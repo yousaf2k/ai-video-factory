@@ -1,0 +1,256 @@
+"""
+Session Manager - Tracks progress and enables crash recovery
+Saves all outputs (story, shots, images) and tracks completion status
+"""
+import json
+import os
+from datetime import datetime
+import config
+
+
+class SessionManager:
+    def __init__(self, sessions_dir="output/sessions"):
+        self.sessions_dir = sessions_dir
+        os.makedirs(sessions_dir, exist_ok=True)
+
+    def get_latest_session(self):
+        """Get the most recent incomplete session, or None if all complete"""
+        sessions = []
+
+        for item in os.listdir(self.sessions_dir):
+            item_path = os.path.join(self.sessions_dir, item)
+
+            # Check if it's a directory (session folder)
+            if os.path.isdir(item_path):
+                meta_file = f"{item}_meta.json"
+                meta_path = os.path.join(item_path, meta_file)
+
+                if os.path.exists(meta_path):
+                    try:
+                        with open(meta_path, 'r', encoding='utf-8') as f:
+                            meta = json.load(f)
+                            sessions.append({
+                                'file': meta_file,
+                                'meta': meta,
+                                'timestamp': meta.get('timestamp', ''),
+                                'completed': meta.get('completed', False)
+                            })
+                    except:
+                        pass
+
+        if not sessions:
+            return None
+
+        # Sort by timestamp descending, get most recent
+        sessions.sort(key=lambda x: x['timestamp'], reverse=True)
+        latest = sessions[0]
+
+        # Only return if incomplete
+        if not latest['completed']:
+            return latest['meta']
+        return None
+
+    def create_session(self, idea):
+        """Create a new session"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        session_id = f"session_{timestamp}"
+
+        session_dir = os.path.join(self.sessions_dir, session_id)
+        os.makedirs(session_dir, exist_ok=True)
+
+        meta = {
+            'session_id': session_id,
+            'timestamp': timestamp,
+            'idea': idea,
+            'started_at': datetime.now().isoformat(),
+            'completed': False,
+            'steps': {
+                'story': False,
+                'scene_graph': False,
+                'shots': False,
+                'images': False,
+                'videos': False
+            },
+            'shots': [],
+            'stats': {
+                'total_shots': 0,
+                'images_generated': 0,
+                'videos_rendered': 0
+            }
+        }
+
+        self._save_meta(session_id, meta)
+        return session_id, meta
+
+    def load_session(self, session_id):
+        """Load an existing session"""
+        meta_path = os.path.join(self.sessions_dir, session_id, f"{session_id}_meta.json")
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    def save_story(self, session_id, story_json):
+        """Save story output"""
+        session_dir = os.path.join(self.sessions_dir, session_id)
+        story_path = os.path.join(session_dir, "story.json")
+
+        with open(story_path, 'w', encoding='utf-8') as f:
+            f.write(story_json)
+
+        # Update metadata
+        meta = self.load_session(session_id)
+        meta['steps']['story'] = True
+        self._save_meta(session_id, meta)
+
+    def save_shots(self, session_id, shots):
+        """Save shot data (image prompts, motion prompts)"""
+        session_dir = os.path.join(self.sessions_dir, session_id)
+        shots_path = os.path.join(session_dir, "shots.json")
+
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+        # Update metadata with shot tracking
+        meta = self.load_session(session_id)
+        meta['shots'] = []
+        meta['stats']['total_shots'] = len(shots)
+
+        for idx, shot in enumerate(shots, start=1):
+            shot_status = {
+                'index': idx,
+                'image_prompt': shot.get('image_prompt', ''),
+                'motion_prompt': shot.get('motion_prompt', ''),
+                'camera': shot.get('camera', ''),
+                'image_generated': False,
+                'image_path': None,
+                'video_rendered': False,
+                'video_path': None
+            }
+            meta['shots'].append(shot_status)
+
+        meta['steps']['shots'] = True
+        self._save_meta(session_id, meta)
+
+    def mark_image_generated(self, session_id, shot_index, image_path):
+        """Mark that an image has been generated for a shot"""
+        meta = self.load_session(session_id)
+
+        if 0 <= shot_index - 1 < len(meta['shots']):
+            # Normalize path to use forward slashes (JSON-safe)
+            normalized_path = image_path.replace('\\', '/')
+            meta['shots'][shot_index - 1]['image_generated'] = True
+            meta['shots'][shot_index - 1]['image_path'] = normalized_path
+            meta['stats']['images_generated'] = sum(1 for s in meta['shots'] if s['image_generated'])
+
+        self._save_meta(session_id, meta)
+
+        # Also update shots.json file
+        self._update_shots_file(session_id, meta['shots'])
+
+    def mark_video_rendered(self, session_id, shot_index, video_path=None):
+        """
+        Mark that a video has been rendered for a shot
+
+        Args:
+            session_id: Session identifier
+            shot_index: Shot number (1-based)
+            video_path: Optional path to the video file
+        """
+        meta = self.load_session(session_id)
+
+        if 0 <= shot_index - 1 < len(meta['shots']):
+            meta['shots'][shot_index - 1]['video_rendered'] = True
+            if video_path:
+                # Normalize path for JSON
+                normalized_path = video_path.replace('\\', '/')
+                meta['shots'][shot_index - 1]['video_path'] = normalized_path
+            meta['stats']['videos_rendered'] = sum(1 for s in meta['shots'] if s['video_rendered'])
+
+        self._save_meta(session_id, meta)
+
+    def mark_step_complete(self, session_id, step_name):
+        """Mark a pipeline step as complete"""
+        meta = self.load_session(session_id)
+        meta['steps'][step_name] = True
+        self._save_meta(session_id, meta)
+
+    def mark_session_complete(self, session_id):
+        """Mark the entire session as complete"""
+        meta = self.load_session(session_id)
+        meta['completed'] = True
+        meta['completed_at'] = datetime.now().isoformat()
+        self._save_meta(session_id, meta)
+
+    def get_session_dir(self, session_id):
+        """Get the directory path for a session"""
+        return os.path.join(self.sessions_dir, session_id)
+
+    def get_images_dir(self, session_id):
+        """Get the images directory for a session"""
+        return os.path.join(self.sessions_dir, session_id, "images")
+
+    def get_videos_dir(self, session_id):
+        """Get the videos directory for a session"""
+        return os.path.join(self.sessions_dir, session_id, "videos")
+
+    def _save_meta(self, session_id, meta):
+        """Save session metadata"""
+        session_dir = os.path.join(self.sessions_dir, session_id)
+        os.makedirs(session_dir, exist_ok=True)
+
+        meta_path = os.path.join(session_dir, f"{session_id}_meta.json")
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+
+    def _update_shots_file(self, session_id, shots):
+        """Update the shots.json file with current shot data"""
+        session_dir = self.get_session_dir(session_id)
+        shots_path = os.path.join(session_dir, "shots.json")
+
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+    def list_all_sessions(self):
+        """List all sessions with their status"""
+        sessions = []
+
+        for item in os.listdir(self.sessions_dir):
+            item_path = os.path.join(self.sessions_dir, item)
+
+            # Check if it's a directory (session folder)
+            if os.path.isdir(item_path):
+                meta_file = f"{item}_meta.json"
+                meta_path = os.path.join(item_path, meta_file)
+
+                if os.path.exists(meta_path):
+                    try:
+                        with open(meta_path, 'r', encoding='utf-8') as f:
+                            meta = json.load(f)
+                            sessions.append(meta)
+                    except:
+                        pass
+
+        sessions.sort(key=lambda x: x['timestamp'], reverse=True)
+        return sessions
+
+    def print_session_summary(self, session_id):
+        """Print a summary of a session"""
+        meta = self.load_session(session_id)
+
+        print("\n" + "="*60)
+        print(f"SESSION: {session_id}")
+        print("="*60)
+        print(f"Idea: {meta.get('idea', 'N/A')[:100]}...")
+        print(f"Started: {meta.get('started_at', 'N/A')}")
+        print(f"Status: {'COMPLETE' if meta.get('completed') else 'IN PROGRESS'}")
+        print(f"\nProgress:")
+        print(f"  Total shots: {meta['stats']['total_shots']}")
+        print(f"  Images generated: {meta['stats']['images_generated']}")
+        print(f"  Videos rendered: {meta['stats']['videos_rendered']}")
+
+        if meta.get('shots'):
+            print(f"\nShot Details:")
+            for shot in meta['shots']:
+                status = "[DONE]" if shot['video_rendered'] else ("[IMG]" if shot['image_generated'] else "[TODO]")
+                print(f"  {status} Shot {shot['index']}: {shot['image_prompt'][:50]}...")
+
+        print("="*60 + "\n")

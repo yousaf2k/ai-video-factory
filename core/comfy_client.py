@@ -1,0 +1,181 @@
+import requests
+import uuid
+import time
+import config
+import os
+
+def submit(workflow):
+    """
+    Submit a workflow to ComfyUI and return the response.
+
+    Returns:
+        dict with 'prompt_id' and 'number' of the prompt in queue
+    """
+    payload = {
+        "prompt": workflow,
+        "client_id": str(uuid.uuid4())
+    }
+
+    r = requests.post(
+        f"{config.COMFY_URL}/prompt",
+        json=payload
+    )
+
+    if r.status_code != 200:
+        raise Exception(f"ComfyUI returned status {r.status_code}: {r.text}")
+
+    return r.json()
+
+
+def wait_for_prompt_completion(prompt_id, timeout=1800):
+    """
+    Wait for a specific prompt to complete and check for errors.
+
+    Args:
+        prompt_id: The prompt ID to wait for
+        timeout: Maximum time to wait in seconds (default: 30 minutes)
+
+    Returns:
+        dict with 'success' (bool), 'outputs' (list of output files), 'error' (str if failed)
+    """
+    start_time = time.time()
+    last_status_check = 0
+
+    while True:
+        elapsed = time.time() - start_time
+
+        if elapsed > timeout:
+            # Check queue status before giving up
+            try:
+                queue_response = requests.get(f"{config.COMFY_URL}/queue")
+                if queue_response.status_code == 200:
+                    queue_data = queue_response.json()
+                    queue_running = queue_data.get("queue_running", [])
+                    queue_pending = queue_data.get("queue_pending", [])
+                    return {
+                        'success': False,
+                        'error': f'Timeout after {int(elapsed)}s. Queue running: {len(queue_running)}, pending: {len(queue_pending)}',
+                        'outputs': []
+                    }
+            except:
+                pass
+
+            return {
+                'success': False,
+                'error': f'Timeout waiting for prompt {prompt_id} after {int(elapsed)}s',
+                'outputs': []
+            }
+
+        try:
+            # Check prompt status
+            response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}")
+
+            if response.status_code != 200:
+                time.sleep(2)
+                continue
+
+            history = response.json()
+
+            if prompt_id not in history:
+                time.sleep(2)
+                continue
+
+            prompt_data = history[prompt_id]
+            status = prompt_data.get("status", {})
+
+            # Print status every 30 seconds
+            if elapsed - last_status_check > 30:
+                last_status_check = elapsed
+                status_str = status.get("status", "unknown")
+                print(f"       [STATUS] {status_str} ({int(elapsed)}s elapsed)")
+
+            # Check if completed
+            if status.get("completed", False):
+                # Get outputs
+                outputs = prompt_data.get("outputs", {})
+                output_files = []
+
+                # Extract output files from all nodes
+                for node_id, node_output in outputs.items():
+                    # Check for video outputs
+                    if "video" in node_output and len(node_output["video"]) > 0:
+                        for video_info in node_output["video"]:
+                            filename = video_info.get("filename", "")
+                            subfolder = video_info.get("subfolder", "")
+                            output_files.append({
+                                'type': 'video',
+                                'filename': filename,
+                                'subfolder': subfolder
+                            })
+
+                    # Check for images - but filter for video files (.mp4, .webm, etc.)
+                    # ComfyUI's SaveVideo node sometimes outputs to the "images" field
+                    if "images" in node_output and len(node_output["images"]) > 0:
+                        for img_info in node_output["images"]:
+                            filename = img_info.get("filename", "")
+                            subfolder = img_info.get("subfolder", "")
+
+                            # Check if it's actually a video file
+                            if any(filename.lower().endswith(ext) for ext in ['.mp4', '.webm', '.avi', '.mov', '.mkv']):
+                                output_files.append({
+                                    'type': 'video',
+                                    'filename': filename,
+                                    'subfolder': subfolder
+                                })
+                            else:
+                                # Regular image
+                                output_files.append({
+                                    'type': 'image',
+                                    'filename': filename,
+                                    'subfolder': subfolder
+                                })
+
+                return {
+                    'success': True,
+                    'outputs': output_files,
+                    'error': None
+                }
+
+            # Check for errors
+            if status.get("status", "") == "error":
+                error_details = status.get("message", "Unknown error")
+                # Try to get more error details
+                if "node_errors" in prompt_data:
+                    node_errors = prompt_data["node_errors"]
+                    error_details += f" | Nodes with errors: {list(node_errors.keys())}"
+                return {
+                    'success': False,
+                    'error': f'ComfyUI error: {error_details}',
+                    'outputs': []
+                }
+
+            # Still processing
+            if status.get("status", "") in ["queued", "processing"]:
+                time.sleep(2)
+                continue
+
+        except Exception as e:
+            time.sleep(2)
+            continue
+
+
+def get_output_file_path(output_info):
+    """
+    Get the full local path for a ComfyUI output file.
+
+    Args:
+        output_info: dict with 'filename', 'subfolder', 'type'
+
+    Returns:
+        Full path to the output file
+    """
+    filename = output_info['filename']
+    subfolder = output_info.get('subfolder', '')
+
+    # ComfyUI default output directory
+    if subfolder:
+        output_path = os.path.join("ComfyUI", "output", subfolder, filename)
+    else:
+        output_path = os.path.join("ComfyUI", "output", filename)
+
+    return os.path.abspath(output_path)
