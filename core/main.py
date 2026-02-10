@@ -1293,6 +1293,8 @@ Examples:
   # Skip resume prompt (always start new session)
   python core/main.py --idea "Quick test" --no-resume
 
+  # For camera-specific LoRA strengths, edit config.py CAMERA_LORA_MAPPING
+
 Workflow Steps:
   1. Idea Input
   2. Story Generation (story)
@@ -1313,11 +1315,19 @@ TTS Methods:
   - elevenlabs: ElevenLabs API (requires API key)
   - comfyui: ComfyUI TTS workflow
 
+LoRA System:
+  - Wan 2.2 workflow uses TWO LoRA nodes simultaneously
+  - LORA_NODE_ID: Low noise model (subtle motion)
+  - LORA_NODE_ID_2: High noise model (dynamic motion)
+  - Configure camera-specific LoRAs in CAMERA_LORA_MAPPING (config.py)
+  - Each camera type has its own strength_low and strength_high (0.0 to 1.0)
+  - Edit config.py to adjust LoRA strengths for each camera type
+
 Testing Options:
-  --max-shots N     : Limit to N shots (for quick testing)
-  --images-per-shot N: Generate N image variations per shot (default: 1)
-  --no-narration     : Skip narration generation
-  --no-resume       : Skip resume prompt, start new session
+  --max-shots N         : Limit to N shots (for quick testing)
+  --images-per-shot N   : Generate N image variations per shot (default: 1)
+  --no-narration        : Skip narration generation
+  --no-resume          : Skip resume prompt, start new session
 
   Use --list-voices to see ElevenLabs voices
   Use --list-agents to see all available agents

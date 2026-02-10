@@ -94,53 +94,98 @@ TARGET_VIDEO_LENGTH = None  # or specify like: 60.0 for 60 seconds
 # Maximum time to wait for a single video render to complete
 VIDEO_RENDER_TIMEOUT = 1800  # 30 minutes
 
-# LoRA node ID in the workflow (for camera-based LoRA loading)
-LORA_NODE_ID = "101"  # LoraLoaderModelOnly node to update based on camera type
+# LoRA node IDs in the workflow (for camera-based LoRA loading)
+# Wan 2.2 workflow uses TWO LoRA nodes simultaneously
+LORA_NODE_ID = "127"        # First LoRA node (LoraLoaderModelOnly) - for low noise model
+LORA_NODE_ID_2 = "128"      # Second LoRA node (LoraLoaderModelOnly) - for high noise model
 
 # ==========================================
 # CAMERA-TO-LORA MAPPING
 # ==========================================
 # Map camera types to specific LoRA files and trigger keywords for different motion effects
 # Camera types from shots.json will be matched to these LoRAs
-# Trigger keywords are appended to image prompts to activate specific LoRA effects
+# Trigger keywords are appended to motion prompts to activate specific LoRA effects
+#
+# Each camera type has TWO LoRA options:
+# - high_noise_lora: High noise model for more dynamic motion (loaded into LORA_NODE_ID_2)
+# - low_noise_lora: Low noise model for more stable/subtle motion (loaded into LORA_NODE_ID)
+# - trigger_keyword: Text appended to motion prompt to activate LoRA effects
+# - strength_low: LoRA strength for low noise model (0.0 to 1.0), required
+# - strength_high: LoRA strength for high noise model (0.0 to 1.0), required
+#
+# IMPORTANT: Every camera type MUST have strength_low and strength_high defined
 CAMERA_LORA_MAPPING = {
     "slow pan": {
-        "lora_file": "wan2.2_i2v__lightx2v_4steps_lora_v1__high_noise_model.safetensors",
-        "trigger_keyword": "slow pan movement"
+        "high_noise_lora": "",
+        "low_noise_lora": "",
+        "trigger_keyword": "slow pan",
+        "strength_low": 0.5,
+        "strength_high": 0.6
     },
     "pan": {
-        "lora_file": "wan2.2_i2v__lightx2v_4steps_lora_v1__high_noise_model.safetensors",
-        "trigger_keyword": "pan movement"
+        "high_noise_lora": "",
+        "low_noise_lora": "",
+        "trigger_keyword": "pan",
+        "strength_low": 0.6,
+        "strength_high": 0.7
     },
     "static": {
-        "lora_file": "wan2.2_i2v__lightx2v_4steps_lora_v1_low_noise_model.safetensors",
-        "trigger_keyword": "static shot"
+        "high_noise_lora": "",
+        "low_noise_lora": "",
+        "trigger_keyword": "static shot",
+        "strength_low": 0.3,
+        "strength_high": 0.4
     },
     "dolly": {
-        "lora_file": "wan2.2_i2v__lightx2v_4steps_lora_v1__high_noise_model.safetensors",
-        "trigger_keyword": "dolly movement"
+        "high_noise_lora": "",
+        "low_noise_lora": "",
+        "trigger_keyword": "dolly",
+        "strength_low": 0.7,
+        "strength_high": 0.8
     },
     "orbit": {
-        "lora_file": "wan2.2_i2v__lightx2v_4steps_lora_v1__high_noise_model.safetensors",
-        "trigger_keyword": "orbit movement"
+        "high_noise_lora": "Surround_Camera_S1440.safetensors",
+        "low_noise_lora": "",
+        "trigger_keyword": "ymq",
+        "strength_low": 0.0,
+        "strength_high": 1.0
     },
     "zoom": {
-        "lora_file": "wan2.2_i2v__lightx2v_4steps_lora_v1__high_noise_model.safetensors",
-        "trigger_keyword": "zoom in"
+        "high_noise_lora": "",
+        "low_noise_lora": "",
+        "trigger_keyword": "zoom in",
+        "strength_low": 0.8,
+        "strength_high": 0.9
     },
     "tracking": {
-        "lora_file": "wan2.2_i2v__lightx2v_4steps_lora_v1__high_noise_model.safetensors",
-        "trigger_keyword": "tracking shot"
+        "high_noise_lora": "",
+        "low_noise_lora": "",
+        "trigger_keyword": "tracking shot",
+        "strength_low": 0.7,
+        "strength_high": 0.8
+    },
+    "drone": {
+        "high_noise_lora": "wan22-video8-drone-16-sel-2.safetensors",
+        "low_noise_lora": "",
+        "trigger_keyword": "drone footage aerial",
+        "strength_low": 0.7,
+        "strength_high": 0.9
+    },
+    "arc": {
+        "high_noise_lora": "wan22-video10-arcshot-16-sel-7-high.safetensors",
+        "low_noise_lora": "",
+        "trigger_keyword": "arc shot",
+        "strength_low": 0.7,
+        "strength_high": 0.9
     },
     "default": {
-        "lora_file": "wan2.2_i2v__lightx2v_4steps_lora_v1__high_noise_model.safetensors",
-        "trigger_keyword": ""
+        "high_noise_lora": "",
+        "low_noise_lora": "",
+        "trigger_keyword": "",
+        "strength_low": 0.8,
+        "strength_high": 0.8
     }
 }
-
-# Legacy support: if you prefer simple string mapping, this fallback is used
-# The system will automatically use empty trigger keywords for old-style mappings
-_LEGACY_CAMERA_LORA_MAPPING = CAMERA_LORA_MAPPING
 
 
 # ==========================================

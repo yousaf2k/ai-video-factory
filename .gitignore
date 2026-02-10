@@ -1,4 +1,7 @@
 output/sessions/
 output/
-__pycache__/
+__pycache__/*
 *.pyc
+__pycache__/config.cpython-311.pyc
+core/__pycache__/main.cpython-311.pyc
+core/__pycache__/prompt_compiler.cpython-311.pyc
