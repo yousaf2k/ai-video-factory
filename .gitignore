@@ -1,2 +1,4 @@
 output/sessions/
 output/
+__pycache__/
+*.pyc

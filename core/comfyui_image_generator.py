@@ -9,7 +9,7 @@ import config
 import os
 
 
-def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = ""):
+def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = "", seed: int = None):
     """
     Generate a single image using ComfyUI workflow.
 
@@ -17,6 +17,7 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
         prompt: Text description of the image to generate
         output_path: Full path where the image will be saved
         negative_prompt: Optional negative prompt for better quality
+        seed: Optional random seed for reproducibility
 
     Returns:
         Path to the generated image file, or None if failed
@@ -39,6 +40,18 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
 
         if config.IMAGE_NEG_TEXT_NODE_ID in api_format and negative_prompt:
             api_format[config.IMAGE_NEG_TEXT_NODE_ID]["inputs"]["text"] = negative_prompt
+
+        # Set random seed if provided
+        if seed is not None:
+            # Find KSampler or RandomNoise node to set seed
+            for node_id, node_data in api_format.items():
+                class_type = node_data.get("class_type", "")
+                if class_type in ["KSampler", "KSamplerAdvanced"]:
+                    if "seed" in node_data.get("inputs", {}):
+                        api_format[node_id]["inputs"]["seed"] = seed
+                elif class_type == "RandomNoise":
+                    if "noise_seed" in node_data.get("inputs", {}):
+                        api_format[node_id]["inputs"]["noise_seed"] = seed
 
         # Set output filename for SaveImage node
         if config.IMAGE_SAVE_NODE_ID in api_format:

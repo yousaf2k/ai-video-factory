@@ -367,23 +367,29 @@ Optimize ComfyUI workflow:
 ```bash
 # For cinematic shots
 # Use Flux (slower, better quality)
-IMAGE_WORKFLOW_PATH = "workflow/flux_workflow.json"
+IMAGE_WORKFLOW_PATH = "workflow/images/flux_workflow.json"
 python core/main.py
 
 # For fast preview
 # Use SD 1.5 (faster, good enough)
-IMAGE_WORKFLOW_PATH = "workflow/sd15_workflow.json"
+IMAGE_WORKFLOW_PATH = "workflow/images/sd15_workflow.json"
 python core/main.py
 ```
 
 ### Custom Workflows per Project
 
 ```
-workflow/
-├── flux_workflow.json           # Portrait-heavy
-├── sdxl_workflow.json          # General purpose
-├── sd15_workflow.json          # Fast preview
-└── realistic_workflow.json     # Photorealistic
+├── workflow/image/
+|    ├── flux_workflow.json          # Portrait-heavy
+|    ├── sdxl_workflow.json          # General purpose
+|    ├── sd15_workflow.json          # Fast preview
+|    └── realistic_workflow.json     # Photorealistic
+├── workflow/video/
+|    ├── wan22_workflow.json         # General purpose
+|    └── workflow/voice/
+└── workflow/voice/
+     └── tts_workflow_example.json   # General purpose
+
 ```
 
 Update config.py to switch workflows:

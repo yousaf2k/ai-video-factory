@@ -69,13 +69,15 @@ class SessionManager:
                 'scene_graph': False,
                 'shots': False,
                 'images': False,
-                'videos': False
+                'videos': False,
+                'narration': False
             },
             'shots': [],
             'stats': {
                 'total_shots': 0,
                 'images_generated': 0,
-                'videos_rendered': 0
+                'videos_rendered': 0,
+                'narration_generated': False
             }
         }
 
@@ -87,6 +89,10 @@ class SessionManager:
         meta_path = os.path.join(self.sessions_dir, session_id, f"{session_id}_meta.json")
         with open(meta_path, 'r', encoding='utf-8') as f:
             return json.load(f)
+
+    def get_session(self, session_id):
+        """Get session metadata (alias for load_session)"""
+        return self.load_session(session_id)
 
     def save_story(self, session_id, story_json):
         """Save story output"""
@@ -153,8 +159,16 @@ class SessionManager:
         Args:
             session_id: Session identifier
             shot_index: Shot number (1-based)
-            video_path: Optional path to the video file
+            video_path: Optional path to the video file (will verify existence)
         """
+        import os
+
+        # Verify video file exists before marking as rendered
+        if video_path and not os.path.exists(video_path):
+            print(f"[WARN] mark_video_rendered: Video file doesn't exist: {video_path}")
+            print(f"[WARN] Shot {shot_index} will NOT be marked as rendered")
+            return
+
         meta = self.load_session(session_id)
 
         if 0 <= shot_index - 1 < len(meta['shots']):
@@ -191,6 +205,10 @@ class SessionManager:
     def get_videos_dir(self, session_id):
         """Get the videos directory for a session"""
         return os.path.join(self.sessions_dir, session_id, "videos")
+
+    def get_narration_dir(self, session_id):
+        """Get the narration directory for a session"""
+        return os.path.join(self.sessions_dir, session_id, "narration")
 
     def _save_meta(self, session_id, meta):
         """Save session metadata"""
@@ -246,6 +264,7 @@ class SessionManager:
         print(f"  Total shots: {meta['stats']['total_shots']}")
         print(f"  Images generated: {meta['stats']['images_generated']}")
         print(f"  Videos rendered: {meta['stats']['videos_rendered']}")
+        print(f"  Narration: {'[DONE]' if meta.get('steps', {}).get('narration', False) else '[TODO]'}")
 
         if meta.get('shots'):
             print(f"\nShot Details:")

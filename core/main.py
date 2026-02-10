@@ -11,6 +11,27 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 
+# Workflow steps definition
+# Note: Idea is step 1, but we start tracking from story (step 2)
+WORKFLOW_STEPS = {
+    'story': 2,
+    'scene_graph': 3,
+    'shots': 4,
+    'images': 5,
+    'videos': 6,
+    'narration': 7
+}
+
+STEP_NAMES = {
+    1: 'idea',      # Not tracked in session steps
+    2: 'story',
+    3: 'scene_graph',
+    4: 'shots',
+    5: 'images',
+    6: 'videos',
+    7: 'narration'
+}
+
 from core.story_engine import build_story
 from core.scene_graph import build_scene_graph
 from core.shot_planner import plan_shots
@@ -19,6 +40,52 @@ from core.comfy_client import submit, wait_for_prompt_completion
 from core.render_monitor import wait_until_idle
 from core.image_generator import generate_image_gemini
 from core.session_manager import SessionManager
+
+
+def enhance_motion_prompts_with_triggers(shots):
+    """
+    Append trigger keywords to motion prompts for each shot based on camera type.
+    This helps activate the correct LoRA during video generation.
+
+    Args:
+        shots: List of shot dictionaries with 'camera' and 'motion_prompt' fields
+
+    Returns:
+        Updated shots list with enhanced motion prompts
+    """
+    for shot in shots:
+        camera_type = shot.get('camera', 'default')
+        motion_prompt = shot.get('motion_prompt', '')
+
+        if not motion_prompt:
+            continue
+
+        # Get trigger keyword for this camera type
+        lora_mapping = config.CAMERA_LORA_MAPPING
+        trigger_keyword = ""
+
+        camera_type_lower = camera_type.lower() if camera_type else "default"
+
+        # Check if mapping is dict (new-style) or string (old-style)
+        if camera_type_lower in lora_mapping:
+            mapping = lora_mapping[camera_type_lower]
+            if isinstance(mapping, dict):
+                trigger_keyword = mapping.get("trigger_keyword", "")
+        else:
+            # Try partial match
+            for key, value in lora_mapping.items():
+                if key != "default" and key in camera_type_lower:
+                    if isinstance(value, dict):
+                        trigger_keyword = value.get("trigger_keyword", "")
+                    break
+
+        # Append trigger keyword to motion prompt
+        if trigger_keyword:
+            enhanced_prompt = f"{motion_prompt}, {trigger_keyword}"
+            shot['motion_prompt'] = enhanced_prompt
+            print(f"[TRIGGER] Shot {shot.get('index', '?')}: '{camera_type}' -> '{trigger_keyword}'")
+
+    return shots
 
 
 def get_idea(args):
@@ -51,35 +118,151 @@ def read_idea():
     raise FileNotFoundError("input/video_idea.txt not found and no --idea parameter provided")
 
 
-def get_image_generation_mode():
-    """Ask user for image generation mode"""
+def prompt_step_action(current_step, session_id, session_mgr):
+    """
+    Prompt user for action after completing a step in manual mode.
+
+    Args:
+        current_step: The step that just completed (2-7)
+        session_id: Current session ID
+        session_mgr: SessionManager instance
+
+    Returns:
+        str: User's choice - 'continue', 'retry', or 'quit'
+    """
+    step_name = STEP_NAMES.get(current_step, 'unknown')
+    step_map = {
+        'idea': 'Idea Input',
+        'story': 'Story Generation',
+        'scene_graph': 'Scene Graph',
+        'shots': 'Shot Planning',
+        'images': 'Image Generation',
+        'videos': 'Video Rendering',
+        'narration': 'Narration Generation'
+    }
+    step_title = step_map.get(step_name, step_name.title())
+
+    # Get current progress
+    meta = session_mgr.get_session(session_id)
+    steps = meta.get('steps', {})
+
     print("\n" + "="*70)
-    print("IMAGE GENERATION MODE")
+    print(f"STEP {current_step} COMPLETED: {step_title}")
     print("="*70)
-    print("\nChoose image generation method:")
-    print("  1. Gemini (cloud API) - Fast, easy, ~$0.08 per image")
-    print("  2. ComfyUI (local) - Free, uses your GPU, more control")
-    print(f"\nCurrent default: {config.IMAGE_GENERATION_MODE}")
+    print(f"\nCurrent Progress:")
+    for step_num, step_key in STEP_NAMES.items():
+        if step_num == 1:  # Skip idea for display
+            continue
+        status = "[DONE]" if steps.get(step_key, False) else "[TODO]"
+        marker = " <-" if step_key == step_name else ""
+        print(f"  Step {step_num}: {step_key.replace('_', ' ').title():20s} {status}{marker}")
 
-    choice = input("\nSelect mode [1/2] (or press Enter for default): ").strip()
+    print("\n" + "="*70)
+    print("OPTIONS:")
+    print("  1. Continue to next step")
+    print("  2. Re-execute current step")
+    print("  3. Re-execute from a specific step")
+    print("  4. Quit (save progress)")
+    print("="*70)
 
-    if choice == "1":
-        mode = "gemini"
-        print("[INFO] Using Gemini for image generation")
-    elif choice == "2":
-        mode = "comfyui"
-        print("[INFO] Using ComfyUI for image generation")
-        print("[WARN] Make sure ComfyUI is running!")
+    while True:
+        choice = input("\nSelect option [1/2/3/4]: ").strip().lower()
 
-        # Ask for negative prompt
-        neg_prompt = input("\nEnter negative prompt (optional, press Enter to skip): ").strip()
-        return mode, neg_prompt
-    else:
-        mode = config.IMAGE_GENERATION_MODE
-        print(f"[INFO] Using default: {mode}")
-        return mode, ""
+        if choice in ('1', 'continue', 'c', 'next'):
+            return 'continue'
+        elif choice in ('2', 'retry', 'r', 're-execute'):
+            return 'retry'
+        elif choice in ('3', 'from', 'f', 'restart'):
+            # Ask which step to start from
+            print("\nSelect step to restart from:")
+            for step_num, step_key in STEP_NAMES.items():
+                if step_num == 1:  # Skip idea
+                    continue
+                is_done = steps.get(step_key, False)
+                status = ""
+                if is_done:
+                    status = " (already done - will re-execute)"
+                print(f"  {step_num}. {step_key.replace('_', ' ').title()}{status}")
 
-    return mode, ""
+            while True:
+                step_choice = input(f"\nEnter step number [2-{len(STEP_NAMES)}]: ").strip()
+                try:
+                    step_num = int(step_choice)
+                    if 2 <= step_num <= len(STEP_NAMES):
+                        return f'restart:{step_num}'
+                    else:
+                        print(f"[WARN] Please enter a number between 2 and {len(STEP_NAMES)}")
+                except ValueError:
+                    print("[WARN] Please enter a valid number")
+
+        elif choice in ('4', 'quit', 'q', 'exit'):
+            return 'quit'
+        else:
+            print("[WARN] Invalid choice. Please enter 1, 2, 3, or 4")
+
+
+def get_start_step(args, session_meta=None):
+    """
+    Determine which step to start from.
+
+    Args:
+        args: Command line arguments
+        session_meta: Session metadata (for resume)
+
+    Returns:
+        int: Starting step number (1-6)
+    """
+    # If --step argument provided, use that
+    if hasattr(args, 'step') and args.step:
+        step_name = args.step.lower()
+        if step_name in WORKFLOW_STEPS:
+            return WORKFLOW_STEPS[step_name]
+        elif step_name.isdigit():
+            step_num = int(step_name)
+            if 1 <= step_num <= 6:
+                return step_num
+        print(f"[WARN] Invalid step '{args.step}', using default")
+
+    # For existing sessions, find first incomplete step
+    if session_meta:
+        steps = session_meta.get('steps', {})
+        for step_num, step_key in STEP_NAMES.items():
+            if step_num == 1:  # Skip 'idea' step
+                continue
+            if not steps.get(step_key, False):
+                return step_num
+        return 6  # All complete, return last step
+
+    # Default: start from step 2 (story)
+    return 2
+
+
+def get_step_mode(args):
+    """
+    Determine step progression mode (auto or manual).
+
+    Args:
+        args: Command line arguments
+
+    Returns:
+        bool: True for auto mode, False for manual
+    """
+    # Check command line override
+    if hasattr(args, 'auto') and args.auto:
+        return True
+    if hasattr(args, 'manual') and args.manual:
+        return False
+
+    # Use config setting
+    return config.AUTO_STEP_MODE
+
+
+def get_image_generation_mode():
+    """Get image generation mode from config (no longer prompts user)"""
+    # Use config defaults - no interactive prompt
+    mode = config.IMAGE_GENERATION_MODE
+    negative_prompt = config.DEFAULT_NEGATIVE_PROMPT
+    return mode, negative_prompt
 
 
 def check_continue_session(session_mgr):
@@ -273,21 +456,20 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
                     print(f"[WARN] Copy verification failed")
                     return False, "Video copy failed", None
             else:
-                print(f"[WARN] Source video not found: {source_path}")
-                # Mark as rendered anyway (video exists in ComfyUI output)
-                session_mgr.mark_video_rendered(session_id, shot_idx)
-                return True, None, source_path
+                print(f"[FAIL] Source video not found: {source_path}")
+                # DON'T mark as rendered - the video file doesn't exist
+                return False, "Source video not found", None
 
         elif image_outputs:
-            print(f"[PASS] Shot {shot_idx}: Generated {len(image_outputs)} frame(s)")
+            print(f"[WARN] Shot {shot_idx}: Generated {len(image_outputs)} frame(s) instead of video")
             for i in image_outputs[:3]:
                 print(f"       - {i['filename']}")
             if len(image_outputs) > 3:
                 print(f"       ... and {len(image_outputs) - 3} more")
 
-            # No video file, just frames - mark as rendered but no video path
-            session_mgr.mark_video_rendered(session_id, shot_idx)
-            return True, None, None
+            # No video file, just frames - this is a failure for video generation
+            # DON'T mark as rendered - we wanted a video, not frames
+            return False, "Generated frames instead of video", None
 
         else:
             print(f"[FAIL] Shot {shot_idx}: Unknown output type")
@@ -301,8 +483,21 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
         return False, error_msg, None
 
 
-def continue_session(session_id, session_meta, session_mgr):
+def continue_session(session_id, session_meta, session_mgr, args=None):
     """Continue from an existing session"""
+    if args is None:
+        args = argparse.Namespace()
+
+    # Get step mode
+    auto_mode = get_step_mode(args)
+    mode_str = "AUTO" if auto_mode else "MANUAL"
+    print(f"[INFO] Execution mode: {mode_str}")
+
+    # Check if user specified a step to start from
+    start_step = get_start_step(args, session_meta)
+    if hasattr(args, 'step') and args.step:
+        print(f"[INFO] Starting from step {start_step} (--step override)")
+
     shots_dir = session_mgr.get_session_dir(session_id)
     shots_path = os.path.join(shots_dir, "shots.json")
 
@@ -401,6 +596,18 @@ def continue_session(session_id, session_meta, session_mgr):
 
         session_mgr.mark_step_complete(session_id, 'images')
 
+        # Prompt for next action in manual mode
+        if not auto_mode:
+            action = prompt_step_action(5, session_id, session_mgr)
+            if action == 'quit':
+                print("\n[INFO] Session saved. You can continue later with:")
+                print(f"       python core/main.py --step videos")
+                return None
+            elif action.startswith('restart:'):
+                print("[INFO] Restart requested. Please run with --step parameter.")
+                return None
+            # If 'continue' or 'retry', just proceed
+
     elif not videos_done:
         print("\n[RESUME] STEP 5: Rendering")
 
@@ -496,14 +703,21 @@ def run_new_session(session_mgr, args=None):
     idea = get_idea(args)
     print(f"\n{idea[:200]}{'...' if len(idea) > 200 else ''}")
 
-    # Determine image generation mode
+    # Get image generation mode and negative prompt from config or args
     if hasattr(args, 'image_mode') and args.image_mode:
         image_mode = args.image_mode
-        negative_prompt = getattr(args, 'negative_prompt', '')
-        print(f"\n[INFO] Image generation mode: {image_mode} (from command line)")
+        print(f"[INFO] Image generation mode: {image_mode} (from command line)")
     else:
-        # Get image generation mode from user
-        image_mode, negative_prompt = get_image_generation_mode()
+        image_mode = config.IMAGE_GENERATION_MODE
+        print(f"[INFO] Image generation mode: {image_mode} (from config)")
+
+    # Get negative prompt from args or config
+    if hasattr(args, 'negative_prompt') and args.negative_prompt:
+        negative_prompt = args.negative_prompt
+    else:
+        negative_prompt = config.DEFAULT_NEGATIVE_PROMPT
+    if negative_prompt:
+        print(f"[INFO] Negative prompt: {negative_prompt}")
 
     # Get video configuration
     print("\n" + "="*70)
@@ -515,40 +729,38 @@ def run_new_session(session_mgr, args=None):
         total_length = args.total_length
         print(f"[INFO] Total video length: {total_length}s (from command line)")
     else:
-        # Ask for total video length
-        total_length_input = input(f"\nEnter total video length in seconds (or press Enter for default based on story): ").strip()
-        if total_length_input:
-            try:
-                total_length = float(total_length_input)
-            except ValueError:
-                print("[WARN] Invalid input, using story-based length")
-                total_length = config.TARGET_VIDEO_LENGTH
-        else:
-            total_length = config.TARGET_VIDEO_LENGTH
+        total_length = config.TARGET_VIDEO_LENGTH
+        if total_length:
+            print(f"[INFO] Total video length: {total_length}s (from config)")
 
     # Determine shot length
     if hasattr(args, 'shot_length') and args.shot_length:
         shot_length = args.shot_length
         print(f"[INFO] Shot length: {shot_length}s (from command line)")
     else:
-        # Ask for shot length
-        shot_length_input = input(f"\nEnter length per shot in seconds (default: {config.DEFAULT_SHOT_LENGTH}s): ").strip()
-        if shot_length_input:
-            try:
-                shot_length = float(shot_length_input)
-            except ValueError:
-                print(f"[WARN] Invalid input, using default: {config.DEFAULT_SHOT_LENGTH}s")
-                shot_length = config.DEFAULT_SHOT_LENGTH
-        else:
-            shot_length = config.DEFAULT_SHOT_LENGTH
+        shot_length = config.DEFAULT_SHOT_LENGTH
+        print(f"[INFO] Shot length: {shot_length}s (from config)")
 
     # Calculate number of shots needed
     if total_length:
         max_shots = int(total_length / shot_length)
         print(f"\n[INFO] Target: {total_length}s video, {shot_length}s per shot = {max_shots} shots")
+    elif hasattr(args, 'max_shots') and args.max_shots is not None:
+        max_shots = args.max_shots
+        if max_shots > 0:
+            print(f"\n[INFO] Maximum shots limited to: {max_shots} (from command line)")
+        else:
+            max_shots = None
+            print(f"\n[INFO] Shot length: {shot_length}s (no shot limit)")
+    elif config.DEFAULT_MAX_SHOTS > 0:
+        max_shots = config.DEFAULT_MAX_SHOTS
+        print(f"\n[INFO] Maximum shots limited to: {max_shots} (set by DEFAULT_MAX_SHOTS)")
+        print(f"[INFO] Shot length: {shot_length}s")
     else:
         max_shots = None
         print(f"\n[INFO] Shot length: {shot_length}s (number of shots based on story)")
+        if config.DEFAULT_MAX_SHOTS == 0:
+            print(f"[INFO] No shot limit - all story scenes will be generated")
 
     print("="*70)
 
@@ -563,86 +775,409 @@ def run_new_session(session_mgr, args=None):
     }
 
     # Store image generation config
+    images_per_shot = getattr(args, 'images_per_shot', None) or config.IMAGES_PER_SHOT
     session_meta['image_config'] = {
         'mode': image_mode,
-        'negative_prompt': negative_prompt
+        'negative_prompt': negative_prompt,
+        'images_per_shot': images_per_shot
+    }
+
+    # Get agent selection from args or config
+    story_agent = getattr(args, 'story_agent', None) or config.STORY_AGENT
+    image_agent = getattr(args, 'image_agent', None) or config.IMAGE_AGENT
+    video_agent = getattr(args, 'video_agent', None) or config.VIDEO_AGENT
+    narration_agent = getattr(args, 'narration_agent', None) or config.NARRATION_AGENT
+
+    # Get narration settings
+    generate_narration = not getattr(args, 'no_narration', False) and config.GENERATE_NARRATION
+    tts_method = getattr(args, 'tts_method', None) or config.TTS_METHOD
+    tts_workflow = getattr(args, 'tts_workflow', None) or config.TTS_WORKFLOW_PATH
+    tts_voice = getattr(args, 'tts_voice', None) or config.TTS_VOICE
+
+    # Store agent config in session
+    session_meta['agent_config'] = {
+        'story': story_agent,
+        'image': image_agent,
+        'video': video_agent,
+        'narration': narration_agent
+    }
+
+    # Store narration config in session
+    session_meta['narration_config'] = {
+        'enabled': generate_narration,
+        'tts_method': tts_method,
+        'tts_workflow': tts_workflow,
+        'tts_voice': tts_voice
     }
 
     session_mgr._save_meta(session_id, session_meta)
 
     print(f"[INFO] Created session: {session_id}")
+    print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
+    print(f"[INFO] Image generation: {images_per_shot} image(s) per shot")
+    if generate_narration:
+        print(f"[INFO] Narration enabled - TTS: {tts_method}, Voice: {tts_voice}")
+    else:
+        print(f"[INFO] Narration disabled")
+
+    # Get execution mode
+    auto_mode = get_step_mode(args)
+    start_step = get_start_step(args)
+    mode_str = "AUTO" if auto_mode else "MANUAL"
+    print(f"[INFO] Execution mode: {mode_str} (starting from step {start_step})")
+
+    # Execute workflow based on mode
+    if auto_mode:
+        # Original auto mode - execute all remaining steps
+        _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
+                      story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
+                      narration_agent=narration_agent, generate_narration=generate_narration,
+                      tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
+                      images_per_shot=images_per_shot)
+    else:
+        # New manual mode - step by step with prompts
+        _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
+                        story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
+                        narration_agent=narration_agent, generate_narration=generate_narration,
+                        tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
+                        images_per_shot=images_per_shot)
+
+
+def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
+                   story_agent=None, image_agent=None, video_agent=None,
+                   narration_agent=None, generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
+                   images_per_shot=1):
+    """Execute all remaining steps automatically"""
+    # Get current progress
+    steps = session_meta.get('steps', {})
+
+    # Get agent names from session metadata or args
+    agent_config = session_meta.get('agent_config', {})
+    story_agent = story_agent or agent_config.get('story', config.STORY_AGENT)
+    image_agent = image_agent or agent_config.get('image', config.IMAGE_AGENT)
+    video_agent = video_agent or agent_config.get('video', config.VIDEO_AGENT)
+    narration_agent = narration_agent or agent_config.get('narration', config.NARRATION_AGENT)
+
+    # Get narration config
+    narration_config = session_meta.get('narration_config', {})
+    generate_narration = generate_narration or narration_config.get('enabled', False)
+    tts_method = tts_method or narration_config.get('tts_method', config.TTS_METHOD)
+    tts_workflow = tts_workflow or narration_config.get('tts_workflow', config.TTS_WORKFLOW_PATH)
+    tts_voice = tts_voice or narration_config.get('tts_voice', config.TTS_VOICE)
+
+    # Get image config
+    image_config = session_meta.get('image_config', {})
+    images_per_shot = images_per_shot or image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
+
+    print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
+    print(f"[INFO] Generating {images_per_shot} image(s) per shot")
 
     # STEP 2: Story
-    print("\nSTEP 2: Story Generation")
-    story_json = build_story(idea)
-    session_mgr.save_story(session_id, story_json)
+    if not steps.get('story', False):
+        print("\nSTEP 2: Story Generation")
+        story_json = build_story(idea, agent_name=story_agent)
+        session_mgr.save_story(session_id, story_json)
 
     # STEP 3: Scene Graph
-    print("\nSTEP 3: Scene Graph")
-    session_mgr.mark_step_complete(session_id, 'scene_graph')
-    graph = build_scene_graph(story_json)
+    if not steps.get('scene_graph', False):
+        print("\nSTEP 3: Scene Graph")
+        session_mgr.mark_step_complete(session_id, 'scene_graph')
+        graph = build_scene_graph(story_json)
 
     # STEP 4: Shot Planning (with max_shots if specified)
-    print("\nSTEP 4: Shot Planning")
-    shots = plan_shots(graph, max_shots=max_shots)
-    session_mgr.save_shots(session_id, shots)
+    if not steps.get('shots', False):
+        print("\nSTEP 4: Shot Planning")
+        shots = plan_shots(graph, max_shots=max_shots, image_agent=image_agent, video_agent=video_agent)
+        # Enhance motion prompts with trigger keywords for LoRA activation
+        shots = enhance_motion_prompts_with_triggers(shots)
+        session_mgr.save_shots(session_id, shots)
+    else:
+        # Reload shots if already done
+        shots_dir = session_mgr.get_session_dir(session_id)
+        shots_path = os.path.join(shots_dir, "shots.json")
+        with open(shots_path, 'r', encoding='utf-8') as f:
+            shots = json.load(f)
 
     # STEP 4.5: Image Generation
-    print("\nSTEP 4.5: Image Generation")
+    if not steps.get('images', False):
+        print("\nSTEP 4.5: Image Generation")
+        _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot)
+        # Reload shots with updated paths
+        shots_dir = session_mgr.get_session_dir(session_id)
+        shots_path = os.path.join(shots_dir, "shots.json")
+        with open(shots_path, 'r', encoding='utf-8') as f:
+            shots = json.load(f)
+
+    # STEP 5: Rendering with verification
+    if not steps.get('videos', False):
+        # Filter to only shots with successfully generated images
+        valid_shots = [s for s in shots if s.get('image_path')]
+
+        if not valid_shots:
+            print("[ERROR] No images were successfully generated. Cannot proceed.")
+            return
+
+        print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
+        _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
+
+    # STEP 6: Narration Generation
+    if generate_narration and not steps.get('narration', False):
+        print("\nSTEP 6: Narration Generation")
+
+        # Load story for narration
+        story_dir = session_mgr.get_session_dir(session_id)
+        story_path = os.path.join(story_dir, "story.json")
+        with open(story_path, 'r', encoding='utf-8') as f:
+            story_json = f.read()
+
+        # Calculate total duration
+        video_config = session_meta.get('video_config', {})
+        total_duration = video_config.get('total_length') or (len(shots) * shot_length)
+
+        # Generate narration
+        from core.narration_generator import generate_narration_for_session
+
+        script_path, audio_path = generate_narration_for_session(
+            session_id=session_id,
+            story_json=story_json,
+            shots=shots,
+            total_duration=total_duration,
+            agent_name=narration_agent,
+            tts_method=tts_method,
+            tts_workflow_path=tts_workflow,
+            voice=tts_voice
+        )
+
+        if script_path and audio_path:
+            print(f"[PASS] Narration complete")
+            print(f"       Script: {script_path}")
+            print(f"       Audio: {audio_path}")
+        elif script_path:
+            print(f"[WARN] Narration script generated but audio failed")
+            print(f"       Script: {script_path}")
+        else:
+            print(f"[FAIL] Narration generation failed")
+
+    if not generate_narration or steps.get('videos', False):
+        print("\n[INFO] All steps completed!")
+        session_mgr.print_session_summary(session_id)
+
+
+def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
+                     story_agent=None, image_agent=None, video_agent=None,
+                     narration_agent=None, generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
+                     images_per_shot=1):
+    """Execute workflow step by step with user prompts"""
+    shots = None
+    story_json = None
+    graph = None
+
+    # Get agent names from session metadata or args
+    agent_config = session_meta.get('agent_config', {})
+    story_agent = story_agent or agent_config.get('story', config.STORY_AGENT)
+    image_agent = image_agent or agent_config.get('image', config.IMAGE_AGENT)
+    video_agent = video_agent or agent_config.get('video', config.VIDEO_AGENT)
+    narration_agent = narration_agent or agent_config.get('narration', config.NARRATION_AGENT)
+
+    # Get narration config
+    narration_config = session_meta.get('narration_config', {})
+    generate_narration = generate_narration or narration_config.get('enabled', False)
+    tts_method = tts_method or narration_config.get('tts_method', config.TTS_METHOD)
+    tts_workflow = tts_workflow or narration_config.get('tts_workflow', config.TTS_WORKFLOW_PATH)
+    tts_voice = tts_voice or narration_config.get('tts_voice', config.TTS_VOICE)
+
+    # Get image config
+    image_config = session_meta.get('image_config', {})
+    images_per_shot = images_per_shot or image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
+
+    print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
+    print(f"[INFO] Generating {images_per_shot} image(s) per shot")
+
+    current_step = start_step
+
+    while current_step <= 7:
+        step_key = STEP_NAMES[current_step]
+
+        # Execute the current step
+        if current_step == 2:  # Story
+            if not session_meta.get('steps', {}).get('story', False):
+                print("\nSTEP 2: Story Generation")
+                story_json = build_story(idea, agent_name=story_agent)
+                session_mgr.save_story(session_id, story_json)
+            else:
+                print("\n[SKIP] STEP 2: Story already generated")
+                # Load existing story
+                story_dir = session_mgr.get_session_dir(session_id)
+                story_path = os.path.join(story_dir, "story.json")
+                with open(story_path, 'r', encoding='utf-8') as f:
+                    story_json = f.read()
+
+        elif current_step == 3:  # Scene Graph
+            if not session_meta.get('steps', {}).get('scene_graph', False):
+                print("\nSTEP 3: Scene Graph")
+                session_mgr.mark_step_complete(session_id, 'scene_graph')
+                graph = build_scene_graph(story_json)
+            else:
+                print("\n[SKIP] STEP 3: Scene Graph already created")
+
+        elif current_step == 4:  # Shot Planning
+            if not session_meta.get('steps', {}).get('shots', False):
+                print("\nSTEP 4: Shot Planning")
+                shots = plan_shots(graph, max_shots=max_shots, image_agent=image_agent, video_agent=video_agent)
+                # Enhance motion prompts with trigger keywords for LoRA activation
+                shots = enhance_motion_prompts_with_triggers(shots)
+                session_mgr.save_shots(session_id, shots)
+            else:
+                print("\n[SKIP] STEP 4: Shots already planned")
+                # Load existing shots
+                shots_dir = session_mgr.get_session_dir(session_id)
+                shots_path = os.path.join(shots_dir, "shots.json")
+                with open(shots_path, 'r', encoding='utf-8') as f:
+                    shots = json.load(f)
+
+        elif current_step == 5:  # Image Generation
+            if not session_meta.get('steps', {}).get('images', False):
+                print("\nSTEP 5: Image Generation")
+                _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot)
+                # Reload shots with updated paths
+                shots_dir = session_mgr.get_session_dir(session_id)
+                shots_path = os.path.join(shots_dir, "shots.json")
+                with open(shots_path, 'r', encoding='utf-8') as f:
+                    shots = json.load(f)
+            else:
+                print("\n[SKIP] STEP 5: Images already generated")
+
+        elif current_step == 6:  # Video Rendering
+            if not session_meta.get('steps', {}).get('videos', False):
+                # Filter to only shots with successfully generated images
+                valid_shots = [s for s in shots if s.get('image_path')]
+
+                if not valid_shots:
+                    print("[ERROR] No images were successfully generated. Cannot proceed.")
+                    return
+
+                print(f"\nSTEP 6: Rendering {len(valid_shots)} shots")
+                _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
+            else:
+                print("\n[SKIP] STEP 6: Videos already rendered")
+
+        elif current_step == 7:  # Narration Generation
+            if generate_narration and not session_meta.get('steps', {}).get('narration', False):
+                print("\nSTEP 7: Narration Generation")
+
+                # Calculate total duration
+                video_config = session_meta.get('video_config', {})
+                total_duration = video_config.get('total_length') or (len(shots) * shot_length)
+
+                # Generate narration
+                from core.narration_generator import generate_narration_for_session
+
+                script_path, audio_path = generate_narration_for_session(
+                    session_id=session_id,
+                    story_json=story_json,
+                    shots=shots,
+                    total_duration=total_duration,
+                    agent_name=narration_agent,
+                    use_comfyui=(tts_method == 'comfyui'),
+                    tts_workflow_path=tts_workflow,
+                    voice=tts_voice
+                )
+
+                if script_path and audio_path:
+                    print(f"[PASS] Narration complete")
+                    print(f"       Script: {script_path}")
+                    print(f"       Audio: {audio_path}")
+                elif script_path:
+                    print(f"[WARN] Narration script generated but audio failed")
+                else:
+                    print(f"[FAIL] Narration generation failed")
+            else:
+                if generate_narration:
+                    print("\n[SKIP] STEP 7: Narration already generated")
+                else:
+                    print("\n[SKIP] STEP 7: Narration disabled")
+                # All steps complete
+                print("\n[INFO] All steps completed!")
+                session_mgr.print_session_summary(session_id)
+                return
+
+        # Reload session metadata after step
+        session_meta = session_mgr.get_session(session_id)
+
+        # Prompt for next action
+        if current_step < 7:  # Don't prompt after final step
+            action = prompt_step_action(current_step, session_id, session_mgr)
+
+            if action == 'continue':
+                current_step += 1
+            elif action == 'retry':
+                # Re-execute current step
+                continue
+            elif action.startswith('restart:'):
+                # Restart from specific step
+                _, step_num = action.split(':')
+                current_step = int(step_num)
+                print(f"\n[INFO] Restarting from step {current_step}")
+            elif action == 'quit':
+                print("\n[INFO] Session saved. You can continue later with:")
+                print(f"       python core/main.py --step {current_step + 1}")
+                return
+
+
+def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot=1):
+    """Generate images for all shots with optional multiple variations"""
+    from core.image_generator import generate_images_for_shots
 
     images_dir = session_mgr.get_images_dir(session_id)
     os.makedirs(images_dir, exist_ok=True)
 
-    for idx, shot in enumerate(shots, start=1):
-        # Check if already exists (in case of resume)
-        filename = f"shot_{idx:03d}.png"
-        output_path = os.path.join(images_dir, filename)
+    # Check if images are already generated (resume case)
+    # For simplicity, check if first variation of first shot exists
+    if shots and images_per_shot > 0:
+        first_shot_idx = shots[0].get('index', 1)
+        first_image_path = os.path.join(images_dir, f"shot_{first_shot_idx:03d}_001.png")
 
-        if os.path.exists(output_path):
-            print(f"[SKIP] Shot {idx}: Image already exists")
-            # Normalize path for JSON
-            normalized_path = output_path.replace('\\', '/')
-            session_mgr.mark_image_generated(session_id, idx, normalized_path)
-            shot['image_path'] = normalized_path
-            continue
+        if os.path.exists(first_image_path):
+            print(f"[SKIP] Images already generated, loading from disk")
+            # Load existing images
+            for shot in shots:
+                shot_idx = shot.get('index', shots.index(shot) + 1)
+                image_paths = []
+                for var_idx in range(images_per_shot):
+                    img_path = os.path.join(images_dir, f"shot_{shot_idx:03d}_{var_idx + 1:03d}.png")
+                    if os.path.exists(img_path):
+                        normalized_path = img_path.replace('\\', '/')
+                        image_paths.append(normalized_path)
+                        session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
 
-        # Generate image
-        image_prompt = shot.get('image_prompt', '')
-        if not image_prompt:
-            print(f"[SKIP] Shot {idx}: No image prompt")
-            continue
+                shot['image_paths'] = image_paths
+                shot['image_path'] = image_paths[0] if image_paths else None
 
-        print(f"[{idx}/{len(shots)}] Generating image: {image_prompt[:60]}...")
+            session_mgr.mark_step_complete(session_id, 'images')
+            return
 
-        if image_mode == "comfyui":
-            from core.comfyui_image_generator import generate_image_comfyui
-            image_path = generate_image_comfyui(image_prompt, output_path, negative_prompt)
-        else:
-            image_path = generate_image_gemini(image_prompt, output_path)
+    # Generate images using the updated function
+    shots = generate_images_for_shots(
+        shots=shots,
+        output_dir=images_dir,
+        mode=image_mode,
+        negative_prompt=negative_prompt,
+        images_per_shot=images_per_shot
+    )
 
-        shot['image_path'] = image_path
-
-        # Mark as generated
-        if image_path:
-            # Normalize path for JSON
-            normalized_path = image_path.replace('\\', '/')
-            session_mgr.mark_image_generated(session_id, idx, normalized_path)
+    # Mark all generated images in session
+    for shot in shots:
+        shot_idx = shot.get('index', shots.index(shot) + 1)
+        image_paths = shot.get('image_paths', [])
+        for img_path in image_paths:
+            normalized_path = img_path.replace('\\', '/')
+            session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
 
     session_mgr.mark_step_complete(session_id, 'images')
 
-    # Filter to only shots with successfully generated images
-    valid_shots = [s for s in shots if s.get('image_path')]
 
-    if not valid_shots:
-        print("[ERROR] No images were successfully generated. Cannot proceed.")
-        return
-
-    # STEP 5: Rendering with verification
-    print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
-
-    # Get shot length from session
-    shot_length = session_meta.get('video_config', {}).get('shot_length', config.DEFAULT_SHOT_LENGTH)
-
+def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
+    """Render videos for all shots"""
     template = load_workflow(config.WORKFLOW_PATH, video_length_seconds=shot_length)
 
     # Track results
@@ -704,6 +1239,36 @@ Examples:
   # Use idea from command line
   python core/main.py --idea "A cat dancing in the rain"
 
+  # Quick test with limited shots (for testing workflow)
+  python core/main.py --idea "Test video" --max-shots 3
+
+  # Generate short video for testing
+  python core/main.py --idea "Quick test" --max-shots 2 --no-narration
+
+  # Generate multiple image variations per shot
+  python core/main.py --idea "Artistic video" --images-per-shot 4
+
+  # Generate 4 variations for quick testing
+  python core/main.py --idea "Test" --max-shots 2 --images-per-shot 4 --no-narration
+
+  # Use specific agents for different steps
+  python core/main.py --idea "Dramatic space epic" --story-agent dramatic --image-agent artistic --video-agent cinematic
+
+  # Generate video with narration using ElevenLabs
+  python core/main.py --idea "Nature documentary" --story-agent documentary --narration-agent professional --tts-method elevenlabs --tts-voice "Rachel"
+
+  # List available ElevenLabs voices
+  python core/main.py --list-voices
+
+  # Generate narration with edge-tts (free)
+  python core/main.py --idea "Tutorial video" --narration-agent default --tts-method local --tts-voice "en-US-AriaNeural"
+
+  # Use ComfyUI TTS workflow for narration
+  python core/main.py --idea "Explainer video" --narration-agent professional --tts-method comfyui --tts-workflow workflow/tts_workflow.json
+
+  # List all available agents
+  python core/main.py --list-agents
+
   # Use idea from file (default)
   python core/main.py
 
@@ -716,8 +1281,46 @@ Examples:
   # Set image dimensions
   python core/main.py --idea "Portrait video" --aspect-ratio 9:16 --resolution 1024
 
+  # Run in manual step-by-step mode
+  python core/main.py --idea "Space epic" --manual
+
+  # Start from a specific step (2=story, 3=scene_graph, 4=shots, 5=images, 6=videos, 7=narration)
+  python core/main.py --step narration --manual
+
+  # Skip narration generation
+  python core/main.py --idea "Music video" --no-narration
+
   # Skip resume prompt (always start new session)
   python core/main.py --idea "Quick test" --no-resume
+
+Workflow Steps:
+  1. Idea Input
+  2. Story Generation (story)
+  3. Scene Graph (scene_graph)
+  4. Shot Planning (shots)
+  5. Image Generation (images)
+  6. Video Rendering (videos)
+  7. Narration Generation (narration)
+
+Available Agents:
+  Story: default, dramatic, documentary
+  Image: default, artistic
+  Video: default, cinematic
+  Narration: default, documentary, professional, storytelling
+
+TTS Methods:
+  - local: edge-tts (free, requires: pip install edge-tts)
+  - elevenlabs: ElevenLabs API (requires API key)
+  - comfyui: ComfyUI TTS workflow
+
+Testing Options:
+  --max-shots N     : Limit to N shots (for quick testing)
+  --images-per-shot N: Generate N image variations per shot (default: 1)
+  --no-narration     : Skip narration generation
+  --no-resume       : Skip resume prompt, start new session
+
+  Use --list-voices to see ElevenLabs voices
+  Use --list-agents to see all available agents
         """
     )
 
@@ -742,6 +1345,13 @@ Examples:
     )
 
     parser.add_argument(
+        '--images-per-shot',
+        type=int,
+        default=None,
+        help='Number of images to generate per shot (default: from config.py)'
+    )
+
+    parser.add_argument(
         '--shot-length',
         type=float,
         help='Length per shot in seconds (default: from config.py)'
@@ -751,6 +1361,12 @@ Examples:
         '--total-length',
         type=float,
         help='Total video length in seconds (default: based on story)'
+    )
+
+    parser.add_argument(
+        '--max-shots',
+        type=int,
+        help='Maximum number of shots to generate (0=no limit, useful for testing workflow)'
     )
 
     parser.add_argument(
@@ -779,7 +1395,124 @@ Examples:
         help='List all sessions and exit'
     )
 
+    parser.add_argument(
+        '--step', '-s',
+        type=str,
+        help='Start from specific step (2-7, or: story, scene_graph, shots, images, videos, narration)'
+    )
+
+    parser.add_argument(
+        '--auto',
+        action='store_true',
+        help='Auto-proceed through steps without pausing'
+    )
+
+    parser.add_argument(
+        '--manual',
+        action='store_true',
+        help='Manual step progression - pause after each step'
+    )
+
+    parser.add_argument(
+        '--story-agent',
+        type=str,
+        default=None,
+        help='Story agent to use (default: dramatic, documentary, etc.)'
+    )
+
+    parser.add_argument(
+        '--image-agent',
+        type=str,
+        default=None,
+        help='Image prompt agent to use (default: artistic, etc.)'
+    )
+
+    parser.add_argument(
+        '--video-agent',
+        type=str,
+        default=None,
+        help='Video motion agent to use (default: cinematic, etc.)'
+    )
+
+    parser.add_argument(
+        '--narration-agent',
+        type=str,
+        default=None,
+        help='Narration agent to use (default: professional, storytelling, documentary, etc.)'
+    )
+
+    parser.add_argument(
+        '--no-narration',
+        action='store_true',
+        help='Skip narration generation step'
+    )
+
+    parser.add_argument(
+        '--tts-method',
+        type=str,
+        choices=['comfyui', 'local', 'elevenlabs'],
+        help='TTS method: comfyui workflow, local (edge-tts), or elevenlabs'
+    )
+
+    parser.add_argument(
+        '--tts-workflow',
+        type=str,
+        help='Path to ComfyUI TTS workflow JSON'
+    )
+
+    parser.add_argument(
+        '--tts-voice',
+        type=str,
+        help='Voice name for TTS (e.g., "Rachel" for ElevenLabs, "en-US-AriaNeural" for edge-tts)'
+    )
+
+    parser.add_argument(
+        '--list-voices',
+        action='store_true',
+        help='List available ElevenLabs voices and exit'
+    )
+
+    parser.add_argument(
+        '--list-agents',
+        action='store_true',
+        help='List all available agents and exit'
+    )
+
     args = parser.parse_args()
+
+    # Handle --list-agents
+    if args.list_agents:
+        from core.agent_loader import AgentLoader
+        loader = AgentLoader()
+        loader.print_all_agents()
+        return
+
+    # Handle --list-voices
+    if args.list_voices:
+        from core.narration_generator import list_elevenlabs_voices
+        print("\n" + "="*70)
+        print("ELEVENLABS VOICES")
+        print("="*70)
+
+        voices = list_elevenlabs_voices()
+        if voices:
+            print(f"\nFound {len(voices)} voices:\n")
+            for voice in voices:
+                name = voice.get('name', 'Unknown')
+                voice_id = voice.get('voice_id', 'Unknown')
+                labels = voice.get('labels', {})
+                accent = labels.get('accent', 'N/A')
+                gender = labels.get('gender', 'N/A')
+                age = labels.get('age', 'N/A')
+                print(f"  {name}")
+                print(f"    ID: {voice_id}")
+                print(f"    Accent: {accent}, Gender: {gender}, Age: {age}")
+                print()
+        else:
+            print("\n[ERROR] Could not fetch voices.")
+            print("[HINT] Make sure ELEVENLABS_API_KEY is set in config.py or environment")
+        print("="*70)
+        return
 
     # Handle --list-sessions
     if args.list_sessions:
@@ -844,7 +1577,7 @@ Examples:
     if session_id and session_meta:
         # Continue existing session
         try:
-            continue_session(session_id, session_meta, session_mgr)
+            continue_session(session_id, session_meta, session_mgr, args=args)
         except Exception as e:
             print(f"\n[ERROR] Failed to continue session: {e}")
             import traceback

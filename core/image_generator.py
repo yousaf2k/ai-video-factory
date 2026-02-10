@@ -1,15 +1,19 @@
 """
 Image Generation Module - Supports both Gemini and ComfyUI
 Generates images from prompts and saves them to organized directory structure
+
+Now supports generating multiple images per shot with different random seeds.
+Also supports camera trigger keywords for LoRA activation.
 """
 import google.genai as genai
 from google.genai import types
 import config
 import os
+import random
 from pathlib import Path
 
 
-def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None) -> str:
+def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, seed: int = None) -> str:
     """
     Generate a single image from prompt using Gemini.
 
@@ -18,6 +22,7 @@ def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = Non
         output_path: Full path where the image will be saved
         aspect_ratio: Optional. Override default aspect ratio from config
         resolution: Optional. Override default resolution from config
+        seed: Optional random seed for reproducibility (not used by Gemini, but kept for API consistency)
 
     Returns:
         Path to the generated image file, or None if failed
@@ -88,7 +93,7 @@ def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = Non
         return None
 
 
-def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None) -> str:
+def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None) -> str:
     """
     Generate a single image using the configured mode (Gemini or ComfyUI).
 
@@ -98,6 +103,7 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         aspect_ratio: Optional. Override default aspect ratio
         resolution: Optional. Override default resolution
         mode: Force a specific mode ("gemini" or "comfyui"), None to use config default
+        seed: Optional random seed for reproducibility
 
     Returns:
         Path to the generated image file, or None if failed
@@ -108,56 +114,106 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
 
     if mode == "comfyui":
         from core.comfyui_image_generator import generate_image_comfyui
-        return generate_image_comfyui(prompt, output_path)
+        return generate_image_comfyui(prompt, output_path, seed=seed)
     else:
-        return generate_image_gemini(prompt, output_path, aspect_ratio, resolution)
+        return generate_image_gemini(prompt, output_path, aspect_ratio, resolution, seed)
 
 
-def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, negative_prompt: str = "") -> list:
+def generate_image_variations(prompt: str, output_dir: str, count: int = 1, mode: str = None, negative_prompt: str = "", shot_idx: int = 1) -> list:
     """
-    Generate images for all shots in the list.
+    Generate multiple variations of an image with different random seeds.
+
+    Args:
+        prompt: Text description of the image to generate
+        output_dir: Directory to save generated images
+        count: Number of variations to generate
+        mode: Image generation mode ("gemini" or "comfyui")
+        negative_prompt: Negative prompt for ComfyUI mode
+        shot_idx: Shot index for naming (e.g., shot_001_001.png)
+
+    Returns:
+        List of generated image paths
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    generated_paths = []
+
+    for variation_idx in range(count):
+        # Generate random seed for this variation
+        seed = random.randint(0, 2**32 - 1)
+
+        # Generate filename: shot_001_001.png, shot_001_002.png, etc.
+        filename = f"shot_{shot_idx:03d}_{variation_idx + 1:03d}.png"
+        output_path = os.path.join(output_dir, filename)
+
+        print(f"  [{variation_idx + 1}/{count}] Generating variation (seed: {seed})...")
+
+        # Generate image
+        image_path = generate_image(prompt, output_path, mode=mode, seed=seed)
+
+        if image_path:
+            generated_paths.append(image_path)
+        else:
+            print(f"  [FAIL] Variation {variation_idx + 1} failed")
+
+    return generated_paths
+
+
+def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, negative_prompt: str = "", images_per_shot: int = 1) -> list:
+    """
+    Generate images for all shots in the list, with multiple variations per shot.
 
     Args:
         shots: List of shot dictionaries, each containing 'image_prompt'
         output_dir: Directory to save generated images
         mode: Image generation mode ("gemini" or "comfyui"), None to use config default
         negative_prompt: Negative prompt for ComfyUI mode
+        images_per_shot: Number of images to generate per shot (default: 1)
 
     Returns:
-        Updated list of shots with 'image_path' field added to each shot
+        Updated list of shots with 'image_paths' field added to each shot
     """
     # Use config mode if not specified
     if mode is None:
         mode = config.IMAGE_GENERATION_MODE
 
     mode_name = "Gemini" if mode == "gemini" else "ComfyUI"
-    print(f"\nGenerating {len(shots)} images using {mode_name}...")
+    total_images = len(shots) * images_per_shot
+    print(f"\nGenerating {total_images} images ({images_per_shot} per shot) using {mode_name}...")
 
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
-    for idx, shot in enumerate(shots, start=1):
-        # Generate filename: shot_001.png, shot_002.png, etc.
-        filename = f"shot_{idx:03d}.png"
-        output_path = os.path.join(output_dir, filename)
-
-        # Generate image
+    for shot in shots:
+        shot_idx = shot.get('index', shots.index(shot) + 1)
         image_prompt = shot.get('image_prompt', '')
+
         if not image_prompt:
-            print(f"[SKIP] Shot {idx}: No image_prompt found, skipping")
-            shot['image_path'] = None
+            print(f"[SKIP] Shot {shot_idx}: No image_prompt found, skipping")
+            shot['image_paths'] = []
             continue
 
-        print(f"[{idx}/{len(shots)}] Generating image: {image_prompt[:60]}...")
+        print(f"\n[Shot {shot_idx}/{len(shots)}] {image_prompt[:80]}...")
 
-        if mode == "comfyui":
-            from core.comfyui_image_generator import generate_image_comfyui
-            image_path = generate_image_comfyui(image_prompt, output_path, negative_prompt)
+        # Generate multiple variations
+        image_paths = generate_image_variations(
+            prompt=image_prompt,
+            output_dir=output_dir,
+            count=images_per_shot,
+            mode=mode,
+            negative_prompt=negative_prompt,
+            shot_idx=shot_idx
+        )
+
+        # Store all image paths (primary image and variations)
+        shot['image_paths'] = image_paths
+
+        # For backward compatibility, also store primary image_path
+        shot['image_path'] = image_paths[0] if image_paths else None
+
+        if image_paths:
+            print(f"  [PASS] Generated {len(image_paths)} variation(s) for shot {shot_idx}")
         else:
-            image_path = generate_image_gemini(image_prompt, output_path)
-
-        # Add image_path to shot dictionary
-        shot['image_path'] = image_path
+            print(f"  [FAIL] All variations failed for shot {shot_idx}")
 
     print(f"\n[INFO] Image generation complete. Images saved to: {output_dir}")
     return shots

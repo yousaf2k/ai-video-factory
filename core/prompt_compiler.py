@@ -165,6 +165,56 @@ def compile_workflow(template, shot, video_length_seconds=None):
             # Update existing text
             wf[motion_node_id]["inputs"]["text"] = shot["motion_prompt"]
 
+    # Inject camera-based LoRA
+    camera_type = shot.get("camera", "default").lower()
+    lora_mapping = config.CAMERA_LORA_MAPPING
+
+    # Find the matching LoRA configuration (use exact match first, then partial match, then default)
+    lora_config = None
+    trigger_keyword = ""
+
+    # Check if mapping is old-style (string) or new-style (dict)
+    if camera_type in lora_mapping:
+        mapping = lora_mapping[camera_type]
+        if isinstance(mapping, dict):
+            # New-style dict with lora_file and trigger_keyword
+            lora_config = mapping
+            lora_name = mapping.get("lora_file")
+            trigger_keyword = mapping.get("trigger_keyword", "")
+        else:
+            # Old-style string (just the lora filename)
+            lora_name = mapping
+            lora_config = {"lora_file": mapping, "trigger_keyword": ""}
+    else:
+        # Try partial match (e.g., "slow pan" matches "pan")
+        for key, value in lora_mapping.items():
+            if key != "default" and key in camera_type:
+                if isinstance(value, dict):
+                    lora_name = value.get("lora_file")
+                    trigger_keyword = value.get("trigger_keyword", "")
+                else:
+                    lora_name = value
+                    break
+        # Fall back to default if no match found
+        if lora_name is None:
+            default_mapping = lora_mapping.get("default", {})
+            if isinstance(default_mapping, dict):
+                lora_name = default_mapping.get("lora_file", list(default_mapping.values())[0])
+                trigger_keyword = default_mapping.get("trigger_keyword", "")
+            else:
+                lora_name = default_mapping
+                trigger_keyword = ""
+
+    # Update LoRA node if configured
+    if hasattr(config, 'LORA_NODE_ID') and config.LORA_NODE_ID and lora_name:
+        lora_node_id = config.LORA_NODE_ID
+        if lora_node_id in wf:
+            old_lora = wf[lora_node_id]["inputs"].get("lora_name", "")
+            wf[lora_node_id]["inputs"]["lora_name"] = lora_name
+            print(f"[LORA] Camera '{camera_type}' -> LoRA: {lora_name}")
+            if old_lora != lora_name:
+                print(f"       (was: {old_lora})")
+
     # Inject image path to LoadImage node if available
     if "image_path" in shot and shot["image_path"]:
         load_node_id = config.LOAD_IMAGE_NODE_ID
