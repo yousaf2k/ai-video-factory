@@ -30,10 +30,13 @@ Return a JSON list where each item contains:
   {
     "image_prompt": "Full detailed image generation prompt",
     "motion_prompt": "Description of desired camera movement",
-    "camera": "slow pan | dolly | static | orbit | zoom | tracking"
+    "camera": "slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime ",
+    "narration": "Voice-over narration text for this shot (from the story scene)"
   }
 ]
 ```
+
+**Important**: Include the narration text from each scene in the shot output.
 
 ## Camera Types
 
@@ -44,9 +47,17 @@ Return a JSON list where each item contains:
 - **zoom**: In-place zoom in or out
 - **static**: No camera movement
 - **tracking**: Camera follows moving subject
+- **drone**: Aerial camera movement from above, smooth and stabilized
+- **arc**: Camera moves in a curved path around the subject
+- **walk**: Natural ground-level walking movement as if held by a person
+- **fpv**: Fast first-person-view motion, immersive and dynamic
+- **dronedive**: Drone rapidly descends from high altitude toward the subject
+- **bullettime**: Subject appears frozen while the camera moves around in slow motion
 
 ## Input
 
 You will receive scene descriptions. Create image prompts that capture the essence of each scene visually.
+
+**IMPORTANT**: Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 {USER_INPUT}

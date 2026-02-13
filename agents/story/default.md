@@ -21,11 +21,20 @@ You must respond with valid JSON only. No markdown, no explanations, just the JS
       "location": "Describe the setting/environment",
       "characters": "Who is in the scene",
       "action": "What happens in the scene",
-      "emotion": "The emotional tone/mood"
+      "emotion": "The emotional tone/mood",
+      "narration": "Voice-over narration text for this scene (2-3 sentences spoken by narrator)"
     }
   ]
 }
 ```
+
+## Narration Guidelines
+
+- **Scene-Specific**: Each scene should have its own narration that describes what's happening
+- **Story-Driven**: Narration should advance the story, provide context, or add emotional depth
+- **Concise**: Keep narration to 2-3 sentences per scene (approximately 15-30 seconds when spoken)
+- **Conversational**: Write as if speaking naturally to the audience
+- **Visual Complement**: Narration should enhance what's seen on screen, not just describe it
 
 ## Input
 

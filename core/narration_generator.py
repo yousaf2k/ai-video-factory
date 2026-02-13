@@ -20,6 +20,9 @@ def generate_narration_script(story_json, shots, total_duration=None, agent_name
     """
     Generate a narration script from story and shots.
 
+    NOTE: This function is deprecated. Narration should now be included in shots
+    during story generation. Use generate_narration_from_shots() instead.
+
     Args:
         story_json: The story JSON
         shots: List of shot dictionaries
@@ -29,55 +32,45 @@ def generate_narration_script(story_json, shots, total_duration=None, agent_name
     Returns:
         Dictionary with narration script and timing
     """
-    # Build input for the agent
-    story_data = json.loads(story_json) if isinstance(story_json, str) else story_json
+    print("[WARN] generate_narration_script() is deprecated. Narration should come from shots.")
+    return generate_narration_from_shots(shots)
 
-    input_text = f"""
-STORY:
-Title: {story_data.get('title', '')}
-Style: {story_data.get('style', '')}
 
-SCENES ({len(story_data.get('scenes', []))} total):
-"""
+def generate_narration_from_shots(shots, story_json=None):
+    """
+    Extract narration script from shots (generated during story creation).
 
-    for i, scene in enumerate(story_data.get('scenes', []), 1):
-        input_text += f"""
-Scene {i}:
-  Location: {scene.get('location', '')}
-  Characters: {scene.get('characters', '')}
-  Action: {scene.get('action', '')}
-  Emotion: {scene.get('emotion', '')}
-"""
+    Args:
+        shots: List of shot dictionaries with 'narration' field
+        story_json: Optional story data for title/header
 
-    if total_duration:
-        input_text += f"\nTARGET VIDEO DURATION: {total_duration} seconds"
-    else:
-        # Estimate duration from shots (5 seconds per shot)
-        estimated_duration = len(shots) * config.DEFAULT_SHOT_LENGTH
-        input_text += f"\nESTIMATED VIDEO DURATION: {estimated_duration} seconds"
+    Returns:
+        Narration script as formatted text
+    """
+    if not shots:
+        return ""
 
-    # Try to use agent prompt
-    try:
-        prompt = load_agent_prompt("narration", input_text, agent_name)
-    except (FileNotFoundError, ValueError):
-        # Fallback to simple prompt
-        print(f"[WARN] Narration agent '{agent_name}' not found, using legacy prompt")
-        prompt = f"""Create a narration script for the following story.
+    # Build narration script from shots
+    script_parts = []
 
-Target duration: {total_duration or 'variable'} seconds
+    # Add header if story provided
+    if story_json:
+        story_data = json.loads(story_json) if isinstance(story_json, str) else story_json
+        title = story_data.get('title', 'Video')
+        style = story_data.get('style', 'cinematic')
+        script_parts.append(f"# {title}\n")
+        script_parts.append(f"# Style: {style}\n")
 
-Create a narration with timing cues:
-[0:00-0:05] Opening
-[0:05-0:15] Story development
-[0:15-0:30] Main content
-[0:30-0:45] Conclusion
+    # Add narration from each shot
+    for i, shot in enumerate(shots, 1):
+        narration = shot.get('narration', '')
 
-STORY:
-{input_text}
-"""
+        if narration:
+            # Add scene/shot number
+            script_parts.append(f"\n## Shot {i}")
+            script_parts.append(f"{narration}")
 
-    response = ask(prompt, response_format="text/plain")
-    return response
+    return "\n".join(script_parts)
 
 
 def generate_narration_audio(script, output_path, tts_method="local", comfyui_workflow=None, voice="default"):
@@ -444,19 +437,24 @@ def _generate_with_local_tts(script, output_path, voice):
 
 
 def generate_narration_for_session(session_id, story_json, shots, total_duration, agent_name="default",
-                                   tts_method="local", tts_workflow_path=None, voice="default"):
+                                   tts_method="local", tts_workflow_path=None, voice="default",
+                                   use_comfyui=False):
     """
-    Complete narration generation workflow for a session.
+    Complete narration TTS workflow for a session.
+
+    NOTE: Narration text should already be in shots (from story generation).
+    This function only handles TTS conversion.
 
     Args:
         session_id: Session identifier
-        story_json: Story data
-        shots: Shot list
-        total_duration: Total video duration
-        agent_name: Narration agent to use
+        story_json: Story data (for title/header)
+        shots: Shot list with narration fields
+        total_duration: Total video duration (not used, kept for compatibility)
+        agent_name: Narration agent (not used, kept for compatibility)
         tts_method: TTS method ("local", "comfyui", "elevenlabs")
         tts_workflow_path: Path to TTS workflow JSON (for comfyui)
         voice: Voice selection
+        use_comfyui: Legacy parameter (use tts_method="comfyui" instead)
 
     Returns:
         Tuple of (script_path, audio_path) or (None, None) if failed
@@ -467,9 +465,13 @@ def generate_narration_for_session(session_id, story_json, shots, total_duration
     narration_dir = session_mgr.get_session_dir(session_id) / "narration"
     os.makedirs(narration_dir, exist_ok=True)
 
-    # Step 1: Generate script
-    print("\n[NARRATION] Step 1: Generating script...")
-    script = generate_narration_script(story_json, shots, total_duration, agent_name)
+    # Step 1: Extract narration from shots
+    print("\n[NARRATION] Step 1: Extracting narration from shots...")
+    script = generate_narration_from_shots(shots, story_json)
+
+    if not script.strip():
+        print("[WARN] No narration found in shots. Skipping narration generation.")
+        return None, None
 
     # Save script
     script_path = narration_dir / "narration_script.txt"

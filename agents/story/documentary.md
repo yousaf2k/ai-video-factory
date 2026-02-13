@@ -21,10 +21,18 @@ You must respond with valid JSON only:
       "location": "Real-world setting or environment",
       "characters": "Experts, witnesses, or subjects",
       "action": "Informative or revealing actions",
-      "emotion": "The tone (curiosity, wonder, concern, etc.)"
+      "emotion": "The tone (curiosity, wonder, concern, etc.)",
+      "narration": "Informative voice-over explaining facts, context, or significance (2-3 sentences)"
     }
   ]
 }
 ```
+
+## Narration Guidelines
+
+- **Educational**: Narration should provide facts, context, explanations, or expert insights
+- **Clear and Concise**: Keep narration to 2-3 sentences per scene (approximately 15-30 seconds when spoken)
+- **Objective Tone**: Maintain informative, balanced perspective
+- **Story Integration**: Narration should connect visual evidence to broader themes or discoveries
 
 {USER_INPUT}

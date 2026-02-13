@@ -9,7 +9,7 @@ import os
 # Get your API key from: https://ai.google.dev/
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
-# Text generation model (for story, shots, etc.)
+# Text generation model (for story, shots, etc. "gemini-2.0-flash" and "gemini-3-flash-preview" is faster and cheaper, "gemini-3-pro-preview" is higher quality but more expensive)
 GEMINI_TEXT_MODEL = "gemini-2.0-flash"
 
 # Image generation model (NanoBanana Pro)
@@ -43,12 +43,12 @@ IMAGE_GENERATION_MODE = "comfyui"  # Options: "gemini", "comfyui"
 
 # Default negative prompt for ComfyUI image generation
 # Common negative prompts: "blurry, low quality, distorted, deformed"
-DEFAULT_NEGATIVE_PROMPT = ""
+DEFAULT_NEGATIVE_PROMPT = "Vibrant colors, overexposed, static, blurry details, subtitles, style, artwork, painting, image, still, overall grayish, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, distorted limbs, fingers fused together, static image, cluttered background, three legs, many people in the background, walking backwards, blurry, too dark, too bright, too saturated, too sharp, too soft, too high contrast, too bland, too monotonous, too complex, too simple, too abstract, text, logo, watermark, signature"
 
 # Number of images to generate per shot (with different seeds)
 # Set to 1 for single image per shot, or higher for multiple variations
 # Each image will be named: shot_001_001.png, shot_001_002.png, etc.
-IMAGES_PER_SHOT = 1
+IMAGES_PER_SHOT = 4
 
 # Output directory for generated images
 IMAGES_OUTPUT_DIR = "output/generated_images"
@@ -59,22 +59,86 @@ IMAGE_ASPECT_RATIO = "16:9"
 # Image resolution (options: "512", "1024", "1280" "2048")
 IMAGE_RESOLUTION = "1280"
 
-# ComfyUI image generation workflow path
-IMAGE_WORKFLOW_PATH = "workflow/image/image_generation_workflow.json"
+# ==========================================
+# IMAGE WORKFLOW CONFIGURATION
+# ==========================================
+# Active image workflow to use (must exist in IMAGE_WORKFLOWS)
+IMAGE_WORKFLOW = "flux2"
 
-# Node IDs for image generation workflow (ComfyUI mode)
-# These need to match your ComfyUI image generation workflow
-IMAGE_TEXT_NODE_ID = "6"        # CLIPTextEncode node for positive prompt
-IMAGE_NEG_TEXT_NODE_ID = None   # Flux doesn't use negative prompts (set to None)
-IMAGE_KSAMPLER_NODE_ID = "13"   # SamplerCustomAdvanced node (Flux uses this, not KSampler)
-IMAGE_VAE_NODE_ID = "8"         # VAEDecode node
-IMAGE_SAVE_NODE_ID = "9"        # SaveImage node
+# Image workflow definitions
+# Each workflow has its own node IDs and workflow file path
+# Add new workflows here and set IMAGE_WORKFLOW to the desired key
+IMAGE_WORKFLOWS = {
+    "flux": {
+        "workflow_path": "workflow/image/flux.json",
+        "text_node_id": "6",           # CLIPTextEncode node for positive prompt
+        "neg_text_node_id": None,      # Flux doesn't use negative prompts
+        "ksampler_node_id": "13",      # SamplerCustomAdvanced node
+        "vae_node_id": "8",            # VAEDecode node
+        "save_node_id": "9",           # SaveImage node
+        "description": "Flux model for high-quality image generation"
+    },
+    "flux2": {
+        "workflow_path": "workflow/image/flux2.json",
+        "text_node_id": "6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "13",
+        "vae_node_id": "8",
+        "save_node_id": "9",
+        "description": "Alternative Flux workflow"
+    },
+    "sdxl": {
+        "workflow_path": "workflow/image/sdxl.json",
+        "text_node_id": "6",           # CLIPTextEncode node for positive prompt
+        "neg_text_node_id": "7",       # CLIPTextEncode node for negative prompt
+        "ksampler_node_id": "13",      # KSampler node
+        "vae_node_id": "8",            # VAEDecode node
+        "save_node_id": "9",           # SaveImage node
+        "description": "SDXL model for image generation"
+    },
+    "hidream": {
+        "workflow_path": "workflow/image/hidream.json",
+        "text_node_id": "6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "13",
+        "vae_node_id": "8",
+        "save_node_id": "9",
+        "description": "HiDream model for image generation"
+    },
+    "qwen": {
+        "workflow_path": "workflow/image/qwen.json",
+        "text_node_id": "6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "13",
+        "vae_node_id": "8",
+        "save_node_id": "9",
+        "description": "Qwen model for image generation"
+    },
+    "default": {
+        "workflow_path": "workflow/image/image_generation_workflow.json",
+        "text_node_id": "6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "13",
+        "vae_node_id": "8",
+        "save_node_id": "9",
+        "description": "Default/fallback image generation workflow"
+    }
+}
+
+# Legacy single workflow settings (deprecated, use IMAGE_WORKFLOWS instead)
+# Kept for backward compatibility
+IMAGE_WORKFLOW_PATH = "workflow/image/image_generation_workflow.json"
+IMAGE_TEXT_NODE_ID = "6"
+IMAGE_NEG_TEXT_NODE_ID = None
+IMAGE_KSAMPLER_NODE_ID = "13"
+IMAGE_VAE_NODE_ID = "8"
+IMAGE_SAVE_NODE_ID = "9"
 
 # ==========================================
 # VIDEO GENERATION CONFIGURATION
 # ==========================================
 # Default video length per shot (in seconds)
-DEFAULT_SHOT_LENGTH = 5.0
+DEFAULT_SHOT_LENGTH = 6.0
 
 # Maximum number of shots to generate (for testing)
 # Set to 0 for no limit (generates all shots from story)
@@ -82,7 +146,7 @@ DEFAULT_SHOT_LENGTH = 5.0
 DEFAULT_MAX_SHOTS = 0  # 0 = no limit
 
 # Video framerate (fps)
-VIDEO_FPS = 24
+VIDEO_FPS = 16
 
 # Target total video length (in seconds)
 # Set to None to generate based on story length
@@ -95,9 +159,18 @@ TARGET_VIDEO_LENGTH = None  # or specify like: 60.0 for 60 seconds
 VIDEO_RENDER_TIMEOUT = 1800  # 30 minutes
 
 # LoRA node IDs in the workflow (for camera-based LoRA loading)
-# Wan 2.2 workflow uses TWO LoRA nodes simultaneously
-LORA_NODE_ID = "127"        # First LoRA node (LoraLoaderModelOnly) - for low noise model
-LORA_NODE_ID_2 = "128"      # Second LoRA node (LoraLoaderModelOnly) - for high noise model
+# Array of LoRA node pairs - each pair contains HIGH_NOISE_LORA_NODE_ID and LOW_NOISE_LORA_NODE_ID
+# This allows up to 4 different camera types to load their LoRAs simultaneously
+LORA_NODES = [
+    {"HIGH_NOISE_LORA_NODE_ID": "128", "LOW_NOISE_LORA_NODE_ID": "127"},
+    {"HIGH_NOISE_LORA_NODE_ID": "130", "LOW_NOISE_LORA_NODE_ID": "131"},
+    {"HIGH_NOISE_LORA_NODE_ID": "132", "LOW_NOISE_LORA_NODE_ID": "133"},
+    {"HIGH_NOISE_LORA_NODE_ID": "134", "LOW_NOISE_LORA_NODE_ID": "135"},
+]
+
+# Legacy single node IDs (for backward compatibility)
+LORA_NODE_ID = "127"
+LORA_NODE_ID_2 = "128"
 
 # ==========================================
 # CAMERA-TO-LORA MAPPING
@@ -106,42 +179,47 @@ LORA_NODE_ID_2 = "128"      # Second LoRA node (LoraLoaderModelOnly) - for high 
 # Camera types from shots.json will be matched to these LoRAs
 # Trigger keywords are appended to motion prompts to activate specific LoRA effects
 #
-# Each camera type has TWO LoRA options:
-# - high_noise_lora: High noise model for more dynamic motion (loaded into LORA_NODE_ID_2)
-# - low_noise_lora: Low noise model for more stable/subtle motion (loaded into LORA_NODE_ID)
+# Each shot can have multiple cameras (e.g., "dolly,pan" or ["pan", "drone"])
+# When multiple cameras are present, they are assigned to LORA_NODES pairs sequentially:
+# - First camera -> LORA_NODES[0]
+# - Second camera -> LORA_NODES[1]
+# - Third camera -> LORA_NODES[2]
+# - Fourth camera -> LORA_NODES[3]
+#
+# Each camera type has:
+# - high_noise_lora: High noise model for more dynamic motion
+# - low_noise_lora: Low noise model for more stable/subtle motion
 # - trigger_keyword: Text appended to motion prompt to activate LoRA effects
 # - strength_low: LoRA strength for low noise model (0.0 to 1.0), required
 # - strength_high: LoRA strength for high noise model (0.0 to 1.0), required
-#
-# IMPORTANT: Every camera type MUST have strength_low and strength_high defined
 CAMERA_LORA_MAPPING = {
     "slow pan": {
         "high_noise_lora": "",
         "low_noise_lora": "",
         "trigger_keyword": "slow pan",
-        "strength_low": 0.5,
-        "strength_high": 0.6
+        "strength_low": 0.0,
+        "strength_high": 0.0
     },
     "pan": {
         "high_noise_lora": "",
         "low_noise_lora": "",
         "trigger_keyword": "pan",
-        "strength_low": 0.6,
-        "strength_high": 0.7
+        "strength_low": 0.0,
+        "strength_high": 0.0
     },
     "static": {
         "high_noise_lora": "",
         "low_noise_lora": "",
         "trigger_keyword": "static shot",
-        "strength_low": 0.3,
-        "strength_high": 0.4
+        "strength_low": 0.0,
+        "strength_high": 0.0
     },
     "dolly": {
-        "high_noise_lora": "",
+        "high_noise_lora": "dolly-zoom-wan22-high.safetensors",
         "low_noise_lora": "",
-        "trigger_keyword": "dolly",
-        "strength_low": 0.7,
-        "strength_high": 0.8
+        "trigger_keyword": "dolly-zoom shot",
+        "strength_low": 0.0,
+        "strength_high": 1.0
     },
     "orbit": {
         "high_noise_lora": "Surround_Camera_S1440.safetensors",
@@ -151,38 +229,66 @@ CAMERA_LORA_MAPPING = {
         "strength_high": 1.0
     },
     "zoom": {
-        "high_noise_lora": "",
+        "high_noise_lora": "POV_Parkour_high_noise.safetensors",
         "low_noise_lora": "",
-        "trigger_keyword": "zoom in",
-        "strength_low": 0.8,
-        "strength_high": 0.9
+        "trigger_keyword": "POV Parkour",
+        "strength_low": 0.0,
+        "strength_high": 1.0
     },
     "tracking": {
         "high_noise_lora": "",
         "low_noise_lora": "",
         "trigger_keyword": "tracking shot",
-        "strength_low": 0.7,
+        "strength_low": 0.0,
         "strength_high": 0.8
     },
     "drone": {
         "high_noise_lora": "wan22-video8-drone-16-sel-2.safetensors",
         "low_noise_lora": "",
-        "trigger_keyword": "drone footage aerial",
-        "strength_low": 0.7,
+        "trigger_keyword": "drone shot",
+        "strength_low": 0.0,
         "strength_high": 0.9
     },
     "arc": {
         "high_noise_lora": "wan22-video10-arcshot-16-sel-7-high.safetensors",
         "low_noise_lora": "",
         "trigger_keyword": "arc shot",
-        "strength_low": 0.7,
+        "strength_low": 0.0,
+        "strength_high": 0.8
+    },
+    "walk": {
+        "high_noise_lora": "Walk01_HighWan2_2.safetensors",
+        "low_noise_lora": "Walk01_LowWan2_2.safetensors",
+        "trigger_keyword": "walking into the direction of the moving camera",
+        "strength_low": 0.0,
+        "strength_high": 0.9
+    },
+    "fpv": {
+        "high_noise_lora": "wan2.2extremebodycam_000000300_high_noise.safetensors",
+        "low_noise_lora": "",
+        "trigger_keyword": "the viewer runs trought , the hand shows throught camera",
+        "strength_low": 0.0,
+        "strength_high": 0.9
+    },
+    "dronedive": {
+        "high_noise_lora": "FPV_drone_dive_high_noise.safetensors",
+        "low_noise_lora": "",
+        "trigger_keyword": "Dr0ne Div3",
+        "strength_low": 0.0,
+        "strength_high": 1.0
+    },
+    "bullettime": {
+        "high_noise_lora": "wan2.2bullet_time_high_noise.safetensors",
+        "low_noise_lora": "",
+        "trigger_keyword": "BULLETTIME",
+        "strength_low": 0.0,
         "strength_high": 0.9
     },
     "default": {
         "high_noise_lora": "",
         "low_noise_lora": "",
         "trigger_keyword": "",
-        "strength_low": 0.8,
+        "strength_low": 0.0,
         "strength_high": 0.8
     }
 }
@@ -244,7 +350,7 @@ AUTO_STEP_MODE = True  # True = auto, False = manual
 # AGENT CONFIGURATION
 # ==========================================
 # Default agents to use for each step
-# Agent files are stored in agents/{type}/{name}.txt
+# Agent files are stored in agents/{type}/{name}.md
 # Available agents depend on files in the agents folder
 
 # Story generation agent (default, dramatic, documentary)

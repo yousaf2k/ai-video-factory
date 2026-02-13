@@ -9,7 +9,7 @@ import config
 import os
 
 
-def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = "", seed: int = None):
+def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = "", seed: int = None, workflow_name: str = None):
     """
     Generate a single image using ComfyUI workflow.
 
@@ -18,13 +18,48 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
         output_path: Full path where the image will be saved
         negative_prompt: Optional negative prompt for better quality
         seed: Optional random seed for reproducibility
+        workflow_name: Optional workflow name from IMAGE_WORKFLOWS (uses config.IMAGE_WORKFLOW if not specified)
 
     Returns:
         Path to the generated image file, or None if failed
     """
     try:
+        # Get workflow configuration
+        if workflow_name is None:
+            workflow_name = config.IMAGE_WORKFLOW
+
+        # Get workflow config from IMAGE_WORKFLOWS
+        workflows = getattr(config, 'IMAGE_WORKFLOWS', {})
+
+        if workflow_name not in workflows:
+            print(f"[WARN] Workflow '{workflow_name}' not found in IMAGE_WORKFLOWS, using 'default'")
+            workflow_name = 'default'
+
+        if workflow_name not in workflows:
+            print(f"[WARN] Default workflow not found, falling back to legacy config")
+            workflow_config = {
+                'workflow_path': config.IMAGE_WORKFLOW_PATH,
+                'text_node_id': config.IMAGE_TEXT_NODE_ID,
+                'neg_text_node_id': config.IMAGE_NEG_TEXT_NODE_ID,
+                'ksampler_node_id': config.IMAGE_KSAMPLER_NODE_ID,
+                'vae_node_id': config.IMAGE_VAE_NODE_ID,
+                'save_node_id': config.IMAGE_SAVE_NODE_ID
+            }
+        else:
+            workflow_config = workflows[workflow_name]
+
+        workflow_path = workflow_config['workflow_path']
+        text_node_id = workflow_config['text_node_id']
+        neg_text_node_id = workflow_config['neg_text_node_id']
+        ksampler_node_id = workflow_config['ksampler_node_id']
+        vae_node_id = workflow_config['vae_node_id']
+        save_node_id = workflow_config['save_node_id']
+
+        print(f"[INFO] Using workflow: {workflow_name} ({workflow_config.get('description', 'No description')})")
+        print(f"[INFO] Workflow file: {workflow_path}")
+
         # Load the image generation workflow
-        with open(config.IMAGE_WORKFLOW_PATH, 'r', encoding='utf-8') as f:
+        with open(workflow_path, 'r', encoding='utf-8') as f:
             workflow = json.load(f)
 
         # Get dimensions from config
@@ -34,12 +69,12 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
         # The workflow structure needs to be converted to API format
         api_format = _convert_workflow_to_api_format(workflow, width=width, height=height)
 
-        # Set the text prompts
-        if config.IMAGE_TEXT_NODE_ID in api_format:
-            api_format[config.IMAGE_TEXT_NODE_ID]["inputs"]["text"] = prompt
+        # Set the text prompts using workflow-specific node IDs
+        if text_node_id and text_node_id in api_format:
+            api_format[text_node_id]["inputs"]["text"] = prompt
 
-        if config.IMAGE_NEG_TEXT_NODE_ID in api_format and negative_prompt:
-            api_format[config.IMAGE_NEG_TEXT_NODE_ID]["inputs"]["text"] = negative_prompt
+        if neg_text_node_id and neg_text_node_id in api_format and negative_prompt:
+            api_format[neg_text_node_id]["inputs"]["text"] = negative_prompt
 
         # Set random seed if provided
         if seed is not None:
@@ -53,11 +88,11 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
                     if "noise_seed" in node_data.get("inputs", {}):
                         api_format[node_id]["inputs"]["noise_seed"] = seed
 
-        # Set output filename for SaveImage node
-        if config.IMAGE_SAVE_NODE_ID in api_format:
+        # Set output filename for SaveImage node using workflow-specific node ID
+        if save_node_id and save_node_id in api_format:
             # Extract just the filename from the full path
             filename = os.path.basename(output_path)
-            api_format[config.IMAGE_SAVE_NODE_ID]["inputs"]["filename_prefix"] = os.path.splitext(filename)[0]
+            api_format[save_node_id]["inputs"]["filename_prefix"] = os.path.splitext(filename)[0]
 
         # Submit to ComfyUI
         payload = {

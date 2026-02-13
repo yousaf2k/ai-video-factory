@@ -16,7 +16,8 @@ def build_scene_graph(story_json):
             "location": s["location"],
             "action": s["action"],
             "emotion": s["emotion"],
-            "characters": s["characters"]
+            "characters": s["characters"],
+            "narration": s.get("narration", "")  # Include narration from story
         })
 
     return graph

@@ -156,118 +156,140 @@ def compile_workflow(template, shot, video_length_seconds=None):
 
     wf = copy.deepcopy(template)
 
-    # Inject motion prompt
+    # Inject motion prompt (will be enhanced with trigger keywords below)
     motion_node_id = config.MOTION_PROMPT_NODE_ID
-    if motion_node_id in wf:
-        if "text" not in wf[motion_node_id]["inputs"]:
-            wf[motion_node_id]["inputs"]["text"] = shot["motion_prompt"]
+    base_motion_prompt = shot.get("motion_prompt", "")
+
+    # ==========================================
+    # MULTI-CAMERA LORA SYSTEM
+    # ==========================================
+    # Parse camera field - can be:
+    # - Single camera as string: "drone"
+    # - Multiple cameras as comma-separated string: "drone, zoom"
+    # - Multiple cameras as list: ["drone", "zoom"]
+
+    camera_field = shot.get("camera", "default")
+    camera_types = []
+
+    if isinstance(camera_field, list):
+        # Already a list
+        camera_types = [c.lower().strip() for c in camera_field]
+    elif isinstance(camera_field, str):
+        # Split by comma if present
+        if ',' in camera_field:
+            camera_types = [c.lower().strip() for c in camera_field.split(',')]
         else:
-            # Update existing text
-            wf[motion_node_id]["inputs"]["text"] = shot["motion_prompt"]
-
-    # Inject camera-based LoRA (both high and low noise models)
-    camera_type = shot.get("camera", "default").lower()
-    lora_mapping = config.CAMERA_LORA_MAPPING
-
-    # Find the matching LoRA configuration (use exact match first, then partial match, then default)
-    trigger_keyword = ""
-    high_noise_lora = None
-    low_noise_lora = None
-    strength_low = None
-    strength_high = None
-
-    # Check if mapping is old-style (string) or new-style (dict)
-    if camera_type in lora_mapping:
-        mapping = lora_mapping[camera_type]
-        if isinstance(mapping, dict):
-            # New-style dict with high_noise_lora, low_noise_lora, trigger_keyword, and strengths
-            trigger_keyword = mapping.get("trigger_keyword", "")
-            high_noise_lora = mapping.get("high_noise_lora")
-            low_noise_lora = mapping.get("low_noise_lora")
-            # Get camera-specific strengths if available
-            strength_low = mapping.get("strength_low")
-            strength_high = mapping.get("strength_high")
-        else:
-            # Old-style string (just the lora filename) - use for both
-            high_noise_lora = mapping
-            low_noise_lora = mapping
-            trigger_keyword = ""
+            camera_types = [camera_field.lower().strip()]
     else:
-        # Try partial match (e.g., "slow pan" matches "pan")
-        for key, value in lora_mapping.items():
-            if key != "default" and key in camera_type:
-                if isinstance(value, dict):
-                    trigger_keyword = value.get("trigger_keyword", "")
-                    high_noise_lora = value.get("high_noise_lora")
-                    low_noise_lora = value.get("low_noise_lora")
-                    # Get camera-specific strengths if available
-                    strength_low = value.get("strength_low")
-                    strength_high = value.get("strength_high")
-                else:
-                    # Old-style string
-                    high_noise_lora = value
-                    low_noise_lora = value
-                break
+        # Fallback to default
+        camera_types = ["default"]
 
-        # Fall back to default if no match found
-        if high_noise_lora is None:
-            default_mapping = lora_mapping.get("default", {})
-            if isinstance(default_mapping, dict):
-                trigger_keyword = default_mapping.get("trigger_keyword", "")
-                high_noise_lora = default_mapping.get("high_noise_lora")
-                low_noise_lora = default_mapping.get("low_noise_lora")
-                # Get camera-specific strengths if available
-                strength_low = default_mapping.get("strength_low")
-                strength_high = default_mapping.get("strength_high")
-            else:
-                # Old-style string
-                high_noise_lora = default_mapping
-                low_noise_lora = default_mapping
-                trigger_keyword = ""
+    lora_mapping = config.CAMERA_LORA_MAPPING
+    lora_nodes = getattr(config, 'LORA_NODES', [])
 
-    # Use global defaults if camera-specific strengths not provided
-    if strength_low is None:
-        strength_low = getattr(config, 'LORA_STRENGTH_LOW', 0.8)
-    if strength_high is None:
-        strength_high = getattr(config, 'LORA_STRENGTH_HIGH', 0.8)
+    # Collect all trigger keywords from all cameras
+    all_trigger_keywords = []
 
-    # Update first LoRA node (low noise model) if configured
-    if hasattr(config, 'LORA_NODE_ID') and config.LORA_NODE_ID and low_noise_lora:
-        lora_node_id = config.LORA_NODE_ID
-        if lora_node_id in wf:
-            old_lora = wf[lora_node_id]["inputs"].get("lora_name", "")
-            old_strength = wf[lora_node_id]["inputs"].get("strength_model", "")
+    # Process each camera type and assign to LORA_NODES pairs sequentially
+    for camera_index, camera_type in enumerate(camera_types):
+        if not camera_type:
+            continue
 
-            wf[lora_node_id]["inputs"]["lora_name"] = low_noise_lora
-            wf[lora_node_id]["inputs"]["strength_model"] = strength_low
+        # Skip if we've run out of available node pairs
+        if camera_index >= len(lora_nodes):
+            print(f"[WARN] Camera '{camera_type}' skipped - no available LoRA node pairs (max 4 cameras)")
+            continue
 
-            print(f"[LORA 1] Camera '{camera_type}' -> Low noise: {low_noise_lora} (strength: {strength_low})")
-            if old_lora != low_noise_lora:
-                print(f"        (was: {old_lora})")
-            if old_strength != strength_low and old_strength != "":
-                print(f"        strength was: {old_strength})")
-    elif low_noise_lora == "":
-        # Skip loading low noise LoRA if explicitly set to empty string
-        print(f"[LORA 1] Camera '{camera_type}' -> Low noise: SKIPPED (empty filename)")
+        # Get the node pair for this camera
+        node_pair = lora_nodes[camera_index]
+        high_noise_node_id = node_pair.get("HIGH_NOISE_LORA_NODE_ID")
+        low_noise_node_id = node_pair.get("LOW_NOISE_LORA_NODE_ID")
 
-    # Update second LoRA node (high noise model) if configured
-    if hasattr(config, 'LORA_NODE_ID_2') and config.LORA_NODE_ID_2 and high_noise_lora:
-        lora_node_id_2 = config.LORA_NODE_ID_2
-        if lora_node_id_2 in wf:
-            old_lora = wf[lora_node_id_2]["inputs"].get("lora_name", "")
-            old_strength = wf[lora_node_id_2]["inputs"].get("strength_model", "")
+        # Find matching camera configuration
+        camera_config = None
 
-            wf[lora_node_id_2]["inputs"]["lora_name"] = high_noise_lora
-            wf[lora_node_id_2]["inputs"]["strength_model"] = strength_high
+        # Try exact match first
+        if camera_type in lora_mapping:
+            camera_config = lora_mapping[camera_type]
+        else:
+            # Try partial match
+            for key, value in lora_mapping.items():
+                if key != "default" and key in camera_type:
+                    camera_config = value
+                    break
 
-            print(f"[LORA 2] Camera '{camera_type}' -> High noise: {high_noise_lora} (strength: {strength_high})")
-            if old_lora != high_noise_lora:
-                print(f"        (was: {old_lora})")
-            if old_strength != strength_high and old_strength != "":
-                print(f"        strength was: {old_strength})")
-    elif high_noise_lora == "":
-        # Skip loading high noise LoRA if explicitly set to empty string
-        print(f"[LORA 2] Camera '{camera_type}' -> High noise: SKIPPED (empty filename)")
+            # Fall back to default
+            if camera_config is None:
+                camera_config = lora_mapping.get("default", {})
+
+        if not isinstance(camera_config, dict):
+            continue
+
+        # Get LoRA configuration for this camera
+        trigger_keyword = camera_config.get("trigger_keyword", "")
+        high_noise_lora = camera_config.get("high_noise_lora")
+        low_noise_lora = camera_config.get("low_noise_lora")
+        strength_low = camera_config.get("strength_low")
+        strength_high = camera_config.get("strength_high")
+
+        # Collect trigger keyword
+        if trigger_keyword:
+            all_trigger_keywords.append(trigger_keyword)
+
+        # Use global defaults if camera-specific strengths not provided
+        if strength_low is None:
+            strength_low = getattr(config, 'LORA_STRENGTH_LOW', 0.8)
+        if strength_high is None:
+            strength_high = getattr(config, 'LORA_STRENGTH_HIGH', 0.8)
+
+        print(f"\n[LORA] Processing camera {camera_index + 1}/{len(camera_types)}: '{camera_type}' -> Pair {camera_index}")
+
+        # Update low noise LoRA node if configured
+        if low_noise_node_id and low_noise_lora:
+            if low_noise_node_id in wf:
+                old_lora = wf[low_noise_node_id]["inputs"].get("lora_name", "")
+                old_strength = wf[low_noise_node_id]["inputs"].get("strength_model", "")
+
+                wf[low_noise_node_id]["inputs"]["lora_name"] = low_noise_lora
+                wf[low_noise_node_id]["inputs"]["strength_model"] = strength_low
+
+                print(f"  Low Node {low_noise_node_id}: {low_noise_lora} (strength: {strength_low})")
+                if old_lora and old_lora != low_noise_lora:
+                    print(f"    (was: {old_lora})")
+        elif low_noise_lora == "":
+            print(f"  Low Node {low_noise_node_id}: SKIPPED (empty filename)")
+
+        # Update high noise LoRA node if configured
+        if high_noise_node_id and high_noise_lora:
+            if high_noise_node_id in wf:
+                old_lora = wf[high_noise_node_id]["inputs"].get("lora_name", "")
+                old_strength = wf[high_noise_node_id]["inputs"].get("strength_model", "")
+
+                wf[high_noise_node_id]["inputs"]["lora_name"] = high_noise_lora
+                wf[high_noise_node_id]["inputs"]["strength_model"] = strength_high
+
+                print(f"  High Node {high_noise_node_id}: {high_noise_lora} (strength: {strength_high})")
+                if old_lora and old_lora != high_noise_lora:
+                    print(f"    (was: {old_lora})")
+        elif high_noise_lora == "":
+            print(f"  High Node {high_noise_node_id}: SKIPPED (empty filename)")
+
+    # Append all trigger keywords to motion prompt
+    if all_trigger_keywords:
+        enhanced_prompt = base_motion_prompt
+        for keyword in all_trigger_keywords:
+            if keyword and keyword not in enhanced_prompt:
+                enhanced_prompt += f", {keyword}"
+
+        # Inject enhanced motion prompt
+        if motion_node_id in wf:
+            wf[motion_node_id]["inputs"]["text"] = enhanced_prompt
+
+        print(f"\n[TRIGGERS] Added: {', '.join(all_trigger_keywords)}")
+
+    # Inject base motion prompt if no triggers
+    elif motion_node_id in wf and base_motion_prompt:
+        wf[motion_node_id]["inputs"]["text"] = base_motion_prompt
 
     # Inject image path to LoadImage node if available
     if "image_path" in shot and shot["image_path"]:

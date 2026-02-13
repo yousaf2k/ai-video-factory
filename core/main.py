@@ -13,23 +13,25 @@ import config
 
 # Workflow steps definition
 # Note: Idea is step 1, but we start tracking from story (step 2)
+# Narration text is generated during story creation (step 2)
+# Step 7 only handles TTS conversion (text-to-speech)
 WORKFLOW_STEPS = {
     'story': 2,
     'scene_graph': 3,
     'shots': 4,
     'images': 5,
     'videos': 6,
-    'narration': 7
+    'narration': 7  # Narration TTS (text already in shots from story)
 }
 
 STEP_NAMES = {
-    1: 'idea',      # Not tracked in session steps
-    2: 'story',
+    1: 'idea',          # Not tracked in session steps
+    2: 'story',         # Includes narration text per scene
     3: 'scene_graph',
-    4: 'shots',
+    4: 'shots',         # Includes narration from story scenes
     5: 'images',
     6: 'videos',
-    7: 'narration'
+    7: 'narration_tts'  # TTS conversion only
 }
 
 from core.story_engine import build_story
@@ -138,7 +140,7 @@ def prompt_step_action(current_step, session_id, session_mgr):
         'shots': 'Shot Planning',
         'images': 'Image Generation',
         'videos': 'Video Rendering',
-        'narration': 'Narration Generation'
+        'narration': 'Narration TTS'
     }
     step_title = step_map.get(step_name, step_name.title())
 
@@ -375,7 +377,8 @@ def regenerate_failed_images(session_id, session_meta, shots, session_mgr):
     return regenerated_count
 
 
-def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, session_mgr):
+def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, session_mgr,
+                             image_path=None, variation_idx=1):
     """
     Submit a video to ComfyUI and wait for verification before marking as rendered.
 
@@ -386,6 +389,8 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
         session_id: Current session ID
         shot_idx: Shot index (1-based)
         session_mgr: SessionManager instance
+        image_path: Specific image path to use (overrides shot['image_path'])
+        variation_idx: Variation index for naming (1 = first, 2 = second, etc.)
 
     Returns:
         tuple: (success: bool, error_message: str or None, video_path: str or None)
@@ -398,33 +403,48 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
     os.makedirs(videos_dir, exist_ok=True)
 
     # Expected video filename
-    video_filename = f"shot_{shot_idx:03d}.mp4"
+    # If variation_idx > 1, use shot_001_002.mp4 format
+    if variation_idx > 1:
+        video_filename = f"shot_{shot_idx:03d}_{variation_idx:03d}.mp4"
+    else:
+        video_filename = f"shot_{shot_idx:03d}.mp4"
     video_save_path = os.path.join(videos_dir, video_filename)
 
     try:
+        # If a specific image path is provided, temporarily override shot's image_path
+        original_image_path = None
+        if image_path:
+            original_image_path = shot.get('image_path')
+            shot['image_path'] = image_path
+
         # Compile and submit workflow
         wf = compile_workflow(template, shot, video_length_seconds=shot_length)
         result = submit(wf)
+
+        # Restore original image_path if we overrode it
+        if original_image_path is not None:
+            shot['image_path'] = original_image_path
 
         prompt_id = result.get('prompt_id')
         if not prompt_id:
             return False, "No prompt_id returned from ComfyUI", None
 
-        print(f"[QUEUE] Shot {shot_idx}: Prompt {prompt_id[:8]}... submitted")
+        variation_label = f" (variation {variation_idx})" if variation_idx > 1 else ""
+        print(f"[QUEUE] Shot {shot_idx}{variation_label}: Prompt {prompt_id[:8]}... submitted")
 
         # Wait for completion and verify
-        print(f"[WAIT] Shot {shot_idx}: Waiting for render...")
+        print(f"[WAIT] Shot {shot_idx}{variation_label}: Waiting for render...")
         wait_result = wait_for_prompt_completion(prompt_id, timeout=config.VIDEO_RENDER_TIMEOUT)
 
         if not wait_result['success']:
             error_msg = wait_result.get('error', 'Unknown error')
-            print(f"[FAIL] Shot {shot_idx}: {error_msg}")
+            print(f"[FAIL] Shot {shot_idx}{variation_label}: {error_msg}")
             return False, error_msg, None
 
         # Check if we got any outputs
         outputs = wait_result.get('outputs', [])
         if not outputs:
-            print(f"[FAIL] Shot {shot_idx}: No output files generated")
+            print(f"[FAIL] Shot {shot_idx}{variation_label}: No output files generated")
             return False, "No output files generated", None
 
         # Find video outputs
@@ -432,7 +452,7 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
         image_outputs = [o for o in outputs if o['type'] == 'image']
 
         if video_outputs:
-            print(f"[PASS] Shot {shot_idx}: Generated {len(video_outputs)} video(s)")
+            print(f"[PASS] Shot {shot_idx}{variation_label}: Generated {len(video_outputs)} video(s)")
 
             # Copy first video to session folder
             video_info = video_outputs[0]
@@ -440,7 +460,7 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
 
             if os.path.exists(source_path):
                 shutil.copy2(source_path, video_save_path)
-                print(f"[COPY] Shot {shot_idx}: {video_filename} -> session/videos/")
+                print(f"[COPY] Shot {shot_idx}{variation_label}: {video_filename} -> session/videos/")
                 print(f"       Source: {source_path}")
                 print(f"       Target: {video_save_path}")
 
@@ -450,7 +470,9 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
                     print(f"[INFO] Video saved: {video_filename} ({file_size:,} bytes)")
 
                     # Mark as rendered with video path
-                    session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    # Only mark primary variation (1) in session metadata
+                    if variation_idx == 1:
+                        session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
                     return True, None, video_save_path
                 else:
                     print(f"[WARN] Copy verification failed")
@@ -461,7 +483,7 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
                 return False, "Source video not found", None
 
         elif image_outputs:
-            print(f"[WARN] Shot {shot_idx}: Generated {len(image_outputs)} frame(s) instead of video")
+            print(f"[WARN] Shot {shot_idx}{variation_label}: Generated {len(image_outputs)} frame(s) instead of video")
             for i in image_outputs[:3]:
                 print(f"       - {i['filename']}")
             if len(image_outputs) > 3:
@@ -472,12 +494,12 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
             return False, "Generated frames instead of video", None
 
         else:
-            print(f"[FAIL] Shot {shot_idx}: Unknown output type")
+            print(f"[FAIL] Shot {shot_idx}{variation_label}: Unknown output type")
             return False, "Unknown output type", None
 
     except Exception as e:
         error_msg = f"Exception during render: {str(e)}"
-        print(f"[FAIL] Shot {shot_idx}: {error_msg}")
+        print(f"[FAIL] Shot {shot_idx}{variation_label}: {error_msg}")
         import traceback
         traceback.print_exc()
         return False, error_msg, None
@@ -632,13 +654,14 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
     # Track results
     successful_renders = 0
     failed_renders = 0
+    total_renders = 0
     errors = []
 
     for shot in valid_shots:
         shot_idx = shot.get('index', 0)
         shot_meta = session_meta['shots'][shot_idx - 1]
 
-        # Skip if already rendered
+        # Skip if already rendered (only checks primary video)
         if shot_meta['video_rendered']:
             # Verify the video actually exists
             # For now, trust the metadata - user can regenerate if needed
@@ -646,23 +669,44 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
             successful_renders += 1
             continue
 
-        print(f"\n[SUBMIT] Shot {shot_idx} ({shot_length}s each)")
-        success, error, video_path = submit_and_verify_video(
-            template, shot, shot_length, session_id, shot_idx, session_mgr
-        )
+        # Get all image paths for this shot
+        image_paths = shot.get('image_paths', [])
+        if not image_paths:
+            # Fall back to single image_path
+            image_path = shot.get('image_path')
+            if image_path:
+                image_paths = [image_path]
 
-        if success:
-            successful_renders += 1
-        else:
+        if not image_paths:
+            print(f"\n[SKIP] Shot {shot_idx}: No images found")
+            errors.append(f"Shot {shot_idx}: No images found")
             failed_renders += 1
-            errors.append(f"Shot {shot_idx}: {error}")
+            continue
+
+        # Render video for each image variation
+        print(f"\n[SUBMIT] Shot {shot_idx} ({shot_length}s each, {len(image_paths)} variation(s))")
+
+        for variation_idx, img_path in enumerate(image_paths, 1):
+            total_renders += 1
+            variation_label = f" (variation {variation_idx}/{len(image_paths)})" if len(image_paths) > 1 else ""
+
+            success, error, video_path = submit_and_verify_video(
+                template, shot, shot_length, session_id, shot_idx, session_mgr,
+                image_path=img_path, variation_idx=variation_idx
+            )
+
+            if success:
+                successful_renders += 1
+            else:
+                failed_renders += 1
+                errors.append(f"Shot {shot_idx}{variation_label}: {error}")
 
     # Summary
     print("\n" + "="*70)
     print("RENDER SUMMARY")
     print("="*70)
-    print(f"Successful: {successful_renders}/{len(valid_shots)}")
-    print(f"Failed: {failed_renders}/{len(valid_shots)}")
+    print(f"Successful: {successful_renders}/{total_renders}")
+    print(f"Failed: {failed_renders}/{total_renders}")
 
     if errors:
         print("\n[ERRORS] Failed renders:")
@@ -920,9 +964,9 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
         _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
 
-    # STEP 6: Narration Generation
+    # STEP 6: Narration TTS
     if generate_narration and not steps.get('narration', False):
-        print("\nSTEP 6: Narration Generation")
+        print("\nSTEP 6: Narration TTS")
 
         # Load story for narration
         story_dir = session_mgr.get_session_dir(session_id)
@@ -1061,9 +1105,9 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
             else:
                 print("\n[SKIP] STEP 6: Videos already rendered")
 
-        elif current_step == 7:  # Narration Generation
+        elif current_step == 7:  # Narration TTS
             if generate_narration and not session_meta.get('steps', {}).get('narration', False):
-                print("\nSTEP 7: Narration Generation")
+                print("\nSTEP 7: Narration TTS")
 
                 # Calculate total duration
                 video_config = session_meta.get('video_config', {})
@@ -1177,34 +1221,56 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
 
 
 def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
-    """Render videos for all shots"""
+    """Render videos for all shots and all image variations"""
     template = load_workflow(config.WORKFLOW_PATH, video_length_seconds=shot_length)
 
     # Track results
     successful_renders = 0
     failed_renders = 0
+    total_renders = 0
     errors = []
 
     for shot in valid_shots:
         shot_idx = shot.get('index', shots.index(shot) + 1)
-        print(f"\n[SUBMIT] Shot {shot_idx} ({shot_length}s each)")
 
-        success, error, video_path = submit_and_verify_video(
-            template, shot, shot_length, session_id, shot_idx, session_mgr
-        )
+        # Get all image paths for this shot
+        image_paths = shot.get('image_paths', [])
+        if not image_paths:
+            # Fall back to single image_path
+            image_path = shot.get('image_path')
+            if image_path:
+                image_paths = [image_path]
 
-        if success:
-            successful_renders += 1
-        else:
+        if not image_paths:
+            print(f"\n[SKIP] Shot {shot_idx}: No images found")
+            errors.append(f"Shot {shot_idx}: No images found")
             failed_renders += 1
-            errors.append(f"Shot {shot_idx}: {error}")
+            continue
+
+        # Render video for each image variation
+        print(f"\n[SUBMIT] Shot {shot_idx} ({shot_length}s each, {len(image_paths)} variation(s))")
+
+        for variation_idx, img_path in enumerate(image_paths, 1):
+            total_renders += 1
+            variation_label = f" (variation {variation_idx}/{len(image_paths)})" if len(image_paths) > 1 else ""
+
+            success, error, video_path = submit_and_verify_video(
+                template, shot, shot_length, session_id, shot_idx, session_mgr,
+                image_path=img_path, variation_idx=variation_idx
+            )
+
+            if success:
+                successful_renders += 1
+            else:
+                failed_renders += 1
+                errors.append(f"Shot {shot_idx}{variation_label}: {error}")
 
     # Summary
     print("\n" + "="*70)
     print("RENDER SUMMARY")
     print("="*70)
-    print(f"Successful: {successful_renders}/{len(valid_shots)}")
-    print(f"Failed: {failed_renders}/{len(valid_shots)}")
+    print(f"Successful: {successful_renders}/{total_renders}")
+    print(f"Failed: {failed_renders}/{total_renders}")
 
     if errors:
         print("\n[ERRORS] Failed renders:")
@@ -1302,7 +1368,7 @@ Workflow Steps:
   4. Shot Planning (shots)
   5. Image Generation (images)
   6. Video Rendering (videos)
-  7. Narration Generation (narration)
+  7. Narration TTS (narration)
 
 Available Agents:
   Story: default, dramatic, documentary

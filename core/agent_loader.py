@@ -4,18 +4,18 @@ Agent Loader - Load and manage system prompts for LLM agents.
 Agent folder structure:
 agents/
 ├── story/
-│   ├── default.txt
-│   ├── dramatic.txt
-│   └── documentary.txt
+│   ├── default.md
+│   ├── dramatic.md
+│   └── documentary.md
 ├── narration/
-│   ├── default.txt
-│   └── documentary.txt
+│   ├── default.md
+│   └── documentary.md
 ├── image/
-│   ├── default.txt
-│   └── artistic.txt
+│   ├── default.md
+│   └── artistic.md
 └── video/
-    ├── default.txt
-    └── cinematic.txt
+    ├── default.md
+    └── cinematic.md
 """
 import os
 from pathlib import Path
@@ -51,7 +51,7 @@ class AgentLoader:
             agent_type: Type of agent ('story', 'narration', 'image', 'video')
 
         Returns:
-            List of agent names (without .txt extension)
+            List of agent names (without .md extension)
         """
         if agent_type not in AGENT_TYPES:
             raise ValueError(f"Unknown agent type: {agent_type}. Must be one of: {list(AGENT_TYPES.keys())}")
@@ -61,7 +61,7 @@ class AgentLoader:
             return []
 
         agents = []
-        for file in agent_dir.glob("*.txt"):
+        for file in agent_dir.glob("*.md"):
             agents.append(file.stem)
         return sorted(agents)
 
@@ -83,7 +83,7 @@ class AgentLoader:
         if agent_type not in AGENT_TYPES:
             raise ValueError(f"Unknown agent type: {agent_type}. Must be one of: {list(AGENT_TYPES.keys())}")
 
-        agent_file = self.agents_dir / agent_type / f"{agent_name}.txt"
+        agent_file = self.agents_dir / agent_type / f"{agent_name}.md"
 
         if not agent_file.exists():
             available = self.list_agents(agent_type)

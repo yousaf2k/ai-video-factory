@@ -93,7 +93,7 @@ def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = Non
         return None
 
 
-def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None) -> str:
+def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None, workflow_name: str = None) -> str:
     """
     Generate a single image using the configured mode (Gemini or ComfyUI).
 
@@ -104,6 +104,7 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         resolution: Optional. Override default resolution
         mode: Force a specific mode ("gemini" or "comfyui"), None to use config default
         seed: Optional random seed for reproducibility
+        workflow_name: Optional ComfyUI workflow name from IMAGE_WORKFLOWS (only for comfyui mode)
 
     Returns:
         Path to the generated image file, or None if failed
@@ -114,12 +115,12 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
 
     if mode == "comfyui":
         from core.comfyui_image_generator import generate_image_comfyui
-        return generate_image_comfyui(prompt, output_path, seed=seed)
+        return generate_image_comfyui(prompt, output_path, seed=seed, workflow_name=workflow_name)
     else:
         return generate_image_gemini(prompt, output_path, aspect_ratio, resolution, seed)
 
 
-def generate_image_variations(prompt: str, output_dir: str, count: int = 1, mode: str = None, negative_prompt: str = "", shot_idx: int = 1) -> list:
+def generate_image_variations(prompt: str, output_dir: str, count: int = 1, mode: str = None, negative_prompt: str = "", shot_idx: int = 1, workflow_name: str = None) -> list:
     """
     Generate multiple variations of an image with different random seeds.
 
@@ -130,6 +131,7 @@ def generate_image_variations(prompt: str, output_dir: str, count: int = 1, mode
         mode: Image generation mode ("gemini" or "comfyui")
         negative_prompt: Negative prompt for ComfyUI mode
         shot_idx: Shot index for naming (e.g., shot_001_001.png)
+        workflow_name: ComfyUI workflow name from IMAGE_WORKFLOWS (only for comfyui mode)
 
     Returns:
         List of generated image paths
@@ -148,7 +150,7 @@ def generate_image_variations(prompt: str, output_dir: str, count: int = 1, mode
         print(f"  [{variation_idx + 1}/{count}] Generating variation (seed: {seed})...")
 
         # Generate image
-        image_path = generate_image(prompt, output_path, mode=mode, seed=seed)
+        image_path = generate_image(prompt, output_path, mode=mode, seed=seed, workflow_name=workflow_name)
 
         if image_path:
             generated_paths.append(image_path)
@@ -158,7 +160,7 @@ def generate_image_variations(prompt: str, output_dir: str, count: int = 1, mode
     return generated_paths
 
 
-def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, negative_prompt: str = "", images_per_shot: int = 1) -> list:
+def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, negative_prompt: str = "", images_per_shot: int = 1, workflow_name: str = None) -> list:
     """
     Generate images for all shots in the list, with multiple variations per shot.
 
@@ -201,7 +203,8 @@ def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, ne
             count=images_per_shot,
             mode=mode,
             negative_prompt=negative_prompt,
-            shot_idx=shot_idx
+            shot_idx=shot_idx,
+            workflow_name=workflow_name
         )
 
         # Store all image paths (primary image and variations)

@@ -16,7 +16,7 @@ agents/
 
 1. **Navigate to the appropriate folder** (e.g., `agents/story/`)
 
-2. **Create a new `.txt` file** with your agent name (e.g., `my_custom_agent.txt`)
+2. **Create a new `.md` file** with your agent name (e.g., `my_custom_agent.md`)
 
 3. **Write the system prompt** following this template:
 
@@ -44,23 +44,25 @@ agents/
 ## Available Agents
 
 ### Story Agents (`agents/story/`)
-- `default.txt` - Cinematic documentary style
-- `dramatic.txt` - Emotional, character-driven narratives
-- `documentary.txt` - Factual, educational content
+- `default.md` - Cinematic documentary style
+- `dramatic.md` - Emotional, character-driven narratives
+- `documentary.md` - Factual, educational content
+- `time_traveler.md` ⭐ - First-person narratives from a time traveler's perspective using historical facts
 
 ### Narration Agents (`agents/narration/`)
-- `default.txt` - Standard voice-over narration
-- `documentary.txt` - Educational documentary narration
-- `professional.txt` - Professional VO artist style
-- `storytelling.txt` - Narrative-driven storytelling
+- `default.md` - Standard voice-over narration
+- `documentary.md` - Educational documentary narration
+- `professional.md` - Professional VO artist style
+- `storytelling.md` - Narrative-driven storytelling
 
 ### Image Agents (`agents/image/`)
-- `default.txt` - Standard image prompt engineering
-- `artistic.txt` - Artistic, aesthetic-focused prompts
+- `default.md` - Standard image prompt engineering
+- `artistic.md` - Artistic, aesthetic-focused prompts
+- `time_traveler.md` ⭐ - Photorealistic historical images from first-person time traveler perspective with DSLR photography
 
 ### Video Agents (`agents/video/`)
-- `default.txt` - Standard motion/camera prompts
-- `cinematic.txt` - Hollywood cinematography style
+- `default.md` - Standard motion/camera prompts
+- `cinematic.md` - Hollywood cinematography style
 
 ## Agent Prompt Guidelines
 

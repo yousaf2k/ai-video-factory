@@ -51,13 +51,14 @@ def plan_shots(scene_graph, max_shots=None, image_agent="default", video_agent="
         prompt = f"""
 Create cinematic shots for WAN 2.2.{max_shots_instruction}
 
-Return JSON list:
+Return JSON list (each shot MUST include narration from the scene):
 
 [
  {{
    "image_prompt":"",
    "motion_prompt":"",
-   "camera":"slow pan | dolly | static | orbit"
+   "camera":"slow pan | dolly | static | orbit",
+   "narration":""
  }}
 ]
 
