@@ -142,7 +142,7 @@ IMAGE_RESOLUTION = "1280"
 # IMAGE WORKFLOW CONFIGURATION
 # ==========================================
 # Active image workflow to use (must exist in IMAGE_WORKFLOWS)
-IMAGE_WORKFLOW = "flux2"
+IMAGE_WORKFLOW = "flux"
 
 # Image workflow definitions
 # Each workflow has its own node IDs and workflow file path
@@ -498,6 +498,19 @@ CONSOLE_LOG_LEVEL = "INFO"
 FILE_LOG_LEVEL = "DEBUG"
 LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
 LOG_BACKUP_COUNT = 5
+
+
+# ==========================================
+# CUSTOM PROMPTS FILE CONFIGURATION
+# ==========================================
+# Default camera type for prompts without explicit camera specification
+DEFAULT_CAMERA_FOR_PROMPTS = "static"
+
+# Default motion prompt for shots without explicit motion
+DEFAULT_MOTION_FOR_PROMPTS = "Subtle camera movement, slow and smooth"
+
+# Auto-detect camera from prompt text (enabled by default)
+AUTO_DETECT_CAMERA_FROM_PROMPTS = True
 
 
 # Pre-calculate current dimensions

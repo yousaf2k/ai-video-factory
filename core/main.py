@@ -944,6 +944,10 @@ def run_new_session(session_mgr, args=None):
     if args is None:
         args = argparse.Namespace()
 
+    # Check if using prompts file workflow
+    if hasattr(args, 'prompts_file') and args.prompts_file:
+        return _run_with_prompts_file(session_mgr, args)
+
     logger.debug("Starting STEP 1: Idea Input")
     print("\nSTEP 1: Idea")
     idea = get_idea(args)
@@ -1528,6 +1532,125 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
     session_mgr.print_session_summary(session_id)
 
 
+def _run_with_prompts_file(session_mgr, args):
+    """
+    Run workflow using custom prompts file (skip story generation).
+
+    Args:
+        session_mgr: SessionManager instance
+        args: argparse namespace with command line arguments
+
+    Returns:
+        List of shots, or None if failed
+    """
+    from core.prompts_parser import parse_prompts_file, prompts_to_shots, validate_and_fix_prompts
+
+    prompts_file = args.prompts_file
+
+    # Validate file exists
+    if not os.path.exists(prompts_file):
+        print(f"[ERROR] Prompts file not found: {prompts_file}")
+        return None
+
+    logger.info(f"Using custom prompts file: {prompts_file}")
+    print(f"\n[INFO] Loading prompts from: {prompts_file}")
+
+    # Parse prompts file
+    try:
+        prompts_data, overall_title = parse_prompts_file(prompts_file)
+        print(f"[INFO] Parsed {len(prompts_data)} prompts from file")
+        prompts_data = validate_and_fix_prompts(prompts_data)
+    except Exception as e:
+        print(f"[ERROR] Failed to parse prompts file: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+    # Convert to shots format
+    shots = prompts_to_shots(prompts_data)
+
+    # Apply defaults from args or config
+    default_camera = getattr(args, 'default_camera', None) or config.DEFAULT_CAMERA_FOR_PROMPTS
+    default_motion = getattr(args, 'default_motion', None) or config.DEFAULT_MOTION_FOR_PROMPTS
+
+    for shot in shots:
+        if not shot.get('camera') or shot['camera'] == config.DEFAULT_CAMERA_FOR_PROMPTS:
+            shot['camera'] = default_camera
+        if not shot.get('motion_prompt'):
+            shot['motion_prompt'] = default_motion
+
+    print(f"[INFO] Created {len(shots)} shots from prompts")
+
+    # Use overall_title or filename as session idea
+    idea = overall_title or f"Custom prompts: {os.path.basename(prompts_file)}"
+
+    # Get config from args or config
+    image_mode = getattr(args, 'image_mode', None) or config.IMAGE_GENERATION_MODE
+    negative_prompt = getattr(args, 'negative_prompt', None) or config.DEFAULT_NEGATIVE_PROMPT
+    shot_length = getattr(args, 'shot_length', None) or config.DEFAULT_SHOT_LENGTH
+    images_per_shot = getattr(args, 'images_per_shot', None) or config.IMAGES_PER_SHOT
+
+    # Create session
+    session_id, session_meta = session_mgr.create_session(idea)
+
+    # Store config in session
+    session_meta['video_config'] = {
+        'shot_length': shot_length,
+        'fps': config.VIDEO_FPS
+    }
+    session_meta['image_config'] = {
+        'mode': image_mode,
+        'negative_prompt': negative_prompt,
+        'images_per_shot': images_per_shot
+    }
+    session_meta['prompts_file'] = prompts_file
+
+    # Mark story and scene_graph as complete (skipped)
+    session_meta['steps']['story'] = True
+    session_meta['steps']['scene_graph'] = True
+
+    session_mgr._save_meta(session_id, session_meta)
+
+    print(f"[INFO] Created session: {session_id}")
+    print(f"[INFO] Skipping story generation (using custom prompts)")
+    print(f"[INFO] Image generation: {image_mode}")
+
+    # Enhance motion prompts with trigger keywords for LoRA activation
+    shots = enhance_motion_prompts_with_triggers(shots)
+
+    # Save shots
+    session_mgr.save_shots(session_id, shots)
+
+    # STEP 4.5: Image Generation
+    print("\nSTEP 4.5: Image Generation")
+    _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot)
+
+    # Reload shots with image paths
+    shots_dir = session_mgr.get_session_dir(session_id)
+    shots_path = os.path.join(shots_dir, "shots.json")
+    with open(shots_path, 'r', encoding='utf-8') as f:
+        shots = json.load(f)
+
+    # Check if images-only mode
+    if getattr(args, 'images_only', False):
+        print("\n[INFO] Images-only mode: Skipping video generation")
+        session_mgr.mark_session_complete(session_id)
+        session_mgr.print_session_summary(session_id)
+        return shots
+
+    # STEP 5: Video Rendering
+    valid_shots = [s for s in shots if s.get('image_path')]
+
+    if not valid_shots:
+        print("[ERROR] No images were successfully generated. Cannot proceed.")
+        return None
+
+    print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
+    _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
+
+    return shots
+
+
 def main():
     """Main pipeline with crash recovery"""
     # Parse command line arguments
@@ -1601,6 +1724,18 @@ Examples:
 
   # Skip resume prompt (always start new session)
   python core/main.py --idea "Quick test" --no-resume
+
+  # Use custom prompts file (skip story generation)
+  python core/main.py --prompts-file input/my_prompts.txt
+
+  # Use prompts file with custom default camera
+  python core/main.py --prompts-file input/my_prompts.txt --default-camera drone
+
+  # Generate only images from prompts file (no videos)
+  python core/main.py --prompts-file input/my_prompts.txt --images-only
+
+  # Use prompts file with multiple image variations
+  python core/main.py --prompts-file input/my_prompts.txt --images-per-shot 4 --shot-length 3
 
   # For camera-specific LoRA strengths, edit config.py CAMERA_LORA_MAPPING
 
@@ -1809,6 +1944,35 @@ Testing Options:
         '--list-agents',
         action='store_true',
         help='List all available agents and exit'
+    )
+
+    parser.add_argument(
+        '--prompts-file',
+        '-p',
+        type=str,
+        metavar='PATH',
+        help='Path to custom prompts file to skip story generation. Format: "Prompt N: Title" followed by prompt text'
+    )
+
+    parser.add_argument(
+        '--default-camera',
+        type=str,
+        choices=['slow pan', 'pan', 'static', 'orbit', 'zoom', 'tracking', 'drone', 'arc', 'walk', 'fpv', 'dronedive', 'bullettime', 'dolly'],
+        default=None,
+        help='Default camera type for prompts (default: from config.py)'
+    )
+
+    parser.add_argument(
+        '--default-motion',
+        type=str,
+        default=None,
+        help='Default motion prompt (default: from config.py)'
+    )
+
+    parser.add_argument(
+        '--images-only',
+        action='store_true',
+        help='When using --prompts-file, only generate images without videos'
     )
 
     args = parser.parse_args()
