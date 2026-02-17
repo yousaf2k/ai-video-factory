@@ -1,3 +1,31 @@
+# AI Video Factory
+**Create stunning AI-generated videos from simple text ideas. The AI Video Factory is a complete pipeline that transforms your concepts into cinematic videos with custom imagery, motion, and narration.**
+<br><br>
+![Create stunning AI-generated videos from simple text ideas. The AI Video Factory is a complete pipeline that transforms your concepts into cinematic videos with custom imagery, motion, and narration](https://repository-images.githubusercontent.com/1152487184/341c4b55-bcdb-4d80-a0e7-9838ed32571f)
+## Features
+
+- 🎬 **End-to-End Pipeline**: From idea to final video in 7 automated steps
+- 🎨 **Dual Image Generation**: Gemini API or ComfyUI (Flux/SDXL) support
+- 🎥 **Advanced Video Generation**: Wan 2.2 model with ComfyUI integration
+- 🚁 **Multi-Camera LoRA System**: Combine multiple camera movements (drone, orbit, dolly, zoom, etc.)
+- 🎤 **Narration Support**: Optional TTS with multiple voice options
+- 💾 **Session Management**: Crash recovery and selective regeneration
+- 🔧 **Highly Configurable**: Customize every aspect of generation
+
+## Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set your Gemini API key
+export GEMINI_API_KEY="your_api_key_here"
+
+# Start ComfyUI with Wan 2.2 workflow
+# (ComfyUI must be running on http://127.0.0.1:8188)
+
+# Generate a video
+python main.py --idea "A beautiful sunset over the ocean"
 # AI Agents Folder
 
 This folder contains system prompts for LLM agents used in different stages of video generation.
