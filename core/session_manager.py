@@ -5,7 +5,12 @@ Saves all outputs (story, shots, images) and tracks completion status
 import json
 import os
 from datetime import datetime
+from core.logger_config import get_logger
 import config
+
+
+# Get logger for session management
+logger = get_logger(__name__)
 
 
 class SessionManager:
@@ -55,6 +60,9 @@ class SessionManager:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         session_id = f"session_{timestamp}"
 
+        logger.info(f"Creating new session: {session_id}")
+        logger.debug(f"  Idea: {idea[:100]}...")
+
         session_dir = os.path.join(self.sessions_dir, session_id)
         os.makedirs(session_dir, exist_ok=True)
 
@@ -82,10 +90,12 @@ class SessionManager:
         }
 
         self._save_meta(session_id, meta)
+        logger.info(f"Session created: {session_id}")
         return session_id, meta
 
     def load_session(self, session_id):
         """Load an existing session"""
+        logger.debug(f"Loading session: {session_id}")
         meta_path = os.path.join(self.sessions_dir, session_id, f"{session_id}_meta.json")
         with open(meta_path, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -99,6 +109,7 @@ class SessionManager:
         session_dir = os.path.join(self.sessions_dir, session_id)
         story_path = os.path.join(session_dir, "story.json")
 
+        logger.debug(f"Saving story to: {story_path}")
         with open(story_path, 'w', encoding='utf-8') as f:
             f.write(story_json)
 
@@ -183,6 +194,7 @@ class SessionManager:
 
     def mark_step_complete(self, session_id, step_name):
         """Mark a pipeline step as complete"""
+        logger.debug(f"Marking step complete: {session_id} - {step_name}")
         meta = self.load_session(session_id)
         meta['steps'][step_name] = True
         self._save_meta(session_id, meta)

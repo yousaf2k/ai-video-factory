@@ -10,8 +10,24 @@ from datetime import datetime
 # Add parent directory to path so we can import config
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
+from core.logger_config import get_logger
+
+
+# Get logger for pipeline orchestration
+logger = get_logger(__name__)
 
 # Workflow steps definition
+# Note: Idea is step 1, but we start tracking from story (step 2)
+# Narration text is generated during story creation (step 2)
+# Step 7 only handles TTS conversion (text-to-speech)
+WORKFLOW_STEPS = {
+    'story': 2,
+    'scene_graph': 3,
+    'shots': 4,
+    'images': 5,
+    'videos': 6,
+    'narration': 7  # Narration TTS (text already in shots from story)
+}
 # Note: Idea is step 1, but we start tracking from story (step 2)
 # Narration text is generated during story creation (step 2)
 # Step 7 only handles TTS conversion (text-to-speech)
@@ -42,6 +58,64 @@ from core.comfy_client import submit, wait_for_prompt_completion
 from core.render_monitor import wait_until_idle
 from core.image_generator import generate_image_gemini
 from core.session_manager import SessionManager
+
+
+def print_configuration_summary():
+    """Print all configuration settings at startup"""
+    print("\n" + "="*70)
+    print("CONFIGURATION SUMMARY")
+    print("="*70)
+
+    # LLM Provider Configuration
+    print("\n[LLM Provider]")
+    print(f"  Provider: {config.LLM_PROVIDER}")
+    print(f"  Gemini Model: {config.GEMINI_TEXT_MODEL}")
+    print(f"  OpenAI Model: {config.OPENAI_MODEL}")
+
+    # API Key Status (masked)
+    def mask_key(key):
+        return f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "***" if key else "NOT SET"
+
+    print("\n[API Keys Status]")
+    print(f"  Gemini: {mask_key(config.GEMINI_API_KEY)}")
+    print(f"  OpenAI: {mask_key(config.OPENAI_API_KEY)}")
+    print(f"  Zhipu: {mask_key(config.ZHIPU_API_KEY)}")
+    print(f"  Qwen: {mask_key(config.QWEN_API_KEY)}")
+    print(f"  Kimi: {mask_key(config.KIMI_API_KEY)}")
+    print(f"  ElevenLabs: {mask_key(config.ELEVENLABS_API_KEY)}")
+
+    # Image Generation Configuration
+    print("\n[Image Generation]")
+    print(f"  Mode: {config.IMAGE_GENERATION_MODE}")
+    print(f"  Workflow: {config.IMAGE_WORKFLOW}")
+    print(f"  Images per Shot: {config.IMAGES_PER_SHOT}")
+    print(f"  Aspect Ratio: {config.IMAGE_ASPECT_RATIO}")
+    print(f"  Resolution: {config.IMAGE_RESOLUTION}")
+    print(f"  Dimensions: {config.IMAGE_WIDTH}x{config.IMAGE_HEIGHT}")
+
+    # Video Generation Configuration
+    print("\n[Video Generation]")
+    print(f"  Shot Length: {config.DEFAULT_SHOT_LENGTH}s")
+    print(f"  Max Shots: {config.DEFAULT_MAX_SHOTS} (0 = no limit)")
+    print(f"  FPS: {config.VIDEO_FPS}")
+    if config.TARGET_VIDEO_LENGTH:
+        print(f"  Target Length: {config.TARGET_VIDEO_LENGTH}s")
+
+    # Workflow Mode
+    print("\n[Workflow]")
+    print(f"  Auto Step Mode: {config.AUTO_STEP_MODE}")
+    print(f"  Generate Narration: {config.GENERATE_NARRATION}")
+    print(f"  TTS Method: {config.TTS_METHOD}")
+    print(f"  TTS Voice: {config.TTS_VOICE}")
+
+    # Agents
+    print("\n[Agents]")
+    print(f"  Story Agent: {config.STORY_AGENT}")
+    print(f"  Image Agent: {config.IMAGE_AGENT}")
+    print(f"  Video Agent: {config.VIDEO_AGENT}")
+    print(f"  Narration Agent: {config.NARRATION_AGENT}")
+
+    print("\n" + "="*70)
 
 
 def enhance_motion_prompts_with_triggers(shots):
@@ -96,19 +170,53 @@ def get_idea(args):
 
     Priority:
     1. Command line argument (--idea)
-    2. Input file (input/video_idea.txt)
+    2. Custom input file (--idea-file)
+    3. Default input file (input/video_idea.txt)
+
+    Returns:
+        Video idea as string, or None if not found
     """
     # First priority: command line argument
     if hasattr(args, 'idea') and args.idea:
+        logger.debug(f"Using idea from command line argument")
         return args.idea
 
-    # Second priority: read from file
+    # Second priority: custom input file from --idea-file
+    if hasattr(args, 'idea_file') and args.idea_file:
+        idea_file = args.idea_file
+        logger.info(f"Reading idea from custom file: {idea_file}")
+        if os.path.exists(idea_file):
+            try:
+                with open(idea_file, "r", encoding="utf-8") as f:
+                    idea = f.read()
+                    logger.debug(f"  Loaded {len(idea)} characters from {idea_file}")
+                    return idea
+            except Exception as e:
+                logger.error(f"Failed to read idea file {idea_file}: {e}")
+                print(f"[ERROR] Failed to read {idea_file}: {e}")
+                return None
+        else:
+            logger.error(f"Idea file not found: {idea_file}")
+            print(f"[ERROR] Idea file not found: {idea_file}")
+            print(f"[HINT] Create the file or use --idea 'your idea here'")
+            return None
+
+    # Third priority: default input file
     idea_file = "input/video_idea.txt"
     if os.path.exists(idea_file):
-        with open(idea_file, "r", encoding="utf-8") as f:
-            return f.read()
+        logger.info(f"Reading idea from default file: {idea_file}")
+        try:
+            with open(idea_file, "r", encoding="utf-8") as f:
+                idea = f.read()
+                logger.debug(f"  Loaded {len(idea)} characters from {idea_file}")
+                return idea
+        except Exception as e:
+            logger.error(f"Failed to read idea file {idea_file}: {e}")
+            print(f"[ERROR] Failed to read {idea_file}: {e}")
+            return None
 
     # No idea found
+    logger.warning("No video idea provided")
     return None
 
 
@@ -410,6 +518,9 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
         video_filename = f"shot_{shot_idx:03d}.mp4"
     video_save_path = os.path.join(videos_dir, video_filename)
 
+    # Initialize variation_label before try block for exception handler
+    variation_label = f" (variation {variation_idx})" if variation_idx > 1 else ""
+
     try:
         # If a specific image path is provided, temporarily override shot's image_path
         original_image_path = None
@@ -429,7 +540,6 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
         if not prompt_id:
             return False, "No prompt_id returned from ComfyUI", None
 
-        variation_label = f" (variation {variation_idx})" if variation_idx > 1 else ""
         print(f"[QUEUE] Shot {shot_idx}{variation_label}: Prompt {prompt_id[:8]}... submitted")
 
         # Wait for completion and verify
@@ -732,6 +842,96 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
     return shots
 
 
+def _continue_existing_session(session_id, session_meta, session_mgr, args=None):
+    """
+    Continue an existing session from where it left off.
+
+    Args:
+        session_id: Existing session ID
+        session_meta: Session metadata
+        session_mgr: SessionManager instance
+        args: Optional argparse namespace with command line arguments
+    """
+    logger.info(f"Resuming session: {session_id}")
+    if args is None:
+        args = argparse.Namespace()
+
+    # Get idea from session metadata
+    idea = session_meta.get('idea', '')
+    logger.debug(f"  Resuming with idea: {idea[:200]}...")
+
+    # Get execution mode
+    auto_mode = get_step_mode(args)
+    start_step = get_start_step(args, session_meta)
+    mode_str = "AUTO" if auto_mode else "MANUAL"
+
+    print(f"\n[RESUME] Session: {session_id}")
+    print(f"[RESUME] Execution mode: {mode_str}")
+    print(f"[RESUME] Starting from step {start_step}")
+
+    # Get config from session metadata
+    image_config = session_meta.get('image_config', {})
+    image_mode = image_config.get('mode', config.IMAGE_GENERATION_MODE)
+    negative_prompt = image_config.get('negative_prompt', config.DEFAULT_NEGATIVE_PROMPT)
+    images_per_shot = image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
+
+    video_config = session_meta.get('video_config', {})
+    shot_length = video_config.get('shot_length', config.DEFAULT_SHOT_LENGTH)
+    total_length = video_config.get('total_length')
+    shots_per_scene = video_config.get('shots_per_scene', config.DEFAULT_SHOTS_PER_SCENE)
+
+    # Calculate max_shots from total_length if specified
+    if total_length and shot_length:
+        max_shots = int(total_length / shot_length)
+    else:
+        max_shots = None
+
+    # Get agent config from session
+    agent_config = session_meta.get('agent_config', {})
+    story_agent = agent_config.get('story', config.STORY_AGENT)
+    image_agent = agent_config.get('image', config.IMAGE_AGENT)
+    video_agent = agent_config.get('video', config.VIDEO_AGENT)
+    narration_agent = agent_config.get('narration', config.NARRATION_AGENT)
+
+    # Get narration config
+    narration_config = session_meta.get('narration_config', {})
+    generate_narration = narration_config.get('enabled', False)
+    tts_method = narration_config.get('tts_method', config.TTS_METHOD)
+    tts_workflow = narration_config.get('tts_workflow', config.TTS_WORKFLOW_PATH)
+    tts_voice = narration_config.get('tts_voice', config.TTS_VOICE)
+
+    # Update config with session values for display
+    config.IMAGE_GENERATION_MODE = image_mode
+    config.IMAGES_PER_SHOT = images_per_shot
+    config.STORY_AGENT = story_agent
+    config.IMAGE_AGENT = image_agent
+    config.VIDEO_AGENT = video_agent
+    config.NARRATION_AGENT = narration_agent
+    config.GENERATE_NARRATION = generate_narration
+    config.TTS_METHOD = tts_method
+    config.TTS_VOICE = tts_voice
+
+    # Print configuration summary for resumed session
+    print_configuration_summary()
+
+    print(f"[INFO] Image generation: {image_mode}")
+    print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
+
+    # Execute workflow based on mode
+    if auto_mode:
+        _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
+                      story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
+                      narration_agent=narration_agent, generate_narration=generate_narration,
+                      tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
+                      images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
+    else:
+        _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
+                        story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
+                        narration_agent=narration_agent, generate_narration=generate_narration,
+                        tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
+                        images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
+
+
 def run_new_session(session_mgr, args=None):
     """
     Run a complete new session
@@ -740,11 +940,14 @@ def run_new_session(session_mgr, args=None):
         session_mgr: SessionManager instance
         args: Optional argparse namespace with command line arguments
     """
+    logger.info("Starting new session workflow")
     if args is None:
         args = argparse.Namespace()
 
+    logger.debug("Starting STEP 1: Idea Input")
     print("\nSTEP 1: Idea")
     idea = get_idea(args)
+    logger.debug(f"  Idea: {idea[:200]}...")
     print(f"\n{idea[:200]}{'...' if len(idea) > 200 else ''}")
 
     # Get image generation mode and negative prompt from config or args
@@ -806,16 +1009,25 @@ def run_new_session(session_mgr, args=None):
         if config.DEFAULT_MAX_SHOTS == 0:
             print(f"[INFO] No shot limit - all story scenes will be generated")
 
+    # Check for shots-per-scene parameter
+    shots_per_scene = getattr(args, 'shots_per_scene', None) or config.DEFAULT_SHOTS_PER_SCENE
+    if shots_per_scene and not max_shots:
+        # Will be calculated after story generation when we know scene count
+        print(f"[INFO] Shots per scene target: {shots_per_scene}")
+        print(f"[INFO] Total shots will be calculated after story generation")
+
     print("="*70)
 
     # Create new session
     session_id, session_meta = session_mgr.create_session(idea)
 
+    logger.info(f"Session created: {session_id}")
     # Store video config in session
     session_meta['video_config'] = {
         'total_length': total_length,
         'shot_length': shot_length,
-        'fps': config.VIDEO_FPS
+        'fps': config.VIDEO_FPS,
+        'shots_per_scene': shots_per_scene
     }
 
     # Store image generation config
@@ -877,21 +1089,22 @@ def run_new_session(session_mgr, args=None):
                       story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
                       narration_agent=narration_agent, generate_narration=generate_narration,
                       tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
-                      images_per_shot=images_per_shot)
+                      images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
     else:
         # New manual mode - step by step with prompts
         _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
                         story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
                         narration_agent=narration_agent, generate_narration=generate_narration,
                         tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
-                        images_per_shot=images_per_shot)
+                        images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
 
 
 def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
                    story_agent=None, image_agent=None, video_agent=None,
                    narration_agent=None, generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
-                   images_per_shot=1):
+                   images_per_shot=1, shots_per_scene=None):
     """Execute all remaining steps automatically"""
+    logger.info(f"Running auto mode for session: {session_id}")
     # Get current progress
     steps = session_meta.get('steps', {})
 
@@ -916,22 +1129,38 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
     print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
     print(f"[INFO] Generating {images_per_shot} image(s) per shot")
 
+    story_json = None
+    shots = None
+    graph = None
+
     # STEP 2: Story
     if not steps.get('story', False):
+        logger.info("STEP 2: Story Generation")
         print("\nSTEP 2: Story Generation")
         story_json = build_story(idea, agent_name=story_agent)
         session_mgr.save_story(session_id, story_json)
+    else:
+        # Load existing story
+        print("\n[SKIP] STEP 2: Story already generated")
+        story_dir = session_mgr.get_session_dir(session_id)
+        story_path = os.path.join(story_dir, "story.json")
+        with open(story_path, 'r', encoding='utf-8') as f:
+            story_json = f.read()
 
     # STEP 3: Scene Graph
     if not steps.get('scene_graph', False):
+        logger.info("STEP 3: Scene Graph")
         print("\nSTEP 3: Scene Graph")
         session_mgr.mark_step_complete(session_id, 'scene_graph')
         graph = build_scene_graph(story_json)
+    else:
+        print("\n[SKIP] STEP 3: Scene Graph already created")
 
     # STEP 4: Shot Planning (with max_shots if specified)
     if not steps.get('shots', False):
+        logger.info("STEP 4: Shot Planning")
         print("\nSTEP 4: Shot Planning")
-        shots = plan_shots(graph, max_shots=max_shots, image_agent=image_agent, video_agent=video_agent)
+        shots = plan_shots(graph, max_shots=max_shots, image_agent=image_agent, video_agent=video_agent, shots_per_scene=shots_per_scene)
         # Enhance motion prompts with trigger keywords for LoRA activation
         shots = enhance_motion_prompts_with_triggers(shots)
         session_mgr.save_shots(session_id, shots)
@@ -944,6 +1173,7 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
 
     # STEP 4.5: Image Generation
     if not steps.get('images', False):
+        logger.info("STEP 4.5: Image Generation")
         print("\nSTEP 4.5: Image Generation")
         _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot)
         # Reload shots with updated paths
@@ -958,14 +1188,17 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         valid_shots = [s for s in shots if s.get('image_path')]
 
         if not valid_shots:
+            logger.error("No images were successfully generated. Cannot proceed.")
             print("[ERROR] No images were successfully generated. Cannot proceed.")
             return
 
+        logger.info(f"STEP 5: Rendering {len(valid_shots)} shots")
         print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
         _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
 
     # STEP 6: Narration TTS
     if generate_narration and not steps.get('narration', False):
+        logger.info("STEP 6: Narration TTS")
         print("\nSTEP 6: Narration TTS")
 
         # Load story for narration
@@ -1003,6 +1236,7 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
             print(f"[FAIL] Narration generation failed")
 
     if not generate_narration or steps.get('videos', False):
+        logger.info("All steps completed successfully")
         print("\n[INFO] All steps completed!")
         session_mgr.print_session_summary(session_id)
 
@@ -1010,7 +1244,7 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
 def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
                      story_agent=None, image_agent=None, video_agent=None,
                      narration_agent=None, generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
-                     images_per_shot=1):
+                     images_per_shot=1, shots_per_scene=None):
     """Execute workflow step by step with user prompts"""
     shots = None
     story_json = None
@@ -1067,7 +1301,7 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
         elif current_step == 4:  # Shot Planning
             if not session_meta.get('steps', {}).get('shots', False):
                 print("\nSTEP 4: Shot Planning")
-                shots = plan_shots(graph, max_shots=max_shots, image_agent=image_agent, video_agent=video_agent)
+                shots = plan_shots(graph, max_shots=max_shots, image_agent=image_agent, video_agent=video_agent, shots_per_scene=shots_per_scene)
                 # Enhance motion prompts with trigger keywords for LoRA activation
                 shots = enhance_motion_prompts_with_triggers(shots)
                 session_mgr.save_shots(session_id, shots)
@@ -1305,11 +1539,20 @@ Examples:
   # Use idea from command line
   python core/main.py --idea "A cat dancing in the rain"
 
+  # Load idea from default file (input/video_idea.txt)
+  python core/main.py
+
+  # Load idea from custom file
+  python core/main.py --idea-file ideas/nature_documentary.txt
+
   # Quick test with limited shots (for testing workflow)
   python core/main.py --idea "Test video" --max-shots 3
 
   # Generate short video for testing
   python core/main.py --idea "Quick test" --max-shots 2 --no-narration
+
+  # Generate video with specific shots per scene (4 shots x 5 scenes = 20 shots)
+  python core/main.py --idea "Nature documentary" --shots-per-scene 4
 
   # Generate multiple image variations per shot
   python core/main.py --idea "Artistic video" --images-per-shot 4
@@ -1391,9 +1634,10 @@ LoRA System:
 
 Testing Options:
   --max-shots N         : Limit to N shots (for quick testing)
-  --images-per-shot N   : Generate N image variations per shot (default: 1)
+  --shots-per-scene N    : Generate N shots per scene (default: from config)
+  --images-per-shot N    : Generate N image variations per shot (default: 1)
   --no-narration        : Skip narration generation
-  --no-resume          : Skip resume prompt, start new session
+  --no-resume           : Skip resume prompt, start new session
 
   Use --list-voices to see ElevenLabs voices
   Use --list-agents to see all available agents
@@ -1403,7 +1647,14 @@ Testing Options:
     parser.add_argument(
         '--idea', '-i',
         type=str,
-        help='Video idea (if not provided, reads from input/video_idea.txt)'
+        help='Video idea (inline). If not provided, checks --idea-file, then input/video_idea.txt'
+    )
+
+    parser.add_argument(
+        '--idea-file', '-f',
+        type=str,
+        metavar='PATH',
+        help='Path to text file containing video idea (default: input/video_idea.txt)'
     )
 
     parser.add_argument(
@@ -1443,6 +1694,12 @@ Testing Options:
         '--max-shots',
         type=int,
         help='Maximum number of shots to generate (0=no limit, useful for testing workflow)'
+    )
+
+    parser.add_argument(
+        '--shots-per-scene',
+        type=int,
+        help=f'Number of shots to generate per scene (default: {config.DEFAULT_SHOTS_PER_SCENE})'
     )
 
     parser.add_argument(
@@ -1620,11 +1877,23 @@ Testing Options:
     # Check if idea is provided
     idea = get_idea(args)
     if not idea:
+        print("\n" + "="*70)
         print("[ERROR] No video idea provided!")
-        print("\nPlease either:")
-        print("  1. Use --idea parameter: python core/main.py --idea 'Your idea here'")
-        print("  2. Create input/video_idea.txt with your idea")
+        print("="*70)
+        print("\nPlease provide your video idea using one of these methods:")
+        print("\n  1. Use --idea parameter:")
+        print("        python core/main.py --idea 'A cat dancing in the rain'")
+        print("\n  2. Use --idea-file parameter:")
+        print("        python core/main.py --idea-file path/to/your/idea.txt")
+        print("\n  3. Create default input file:")
+        print("        input/video_idea.txt")
+        print("\n" + "="*70)
+        print("Examples:")
+        print("  python core/main.py --idea 'A cat dancing in the rain'")
+        print("  python core/main.py -f my_ideas/nature_documentary.txt")
+        print("  python core/main.py --idea-file ideas/sci_fi_video.txt")
         print("\nRun: python core/main.py --help for more options")
+        print("="*70)
         return
 
     # Update config if command line arguments provided
@@ -1641,6 +1910,9 @@ Testing Options:
         config.IMAGE_WIDTH, config.IMAGE_HEIGHT = config.calculate_image_dimensions()
         print(f"[INFO] Image dimensions: {config.IMAGE_WIDTH}x{config.IMAGE_HEIGHT}")
 
+    # Print configuration summary after command-line overrides
+    print_configuration_summary()
+
     # Initialize session manager
     session_mgr = SessionManager()
 
@@ -1651,9 +1923,10 @@ Testing Options:
         session_id, session_meta = check_continue_session(session_mgr)
 
     if session_id and session_meta:
-        # Continue existing session
+        # Continue existing session - use the same workflow as new session
+        # but with existing session_id and metadata
         try:
-            continue_session(session_id, session_meta, session_mgr, args=args)
+            _continue_existing_session(session_id, session_meta, session_mgr, args=args)
         except Exception as e:
             print(f"\n[ERROR] Failed to continue session: {e}")
             import traceback

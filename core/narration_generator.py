@@ -10,10 +10,14 @@ Supports:
 import os
 import json
 from pathlib import Path
-from core.gemini_engine import ask
 from core.agent_loader import load_agent_prompt
 from core.comfy_client import submit, wait_for_prompt_completion
+from core.logger_config import get_logger
 import config
+
+
+# Get logger for TTS operations
+logger = get_logger(__name__)
 
 
 def generate_narration_script(story_json, shots, total_duration=None, agent_name="default"):
@@ -87,6 +91,10 @@ def generate_narration_audio(script, output_path, tts_method="local", comfyui_wo
     Returns:
         Path to generated audio file, or None if failed
     """
+    logger.info(f"Generating narration audio: {output_path}")
+    logger.debug(f"  TTS method: {tts_method}")
+    logger.debug(f"  Voice: {voice}")
+    logger.debug(f"  Script length: {len(script)} characters")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     if tts_method == "comfyui" and comfyui_workflow:
@@ -411,6 +419,7 @@ def _generate_with_local_tts(script, output_path, voice):
         # Default female voice
         voice_name = voice if voice.startswith("en-") else "en-US-AriaNeural"
 
+        logger.info(f"Using edge-tts with voice: {voice_name}")
         print(f"[INFO] Using edge-tts with voice: {voice_name}")
 
         async def generate():
@@ -421,9 +430,12 @@ def _generate_with_local_tts(script, output_path, voice):
         asyncio.run(generate())
 
         if os.path.exists(output_path):
+            file_size = os.path.getsize(output_path)
+            logger.info(f"Narration audio saved: {output_path} ({file_size:,} bytes)")
             print(f"[PASS] Narration audio saved: {output_path}")
             return output_path
         else:
+            logger.error("Audio file was not created")
             print("[ERROR] Audio file was not created")
             return None
 

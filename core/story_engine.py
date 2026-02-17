@@ -1,7 +1,7 @@
 """
 Story Engine - Generate cinematic stories from ideas using LLM agents.
 """
-from core.gemini_engine import ask
+from core.llm_engine import get_provider
 from core.agent_loader import load_agent_prompt
 import config
 
@@ -12,7 +12,7 @@ def build_story(idea, agent_name="default"):
 
     Args:
         idea: The video idea/concept
-        agent_name: Name of the story agent to use (default: "default")
+        agent_name: Name of story agent to use (default: "default")
                    Available: default, dramatic, documentary
 
     Returns:
@@ -46,4 +46,5 @@ IDEA:
 {idea}
 """
 
-    return ask(prompt, response_format="application/json")
+    provider = get_provider()
+    return provider.ask(prompt, response_format="application/json")

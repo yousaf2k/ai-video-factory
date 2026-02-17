@@ -2,6 +2,28 @@
 Configuration for AI Film Studio System
 """
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# ==========================================
+# LLM PROVIDER CONFIGURATION
+# ==========================================
+# Primary LLM provider (gemini, openai, zhipu, qwen, kimi, ollama, lmstudio)
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
+
+# Maximum tokens for LLM responses (increase for large JSON outputs)
+# Set higher to avoid truncation when generating many shots
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "16384"))  # Default: 16K tokens
+
+# Batch size for generating shots (process scenes in batches to avoid truncation)
+SHOT_GENERATION_BATCH_SIZE = int(os.getenv("SHOT_GENERATION_BATCH_SIZE", "1"))  # Process 1 scene at a time
+
+# Maximum parallel threads for batch processing (only for cloud providers, not local models)
+# Higher values = faster processing but more API rate limits
+# Recommended: 3-5 for most APIs, 1-2 for free tier accounts
+MAX_PARALLEL_BATCH_THREADS = int(os.getenv("MAX_PARALLEL_BATCH_THREADS", "5"))  # Default: 5 parallel threads
 
 # ==========================================
 # GEMINI API CONFIGURATION
@@ -10,7 +32,64 @@ import os
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Text generation model (for story, shots, etc. "gemini-2.0-flash" and "gemini-3-flash-preview" is faster and cheaper, "gemini-3-pro-preview" is higher quality but more expensive)
-GEMINI_TEXT_MODEL = "gemini-2.0-flash"
+GEMINI_TEXT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+# ==========================================
+# OPENAI (CHATGPT) CONFIGURATION
+# ==========================================
+# Get your API key from: https://platform.openai.com/api-keys
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+# ChatGPT model (gpt-4o is latest, gpt-4o-mini is faster/cheaper)
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+
+# ==========================================
+# ZHIPU CONFIGURATION
+# ==========================================
+# Get your API key from Z.AI platform
+ZHIPU_API_KEY = os.getenv("ZHIPU_API_KEY", "")
+
+
+# ==========================================
+# QWEN (ALIBABA CLOUD) CONFIGURATION
+# ==========================================
+# Get your API key from Alibaba Cloud
+QWEN_API_KEY = os.getenv("QWEN_API_KEY", "")
+
+# Qwen model (qwen-max is latest)
+QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen-max")
+
+# ==========================================
+# KIMI (MOONSHOT) CONFIGURATION
+# ==========================================
+# Get your API key from Moonshot AI
+KIMI_API_KEY = os.getenv("KIMI_API_KEY", "")
+
+# Kimi K2 2.5 model (kimi-labs is recommended)
+KIMI_MODEL = os.getenv("KIMI_MODEL", "kimi-labs")
+
+# ==========================================
+# OLLAMA CONFIGURATION (Local LLM)
+# ==========================================
+# Ollama server URL (default: localhost:11434)
+# Download Ollama from: https://ollama.com
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+# Model to use (e.g., llama2, mistral, codellama, qwen2, etc.)
+# List available models: ollama list
+# Download models: ollama pull <model-name>
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama2")
+
+# ==========================================
+# LM STUDIO CONFIGURATION (Local LLM)
+# ==========================================
+# LM Studio server URL (default: localhost:1234)
+# Download LM Studio from: https://lmstudio.ai
+LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234")
+
+# Model to use (e.g., lmstudio-community/qwen2, etc.)
+# Models are managed in LM Studio application
+LMSTUDIO_MODEL = os.getenv("LMSTUDIO_MODEL", "lmstudio-community/qwen2")
 
 # Image generation model (NanoBanana Pro)
 GEMINI_IMAGE_MODEL = "gemini-3-pro-image-preview"
@@ -48,7 +127,7 @@ DEFAULT_NEGATIVE_PROMPT = "Vibrant colors, overexposed, static, blurry details, 
 # Number of images to generate per shot (with different seeds)
 # Set to 1 for single image per shot, or higher for multiple variations
 # Each image will be named: shot_001_001.png, shot_001_002.png, etc.
-IMAGES_PER_SHOT = 4
+IMAGES_PER_SHOT = 1
 
 # Output directory for generated images
 IMAGES_OUTPUT_DIR = "output/generated_images"
@@ -80,12 +159,12 @@ IMAGE_WORKFLOWS = {
     },
     "flux2": {
         "workflow_path": "workflow/image/flux2.json",
-        "text_node_id": "6",
+        "text_node_id": "98:6",
         "neg_text_node_id": None,
-        "ksampler_node_id": "13",
-        "vae_node_id": "8",
+        "ksampler_node_id": "98:16",
+        "vae_node_id": "98:10",
         "save_node_id": "9",
-        "description": "Alternative Flux workflow"
+        "description": "Flux2.Dev for high quality images workflow"
     },
     "sdxl": {
         "workflow_path": "workflow/image/sdxl.json",
@@ -145,6 +224,18 @@ DEFAULT_SHOT_LENGTH = 6.0
 # Recommended for testing: 3-5 shots
 DEFAULT_MAX_SHOTS = 0  # 0 = no limit
 
+# ==========================================
+# SHOT PLANNING CONFIGURATION
+# ==========================================
+# Default number of shots to generate per scene (when no max_shots specified)
+DEFAULT_SHOTS_PER_SCENE = 1  # 4 shots x 5 scenes = 20 shots total
+
+# Minimum shots per scene (enforced in planning logic)
+MIN_SHOTS_PER_SCENE = 3  # Each scene gets at least 3 shots
+
+# Maximum shots per scene (prevents over-generation for long stories)
+MAX_SHOTS_PER_SCENE = 8  # No more than 8 shots per scene
+
 # Video framerate (fps)
 VIDEO_FPS = 16
 
@@ -152,7 +243,7 @@ VIDEO_FPS = 16
 # Set to None to generate based on story length
 # Note: If both DEFAULT_MAX_SHOTS and TARGET_VIDEO_LENGTH are set,
 #       max_shots will be calculated as: int(TARGET_VIDEO_LENGTH / DEFAULT_SHOT_LENGTH)
-TARGET_VIDEO_LENGTH = None  # or specify like: 60.0 for 60 seconds
+TARGET_VIDEO_LENGTH = 600  # or specify like: 60.0 for 60 seconds
 
 # Video rendering timeout (in seconds)
 # Maximum time to wait for a single video render to complete
@@ -353,11 +444,11 @@ AUTO_STEP_MODE = True  # True = auto, False = manual
 # Agent files are stored in agents/{type}/{name}.md
 # Available agents depend on files in the agents folder
 
-# Story generation agent (default, dramatic, documentary)
-STORY_AGENT = "default"
+# Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary)
+STORY_AGENT = "youtube_documentary"
 
-# Image prompt agent (default, artistic)
-IMAGE_AGENT = "default"
+# Image prompt agent (default, artistic, time_traveler)
+IMAGE_AGENT = "time_traveler"
 
 # Video motion agent (default, cinematic)
 VIDEO_AGENT = "default"
@@ -397,6 +488,16 @@ ELEVENLABS_MODEL = "eleven_multilingual_v2"
 # ElevenLabs voice settings
 ELEVENLABS_STABILITY = 0.5  # 0.0 to 1.0 (higher = more stable)
 ELEVENLABS_SIMILARITY = 0.75  # 0.0 to 1.0 (higher = more similar to original voice)
+
+
+# ==========================================
+# LOGGING CONFIGURATION
+# ==========================================
+LOG_DIR = "logs"
+CONSOLE_LOG_LEVEL = "INFO"
+FILE_LOG_LEVEL = "DEBUG"
+LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
+LOG_BACKUP_COUNT = 5
 
 
 # Pre-calculate current dimensions

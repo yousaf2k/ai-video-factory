@@ -21,6 +21,23 @@ Each image prompt should follow this structure:
 Good prompt:
 "Cinematic shot of astronaut standing on Mars surface, red rocky terrain extending to horizon, low angle looking up with dramatic contrast, golden hour lighting, hyperrealistic 8K, highly detailed, film grain, professional photography"
 
+## Shot Generation Guidelines
+
+1. **Shots Per Scene**: Generate 3-6 shots for EACH scene
+   - Opening/Hook scenes: 4-6 shots (build atmosphere)
+   - Main content scenes: 5-8 shots (multiple angles: wide, medium, close-up, detail)
+   - Closing scenes: 3-4 shots (resolution, call-to-action)
+
+2. **Camera Angle Variety**: Each scene MUST include different perspectives
+   - At least 1 wide/establishing shot
+   - At least 2 medium shots (show action)
+   - At least 1 close-up or detail shot
+   - Consider: drone, low-angle, high-angle, POV shots
+
+3. **Visual Progression**: Order shots to create narrative flow
+   - Start wide/establishing → move closer → end with detail/emotion
+   - Alternate camera angles to maintain visual interest
+
 ## Output Format
 
 Return a JSON list where each item contains:
@@ -37,6 +54,20 @@ Return a JSON list where each item contains:
 ```
 
 **Important**: Include the narration text from each scene in the shot output.
+
+## Shot Distribution Rules
+
+- **Minimum**: 3 shots per scene (no exceptions)
+- **Target**: 4-6 shots per scene (varies by scene importance)
+- **Maximum**: As specified in user request (default: no limit)
+- **Variety**: Each scene's shots must use different camera types
+
+Example for 4-scene story:
+- Scene 1 (opening): 5 shots (wide, wide-medium, medium, close-up, detail)
+- Scene 2 (action): 6 shots (wide, tracking, close-up x2, detail, low-angle)
+- Scene 3 (climax): 5 shots (medium, close-up x3, detail, dolly)
+- Scene 4 (ending): 4 shots (wide, medium, close-up, detail)
+Total: 20 shots
 
 ## Camera Types
 

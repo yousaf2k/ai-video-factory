@@ -5,9 +5,14 @@ Replaces OpenAI for all text generation tasks
 import google.genai as genai
 from google.genai import types  # Recommended for configuration types
 import config
+from core.logger_config import get_logger
+from core.log_decorators import log_api_call
 
-# REMOVED: genai.configure() - This is for the legacy 'google-generativeai' library.
+# Get logger for API calls
+logger = get_logger(__name__)
 
+
+@log_api_call
 def ask(prompt: str, response_format: str = None) -> str:
     # Initialize client once with your API key
     # Use v1alpha for experimental models (like gemini-2.0-flash-exp)

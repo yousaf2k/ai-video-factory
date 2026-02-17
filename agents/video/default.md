@@ -30,13 +30,23 @@ When writing motion prompts:
 | zoom | in-place zoom, steady magnification |
 | tracking | follow subject movement, keep subject centered |
 
+## Shot Types to Include
+
+For each scene, ensure variety in motion prompts:
+- **Static** shots (1-2 per scene): Establishing, dramatic moments
+- **Dynamic** shots (2-3 per scene): Following action, camera movement
+- **Transition** shots (1 per scene): Connect scenes visually
+- **Special** shots (as needed): Drone, FPV, bullet-time for impact
+
+This ensures that final video has visual pacing and professional production value.
+
 ## Output Format
 
 For video generation, ensure your motion prompts are:
 
 1. **Clear**: Describe exactly what should move
 2. **Natural**: Movement should feel physically real
-3. **Purposeful**: Every motion should serve the storytelling
+3. **Purposeful**: Every motion should serve storytelling
 4. **Consistent**: Movement style should match throughout
 
 ## Example Motion Prompts

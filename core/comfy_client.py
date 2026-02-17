@@ -3,6 +3,11 @@ import uuid
 import time
 import config
 import os
+from core.logger_config import get_logger
+
+
+# Get logger for ComfyUI API operations
+logger = get_logger(__name__)
 
 def submit(workflow):
     """
@@ -22,9 +27,13 @@ def submit(workflow):
     )
 
     if r.status_code != 200:
+        logger.error(f"ComfyUI returned status {r.status_code}: {r.text}")
         raise Exception(f"ComfyUI returned status {r.status_code}: {r.text}")
 
-    return r.json()
+    result = r.json()
+    prompt_id = result.get('prompt_id')
+    logger.info(f"Workflow submitted: prompt_id={prompt_id}")
+    return result
 
 
 def wait_for_prompt_completion(prompt_id, timeout=1800):
@@ -38,6 +47,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
     Returns:
         dict with 'success' (bool), 'outputs' (list of output files), 'error' (str if failed)
     """
+    logger.info(f"Waiting for prompt {prompt_id} completion (timeout: {timeout}s)")
     start_time = time.time()
     last_status_check = 0
 
@@ -87,6 +97,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
             if elapsed - last_status_check > 30:
                 last_status_check = elapsed
                 status_str = status.get("status", "unknown")
+                logger.debug(f"Prompt {prompt_id[:8]}... status: {status_str} ({int(elapsed)}s elapsed)")
                 print(f"       [STATUS] {status_str} ({int(elapsed)}s elapsed)")
 
             # Check if completed
@@ -130,6 +141,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
                                     'subfolder': subfolder
                                 })
 
+                logger.info(f"Prompt {prompt_id[:8]}... completed successfully with {len(output_files)} output(s)")
                 return {
                     'success': True,
                     'outputs': output_files,
@@ -139,6 +151,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
             # Check for errors
             if status.get("status", "") == "error":
                 error_details = status.get("message", "Unknown error")
+                logger.error(f"Prompt {prompt_id[:8]}... failed: {error_details}")
                 # Try to get more error details
                 if "node_errors" in prompt_data:
                     node_errors = prompt_data["node_errors"]
@@ -171,6 +184,7 @@ def get_output_file_path(output_info):
     """
     filename = output_info['filename']
     subfolder = output_info.get('subfolder', '')
+    logger.debug(f"Getting output file path: {filename} (subfolder: {subfolder})")
 
     # ComfyUI default output directory
     if subfolder:

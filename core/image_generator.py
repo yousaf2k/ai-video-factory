@@ -11,6 +11,11 @@ import config
 import os
 import random
 from pathlib import Path
+from core.logger_config import get_logger
+
+
+# Get logger for image generation
+logger = get_logger(__name__)
 
 
 def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, seed: int = None) -> str:
@@ -27,6 +32,12 @@ def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = Non
     Returns:
         Path to the generated image file, or None if failed
     """
+    logger.info(f"Generating image (Gemini): {output_path}")
+    logger.debug(f"  Prompt: {prompt[:100]}...")
+    logger.debug(f"  Aspect ratio: {aspect_ratio or config.IMAGE_ASPECT_RATIO}")
+    logger.debug(f"  Resolution: {resolution or config.IMAGE_RESOLUTION}")
+    logger.debug(f"  Seed: {seed}")
+
     try:
         # Initialize client with v1alpha for experimental models
         client = genai.Client(
@@ -83,10 +94,14 @@ def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = Non
         with open(output_path, 'wb') as f:
             f.write(image_bytes)
 
+        # Log success with file size
+        file_size = os.path.getsize(output_path)
+        logger.info(f"Generated (Gemini): {output_path} ({file_size:,} bytes)")
         print(f"[PASS] Generated (Gemini): {output_path}")
         return output_path
 
     except Exception as e:
+        logger.error(f"Failed to generate image (Gemini): {e}")
         print(f"[FAIL] Failed to generate image: {e}")
         import traceback
         traceback.print_exc()

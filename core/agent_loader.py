@@ -20,6 +20,12 @@ agents/
 import os
 from pathlib import Path
 from typing import Optional, Tuple
+from core.logger_config import setup_agent_logger
+from core.log_decorators import log_agent_call
+
+
+# Get logger for agent operations
+logger = setup_agent_logger(__name__)
 
 
 # Agent types

@@ -1,7 +1,24 @@
+# Ignore compiled Python files
+*.pyc
+
+# Ignore __pycache__ directory
+__pycache__/
+core/__pycache__/
+
 output/sessions/
 output/
-__pycache__/*
-*.pyc
-__pycache__/config.cpython-311.pyc
-core/__pycache__/main.cpython-311.pyc
-core/__pycache__/prompt_compiler.cpython-311.pyc
+
+# Log files
+logs/*.log
+logs/*.log.*
+
+# Environment variables with API keys
+.env
+.env.local
+
+# Test artifacts
+.pytest_cache/
+tests/__pycache__/
+tests/.pytest_cache/
+.coverage
+htmlcov/
