@@ -64,7 +64,7 @@ Your application supports multiple providers:
 From your `.env` file:
 ```bash
 LLM_PROVIDER=gemini
-GEMINI_API_KEY=AIzaSyBCGBqU0d12I_ZWN5pMA0jjr00hdMEzS24
+GEMINI_API_KEY=AIzaS***EzS24
 GEMINI_MODEL=gemini-2.0-flash
 ```
 
