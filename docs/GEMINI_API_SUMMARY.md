@@ -6,7 +6,7 @@
 
 ### Test Results
 
-**API Key**: `AIzaSyBCGBqU0d12I_ZWN5pMA0jjr00hdMEzS24`
+**API Key**: `AIza***S24`
 **Model**: `gemini-2.0-flash`
 **Status**: 429 RESOURCE_EXHAUSTED
 
