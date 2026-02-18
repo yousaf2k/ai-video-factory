@@ -1,7 +1,11 @@
 import json
 import copy
 import os
+import logging
 import config
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 def load_workflow(path, video_length_seconds=None):
     """Load workflow and optionally set video length and dimensions"""

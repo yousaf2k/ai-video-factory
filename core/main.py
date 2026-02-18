@@ -1213,8 +1213,22 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
                 shots = json.load(f)
         else:
             print("[SKIP] Images verified and already exist")
+            # Update shots with image paths from disk
+            for shot_idx, shot in enumerate(shots, start=1):
+                image_paths = []
+                for var_idx in range(images_per_shot):
+                    img_path = os.path.join(images_dir, f"shot_{shot_idx:03d}_{var_idx + 1:03d}.png")
+                    if os.path.exists(img_path):
+                        normalized_path = img_path.replace('\\', '/')
+                        image_paths.append(normalized_path)
+                shot['image_paths'] = image_paths
+                shot['image_path'] = image_paths[0] if image_paths else None
+            print(f"[INFO] Loaded {len([s for s in shots if s.get('image_path')])} shots with images")
 
     # STEP 5: Rendering with verification
+    print(f"\n[DEBUG] Checking video step: steps.get('videos') = {steps.get('videos', False)}")
+    print(f"[DEBUG] Shots with images: {len([s for s in shots if s.get('image_path')])}/{len(shots)}")
+
     if not steps.get('videos', False):
         # Filter to only shots with successfully generated images
         valid_shots = [s for s in shots if s.get('image_path')]
@@ -1227,6 +1241,34 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         logger.info(f"STEP 5: Rendering {len(valid_shots)} shots")
         print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
         _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
+    else:
+        # Videos step is marked complete, but verify videos actually exist
+        print(f"[VERIFY] Checking if videos actually exist...")
+        videos_dir = session_mgr.get_videos_dir(session_id)
+
+        # Check if video files actually exist on disk
+        missing_videos = False
+        for shot in shots:
+            shot_idx = shot.get('index', shots.index(shot) + 1)
+            video_path = os.path.join(videos_dir, f"shot_{shot_idx:03d}.mp4")
+            if not os.path.exists(video_path):
+                missing_videos = True
+                break
+
+        if missing_videos:
+            print(f"[WARN] Videos step marked complete but video files are missing!")
+            print(f"[INFO] Unmarking videos step and proceeding with video generation...")
+            # Unmark the videos step so we can regenerate
+            session_meta['steps']['videos'] = False
+            session_mgr._save_meta(session_id, session_meta)
+
+            # Now render videos
+            valid_shots = [s for s in shots if s.get('image_path')]
+            logger.info(f"STEP 5: Rendering {len(valid_shots)} shots")
+            print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
+            _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
+        else:
+            print(f"[SKIP] Videos verified and already exist")
 
     # STEP 6: Narration TTS
     if generate_narration and not steps.get('narration', False):
@@ -1566,8 +1608,9 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
 
     print("="*70)
 
-    # Mark step complete
-    session_mgr.mark_step_complete(session_id, 'videos')
+    # Only mark step complete if at least one video was successfully rendered
+    if successful_renders > 0:
+        session_mgr.mark_step_complete(session_id, 'videos')
 
     # Only mark session complete if all renders succeeded
     if failed_renders == 0:
