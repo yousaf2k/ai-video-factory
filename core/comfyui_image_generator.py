@@ -23,6 +23,9 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
     Returns:
         Path to the generated image file, or None if failed
     """
+    import time
+    import uuid
+
     try:
         # Get workflow configuration
         if workflow_name is None:
@@ -92,7 +95,12 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
         if save_node_id and save_node_id in api_format:
             # Extract just the filename from the full path
             filename = os.path.basename(output_path)
-            api_format[save_node_id]["inputs"]["filename_prefix"] = os.path.splitext(filename)[0]
+            base_name = os.path.splitext(filename)[0]
+
+            # Add unique prefix to prevent ComfyUI filename collisions
+            # ComfyUI may append _001, _002 etc. if files with same name exist
+            unique_id = f"{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+            api_format[save_node_id]["inputs"]["filename_prefix"] = f"{unique_id}_{base_name}"
 
         # Submit to ComfyUI
         payload = {
@@ -298,7 +306,9 @@ def _wait_for_image(prompt_id, output_path, timeout=300):
                         img_response = requests.get(url)
 
                         if img_response.status_code == 200:
-                            # Save to output path
+                            # Save to the expected output path
+                            # We added a unique prefix to prevent ComfyUI collisions,
+                            # but we want to save with the expected filename
                             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
                             with open(output_path, 'wb') as f:
