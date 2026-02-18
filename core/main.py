@@ -1416,21 +1416,21 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
     # Check if images are already generated (resume case)
     # For simplicity, check if first variation of first shot exists
     if shots and images_per_shot > 0:
-        first_shot_idx = shots[0].get('index', 1)
-        first_image_path = os.path.join(images_dir, f"shot_{first_shot_idx:03d}_001.png")
+        first_image_path = os.path.join(images_dir, f"shot_001_001.png")
 
         if os.path.exists(first_image_path):
             print(f"[SKIP] Images already generated, loading from disk")
             # Load existing images
-            for shot in shots:
-                shot_idx = shot.get('index', shots.index(shot) + 1)
+            for shot_idx, shot in enumerate(shots, start=1):
+                # Use sequential index to match filenames
                 image_paths = []
                 for var_idx in range(images_per_shot):
                     img_path = os.path.join(images_dir, f"shot_{shot_idx:03d}_{var_idx + 1:03d}.png")
                     if os.path.exists(img_path):
                         normalized_path = img_path.replace('\\', '/')
                         image_paths.append(normalized_path)
-                        session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+                        stored_index = shot.get('index', shot_idx)
+                        session_mgr.mark_image_generated(session_id, stored_index, normalized_path)
 
                 shot['image_paths'] = image_paths
                 shot['image_path'] = image_paths[0] if image_paths else None

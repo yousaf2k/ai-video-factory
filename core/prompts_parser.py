@@ -95,26 +95,26 @@ def parse_prompts_file(file_path: str) -> Tuple[List[Dict[str, any]], Optional[s
     prompts_data = []
 
     # Pattern 1: "Prompt N: Title" format
-    pattern1 = r'Prompt\s+(\d+):\s*([^\n]+)\s*\n(.*?)(?=\n\s*Prompt\s+\d+:|$)'
+    pattern1 = r'Prompt\s+\d+:\s*([^\n]+)\s*\n(.*?)(?=\n\s*Prompt\s+\d+:|$)'
     matches1 = re.findall(pattern1, content, re.DOTALL | re.IGNORECASE)
 
     if matches1:
-        for idx, title, text in matches1:
+        for i, (title, text) in enumerate(matches1, 1):
             prompts_data.append({
-                'index': int(idx),
+                'index': i,  # Use sequential numbering, ignore file numbering
                 'title': title.strip(),
                 'text': title.strip() + '\n' + text.strip()
             })
         logger.info(f"Parsed {len(prompts_data)} prompts using 'Prompt N: Title' pattern")
     else:
         # Pattern 2: Numbered list format "1. Title" or "1) Title"
-        pattern2 = r'(\d+)[\.)]\s*([^\n]+)\s*\n(.*?)(?=\n\s*\d+[\.)]|$)'
+        pattern2 = r'\d+[\.)]\s*([^\n]+)\s*\n(.*?)(?=\n\s*\d+[\.)]|$)'
         matches2 = re.findall(pattern2, content, re.DOTALL)
 
         if matches2:
-            for idx, title, text in matches2:
+            for i, (title, text) in enumerate(matches2, 1):
                 prompts_data.append({
-                    'index': int(idx),
+                    'index': i,  # Use sequential numbering, ignore file numbering
                     'title': title.strip(),
                     'text': title.strip() + '\n' + text.strip()
                 })
@@ -250,8 +250,7 @@ def prompts_to_shots(prompts_data: List[Dict[str, any]]) -> List[Dict[str, any]]
     """
     shots = []
 
-    for prompt_data in prompts_data:
-        idx = prompt_data['index']
+    for seq_idx, prompt_data in enumerate(prompts_data, 1):
         text = prompt_data['text']
         title = prompt_data.get('title', '')
 
@@ -264,10 +263,10 @@ def prompts_to_shots(prompts_data: List[Dict[str, any]]) -> List[Dict[str, any]]
         # Extract narration
         narration = _extract_narration_from_prompt(text)
 
-        # Create shot
+        # Create shot with sequential index (always 1, 2, 3... regardless of file numbering)
         shot = {
-            'index': idx,
-            'scene': idx,  # Scene number matches shot index for 1:1 mapping
+            'index': seq_idx,
+            'scene': seq_idx,  # Scene number matches shot index for 1:1 mapping
             'title': title,
             'image_prompt': text,
             'motion_prompt': motion_prompt,
@@ -276,7 +275,7 @@ def prompts_to_shots(prompts_data: List[Dict[str, any]]) -> List[Dict[str, any]]
         }
 
         shots.append(shot)
-        logger.debug(f"Created shot {idx}: camera={camera}, narration={bool(narration)}")
+        logger.debug(f"Created shot {seq_idx}: camera={camera}, narration={bool(narration)}")
 
     logger.info(f"Converted {len(prompts_data)} prompts to {len(shots)} shots")
     return shots
