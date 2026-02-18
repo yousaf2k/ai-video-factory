@@ -201,9 +201,7 @@ def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, ne
     os.makedirs(output_dir, exist_ok=True)
 
     for shot_idx, shot in enumerate(shots, start=1):
-        # Use sequential index (1-110) instead of shot['index'] to avoid duplicates
-        # This ensures unique filenames even if prompts have duplicate indices
-        stored_index = shot.get('index', shot_idx)
+        # Use sequential index (1-110) for all shots
         image_prompt = shot.get('image_prompt', '')
 
         if not image_prompt:
@@ -211,7 +209,7 @@ def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, ne
             shot['image_paths'] = []
             continue
 
-        print(f"\n[Shot {shot_idx}/{len(shots)}] (index {stored_index}) {image_prompt[:80]}...")
+        print(f"\n[Shot {shot_idx}/{len(shots)}] {image_prompt[:80]}...")
 
         # Generate multiple variations
         image_paths = generate_image_variations(
@@ -231,9 +229,9 @@ def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, ne
         shot['image_path'] = image_paths[0] if image_paths else None
 
         if image_paths:
-            print(f"  [PASS] Generated {len(image_paths)} variation(s) for shot {shot_idx} (original index {stored_index})")
+            print(f"  [PASS] Generated {len(image_paths)} variation(s) for shot {shot_idx}")
         else:
-            print(f"  [FAIL] All variations failed for shot {shot_idx} (original index {stored_index})")
+            print(f"  [FAIL] All variations failed for shot {shot_idx}")
 
     print(f"\n[INFO] Image generation complete. Images saved to: {output_dir}")
     return shots
