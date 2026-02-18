@@ -142,6 +142,13 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
                                 })
 
                 logger.info(f"Prompt {prompt_id[:8]}... completed successfully with {len(output_files)} output(s)")
+
+                # Log details of each output file for debugging
+                for i, output in enumerate(output_files):
+                    logger.debug(f"  Output {i+1}: type={output['type']}, filename={output['filename']}, subfolder='{output.get('subfolder', '')}'")
+                    if output['type'] == 'video':
+                        print(f"  [VIDEO] Found: {output['filename']} (subfolder: '{output.get('subfolder', '')}')")
+
                 return {
                     'success': True,
                     'outputs': output_files,
@@ -184,7 +191,9 @@ def get_output_file_path(output_info):
     """
     filename = output_info['filename']
     subfolder = output_info.get('subfolder', '')
-    logger.debug(f"Getting output file path: {filename} (subfolder: {subfolder})")
+    file_type = output_info.get('type', 'unknown')
+
+    logger.debug(f"Getting output file path: {filename} (subfolder: '{subfolder}', type: {file_type})")
 
     # ComfyUI default output directory
     if subfolder:
@@ -192,4 +201,19 @@ def get_output_file_path(output_info):
     else:
         output_path = os.path.join("ComfyUI", "output", filename)
 
-    return os.path.abspath(output_path)
+    abs_path = os.path.abspath(output_path)
+
+    # Log if file doesn't exist
+    if not os.path.exists(abs_path):
+        logger.warning(f"Output file not found: {abs_path}")
+        # Try alternative paths for videos
+        if file_type == 'video':
+            # ComfyUI saves videos in a 'video' subfolder
+            alt_path = os.path.join("ComfyUI", "output", "video", filename)
+            if os.path.exists(alt_path):
+                logger.info(f"Found video at alternative path: {alt_path}")
+                return os.path.abspath(alt_path)
+    else:
+        logger.debug(f"Output file found: {abs_path}")
+
+    return abs_path

@@ -112,15 +112,17 @@ def parse_prompts_file(file_path: str) -> Tuple[List[Dict[str, any]], Optional[s
 
     # Pattern 1: Prompts separated by blank lines (no numbers)
     # Each prompt is a paragraph/block of text separated by double newlines
-    pattern1 = r'([^\n]+(?:\n(?!\n)[^\n]+)*)(?:\n\n|$)'
-    matches1 = re.findall(pattern1, content.strip())
+    # Split by double newlines to get individual blocks
+    blocks = re.split(r'\n\s*\n', content.strip())
 
-    # Only use this pattern if we found multiple blocks and they don't start with numbers
-    if matches1 and len(matches1) > 1:
+    logger.debug(f"Split content into {len(blocks)} blocks")
+
+    # Only use this pattern if we found multiple blocks
+    if len(blocks) > 1:
         # Check if these are really unnumbered prompts (first block doesn't start with number)
-        first_block = matches1[0].strip()
-        if not first_block[0].isdigit():
-            for i, text in enumerate(matches1, 1):
+        first_block = blocks[0].strip()
+        if not first_block or not first_block[0].isdigit():
+            for i, text in enumerate(blocks, 1):
                 text_clean = text.strip()
                 if not text_clean:
                     continue
@@ -138,10 +140,16 @@ def parse_prompts_file(file_path: str) -> Tuple[List[Dict[str, any]], Optional[s
                     'text': text_clean
                 })
             logger.info(f"Parsed {len(prompts_data)} prompts using blank-line separated format")
-        else:
-            # First block starts with number, skip to next pattern
-            matches1 = []
 
+            # Debug: log first and last prompt lengths
+            if prompts_data:
+                first_len = len(prompts_data[0]['text'])
+                last_len = len(prompts_data[-1]['text'])
+                logger.debug(f"First prompt: {first_len} chars, Last prompt: {last_len} chars")
+                if last_len > 5000:  # Suspiciously long
+                    logger.warning(f"Last prompt is very long ({last_len} chars), may contain multiple prompts")
+
+    # Only try other patterns if first pattern didn't work
     if not prompts_data:
         # Pattern 2: "Prompt N: Title" format (explicit "Prompt" keyword)
         pattern2 = r'Prompt\s+\d+:\s*([^\n]+)\s*\n(.*?)(?=\n\s*Prompt\s+\d+:|$)'
@@ -155,48 +163,35 @@ def parse_prompts_file(file_path: str) -> Tuple[List[Dict[str, any]], Optional[s
                     'text': title.strip() + '\n' + text.strip()
                 })
             logger.info(f"Parsed {len(prompts_data)} prompts using 'Prompt N: Title' pattern")
-    else:
-        # Pattern 2: Numbered list with full prompt content "1. Prompt text here..." or "1) Prompt text here..."
-        # Matches number followed by complete prompt (may span multiple lines)
-        pattern2 = r'(?:\d+[\.)]\s+)(.*?)(?=\n\s*\d+[\.)]\s+|$)'
-        matches2 = re.findall(pattern2, content, re.DOTALL)
-
-        if matches2 and len(matches2) > 1:
-            for i, text in enumerate(matches2, 1):
-                # Use first 80 chars as title (since no separate title exists)
-                text_clean = text.strip()
-                # Remove leading number if present
-                text_clean = re.sub(r'^\d+[\.)]\s+', '', text_clean)
-
-                # Generate title from first part of prompt
-                title_match = re.match(r'^([^.!?]*[.!?]?)', text_clean)
-                if title_match:
-                    title = title_match.group(1).strip()
-                else:
-                    title = text_clean[:80]
-
-                prompts_data.append({
-                    'index': i,
-                    'title': title,
-                    'text': text_clean
-                })
-            logger.info(f"Parsed {len(prompts_data)} prompts using numbered list pattern (full content)")
         else:
-            # Pattern 3: Traditional numbered list with title "1. Title\nDescription" or "1) Title\nDescription"
-            pattern3 = r'\d+[\.)]\s*([^\n]+)\s*\n(.*?)(?=\n\s*\d+[\.)]|$)'
+            # Pattern 3: Numbered list with full prompt content "1. Prompt text here..." or "1) Prompt text here..."
+            # Matches number followed by complete prompt (may span multiple lines)
+            pattern3 = r'(?:\d+[\.)]\s+)(.*?)(?=\n\s*\d+[\.)]\s+|$)'
             matches3 = re.findall(pattern3, content, re.DOTALL)
 
-            if matches3:
-                for i, (title, text) in enumerate(matches3, 1):
+            if matches3 and len(matches3) > 1:
+                for i, text in enumerate(matches3, 1):
+                    # Use first 80 chars as title (since no separate title exists)
+                    text_clean = text.strip()
+                    # Remove leading number if present
+                    text_clean = re.sub(r'^\d+[\.)]\s+', '', text_clean)
+
+                    # Generate title from first part of prompt
+                    title_match = re.match(r'^([^.!?]*[.!?]?)', text_clean)
+                    if title_match:
+                        title = title_match.group(1).strip()
+                    else:
+                        title = text_clean[:80]
+
                     prompts_data.append({
                         'index': i,
-                        'title': title.strip(),
-                        'text': title.strip() + '\n' + text.strip()
+                        'title': title,
+                        'text': text_clean
                     })
-                logger.info(f"Parsed {len(prompts_data)} prompts using numbered list pattern (title + description)")
+                logger.info(f"Parsed {len(prompts_data)} prompts using numbered list pattern (full content)")
             else:
-                # Pattern 4: Markdown headers "## Title"
-                pattern4 = r'##+\s*([^\n]+)\s*\n(.*?)(?=##+|$)'
+                # Pattern 4: Traditional numbered list with title "1. Title\nDescription" or "1) Title\nDescription"
+                pattern4 = r'\d+[\.)]\s*([^\n]+)\s*\n(.*?)(?=\n\s*\d+[\.)]|$)'
                 matches4 = re.findall(pattern4, content, re.DOTALL)
 
                 if matches4:
@@ -206,19 +201,32 @@ def parse_prompts_file(file_path: str) -> Tuple[List[Dict[str, any]], Optional[s
                             'title': title.strip(),
                             'text': title.strip() + '\n' + text.strip()
                         })
-                    logger.info(f"Parsed {len(prompts_data)} prompts using markdown headers")
+                    logger.info(f"Parsed {len(prompts_data)} prompts using numbered list pattern (title + description)")
                 else:
-                    # Fallback: Treat entire file as single prompt
-                    lines = content.strip().split('\n')
-                    if lines:
-                        first_line = lines[0].strip()
-                        rest = '\n'.join(lines[1:]).strip()
-                        prompts_data.append({
-                            'index': 1,
-                            'title': first_line[:100],  # First 100 chars as title
-                            'text': content.strip()
-                        })
-                        logger.warning("Could not detect standard format, treating as single prompt")
+                    # Pattern 5: Markdown headers "## Title"
+                    pattern5 = r'##+\s*([^\n]+)\s*\n(.*?)(?=##+|$)'
+                    matches5 = re.findall(pattern5, content, re.DOTALL)
+
+                    if matches5:
+                        for i, (title, text) in enumerate(matches5, 1):
+                            prompts_data.append({
+                                'index': i,
+                                'title': title.strip(),
+                                'text': title.strip() + '\n' + text.strip()
+                            })
+                        logger.info(f"Parsed {len(prompts_data)} prompts using markdown headers")
+                    else:
+                        # Fallback: Treat entire file as single prompt
+                        lines = content.strip().split('\n')
+                        if lines:
+                            first_line = lines[0].strip()
+                            rest = '\n'.join(lines[1:]).strip()
+                            prompts_data.append({
+                                'index': 1,
+                                'title': first_line[:100],  # First 100 chars as title
+                                'text': content.strip()
+                            })
+                            logger.warning("Could not detect standard format, treating as single prompt")
 
     if not prompts_data:
         raise ValueError("No prompts found in file. Expected format:\nPrompt 1: Title\nPrompt text here...")

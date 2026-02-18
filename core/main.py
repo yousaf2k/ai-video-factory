@@ -1144,12 +1144,17 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         story_json = build_story(idea, agent_name=story_agent)
         session_mgr.save_story(session_id, story_json)
     else:
-        # Load existing story
-        print("\n[SKIP] STEP 2: Story already generated")
-        story_dir = session_mgr.get_session_dir(session_id)
-        story_path = os.path.join(story_dir, "story.json")
-        with open(story_path, 'r', encoding='utf-8') as f:
-            story_json = f.read()
+        # Check if this is a prompts file session (no story.json)
+        if session_meta.get('prompts_file'):
+            print("\n[SKIP] STEP 2: Story skipped (prompts file mode)")
+            story_json = None
+        else:
+            # Load existing story
+            print("\n[SKIP] STEP 2: Story already generated")
+            story_dir = session_mgr.get_session_dir(session_id)
+            story_path = os.path.join(story_dir, "story.json")
+            with open(story_path, 'r', encoding='utf-8') as f:
+                story_json = f.read()
 
     # STEP 3: Scene Graph
     if not steps.get('scene_graph', False):
@@ -1185,6 +1190,29 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         shots_path = os.path.join(shots_dir, "shots.json")
         with open(shots_path, 'r', encoding='utf-8') as f:
             shots = json.load(f)
+    else:
+        # Images step marked complete, but verify images actually exist
+        print("\n[VERIFY] Checking if images exist...")
+        images_dir = session_mgr.get_images_dir(session_id)
+
+        # Check if shots have image_path and files exist
+        missing_images = False
+        for shot in shots:
+            img_path = shot.get('image_path')
+            if not img_path or not os.path.exists(os.path.join(images_dir, os.path.basename(img_path))):
+                missing_images = True
+                break
+
+        if missing_images:
+            print("[WARN] Some images are missing. Regenerating...")
+            _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot)
+            # Reload shots with updated paths
+            shots_dir = session_mgr.get_session_dir(session_id)
+            shots_path = os.path.join(shots_dir, "shots.json")
+            with open(shots_path, 'r', encoding='utf-8') as f:
+                shots = json.load(f)
+        else:
+            print("[SKIP] Images verified and already exist")
 
     # STEP 5: Rendering with verification
     if not steps.get('videos', False):
@@ -1202,42 +1230,49 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
 
     # STEP 6: Narration TTS
     if generate_narration and not steps.get('narration', False):
-        logger.info("STEP 6: Narration TTS")
-        print("\nSTEP 6: Narration TTS")
-
-        # Load story for narration
-        story_dir = session_mgr.get_session_dir(session_id)
-        story_path = os.path.join(story_dir, "story.json")
-        with open(story_path, 'r', encoding='utf-8') as f:
-            story_json = f.read()
-
-        # Calculate total duration
-        video_config = session_meta.get('video_config', {})
-        total_duration = video_config.get('total_length') or (len(shots) * shot_length)
-
-        # Generate narration
-        from core.narration_generator import generate_narration_for_session
-
-        script_path, audio_path = generate_narration_for_session(
-            session_id=session_id,
-            story_json=story_json,
-            shots=shots,
-            total_duration=total_duration,
-            agent_name=narration_agent,
-            tts_method=tts_method,
-            tts_workflow_path=tts_workflow,
-            voice=tts_voice
-        )
-
-        if script_path and audio_path:
-            print(f"[PASS] Narration complete")
-            print(f"       Script: {script_path}")
-            print(f"       Audio: {audio_path}")
-        elif script_path:
-            print(f"[WARN] Narration script generated but audio failed")
-            print(f"       Script: {script_path}")
+        # Skip narration for prompts file sessions (no story.json)
+        if session_meta.get('prompts_file'):
+            print("\n[SKIP] STEP 6: Narration skipped (prompts file mode)")
+            print("[INFO] Shots already have narration text from prompts file")
+            # Mark narration as complete so session can finish
+            session_mgr.mark_step_complete(session_id, 'narration')
         else:
-            print(f"[FAIL] Narration generation failed")
+            logger.info("STEP 6: Narration TTS")
+            print("\nSTEP 6: Narration TTS")
+
+            # Load story for narration
+            story_dir = session_mgr.get_session_dir(session_id)
+            story_path = os.path.join(story_dir, "story.json")
+            with open(story_path, 'r', encoding='utf-8') as f:
+                story_json = f.read()
+
+            # Calculate total duration
+            video_config = session_meta.get('video_config', {})
+            total_duration = video_config.get('total_length') or (len(shots) * shot_length)
+
+            # Generate narration
+            from core.narration_generator import generate_narration_for_session
+
+            script_path, audio_path = generate_narration_for_session(
+                session_id=session_id,
+                story_json=story_json,
+                shots=shots,
+                total_duration=total_duration,
+                agent_name=narration_agent,
+                tts_method=tts_method,
+                tts_workflow_path=tts_workflow,
+                voice=tts_voice
+            )
+
+            if script_path and audio_path:
+                print(f"[PASS] Narration complete")
+                print(f"       Script: {script_path}")
+                print(f"       Audio: {audio_path}")
+            elif script_path:
+                print(f"[WARN] Narration script generated but audio failed")
+                print(f"       Script: {script_path}")
+            else:
+                print(f"[FAIL] Narration generation failed")
 
     if not generate_narration or steps.get('videos', False):
         logger.info("All steps completed successfully")
@@ -1287,12 +1322,17 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
                 story_json = build_story(idea, agent_name=story_agent)
                 session_mgr.save_story(session_id, story_json)
             else:
-                print("\n[SKIP] STEP 2: Story already generated")
-                # Load existing story
-                story_dir = session_mgr.get_session_dir(session_id)
-                story_path = os.path.join(story_dir, "story.json")
-                with open(story_path, 'r', encoding='utf-8') as f:
-                    story_json = f.read()
+                # Check if this is a prompts file session (no story.json)
+                if session_meta.get('prompts_file'):
+                    print("\n[SKIP] STEP 2: Story skipped (prompts file mode)")
+                    story_json = None
+                else:
+                    print("\n[SKIP] STEP 2: Story already generated")
+                    # Load existing story
+                    story_dir = session_mgr.get_session_dir(session_id)
+                    story_path = os.path.join(story_dir, "story.json")
+                    with open(story_path, 'r', encoding='utf-8') as f:
+                        story_json = f.read()
 
         elif current_step == 3:  # Scene Graph
             if not session_meta.get('steps', {}).get('scene_graph', False):
@@ -1345,34 +1385,41 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
 
         elif current_step == 7:  # Narration TTS
             if generate_narration and not session_meta.get('steps', {}).get('narration', False):
-                print("\nSTEP 7: Narration TTS")
-
-                # Calculate total duration
-                video_config = session_meta.get('video_config', {})
-                total_duration = video_config.get('total_length') or (len(shots) * shot_length)
-
-                # Generate narration
-                from core.narration_generator import generate_narration_for_session
-
-                script_path, audio_path = generate_narration_for_session(
-                    session_id=session_id,
-                    story_json=story_json,
-                    shots=shots,
-                    total_duration=total_duration,
-                    agent_name=narration_agent,
-                    use_comfyui=(tts_method == 'comfyui'),
-                    tts_workflow_path=tts_workflow,
-                    voice=tts_voice
-                )
-
-                if script_path and audio_path:
-                    print(f"[PASS] Narration complete")
-                    print(f"       Script: {script_path}")
-                    print(f"       Audio: {audio_path}")
-                elif script_path:
-                    print(f"[WARN] Narration script generated but audio failed")
+                # Skip narration for prompts file sessions (no story.json)
+                if session_meta.get('prompts_file'):
+                    print("\n[SKIP] STEP 7: Narration skipped (prompts file mode)")
+                    print("[INFO] Shots already have narration text from prompts file")
+                    # Mark narration as complete so session can finish
+                    session_mgr.mark_step_complete(session_id, 'narration')
                 else:
-                    print(f"[FAIL] Narration generation failed")
+                    print("\nSTEP 7: Narration TTS")
+
+                    # Calculate total duration
+                    video_config = session_meta.get('video_config', {})
+                    total_duration = video_config.get('total_length') or (len(shots) * shot_length)
+
+                    # Generate narration
+                    from core.narration_generator import generate_narration_for_session
+
+                    script_path, audio_path = generate_narration_for_session(
+                        session_id=session_id,
+                        story_json=story_json,
+                        shots=shots,
+                        total_duration=total_duration,
+                        agent_name=narration_agent,
+                        use_comfyui=(tts_method == 'comfyui'),
+                        tts_workflow_path=tts_workflow,
+                        voice=tts_voice
+                    )
+
+                    if script_path and audio_path:
+                        print(f"[PASS] Narration complete")
+                        print(f"       Script: {script_path}")
+                        print(f"       Audio: {audio_path}")
+                    elif script_path:
+                        print(f"[WARN] Narration script generated but audio failed")
+                    else:
+                        print(f"[FAIL] Narration generation failed")
             else:
                 if generate_narration:
                     print("\n[SKIP] STEP 7: Narration already generated")
@@ -1574,12 +1621,14 @@ def _run_with_prompts_file(session_mgr, args):
     default_motion = getattr(args, 'default_motion', None) or config.DEFAULT_MOTION_FOR_PROMPTS
 
     for shot in shots:
-        if not shot.get('camera') or shot['camera'] == config.DEFAULT_CAMERA_FOR_PROMPTS:
-            shot['camera'] = default_camera
-        if not shot.get('motion_prompt'):
-            shot['motion_prompt'] = default_motion
+        # Set camera to default (skip auto-detection)
+        shot['camera'] = default_camera
+        # Set motion_prompt to be the same as image_prompt
+        shot['motion_prompt'] = shot['image_prompt']
 
     print(f"[INFO] Created {len(shots)} shots from prompts")
+    print(f"[INFO] Using default camera: {default_camera}")
+    print(f"[INFO] motion_prompt set to image_prompt for all shots")
 
     # Use overall_title or filename as session idea
     idea = overall_title or f"Custom prompts: {os.path.basename(prompts_file)}"
@@ -1631,6 +1680,24 @@ def _run_with_prompts_file(session_mgr, args):
     with open(shots_path, 'r', encoding='utf-8') as f:
         shots = json.load(f)
 
+    # Count how many images were actually generated
+    shots_with_images = [s for s in shots if s.get('image_path')]
+    shots_without_images = [s for s in shots if not s.get('image_path')]
+
+    print(f"\n[INFO] Image generation summary:")
+    print(f"  - Total shots: {len(shots)}")
+    print(f"  - Shots with images: {len(shots_with_images)}")
+    print(f"  - Shots without images: {len(shots_without_images)}")
+
+    if shots_without_images:
+        print(f"\n[WARN] The following shots did not generate images:")
+        for shot in shots_without_images[:5]:  # Show first 5
+            idx = shot.get('index', '?')
+            title = shot.get('title', 'No title')[:50]
+            print(f"  - Shot {idx}: {title}...")
+        if len(shots_without_images) > 5:
+            print(f"  ... and {len(shots_without_images) - 5} more")
+
     # Check if images-only mode
     if getattr(args, 'images_only', False):
         print("\n[INFO] Images-only mode: Skipping video generation")
@@ -1642,9 +1709,12 @@ def _run_with_prompts_file(session_mgr, args):
     valid_shots = [s for s in shots if s.get('image_path')]
 
     if not valid_shots:
-        print("[ERROR] No images were successfully generated. Cannot proceed.")
+        print("\n[ERROR] No images were successfully generated. Cannot proceed to video generation.")
+        print(f"[ERROR] Total shots: {len(shots)}, Shots with images: 0")
+        print("[INFO] Please check the ComfyUI server and image generation logs")
         return None
 
+    print(f"\n[INFO] ✓ Proceeding to video generation with {len(valid_shots)}/{len(shots)} shots")
     print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
     _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
 

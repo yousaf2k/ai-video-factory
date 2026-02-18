@@ -317,4 +317,20 @@ def compile_workflow(template, shot, video_length_seconds=None):
             frames = int(video_length_seconds * config.VIDEO_FPS)
             wan_node["inputs"]["widgets_values"] = [widgets[0], widgets[1], frames, widgets[3]]
 
+    # Set video filename prefix to avoid collisions
+    # Find SaveVideo node and set unique filename
+    shot_idx = shot.get("index", 0)
+    import time
+    import uuid
+    unique_id = f"{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+    video_filename_prefix = f"{unique_id}_shot_{shot_idx:03d}"
+
+    for node_id, node in wf.items():
+        if node.get("class_type") == "SaveVideo":
+            # Set the filename prefix
+            if "inputs" in node and "filename_prefix" in node["inputs"]:
+                node["inputs"]["filename_prefix"] = video_filename_prefix
+                logger.debug(f"Set video filename prefix for node {node_id}: {video_filename_prefix}")
+            break
+
     return wf
