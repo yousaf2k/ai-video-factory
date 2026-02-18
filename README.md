@@ -14,33 +14,36 @@
 
 ## Quick Start
 
+
+### Install dependencies
 ```bash
-# Install dependencies
 pip install -r requirements.txt
-
-# Set your Gemini API key
+```
+### Set your Gemini API key
+```bash
 export GEMINI_API_KEY="your_api_key_here"
+```
 
-# Start ComfyUI with Wan 2.2 workflow
-# (ComfyUI must be running on http://127.0.0.1:8188)
+**Start ComfyUI with Wan 2.2 workflow**
+**(ComfyUI must be running on http://127.0.0.1:8188)**
 
-# Generate a video
+### Generate a video
+```bash
 python main.py --idea "A beautiful sunset over the ocean"
-# AI Agents Folder
-
+```
+### AI Agents Folder
 This folder contains system prompts for LLM agents used in different stages of video generation.
 
-## Folder Structure
+#### Folder Structure
+```bash
 
-```
 agents/
 ├── story/         - Story generation agents
 ├── narration/     - Narration script agents
 ├── image/         - Image prompt engineering agents
 └── video/         - Video motion/camera agents
 ```
-
-## How to Create a Custom Agent
+#### How to Create a Custom Agent
 
 1. **Navigate to the appropriate folder** (e.g., `agents/story/`)
 
@@ -48,7 +51,7 @@ agents/
 
 3. **Write the system prompt** following this template:
 
-   ```
+   ```bash
    You are a [role description]. Your task is to [task description].
 
    ## Guidelines
