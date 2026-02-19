@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import argparse
+import time
 from datetime import datetime
 
 # Add parent directory to path so we can import config
@@ -568,7 +569,45 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
             video_info = video_outputs[0]
             source_path = get_output_file_path(video_info)
 
-            if os.path.exists(source_path):
+            # Wait for file to be written to disk with retry mechanism
+            # Video files can be large and take several seconds to finalize
+            max_retries = 10
+            retry_delay = 2  # seconds
+            file_found = False
+
+            for attempt in range(max_retries):
+                if os.path.exists(source_path):
+                    # File exists, but check if it's still being written
+                    # by checking if the file size is stable
+                    try:
+                        initial_size = os.path.getsize(source_path)
+                        time.sleep(1)  # Wait 1 second
+                        final_size = os.path.getsize(source_path)
+
+                        if initial_size == final_size and final_size > 0:
+                            # File size is stable and non-zero, file is complete
+                            file_found = True
+                            break
+                        else:
+                            if attempt < max_retries - 1:
+                                print(f"[WAIT] Shot {shot_idx}{variation_label}: File still writing... (retry {attempt + 1}/{max_retries})")
+                                time.sleep(retry_delay)
+                            else:
+                                print(f"[WARN] Shot {shot_idx}{variation_label}: File size unstable after {max_retries} retries")
+                    except OSError as e:
+                        if attempt < max_retries - 1:
+                            print(f"[WAIT] Shot {shot_idx}{variation_label}: Cannot access file yet... (retry {attempt + 1}/{max_retries})")
+                            time.sleep(retry_delay)
+                        else:
+                            print(f"[ERROR] Shot {shot_idx}{variation_label}: Cannot access file: {e}")
+                else:
+                    if attempt < max_retries - 1:
+                        print(f"[WAIT] Shot {shot_idx}{variation_label}: File not on disk yet... (retry {attempt + 1}/{max_retries})")
+                        time.sleep(retry_delay)
+                    else:
+                        print(f"[FAIL] Shot {shot_idx}{variation_label}: File not found after {max_retries} retries")
+
+            if file_found:
                 shutil.copy2(source_path, video_save_path)
                 print(f"[COPY] Shot {shot_idx}{variation_label}: {video_filename} -> session/videos/")
                 print(f"       Source: {source_path}")
@@ -588,7 +627,9 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
                     print(f"[WARN] Copy verification failed")
                     return False, "Video copy failed", None
             else:
-                print(f"[FAIL] Source video not found: {source_path}")
+                print(f"[FAIL] Source video not found after retries: {source_path}")
+                print(f"[HINT] ComfyUI may have saved it to a different location")
+                print(f"[HINT] Check ComfyUI's output directory")
                 # DON'T mark as rendered - the video file doesn't exist
                 return False, "Source video not found", None
 

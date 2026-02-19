@@ -9,6 +9,114 @@ from core.logger_config import get_logger
 # Get logger for ComfyUI API operations
 logger = get_logger(__name__)
 
+# Cache for ComfyUI output directory
+_comfy_output_dir = None
+
+
+def get_comfyui_output_directory():
+    """
+    Get ComfyUI's actual output directory from the API.
+
+    Returns:
+        str: Path to ComfyUI's output directory
+    """
+    global _comfy_output_dir
+
+    if _comfy_output_dir:
+        return _comfy_output_dir
+
+    # First, check if it's manually set in config
+    if config.COMFY_OUTPUT_DIR:
+        _comfy_output_dir = config.COMFY_OUTPUT_DIR
+        logger.info(f"ComfyUI output directory from config: {_comfy_output_dir}")
+        return _comfy_output_dir
+
+    logger.info("Attempting to detect ComfyUI output directory from API...")
+
+    try:
+        # Try to get ComfyUI settings - this includes path information
+        r = requests.get(f"{config.COMFY_URL}/settings", timeout=5)
+
+        if r.status_code == 200:
+            settings = r.json()
+            logger.debug(f"ComfyUI settings response keys: {list(settings.keys())}")
+
+            # Log the entire settings for debugging (be careful not to log sensitive data)
+            logger.debug(f"ComfyUI settings: {settings}")
+
+            # Check for ComfyUI's paths in settings
+            # The key might vary depending on ComfyUI version
+            possible_keys = ['output_directory', 'outputDir', 'output_dir', 'path_output']
+
+            for key in possible_keys:
+                if key in settings:
+                    _comfy_output_dir = settings[key]
+                    logger.info(f"ComfyUI output directory from API ({key}): {_comfy_output_dir}")
+                    return _comfy_output_dir
+
+    except Exception as e:
+        logger.warning(f"Could not get ComfyUI settings from API: {e}")
+
+    try:
+        # Alternative: Try the system_stats endpoint
+        r = requests.get(f"{config.COMFY_URL}/system_stats", timeout=5)
+
+        if r.status_code == 200:
+            stats = r.json()
+            logger.debug(f"ComfyUI system_stats response: {stats}")
+
+            # Look for path information in various possible fields
+            if 'paths' in stats:
+                paths = stats['paths']
+                logger.debug(f"ComfyUI paths: {paths}")
+                if 'output' in paths:
+                    _comfy_output_dir = paths['output']
+                    logger.info(f"ComfyUI output directory from system_stats: {_comfy_output_dir}")
+                    return _comfy_output_dir
+
+    except Exception as e:
+        logger.warning(f"Could not get ComfyUI system_stats from API: {e}")
+
+    try:
+        # Another approach: Check the extension settings
+        r = requests.get(f"{config.COMFY_URL}/extension_manager", timeout=5)
+
+        if r.status_code == 200:
+            ext_data = r.json()
+            logger.debug(f"ComfyUI extension_manager response: {ext_data}")
+            # Some ComfyUI versions include paths in extension manager data
+            if 'ComfyUI' in ext_data and 'path' in ext_data['ComfyUI']:
+                comfy_path = ext_data['ComfyUI']['path']
+                _comfy_output_dir = os.path.join(comfy_path, "output")
+                logger.info(f"ComfyUI output directory from extension manager: {_comfy_output_dir}")
+                return _comfy_output_dir
+
+    except Exception as e:
+        logger.warning(f"Could not get ComfyUI extension manager info: {e}")
+
+    # Fallback: try to detect from COMFY_URL and known locations
+    # If ComfyUI is at http://127.0.0.1:8188, it might be installed in various locations
+    possible_paths = [
+        "C:/ComfyUI/output",  # Common Windows install
+        "D:/ComfyUI/output",  # Alternative Windows drive
+        os.path.expanduser("~/ComfyUI/output"),  # User home
+        "/ComfyUI/output",  # Linux/Mac common location
+        "ComfyUI/output",  # Relative path (ComfyUI in project folder)
+    ]
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            _comfy_output_dir = path
+            logger.info(f"ComfyUI output directory detected by file existence: {_comfy_output_dir}")
+            return _comfy_output_dir
+
+    # Last resort: use the default relative path but warn about it
+    _comfy_output_dir = "ComfyUI/output"
+    logger.error(f"Could not detect ComfyUI output directory from API or file system!")
+    logger.error(f"   Using default relative path: {_comfy_output_dir}")
+    logger.error(f"   If ComfyUI is installed elsewhere, set COMFY_OUTPUT_DIR in config.py")
+    return _comfy_output_dir
+
 def submit(workflow):
     """
     Submit a workflow to ComfyUI and return the response.
@@ -195,25 +303,57 @@ def get_output_file_path(output_info):
 
     logger.debug(f"Getting output file path: {filename} (subfolder: '{subfolder}', type: {file_type})")
 
+    # Get ComfyUI's actual output directory
+    comfy_output_dir = get_comfyui_output_directory()
+
+    # List of paths to try, in order
+    candidate_paths = []
+
     # ComfyUI default output directory
     if subfolder:
-        output_path = os.path.join("ComfyUI", "output", subfolder, filename)
+        candidate_paths.append(os.path.join(comfy_output_dir, subfolder, filename))
     else:
-        output_path = os.path.join("ComfyUI", "output", filename)
+        candidate_paths.append(os.path.join(comfy_output_dir, filename))
 
-    abs_path = os.path.abspath(output_path)
+    # For videos, try alternative paths
+    if file_type == 'video':
+        # ComfyUI saves videos in a 'video' subfolder
+        candidate_paths.append(os.path.join(comfy_output_dir, "video", filename))
 
-    # Log if file doesn't exist
-    if not os.path.exists(abs_path):
-        logger.warning(f"Output file not found: {abs_path}")
-        # Try alternative paths for videos
-        if file_type == 'video':
-            # ComfyUI saves videos in a 'video' subfolder
-            alt_path = os.path.join("ComfyUI", "output", "video", filename)
-            if os.path.exists(alt_path):
-                logger.info(f"Found video at alternative path: {alt_path}")
-                return os.path.abspath(alt_path)
-    else:
-        logger.debug(f"Output file found: {abs_path}")
+        # Try without the trailing underscore if filename ends with one
+        if filename.endswith('_'):
+            filename_without_underscore = filename[:-1]
+            candidate_paths.append(os.path.join(comfy_output_dir, filename_without_underscore))
+            candidate_paths.append(os.path.join(comfy_output_dir, "video", filename_without_underscore))
 
-    return abs_path
+    # Try each candidate path
+    for path in candidate_paths:
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path):
+            logger.debug(f"Output file found: {abs_path}")
+            return abs_path
+
+    # If none of the exact paths work, try searching for files with similar names
+    if file_type == 'video':
+        logger.warning(f"Video not found at expected paths, searching for similar files...")
+        # Extract the base part of the filename (before the frame count)
+        # Example: 1771452785243_86b45e92_shot_003_00001_.mp4 -> 1771452785243_86b45e92_shot_003
+        import re
+        base_match = re.match(r'^(.*_shot_\d+)_\d+_(\.)?mp4$', filename)
+        if base_match:
+            base_name = base_match.group(1)
+            # Search for any files starting with this base name
+            if os.path.exists(comfy_output_dir):
+                for file in os.listdir(comfy_output_dir):
+                    if file.startswith(base_name) and file.endswith('.mp4'):
+                        found_path = os.path.join(comfy_output_dir, file)
+                        logger.info(f"Found video with similar name: {found_path}")
+                        return os.path.abspath(found_path)
+
+    # Log the expected path even if not found
+    logger.warning(f"Output file not found at any expected path")
+    logger.warning(f"  ComfyUI output dir: {comfy_output_dir}")
+    logger.warning(f"  Tried paths: {candidate_paths}")
+
+    # Return the primary expected path (even though it doesn't exist)
+    return os.path.abspath(candidate_paths[0])

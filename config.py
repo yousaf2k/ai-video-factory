@@ -100,6 +100,15 @@ GEMINI_IMAGE_MODEL = "gemini-3-pro-image-preview"
 # ComfyUI server URL
 COMFY_URL = "http://127.0.0.1:8188"
 
+# ComfyUI output directory (where ComfyUI saves generated videos/images)
+# Set this if ComfyUI is installed in a different location
+# Leave as empty string "" to auto-detect from ComfyUI API
+# Examples:
+#   COMFY_OUTPUT_DIR = ""  # Auto-detect (recommended)
+#   COMFY_OUTPUT_DIR = "C:/ComfyUI/output"  # Manual path for Windows
+#   COMFY_OUTPUT_DIR = "/home/user/ComfyUI/output"  # Manual path for Linux/Mac
+COMFY_OUTPUT_DIR = "C:/ComfyUI_Portable/ComfyUI/output"
+
 # Path to your Wan 2.2 workflow template
 WORKFLOW_PATH = "workflow/video/wan22_workflow.json"
 
@@ -448,7 +457,7 @@ AUTO_STEP_MODE = True  # True = auto, False = manual
 STORY_AGENT = "youtube_documentary"
 
 # Image prompt agent (default, artistic, time_traveler)
-IMAGE_AGENT = "time_traveler"
+IMAGE_AGENT = "default"
 
 # Video motion agent (default, cinematic)
 VIDEO_AGENT = "default"
