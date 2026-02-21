@@ -904,8 +904,11 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
             failed_renders += 1
             continue
 
+        # Print image name before video generation
+        print(f"\n[PROCESS] Shot {shot_idx}: Using image '{os.path.basename(image_paths[0])}'")
+
         # Render video for each image variation
-        print(f"\n[SUBMIT] Shot {shot_idx} ({shot_length}s each, {len(image_paths)} variation(s))")
+        print(f"[SUBMIT] Shot {shot_idx} ({shot_length}s each, {len(image_paths)} variation(s))")
 
         for variation_idx, img_path in enumerate(image_paths, 1):
             total_renders += 1
@@ -1367,8 +1370,12 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
             print("[ERROR] No images were successfully generated. Cannot proceed.")
             return
 
-        logger.info(f"STEP 5: Rendering {len(valid_shots)} shots")
-        print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
+        # Count shots that actually need rendering (don't have videos yet)
+        shots_status = session_mgr.get_shots(session_id)
+        shots_need_video = [s for s in valid_shots if not shots_status[s.get('index', 0) - 1].get('video_rendered', False)]
+
+        logger.info(f"STEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
+        print(f"\nSTEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
         _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
     else:
         # Videos step is marked complete, but verify videos actually exist
@@ -1397,8 +1404,11 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
 
             # Now render videos
             valid_shots = [s for s in shots if s.get('image_path')]
-            logger.info(f"STEP 5: Rendering {len(valid_shots)} shots")
-            print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
+            # Count shots that actually need rendering
+            shots_status = session_mgr.get_shots(session_id)
+            shots_need_video = [s for s in valid_shots if not shots_status[s.get('index', 0) - 1].get('video_rendered', False)]
+            logger.info(f"STEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
+            print(f"\nSTEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
             _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
         else:
             print(f"[SKIP] Videos verified and already exist")
@@ -1714,6 +1724,10 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
     """Render videos for all shots and all image variations"""
     template = load_workflow(config.WORKFLOW_PATH, video_length_seconds=shot_length)
 
+    # Load shots status from shots.json to check which videos are already rendered
+    shots_status = session_mgr.get_shots(session_id)
+    shots_status_dict = {s['index']: s for s in shots_status}
+
     # Track results
     successful_renders = 0
     failed_renders = 0
@@ -1722,6 +1736,13 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
 
     for shot in valid_shots:
         shot_idx = shot.get('index', shots.index(shot) + 1)
+        shot_meta = shots_status_dict.get(shot_idx, {})
+
+        # Skip if already rendered
+        if shot_meta.get('video_rendered', False):
+            print(f"[SKIP] Shot {shot_idx}: Video already marked as rendered")
+            successful_renders += 1
+            continue
 
         # Get all image paths for this shot
         image_paths = shot.get('image_paths', [])
@@ -1737,8 +1758,11 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
             failed_renders += 1
             continue
 
+        # Print image name before video generation
+        print(f"\n[PROCESS] Shot {shot_idx}: Using image '{os.path.basename(image_paths[0])}'")
+
         # Render video for each image variation
-        print(f"\n[SUBMIT] Shot {shot_idx} ({shot_length}s each, {len(image_paths)} variation(s))")
+        print(f"[SUBMIT] Shot {shot_idx} ({shot_length}s each, {len(image_paths)} variation(s))")
 
         for variation_idx, img_path in enumerate(image_paths, 1):
             total_renders += 1

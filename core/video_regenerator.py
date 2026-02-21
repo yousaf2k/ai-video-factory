@@ -186,7 +186,11 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
     for shot in shots_to_render:
         shot_idx = shot.get('index', 0)
 
-        print(f"\n[SUBMIT] Shot {shot_idx} ({shot_length}s)")
+        # Print image name before video generation
+        image_path = shot.get('image_path', '')
+        print(f"\n[PROCESS] Shot {shot_idx}: Using image '{os.path.basename(image_path)}'")
+
+        print(f"[SUBMIT] Shot {shot_idx} ({shot_length}s)")
 
         try:
             wf = compile_workflow(template, shot, video_length_seconds=shot_length)
