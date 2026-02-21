@@ -32,7 +32,7 @@ MAX_PARALLEL_BATCH_THREADS = int(os.getenv("MAX_PARALLEL_BATCH_THREADS", "5"))  
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Text generation model (for story, shots, etc. "gemini-2.0-flash" and "gemini-3-flash-preview" is faster and cheaper, "gemini-3-pro-preview" is higher quality but more expensive)
-GEMINI_TEXT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_TEXT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
 
 # ==========================================
 # OPENAI (CHATGPT) CONFIGURATION
@@ -145,13 +145,13 @@ IMAGES_OUTPUT_DIR = "output/generated_images"
 IMAGE_ASPECT_RATIO = "16:9"
 
 # Image resolution (options: "512", "1024", "1280" "2048")
-IMAGE_RESOLUTION = "1280"
+IMAGE_RESOLUTION = "2048"
 
 # ==========================================
 # IMAGE WORKFLOW CONFIGURATION
 # ==========================================
 # Active image workflow to use (must exist in IMAGE_WORKFLOWS)
-IMAGE_WORKFLOW = "flux"
+IMAGE_WORKFLOW = "flux2"
 
 # Image workflow definitions
 # Each workflow has its own node IDs and workflow file path
@@ -167,7 +167,7 @@ IMAGE_WORKFLOWS = {
         "description": "Flux model for high-quality image generation"
     },
     "flux2": {
-        "workflow_path": "workflow/image/flux2.json",
+        "workflow_path": "workflow/image/flux2_4g_2k.json",
         "text_node_id": "98:6",
         "neg_text_node_id": None,
         "ksampler_node_id": "98:16",
@@ -226,7 +226,7 @@ IMAGE_SAVE_NODE_ID = "9"
 # VIDEO GENERATION CONFIGURATION
 # ==========================================
 # Default video length per shot (in seconds)
-DEFAULT_SHOT_LENGTH = 6.0
+DEFAULT_SHOT_LENGTH = 5.07
 
 # Maximum number of shots to generate (for testing)
 # Set to 0 for no limit (generates all shots from story)
@@ -237,7 +237,7 @@ DEFAULT_MAX_SHOTS = 0  # 0 = no limit
 # SHOT PLANNING CONFIGURATION
 # ==========================================
 # Default number of shots to generate per scene (when no max_shots specified)
-DEFAULT_SHOTS_PER_SCENE = 1  # 4 shots x 5 scenes = 20 shots total
+DEFAULT_SHOTS_PER_SCENE = 8  # 4 shots x 5 scenes = 20 shots total
 
 # Minimum shots per scene (enforced in planning logic)
 MIN_SHOTS_PER_SCENE = 3  # Each scene gets at least 3 shots
@@ -247,6 +247,15 @@ MAX_SHOTS_PER_SCENE = 8  # No more than 8 shots per scene
 
 # Video framerate (fps)
 VIDEO_FPS = 16
+
+# Video aspect ratio (options: "1:1", "16:9", "9:16", "4:3", "3:4")
+# Default uses same as images for compatibility
+VIDEO_ASPECT_RATIO = "16:9"
+
+# Video resolution (options: "512", "720", "1024", "1080", "1280" "2048")
+# For landscape: width = resolution, height calculated from aspect ratio
+# For portrait: height = resolution, width calculated from aspect ratio
+VIDEO_RESOLUTION = "720"  # 720p HD (1280x720 for 16:9)
 
 # Target total video length (in seconds)
 # Set to None to generate based on story length
@@ -437,6 +446,47 @@ def calculate_image_dimensions(aspect_ratio=IMAGE_ASPECT_RATIO, resolution=IMAGE
     return width, height
 
 
+def calculate_video_dimensions(aspect_ratio=VIDEO_ASPECT_RATIO, resolution=VIDEO_RESOLUTION):
+    """
+    Calculate video width and height from aspect ratio and resolution.
+
+    Args:
+        aspect_ratio: String like "16:9", "9:16", "1:1", "4:3", "3:4"
+        resolution: String like "512", "720", "1024", "1080", "1280", "2048"
+                   (width for landscape, height for portrait)
+
+    Returns:
+        Tuple of (width, height) as integers
+    """
+    res = int(resolution)
+
+    # Parse aspect ratio
+    if ':' in aspect_ratio:
+        parts = aspect_ratio.split(':')
+        ar_w = int(parts[0])
+        ar_h = int(parts[1])
+    else:
+        # Default to 1:1 if format is wrong
+        ar_w = 1
+        ar_h = 1
+
+    # Determine orientation and calculate dimensions
+    if ar_w >= ar_h:
+        # Landscape or square: resolution is width
+        width = res
+        height = int(res * ar_h / ar_w)
+    else:
+        # Portrait: resolution is height
+        height = res
+        width = int(res * ar_w / ar_h)
+
+    # Ensure dimensions are multiples of 8 (required by most AI models)
+    width = (width // 8) * 8
+    height = (height // 8) * 8
+
+    return width, height
+
+
 # ==========================================
 # WORKFLOW EXECUTION MODE
 # ==========================================
@@ -524,3 +574,6 @@ AUTO_DETECT_CAMERA_FROM_PROMPTS = True
 
 # Pre-calculate current dimensions
 IMAGE_WIDTH, IMAGE_HEIGHT = calculate_image_dimensions()
+
+# Pre-calculate video dimensions
+VIDEO_WIDTH, VIDEO_HEIGHT = calculate_video_dimensions()

@@ -2013,6 +2013,12 @@ Examples:
   # Set image dimensions
   python core/main.py --idea "Portrait video" --aspect-ratio 9:16 --resolution 1024
 
+  # Set video dimensions (separate from images)
+  python core/main.py --idea "Cinematic video" --video-aspect-ratio 16:9 --video-resolution 1080
+
+  # Set different dimensions for images and videos
+  python core/main.py --idea "High quality video" --resolution 2048 --video-resolution 720
+
   # Run in manual step-by-step mode
   python core/main.py --idea "Space epic" --manual
 
@@ -2149,6 +2155,21 @@ Testing Options:
         type=str,
         choices=['512', '1024', '2048'],
         help='Image resolution (default: from config.py)'
+    )
+
+    # Video dimension arguments
+    parser.add_argument(
+        '--video-aspect-ratio',
+        type=str,
+        choices=['1:1', '16:9', '9:16', '4:3', '3:4'],
+        help='Video aspect ratio (default: from config.py)'
+    )
+
+    parser.add_argument(
+        '--video-resolution',
+        type=str,
+        choices=['512', '720', '1024', '1080', '1280', '2048'],
+        help='Video resolution (default: from config.py). Common: 720=720p, 1080=1080p, 1280=HD'
     )
 
     parser.add_argument(
@@ -2373,6 +2394,20 @@ Testing Options:
     if args.aspect_ratio or args.resolution:
         config.IMAGE_WIDTH, config.IMAGE_HEIGHT = config.calculate_image_dimensions()
         print(f"[INFO] Image dimensions: {config.IMAGE_WIDTH}x{config.IMAGE_HEIGHT}")
+
+    # Update video config if command line arguments provided
+    if args.video_aspect_ratio:
+        config.VIDEO_ASPECT_RATIO = args.video_aspect_ratio
+        print(f"[INFO] Video aspect ratio: {args.video_aspect_ratio}")
+
+    if args.video_resolution:
+        config.VIDEO_RESOLUTION = args.video_resolution
+        print(f"[INFO] Video resolution: {args.video_resolution}")
+
+    # Recalculate video dimensions if config changed
+    if args.video_aspect_ratio or args.video_resolution:
+        config.VIDEO_WIDTH, config.VIDEO_HEIGHT = config.calculate_video_dimensions()
+        print(f"[INFO] Video dimensions: {config.VIDEO_WIDTH}x{config.VIDEO_HEIGHT}")
 
     # Print configuration summary after command-line overrides
     print_configuration_summary()

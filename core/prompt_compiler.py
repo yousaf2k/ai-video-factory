@@ -12,8 +12,8 @@ def load_workflow(path, video_length_seconds=None):
     with open(path,"r",encoding="utf-8") as f:
         workflow = json.load(f)
 
-    # Get dimensions from config
-    width, height = config.calculate_image_dimensions()
+    # Get dimensions from config (use video dimensions for video workflow)
+    width, height = config.calculate_video_dimensions()
 
     # Check if workflow is in UI format (has "nodes" array) or API format (node IDs as keys)
     if "nodes" in workflow:
@@ -84,7 +84,7 @@ def load_workflow(path, video_length_seconds=None):
                         frames = int(video_length_seconds * config.VIDEO_FPS)
                         node_data["inputs"]["length"] = frames
                         print(f"[INFO] Set video length: {video_length_seconds}s ({frames} frames at {config.VIDEO_FPS}fps)")
-                        print(f"[INFO] Set dimensions: {width}x{height} ({config.IMAGE_ASPECT_RATIO} aspect ratio)")
+                        print(f"[INFO] Set dimensions: {width}x{height} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
                     else:
                         node_data["inputs"]["length"] = frames
                 # For CLIPLoader
@@ -152,7 +152,7 @@ def load_workflow(path, video_length_seconds=None):
                     frames = int(video_length_seconds * config.VIDEO_FPS)
                     wan_node['inputs']['length'] = frames
                     print(f"[INFO] Set video length: {video_length_seconds}s ({frames} frames at {config.VIDEO_FPS}fps)")
-                    print(f"[INFO] Set dimensions: {width}x{height} ({config.IMAGE_ASPECT_RATIO} aspect ratio)")
+                    print(f"[INFO] Set dimensions: {width}x{height} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
 
         return wf
 

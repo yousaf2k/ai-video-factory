@@ -108,6 +108,7 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
     total_length = shot_length * len(shots)
     print(f"[INFO] Total video length: {total_length}s ({len(shots)} shots × {shot_length}s)")
     print(f"[INFO] Framerate: {config.VIDEO_FPS} fps")
+    print(f"[INFO] Video dimensions: {config.VIDEO_WIDTH}x{config.VIDEO_HEIGHT} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
     print(f"[INFO] Frames per shot: {int(shot_length * config.VIDEO_FPS)}")
 
     # Check which shots have images
@@ -388,8 +389,25 @@ if __name__ == "__main__":
     parser.add_argument('--length', type=float, help='New shot length in seconds')
     parser.add_argument('--force', action='store_true', help='Regenerate all videos (including already rendered)')
     parser.add_argument('--interactive', action='store_true', help='Interactive mode')
+    parser.add_argument('--video-aspect-ratio', type=str, choices=['1:1', '16:9', '9:16', '4:3', '3:4'],
+                        help='Video aspect ratio (default: from config.py)')
+    parser.add_argument('--video-resolution', type=str, choices=['512', '720', '1024', '1080', '1280', '2048'],
+                        help='Video resolution (default: from config.py). Common: 720=720p, 1080=1080p, 1280=HD')
 
     args = parser.parse_args()
+
+    # Update config if command line arguments provided
+    if args.video_aspect_ratio:
+        config.VIDEO_ASPECT_RATIO = args.video_aspect_ratio
+        config.VIDEO_WIDTH, config.VIDEO_HEIGHT = config.calculate_video_dimensions()
+        print(f"[INFO] Video aspect ratio: {args.video_aspect_ratio}")
+        print(f"[INFO] Video dimensions: {config.VIDEO_WIDTH}x{config.VIDEO_HEIGHT}")
+
+    if args.video_resolution:
+        config.VIDEO_RESOLUTION = args.video_resolution
+        config.VIDEO_WIDTH, config.VIDEO_HEIGHT = config.calculate_video_dimensions()
+        print(f"[INFO] Video resolution: {args.video_resolution}")
+        print(f"[INFO] Video dimensions: {config.VIDEO_WIDTH}x{config.VIDEO_HEIGHT}")
 
     if args.interactive or not args.session:
         interactive_regenerate()
