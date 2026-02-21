@@ -61,6 +61,48 @@ from core.image_generator import generate_image_gemini
 from core.session_manager import SessionManager
 
 
+def generate_unique_video_filename(videos_dir, shot_idx):
+    """
+    Generate a unique video filename based on shot index.
+    If the base filename exists, appends letter suffixes (a, b, c, etc.)
+
+    Examples:
+        - shot_001.mp4 (if doesn't exist)
+        - shot_001a.mp4 (if shot_001.mp4 exists)
+        - shot_001b.mp4 (if shot_001a.mp4 exists)
+        - shot_001c.mp4 (if shot_001b.mp4 exists)
+
+    Args:
+        videos_dir: Directory where videos are stored
+        shot_idx: Shot index (1-based)
+
+    Returns:
+        tuple: (video_filename, video_save_path)
+    """
+    # Suffix letters to try: empty (no suffix), 'a', 'b', 'c', ..., 'z'
+    suffixes = [''] + [chr(ord('a') + i) for i in range(26)]
+
+    for suffix in suffixes:
+        if suffix:
+            video_filename = f"shot_{shot_idx:03d}{suffix}.mp4"
+        else:
+            video_filename = f"shot_{shot_idx:03d}.mp4"
+
+        video_save_path = os.path.join(videos_dir, video_filename)
+
+        # Check if file exists
+        if not os.path.exists(video_save_path):
+            return video_filename, video_save_path
+
+    # Fallback (should never reach here with 26+ suffixes)
+    # Use timestamp as last resort
+    import time
+    timestamp = int(time.time())
+    video_filename = f"shot_{shot_idx:03d}_{timestamp}.mp4"
+    video_save_path = os.path.join(videos_dir, video_filename)
+    return video_filename, video_save_path
+
+
 def print_configuration_summary():
     """Print all configuration settings at startup"""
     print("\n" + "="*70)
@@ -437,13 +479,17 @@ def regenerate_failed_images(session_id, session_meta, shots, session_mgr):
     images_dir = session_mgr.get_images_dir(session_id)
     os.makedirs(images_dir, exist_ok=True)
 
+    # Load shots status from shots.json
+    shots_status = session_mgr.get_shots(session_id)
+    shots_status_dict = {s['index']: s for s in shots_status}
+
     regenerated_count = 0
     for shot in shots:
         shot_idx = shot.get('index', 0)
-        shot_meta = session_meta['shots'][shot_idx - 1]
+        shot_meta = shots_status_dict.get(shot_idx, {})
 
         # Check if image failed
-        if not shot_meta['image_generated']:
+        if not shot_meta.get('image_generated', False):
             continue
 
         existing_path = shot_meta.get('image_path')
@@ -511,13 +557,16 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
     videos_dir = session_mgr.get_videos_dir(session_id)
     os.makedirs(videos_dir, exist_ok=True)
 
-    # Expected video filename
+    # Expected video filename with uniqueness check
     # If variation_idx > 1, use shot_001_002.mp4 format
+    # For main video (variation_idx == 1), use unique filename with suffix if needed
     if variation_idx > 1:
         video_filename = f"shot_{shot_idx:03d}_{variation_idx:03d}.mp4"
+        video_save_path = os.path.join(videos_dir, video_filename)
     else:
-        video_filename = f"shot_{shot_idx:03d}.mp4"
-    video_save_path = os.path.join(videos_dir, video_filename)
+        # Use helper to generate unique filename for main video
+        # This prevents overwriting existing videos when resuming
+        video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_idx)
 
     # Initialize variation_label before try block for exception handler
     variation_label = f" (variation {variation_idx})" if variation_idx > 1 else ""
@@ -694,9 +743,10 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
 
     # Check for failed images
     failed_images = []
-    if session_meta.get('shots'):
-        for shot_meta in session_meta['shots']:
-            if shot_meta['image_generated']:
+    shots_status = session_mgr.get_shots(session_id)
+    if shots_status:
+        for shot_meta in shots_status:
+            if shot_meta.get('image_generated', False):
                 existing_path = shot_meta.get('image_path')
                 if not existing_path or not os.path.exists(existing_path):
                     failed_images.append(shot_meta)
@@ -732,14 +782,18 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
         images_dir = session_mgr.get_images_dir(session_id)
         os.makedirs(images_dir, exist_ok=True)
 
+        # Load shots status from shots.json
+        shots_status = session_mgr.get_shots(session_id)
+        shots_status_dict = {s['index']: s for s in shots_status}
+
         for shot in shots:
             shot_idx = shot.get('index', 0)
-            shot_meta = session_meta['shots'][shot_idx - 1]
+            shot_meta = shots_status_dict.get(shot_idx, {})
 
             # Skip if already generated
-            if shot_meta['image_generated']:
+            if shot_meta.get('image_generated', False):
                 print(f"[SKIP] Shot {shot_idx}: Image already generated")
-                shot['image_path'] = shot_meta['image_path']
+                shot['image_path'] = shot_meta.get('image_path')
                 continue
 
             # Generate image
@@ -814,6 +868,10 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
 
     template = load_workflow(config.WORKFLOW_PATH, video_length_seconds=shot_length)
 
+    # Load shots status from shots.json
+    shots_status = session_mgr.get_shots(session_id)
+    shots_status_dict = {s['index']: s for s in shots_status}
+
     # Track results
     successful_renders = 0
     failed_renders = 0
@@ -822,10 +880,10 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
 
     for shot in valid_shots:
         shot_idx = shot.get('index', 0)
-        shot_meta = session_meta['shots'][shot_idx - 1]
+        shot_meta = shots_status_dict.get(shot_idx, {})
 
         # Skip if already rendered (only checks primary video)
-        if shot_meta['video_rendered']:
+        if shot_meta.get('video_rendered', False):
             # Verify the video actually exists
             # For now, trust the metadata - user can regenerate if needed
             print(f"[SKIP] Shot {shot_idx}: Video already marked as rendered")
@@ -1318,11 +1376,15 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         videos_dir = session_mgr.get_videos_dir(session_id)
 
         # Check if video files actually exist on disk
+        # Check for any video matching the pattern shot_XXX*.mp4 (including suffixes)
+        import glob
         missing_videos = False
         for shot in shots:
             shot_idx = shot.get('index', shots.index(shot) + 1)
-            video_path = os.path.join(videos_dir, f"shot_{shot_idx:03d}.mp4")
-            if not os.path.exists(video_path):
+            # Check for any video file with this shot number (shot_XXX.mp4, shot_XXXa.mp4, etc.)
+            video_pattern = os.path.join(videos_dir, f"shot_{shot_idx:03d}*.mp4")
+            matching_files = glob.glob(video_pattern)
+            if not matching_files:
                 missing_videos = True
                 break
 
@@ -1603,7 +1665,13 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
     if shots_needing_images:
         print(f"[INFO] {len(shots_needing_images)} shot(s) need image generation")
 
-    # Generate images for shots that don't have them
+    # Define callback to update session state after each image generation
+    def update_state_callback(shot_idx, image_path):
+        """Callback to update session state immediately after each image is generated"""
+        normalized_path = image_path.replace('\\', '/')
+        session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+
+    # Generate images for shots that don't have them with progress callback for immediate state updates
     if shots_needing_images:
         print(f"\n[INFO] Generating images for {len(shots_needing_images)} shot(s)...")
         shots_needing_images = generate_images_for_shots(
@@ -1611,7 +1679,8 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
             output_dir=images_dir,
             mode=image_mode,
             negative_prompt=negative_prompt,
-            images_per_shot=images_per_shot
+            images_per_shot=images_per_shot,
+            progress_callback=update_state_callback
         )
 
         # Mark newly generated images in session
@@ -1640,7 +1709,6 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
         shots_without_images = len(shots) - len(shots_with_images)
         print(f"\n[WARNING] {shots_without_images} shot(s) failed to generate images.")
         print(f"[INFO] Images step NOT marked as complete. You can regenerate images when resuming.")
-
 
 def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
     """Render videos for all shots and all image variations"""
@@ -2316,6 +2384,186 @@ Testing Options:
     print("\n" + "="*70)
     print("To view all sessions, check: output/sessions/")
     print("="*70)
+
+
+async def run_auto_mode(session_id: str, idea: str, resume_from: str = None,
+                        max_shots: int = None, progress_callback=None):
+    """
+    Async wrapper for running auto mode with progress callbacks.
+    Used by web API for background task execution.
+
+    Args:
+        session_id: Session identifier
+        idea: Video idea
+        resume_from: Step name to resume from (optional)
+        max_shots: Maximum shots to generate (optional)
+        progress_callback: ProgressCallback instance for WebSocket events
+
+    Returns:
+        None
+    """
+    import types
+
+    # Create args object
+    class Args:
+        def __init__(self):
+            self.idea = idea
+            self.image_mode = None
+            self.negative_prompt = None
+            self.max_shots = max_shots
+            self.shot_length = None
+            self.total_length = None
+            self.images_per_shot = None
+            self.story_agent = None
+            self.image_agent = None
+            self.video_agent = None
+            self.narration_agent = None
+            self.no_narration = False
+            self.tts_method = None
+            self.tts_workflow = None
+            self.tts_voice = None
+            self.aspect_ratio = None
+            self.resolution = None
+            self.shots_per_scene = None
+
+    args = Args()
+
+    # Initialize session manager
+    session_mgr = SessionManager()
+
+    # Load or create session
+    try:
+        session_meta = session_mgr.load_session(session_id)
+    except:
+        # Create new session if not exists
+        session_id, session_meta = session_mgr.create_session(idea)
+
+    # Determine starting step
+    if resume_from:
+        step_map = {
+            'story': 2,
+            'scene_graph': 3,
+            'shots': 4,
+            'images': 5,
+            'videos': 6,
+            'narration': 7
+        }
+        start_step = step_map.get(resume_from, 2)
+    else:
+        start_step = 2
+
+    # Wrap progress callback for async compatibility
+    class SyncProgressCallback:
+        def __init__(self, async_callback):
+            self.async_callback = async_callback
+
+        def step_started(self, step, message=None):
+            if self.async_callback:
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Schedule callback
+                        loop.call_soon(self.async_callback.step_started, step, message)
+                    else:
+                        self.async_callback.step_started(step, message)
+                except:
+                    pass
+
+        def step_progress(self, step, progress, message=None):
+            if self.async_callback:
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.call_soon(self.async_callback.step_progress, step, progress, message)
+                    else:
+                        self.async_callback.step_progress(step, progress, message)
+                except:
+                    pass
+
+        def step_completed(self, step):
+            if self.async_callback:
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.call_soon(self.async_callback.step_completed, step)
+                    else:
+                        self.async_callback.step_completed(step)
+                except:
+                    pass
+
+        def shot_progress(self, shot_index, total_shots, status, message=None):
+            if self.async_callback:
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.call_soon(self.async_callback.shot_progress, shot_index, total_shots, status, message)
+                    else:
+                        self.async_callback.shot_progress(shot_index, total_shots, status, message)
+                except:
+                    pass
+
+        def error(self, error, step=None):
+            if self.async_callback:
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.call_soon(self.async_callback.error, error, step)
+                    else:
+                        self.async_callback.error(error, step)
+                except:
+                    pass
+
+        def session_completed(self):
+            if self.async_callback:
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.call_soon(self.async_callback.session_completed)
+                    else:
+                        self.async_callback.session_completed()
+                except:
+                    pass
+
+    sync_callback = SyncProgressCallback(progress_callback)
+
+    # Monkey-patch logger to emit progress
+    original_info = logger.info
+    original_debug = logger.debug
+
+    def progress_info(msg, *args, **kwargs):
+        original_info(msg, *args, **kwargs)
+        # Try to extract step info from message and emit progress
+        if progress_callback and 'STEP' in str(msg):
+            sync_callback.step_progress('', 0.5, str(msg))
+
+    logger.info = progress_info
+
+    try:
+        # Run auto mode
+        _run_auto_mode(
+            session_id=session_id,
+            session_meta=session_meta,
+            session_mgr=session_mgr,
+            idea=idea,
+            image_mode=args.image_mode or config.IMAGE_GENERATION_MODE,
+            negative_prompt=args.negative_prompt or config.DEFAULT_NEGATIVE_PROMPT,
+            max_shots=args.max_shots or config.DEFAULT_MAX_SHOTS,
+            shot_length=args.shot_length or config.DEFAULT_SHOT_LENGTH,
+            story_agent=args.story_agent,
+            image_agent=args.image_agent,
+            video_agent=args.video_agent,
+            narration_agent=args.narration_agent,
+            generate_narration=not args.no_narration,
+            tts_method=args.tts_method,
+            tts_workflow=args.tts_workflow,
+            tts_voice=args.tts_voice,
+            images_per_shot=args.images_per_shot,
+            shots_per_scene=args.shots_per_scene
+        )
+    finally:
+        # Restore logger
+        logger.info = original_info
+        logger.debug = original_debug
 
 
 if __name__ == "__main__":

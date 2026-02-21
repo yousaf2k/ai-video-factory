@@ -175,7 +175,7 @@ def generate_image_variations(prompt: str, output_dir: str, count: int = 1, mode
     return generated_paths
 
 
-def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, negative_prompt: str = "", images_per_shot: int = 1, workflow_name: str = None) -> list:
+def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, negative_prompt: str = "", images_per_shot: int = 1, workflow_name: str = None, progress_callback=None) -> list:
     """
     Generate images for all shots in the list, with multiple variations per shot.
 
@@ -185,6 +185,8 @@ def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, ne
         mode: Image generation mode ("gemini" or "comfyui"), None to use config default
         negative_prompt: Negative prompt for ComfyUI mode
         images_per_shot: Number of images to generate per shot (default: 1)
+        workflow_name: Workflow name for ComfyUI mode
+        progress_callback: Optional callback function(shot_idx, image_path) called after each image generation
 
     Returns:
         Updated list of shots with 'image_paths' field added to each shot
@@ -230,6 +232,11 @@ def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, ne
 
         if image_paths:
             print(f"  [PASS] Generated {len(image_paths)} variation(s) for shot {shot_idx}")
+
+            # Call progress callback for each generated image to update session state
+            if progress_callback:
+                for img_path in image_paths:
+                    progress_callback(shot_idx, img_path)
         else:
             print(f"  [FAIL] All variations failed for shot {shot_idx}")
 

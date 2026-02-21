@@ -16,6 +16,48 @@ from core.render_monitor import wait_until_idle
 import config
 
 
+def generate_unique_video_filename(videos_dir, shot_idx):
+    """
+    Generate a unique video filename based on shot index.
+    If the base filename exists, appends letter suffixes (a, b, c, etc.)
+
+    Examples:
+        - shot_001.mp4 (if doesn't exist)
+        - shot_001a.mp4 (if shot_001.mp4 exists)
+        - shot_001b.mp4 (if shot_001a.mp4 exists)
+        - shot_001c.mp4 (if shot_001b.mp4 exists)
+
+    Args:
+        videos_dir: Directory where videos are stored
+        shot_idx: Shot index (1-based)
+
+    Returns:
+        tuple: (video_filename, video_save_path)
+    """
+    # Suffix letters to try: empty (no suffix), 'a', 'b', 'c', ..., 'z'
+    suffixes = [''] + [chr(ord('a') + i) for i in range(26)]
+
+    for suffix in suffixes:
+        if suffix:
+            video_filename = f"shot_{shot_idx:03d}{suffix}.mp4"
+        else:
+            video_filename = f"shot_{shot_idx:03d}.mp4"
+
+        video_save_path = os.path.join(videos_dir, video_filename)
+
+        # Check if file exists
+        if not os.path.exists(video_save_path):
+            return video_filename, video_save_path
+
+    # Fallback (should never reach here with 26+ suffixes)
+    # Use timestamp as last resort
+    import time
+    timestamp = int(time.time())
+    video_filename = f"shot_{shot_idx:03d}_{timestamp}.mp4"
+    video_save_path = os.path.join(videos_dir, video_filename)
+    return video_filename, video_save_path
+
+
 def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=False):
     """
     Regenerate videos for a session
@@ -92,11 +134,15 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
 
     print(f"\n[INFO] Found {len(valid_shots)} shots with images")
 
+    # Load shots status from shots.json
+    shots_status = session_mgr.get_shots(session_id)
+    shots_status_dict = {s['index']: s for s in shots_status}
+
     # Determine which shots to render
     shots_to_render = []
     for shot in valid_shots:
         shot_idx = shot.get('index', 0)
-        shot_meta = session_meta['shots'][shot_idx - 1] if session_meta.get('shots') else {}
+        shot_meta = shots_status_dict.get(shot_idx, {})
 
         if force_regenerate_all:
             shots_to_render.append(shot)
@@ -185,10 +231,9 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
                 videos_dir = session_mgr.get_videos_dir(session_id)
                 os.makedirs(videos_dir, exist_ok=True)
 
-                # Copy first video to session folder
+                # Generate unique filename to avoid overwriting existing videos
                 video_info = video_outputs[0]
-                video_filename = f"shot_{shot_idx:03d}.mp4"
-                video_save_path = os.path.join(videos_dir, video_filename)
+                video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_idx)
 
                 source_path = get_output_file_path(video_info)
                 if os.path.exists(source_path):
