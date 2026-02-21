@@ -767,7 +767,19 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
                 normalized_path = image_path.replace('\\', '/')
                 session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
 
-        session_mgr.mark_step_complete(session_id, 'images')
+        # Only mark images step as complete if ALL shots have at least one image
+        shots_with_images = [s for s in shots if s.get('image_path')]
+        if len(shots_with_images) == len(shots):
+            session_mgr.mark_step_complete(session_id, 'images')
+            print(f"\n[INFO] All {len(shots)} shots have images generated.")
+        else:
+            shots_without_images = len(shots) - len(shots_with_images)
+            print(f"\n[WARNING] {shots_without_images} shot(s) failed to generate images.")
+            print(f"[INFO] Images step NOT marked as complete. You can regenerate images when resuming.")
+            # Don't proceed to video generation if images are missing
+            print("\n[STOP] Cannot proceed to video generation without all images.")
+            print("[HINT] Resume the session to regenerate missing images, or use 'python regenerate.py --images'")
+            return None
 
         # Prompt for next action in manual mode
         if not auto_mode:
@@ -1231,6 +1243,15 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         shots_path = os.path.join(shots_dir, "shots.json")
         with open(shots_path, 'r', encoding='utf-8') as f:
             shots = json.load(f)
+
+        # Check if all shots now have images after generation
+        shots_with_images = [s for s in shots if s.get('image_path')]
+        if len(shots_with_images) < len(shots):
+            shots_without = len(shots) - len(shots_with_images)
+            print(f"\n[ERROR] After generation: {shots_without} shot(s) without images.")
+            print("[STOP] Cannot proceed to video generation without all images.")
+            print("[HINT] Resume the session to regenerate missing images, or use 'python regenerate.py --images'")
+            return None
     else:
         # Images step marked complete, but verify images actually exist
         print("\n[VERIFY] Checking if images exist...")
@@ -1252,6 +1273,15 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
             shots_path = os.path.join(shots_dir, "shots.json")
             with open(shots_path, 'r', encoding='utf-8') as f:
                 shots = json.load(f)
+
+            # Check if all shots now have images after regeneration attempt
+            shots_with_images = [s for s in shots if s.get('image_path')]
+            if len(shots_with_images) < len(shots):
+                shots_without = len(shots) - len(shots_with_images)
+                print(f"\n[ERROR] After regeneration: {shots_without} shot(s) still without images.")
+                print("[STOP] Cannot proceed to video generation without all images.")
+                print("[HINT] Resume the session to regenerate missing images, or use 'python regenerate.py --images'")
+                return None
         else:
             print("[SKIP] Images verified and already exist")
             # Update shots with image paths from disk
@@ -1543,49 +1573,73 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
     images_dir = session_mgr.get_images_dir(session_id)
     os.makedirs(images_dir, exist_ok=True)
 
-    # Check if images are already generated (resume case)
-    # For simplicity, check if first variation of first shot exists
-    if shots and images_per_shot > 0:
-        first_image_path = os.path.join(images_dir, f"shot_001_001.png")
+    # First, try to load any existing images from disk (resume case)
+    shots_with_existing_images = []
+    shots_needing_images = []
 
-        if os.path.exists(first_image_path):
-            print(f"[SKIP] Images already generated, loading from disk")
-            # Load existing images
-            for shot_idx, shot in enumerate(shots, start=1):
-                # Use sequential index to match filenames
-                image_paths = []
-                for var_idx in range(images_per_shot):
-                    img_path = os.path.join(images_dir, f"shot_{shot_idx:03d}_{var_idx + 1:03d}.png")
-                    if os.path.exists(img_path):
-                        normalized_path = img_path.replace('\\', '/')
-                        image_paths.append(normalized_path)
-                        stored_index = shot.get('index', shot_idx)
-                        session_mgr.mark_image_generated(session_id, stored_index, normalized_path)
+    for shot_idx, shot in enumerate(shots, start=1):
+        # Use sequential index to match filenames
+        image_paths = []
+        for var_idx in range(images_per_shot):
+            img_path = os.path.join(images_dir, f"shot_{shot_idx:03d}_{var_idx + 1:03d}.png")
+            if os.path.exists(img_path):
+                normalized_path = img_path.replace('\\', '/')
+                image_paths.append(normalized_path)
+                stored_index = shot.get('index', shot_idx)
+                session_mgr.mark_image_generated(session_id, stored_index, normalized_path)
 
-                shot['image_paths'] = image_paths
-                shot['image_path'] = image_paths[0] if image_paths else None
+        shot['image_paths'] = image_paths
+        shot['image_path'] = image_paths[0] if image_paths else None
 
-            session_mgr.mark_step_complete(session_id, 'images')
-            return
+        if image_paths:
+            shots_with_existing_images.append(shot)
+        else:
+            shots_needing_images.append(shot)
 
-    # Generate images using the updated function
-    shots = generate_images_for_shots(
-        shots=shots,
-        output_dir=images_dir,
-        mode=image_mode,
-        negative_prompt=negative_prompt,
-        images_per_shot=images_per_shot
-    )
+    # Report status
+    if shots_with_existing_images:
+        print(f"[INFO] Loaded {len(shots_with_existing_images)} shots with existing images from disk")
 
-    # Mark all generated images in session
-    for shot in shots:
-        shot_idx = shot.get('index', shots.index(shot) + 1)
-        image_paths = shot.get('image_paths', [])
-        for img_path in image_paths:
-            normalized_path = img_path.replace('\\', '/')
-            session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+    if shots_needing_images:
+        print(f"[INFO] {len(shots_needing_images)} shot(s) need image generation")
 
-    session_mgr.mark_step_complete(session_id, 'images')
+    # Generate images for shots that don't have them
+    if shots_needing_images:
+        print(f"\n[INFO] Generating images for {len(shots_needing_images)} shot(s)...")
+        shots_needing_images = generate_images_for_shots(
+            shots=shots_needing_images,
+            output_dir=images_dir,
+            mode=image_mode,
+            negative_prompt=negative_prompt,
+            images_per_shot=images_per_shot
+        )
+
+        # Mark newly generated images in session
+        for shot in shots_needing_images:
+            shot_idx = shot.get('index', shots.index(shot) + 1)
+            image_paths = shot.get('image_paths', [])
+            for img_path in image_paths:
+                normalized_path = img_path.replace('\\', '/')
+                session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+
+        # Update the shots list with newly generated image paths
+        for new_shot in shots_needing_images:
+            idx = new_shot.get('index')
+            for orig_shot in shots:
+                if orig_shot.get('index') == idx:
+                    orig_shot['image_paths'] = new_shot.get('image_paths', [])
+                    orig_shot['image_path'] = new_shot.get('image_path')
+                    break
+
+    # Only mark images step as complete if ALL shots have at least one image
+    shots_with_images = [s for s in shots if s.get('image_path')]
+    if len(shots_with_images) == len(shots):
+        session_mgr.mark_step_complete(session_id, 'images')
+        print(f"\n[INFO] All {len(shots)} shots have images generated.")
+    else:
+        shots_without_images = len(shots) - len(shots_with_images)
+        print(f"\n[WARNING] {shots_without_images} shot(s) failed to generate images.")
+        print(f"[INFO] Images step NOT marked as complete. You can regenerate images when resuming.")
 
 
 def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
