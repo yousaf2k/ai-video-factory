@@ -202,8 +202,10 @@ def generate_images_for_shots(shots: list, output_dir: str, mode: str = None, ne
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
-    for shot_idx, shot in enumerate(shots, start=1):
-        # Use sequential index (1-110) for all shots
+    for shot in shots:
+        # Use the shot's stored index field for consistency with the rest of the codebase
+        # This ensures images are named correctly even when shots are manually reordered
+        shot_idx = shot.get('index', shots.index(shot) + 1)
         image_prompt = shot.get('image_prompt', '')
 
         if not image_prompt:
