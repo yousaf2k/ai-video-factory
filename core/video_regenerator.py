@@ -109,7 +109,8 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
     print(f"[INFO] Total video length: {total_length}s ({len(shots)} shots × {shot_length}s)")
     print(f"[INFO] Framerate: {config.VIDEO_FPS} fps")
     print(f"[INFO] Video dimensions: {config.VIDEO_WIDTH}x{config.VIDEO_HEIGHT} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
-    print(f"[INFO] Frames per shot: {int(shot_length * config.VIDEO_FPS)}")
+    frames_per_shot = int(shot_length * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
+    print(f"[INFO] Frames per shot: {frames_per_shot} ({int(shot_length * config.VIDEO_FPS)}+1)")
 
     # Check which shots have images
     valid_shots = []

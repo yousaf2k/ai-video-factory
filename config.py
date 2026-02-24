@@ -226,7 +226,7 @@ IMAGE_SAVE_NODE_ID = "9"
 # VIDEO GENERATION CONFIGURATION
 # ==========================================
 # Default video length per shot (in seconds)
-DEFAULT_SHOT_LENGTH = 5.07
+DEFAULT_SHOT_LENGTH = 5
 
 # Maximum number of shots to generate (for testing)
 # Set to 0 for no limit (generates all shots from story)
@@ -237,13 +237,13 @@ DEFAULT_MAX_SHOTS = 0  # 0 = no limit
 # SHOT PLANNING CONFIGURATION
 # ==========================================
 # Default number of shots to generate per scene (when no max_shots specified)
-DEFAULT_SHOTS_PER_SCENE = 8  # 4 shots x 5 scenes = 20 shots total
+DEFAULT_SHOTS_PER_SCENE = 12  # 4 shots x 5 scenes = 20 shots total
 
 # Minimum shots per scene (enforced in planning logic)
 MIN_SHOTS_PER_SCENE = 3  # Each scene gets at least 3 shots
 
 # Maximum shots per scene (prevents over-generation for long stories)
-MAX_SHOTS_PER_SCENE = 8  # No more than 8 shots per scene
+MAX_SHOTS_PER_SCENE = 12  # No more than 8 shots per scene
 
 # Video framerate (fps)
 VIDEO_FPS = 16
@@ -255,17 +255,17 @@ VIDEO_ASPECT_RATIO = "16:9"
 # Video resolution (options: "512", "720", "1024", "1080", "1280" "2048")
 # For landscape: width = resolution, height calculated from aspect ratio
 # For portrait: height = resolution, width calculated from aspect ratio
-VIDEO_RESOLUTION = "720"  # 720p HD (1280x720 for 16:9)
+VIDEO_RESOLUTION = "1280"  # 720p HD (1280x720 for 16:9)
 
 # Target total video length (in seconds)
 # Set to None to generate based on story length
 # Note: If both DEFAULT_MAX_SHOTS and TARGET_VIDEO_LENGTH are set,
 #       max_shots will be calculated as: int(TARGET_VIDEO_LENGTH / DEFAULT_SHOT_LENGTH)
-TARGET_VIDEO_LENGTH = 600  # or specify like: 60.0 for 60 seconds
+TARGET_VIDEO_LENGTH = 300  # or specify like: 60.0 for 60 seconds
 
 # Video rendering timeout (in seconds)
 # Maximum time to wait for a single video render to complete
-VIDEO_RENDER_TIMEOUT = 1800  # 30 minutes
+VIDEO_RENDER_TIMEOUT = 900  # 15 minutes
 
 # LoRA node IDs in the workflow (for camera-based LoRA loading)
 # Array of LoRA node pairs - each pair contains HIGH_NOISE_LORA_NODE_ID and LOW_NOISE_LORA_NODE_ID
@@ -504,10 +504,10 @@ AUTO_STEP_MODE = True  # True = auto, False = manual
 # Available agents depend on files in the agents folder
 
 # Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary)
-STORY_AGENT = "youtube_documentary"
+STORY_AGENT = "indus_valley"
 
 # Image prompt agent (default, artistic, time_traveler)
-IMAGE_AGENT = "default"
+IMAGE_AGENT = "indus_valley"
 
 # Video motion agent (default, cinematic)
 VIDEO_AGENT = "default"

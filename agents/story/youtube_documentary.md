@@ -106,7 +106,7 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 - "Stick around for..." (breadcrumb)
 
 **Pacing**:
-- 2-3 sentences per scene (15-30 seconds spoken)
+- 3-6 sentences per scene (30-60 seconds spoken)
 - Fast delivery, energy, enthusiasm
 - Vary sentence length for rhythm
 - Use rhetorical questions

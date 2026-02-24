@@ -81,9 +81,9 @@ def load_workflow(path, video_length_seconds=None):
                     frames = widgets[2]
                     # Set video length if specified
                     if video_length_seconds and node_id == config.WAN_VIDEO_NODE_ID:
-                        frames = int(video_length_seconds * config.VIDEO_FPS)
+                        frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
                         node_data["inputs"]["length"] = frames
-                        print(f"[INFO] Set video length: {video_length_seconds}s ({frames} frames at {config.VIDEO_FPS}fps)")
+                        print(f"[INFO] Set video length: {video_length_seconds}s ({frames-1}+1 frames at {config.VIDEO_FPS}fps)")
                         print(f"[INFO] Set dimensions: {width}x{height} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
                     else:
                         node_data["inputs"]["length"] = frames
@@ -149,9 +149,9 @@ def load_workflow(path, video_length_seconds=None):
 
                 # Set video length if specified
                 if video_length_seconds:
-                    frames = int(video_length_seconds * config.VIDEO_FPS)
+                    frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
                     wan_node['inputs']['length'] = frames
-                    print(f"[INFO] Set video length: {video_length_seconds}s ({frames} frames at {config.VIDEO_FPS}fps)")
+                    print(f"[INFO] Set video length: {video_length_seconds}s ({frames-1}+1 frames at {config.VIDEO_FPS}fps)")
                     print(f"[INFO] Set dimensions: {width}x{height} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
 
         return wf
@@ -313,12 +313,12 @@ def compile_workflow(template, shot, video_length_seconds=None):
         # Check if it's API format (inputs has direct values) or UI format (has widgets_values)
         if "length" in wan_node.get("inputs", {}):
             # API format - set length directly
-            frames = int(video_length_seconds * config.VIDEO_FPS)
+            frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
             wan_node["inputs"]["length"] = frames
         elif "widgets_values" in wan_node["inputs"]:
             # UI format - update widgets_values array
             widgets = wan_node["inputs"]["widgets_values"]
-            frames = int(video_length_seconds * config.VIDEO_FPS)
+            frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
             wan_node["inputs"]["widgets_values"] = [widgets[0], widgets[1], frames, widgets[3]]
 
     # Set video filename prefix to avoid collisions
