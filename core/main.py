@@ -1372,7 +1372,9 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
 
         # Count shots that actually need rendering (don't have videos yet)
         shots_status = session_mgr.get_shots(session_id)
-        shots_need_video = [s for s in valid_shots if not shots_status[s.get('index', 0) - 1].get('video_rendered', False)]
+        # Use dictionary lookup for reliable access by shot index
+        shots_status_dict = {s['index']: s for s in shots_status}
+        shots_need_video = [s for s in valid_shots if not shots_status_dict.get(s.get('index'), {}).get('video_rendered', False)]
 
         logger.info(f"STEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
         print(f"\nSTEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
@@ -1406,7 +1408,9 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
             valid_shots = [s for s in shots if s.get('image_path')]
             # Count shots that actually need rendering
             shots_status = session_mgr.get_shots(session_id)
-            shots_need_video = [s for s in valid_shots if not shots_status[s.get('index', 0) - 1].get('video_rendered', False)]
+            # Use dictionary lookup for reliable access by shot index
+            shots_status_dict = {s['index']: s for s in shots_status}
+            shots_need_video = [s for s in valid_shots if not shots_status_dict.get(s.get('index'), {}).get('video_rendered', False)]
             logger.info(f"STEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
             print(f"\nSTEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
             _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)

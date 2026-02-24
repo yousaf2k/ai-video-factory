@@ -420,6 +420,10 @@ IMPORTANT SHOT DISTRIBUTION:
             # Process batches in parallel
             max_workers = min(total_batches, MAX_PARALLEL_BATCH_THREADS)
             logger.info(f"Using {max_workers} parallel threads (max configured: {MAX_PARALLEL_BATCH_THREADS})")
+
+            # Store results with batch numbers for later sorting
+            batch_results = []
+
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {executor.submit(process_batch, batch): batch['batch_num']
                           for batch in batches}
@@ -427,11 +431,16 @@ IMPORTANT SHOT DISTRIBUTION:
                 for future in as_completed(futures):
                     try:
                         batch_shots, batch_num = future.result()
-                        all_shots.extend(batch_shots)
+                        batch_results.append((batch_num, batch_shots))
                     except Exception as e:
                         batch_num = futures[future]
                         logger.error(f"Batch {batch_num} failed: {e}")
                         print(f"[ERROR] Batch {batch_num} failed: {e}")
+
+            # Sort results by batch_num to ensure correct order
+            batch_results.sort(key=lambda x: x[0])
+            for batch_num, batch_shots in batch_results:
+                all_shots.extend(batch_shots)
 
         else:
             # Sequential processing for local providers

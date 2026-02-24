@@ -51,7 +51,8 @@ def regenerate_images(session_id):
 
     # Check for failed images
     for idx, shot_meta in enumerate(session['shots']):
-        shot_idx = idx + 1  # 1-based index
+        # Use the shot's stored index field for consistency
+        shot_idx = shot_meta.get('index', idx + 1)
         expected_filename = f"shot_{shot_idx:03d}.png"
         expected_path = os.path.join(images_dir, expected_filename)
 
@@ -75,7 +76,7 @@ def regenerate_images(session_id):
         # Create a new shots array with image_path included for video regeneration
         shots_with_paths = []
         for idx, shot in enumerate(shots):
-            shot_idx = idx + 1
+            shot_idx = shot.get('index', idx + 1)
             expected_filename = f"shot_{shot_idx:03d}.png"
             expected_path = os.path.join(images_dir, expected_filename)
             if os.path.exists(expected_path):
@@ -135,7 +136,7 @@ def regenerate_images(session_id):
     # Final sync: create shots array with image_path for all shots
     shots_with_paths = []
     for idx, shot in enumerate(shots):
-        shot_idx = idx + 1
+        shot_idx = shot.get('index', idx + 1)
         expected_filename = f"shot_{shot_idx:03d}.png"
         expected_path = os.path.join(images_dir, expected_filename)
 
