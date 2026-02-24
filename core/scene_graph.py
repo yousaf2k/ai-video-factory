@@ -8,6 +8,13 @@ def build_scene_graph(story_json):
     else:
         story = story_json
 
+    # Handle case where LLM returns an array containing the story object
+    if isinstance(story, list):
+        if len(story) > 0:
+            story = story[0]
+        else:
+            return []
+
     graph = []
 
     for i, s in enumerate(story["scenes"]):
