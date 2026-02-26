@@ -41,15 +41,6 @@
       "title": "FluxGuidance"
     }
   },
-  "98:16": {
-    "inputs": {
-      "sampler_name": "euler"
-    },
-    "class_type": "KSamplerSelect",
-    "_meta": {
-      "title": "KSamplerSelect"
-    }
-  },
   "98:13": {
     "inputs": {
       "noise": [
@@ -97,8 +88,8 @@
   "98:48": {
     "inputs": {
       "steps": 20,
-      "width": 1280,
-      "height": 720
+      "width": 1920,
+      "height": 1088
     },
     "class_type": "Flux2Scheduler",
     "_meta": {
@@ -107,22 +98,13 @@
   },
   "98:47": {
     "inputs": {
-      "width": 1280,
-      "height": 720,
+      "width": 1920,
+      "height": 1088,
       "batch_size": 1
     },
     "class_type": "EmptyFlux2LatentImage",
     "_meta": {
       "title": "Empty Flux 2 Latent"
-    }
-  },
-  "98:25": {
-    "inputs": {
-      "noise_seed": 456747434349477
-    },
-    "class_type": "RandomNoise",
-    "_meta": {
-      "title": "RandomNoise"
     }
   },
   "98:12": {
@@ -133,17 +115,6 @@
     "class_type": "UNETLoader",
     "_meta": {
       "title": "Load Diffusion Model"
-    }
-  },
-  "98:38": {
-    "inputs": {
-      "clip_name": "mistral_3_small_flux2_fp8.safetensors",
-      "type": "flux2",
-      "device": "default"
-    },
-    "class_type": "CLIPLoader",
-    "_meta": {
-      "title": "Load CLIP"
     }
   },
   "98:10": {
@@ -157,7 +128,7 @@
   },
   "98:6": {
     "inputs": {
-      "text": "A highly detailed, stylized screenshot from an educational animation. The scene is a modern, infographic-style map of South Asia, centered on the Indus River basin. The map depicts the full geographical reach of the Indus Valley Civilization (c. 3300–1300 BCE). The Indus River is a prominent, winding feature, highlighted in a vibrant blue. The key cities of Harappa and Mohenjo-daro are clearly marked with distinct, glowing icons and are labeled. A sleek, stylized timeline runs along the bottom edge, clearly displaying the period 3300 BCE to 1300 BCE. The overall aesthetic is informative and clean, using a color palette of earthy browns and greens for the land, a bright blue for the river, and gold/white for the text and markers. The composition is sharp, dynamic, and feels like a high-quality animation still.",
+      "text": "",
       "clip": [
         "98:38",
         0
@@ -166,6 +137,35 @@
     "class_type": "CLIPTextEncode",
     "_meta": {
       "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "98:25": {
+    "inputs": {
+      "noise_seed": 1
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "98:16": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "98:38": {
+    "inputs": {
+      "clip_name": "llama_3.1_8b_instruct_fp8_scaled.safetensors",
+      "type": "flux2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
     }
   }
 }
