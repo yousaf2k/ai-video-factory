@@ -656,3 +656,16 @@ IMAGE_WIDTH, IMAGE_HEIGHT = calculate_image_dimensions()
 
 # Pre-calculate video dimensions
 VIDEO_WIDTH, VIDEO_HEIGHT = calculate_video_dimensions()
+
+
+# ==========================================
+# IMAGE GENERATION RETRY CONFIGURATION
+# ==========================================
+# Maximum retry attempts for failed image generation (including initial attempt)
+IMAGE_GENERATION_MAX_RETRIES = 3
+
+# Delay between retry attempts in seconds
+IMAGE_GENERATION_RETRY_DELAY = 5
+
+# Continue to video generation even if some images failed
+CONTINUE_ON_PARTIAL_IMAGE_FAILURE = True

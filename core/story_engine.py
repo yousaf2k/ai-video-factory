@@ -144,8 +144,15 @@ IDEA:
             is_valid, actual_total, diff, adjusted_story = validate_and_adjust_scene_durations(
                 story, target_length, config.SCENE_DURATION_TOLERANCE
             )
-            story_json = json.dumps(adjusted_story, ensure_ascii=False)
+            story_json = json.dumps(adjusted_story, ensure_ascii=False, indent=2)
         except json.JSONDecodeError:
             logger.warning("Failed to parse story JSON for validation, skipping duration check")
+    else:
+        # Format JSON with proper indentation even when no target_length
+        try:
+            story = json.loads(story_json)
+            story_json = json.dumps(story, ensure_ascii=False, indent=2)
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse story JSON for formatting")
 
     return story_json

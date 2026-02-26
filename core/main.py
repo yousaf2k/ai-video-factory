@@ -1678,8 +1678,9 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
 
 
 def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot=1):
-    """Generate images for all shots with optional multiple variations"""
+    """Generate images for all shots with optional multiple variations and automatic retry mechanism"""
     from core.image_generator import generate_images_for_shots
+    from core.retry_tracker import RetryTracker
 
     images_dir = session_mgr.get_images_dir(session_id)
     os.makedirs(images_dir, exist_ok=True)
@@ -1720,16 +1721,20 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
         normalized_path = image_path.replace('\\', '/')
         session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
 
+    # Initialize retry tracker
+    retry_tracker = RetryTracker(max_retries=config.IMAGE_GENERATION_MAX_RETRIES)
+
     # Generate images for shots that don't have them with progress callback for immediate state updates
     if shots_needing_images:
         print(f"\n[INFO] Generating images for {len(shots_needing_images)} shot(s)...")
-        shots_needing_images = generate_images_for_shots(
+        shots_needing_images, retry_tracker = generate_images_for_shots(
             shots=shots_needing_images,
             output_dir=images_dir,
             mode=image_mode,
             negative_prompt=negative_prompt,
             images_per_shot=images_per_shot,
-            progress_callback=update_state_callback
+            progress_callback=update_state_callback,
+            retry_tracker=retry_tracker
         )
 
         # Mark newly generated images in session
@@ -1737,8 +1742,9 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
             shot_idx = shot.get('index', shots.index(shot) + 1)
             image_paths = shot.get('image_paths', [])
             for img_path in image_paths:
-                normalized_path = img_path.replace('\\', '/')
-                session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+                if img_path:  # Only mark if path exists (not None)
+                    normalized_path = img_path.replace('\\', '/')
+                    session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
 
         # Update the shots list with newly generated image paths
         for new_shot in shots_needing_images:
@@ -1749,15 +1755,27 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
                     orig_shot['image_path'] = new_shot.get('image_path')
                     break
 
-    # Only mark images step as complete if ALL shots have at least one image
+    # Check final status and handle partial success
     shots_with_images = [s for s in shots if s.get('image_path')]
+
     if len(shots_with_images) == len(shots):
+        # All shots have images
         session_mgr.mark_step_complete(session_id, 'images')
         print(f"\n[INFO] All {len(shots)} shots have images generated.")
+    elif len(shots_with_images) > 0:
+        # Partial success - some shots have images
+        if config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE:
+            print(f"\n[WARNING] {len(shots) - len(shots_with_images)} shot(s) failed to generate images.")
+            print(f"[INFO] Will continue to video generation with {len(shots_with_images)} shots that have images.")
+            print(f"[INFO] Images step NOT marked as complete. You can regenerate images when resuming.")
+        else:
+            print(f"\n[ERROR] {len(shots) - len(shots_with_images)} shot(s) failed to generate images.")
+            print(f"[ERROR] CONTINUE_ON_PARTIAL_IMAGE_FAILURE is False. Stopping pipeline.")
+            raise Exception(f"Image generation failed for {len(shots) - len(shots_with_images)} shots")
     else:
-        shots_without_images = len(shots) - len(shots_with_images)
-        print(f"\n[WARNING] {shots_without_images} shot(s) failed to generate images.")
-        print(f"[INFO] Images step NOT marked as complete. You can regenerate images when resuming.")
+        # Complete failure - no shots have images
+        print(f"\n[ERROR] All shots failed to generate images. Cannot continue to video generation.")
+        raise Exception("Image generation failed for all shots")
 
 def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
     """Render videos for all shots and all image variations"""
@@ -1766,6 +1784,16 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
     # Load shots status from shots.json to check which videos are already rendered
     shots_status = session_mgr.get_shots(session_id)
     shots_status_dict = {s['index']: s for s in shots_status}
+
+    # Filter out shots without images (in case of partial failure)
+    shots_with_images = [s for s in valid_shots if s.get('image_path')]
+
+    if len(shots_with_images) < len(valid_shots):
+        skipped = len(valid_shots) - len(shots_with_images)
+        print(f"[INFO] Skipping {skipped} shot(s) without images (partial image generation failure)")
+
+    # Update valid_shots to only include shots with images
+    valid_shots = shots_with_images
 
     # Track results
     successful_renders = 0
