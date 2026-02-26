@@ -303,13 +303,25 @@ Always include:
 "A dramatic naval shot of the Battle of Actium, 31 BCE. The combined fleet of Octavian (Marcus Agrippa) and Antony/Cleopatra clashes in the Ambracian Gulf. Roman quinqueremes with the "harax" (corvus) boarding bridges face off against Cleopatra's Egyptian-style warships. Antony's flagship is visible, its distinctive purple sail unfurled. Cleopatra's Egyptian squadron tries to break through to open sea. The battle is chaotic - ramming, boarding missiles, burning ships. The coastline of Epirus is visible in the background with troops watching. Smoke from burning ships fills the air. The fate of the Hellenistic world hangs in the balance. Low-angle shot from a Roman ship captures the intensity. Shot on 70-200mm telephoto lens, documentary photojournalism, hyper-realistic naval battle. 8K resolution. Authentic historical reconstruction, not stylized movie version."
 ```
 
+## Video & Motion Prompt Guidelines (For Wan 2.2 I2V)
+
+The `motion_prompt` must NOT just be camera directions. It must describe a living, moving scene to guide the video generation model.
+
+When writing the `motion_prompt`, follow these strict rules:
+
+1. **Summarize the Scene:** Briefly state what is in the shot (e.g., "The great library of Alexandria...", "A multicultural harbor scene...").
+2. **Subject Motion (Verbs):** Describe exactly how the people/animals are moving. Use dynamic verbs (e.g., "Scholars study scrolls," "Merchants from many lands trade goods," "Ships sail into harbor").
+3. **Environmental Motion:** Describe how the elements react (e.g., "Sea breeze moves fabrics," "Water laps against docks," "Desert wind carries sand").
+4. **Camera Movement:** End with the camera instruction (e.g., "The camera slowly tracks through the library," "Drone ascends over the city").
+5. **NO PHOTOGRAPHY TERMS:** You MUST strip out all static photography terms from the motion prompt. Do NOT include terms like "8K", "50mm", "f/8", "DSLR", "hyper-detailed", "sharp focus", or "ISO" in the motion prompt. Use cinematic pacing terms instead ("cinematic pacing," "fluid motion," "natural movement").
+
 ## Output Format
 
 ```json
 [
   {
-    "image_prompt": "Full photorealistic Hellenistic Greek image prompt with historical accuracy and multicultural character",
-    "motion_prompt": "Camera movement that enhances the immersive historical experience",
+    "image_prompt": "Full photorealistic Hellenistic Greek image prompt with historical accuracy and multicultural character. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
+    "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "static | slow pan | walk | tracking | drone | orbit | zoom",
     "narration": "Voice-over narration text for this shot (from the story scene)"
   }

@@ -274,13 +274,30 @@ Always include:
 "A scene of a Greek trader adapting the Phoenician alphabet, 800 BCE. The trader sits in a small coastal settlement, scratching symbols on a potsherd (ostrakon) with a stylus. Phoenician letters are being adapted to represent Greek sounds. Nearby, Phoenician merchant ships are visible in the harbor. Greek Geometric pottery is being exchanged for luxury goods - ivory, faience, copper. The trader wears a woolen himation and has a bronze signet ring. Other Greeks examine exotic goods from the East. The revival of long-distance trade is evident. Late afternoon sun reflects off the Aegean Sea. Shot on 50mm lens, documentary style, hyper-realistic, cultural transition moment. 8K resolution. Authentic end of Dark Ages, beginning of Archaic period."
 ```
 
+## Video & Motion Prompt Guidelines (For Wan 2.2 I2V)
+
+The `motion_prompt` must NOT just be camera directions. It must describe a living, moving scene to guide the video generation model.
+
+When writing the `motion_prompt`, follow these strict rules:
+
+1. **Summarize the Scene:** Briefly state what is in the shot (e.g., "A village scene in post-collapse Greece...", "Warriors gathering at a refuge settlement...").
+2. **Subject Motion (Verbs):** Describe exactly how the people/animals are moving. Use dynamic verbs (e.g., "Warriors walk slowly through the ruins," "Women weave at ground-level looms," "Potter shapes clay on wheel").
+3. **Environmental Motion:** Describe how the elements react (e.g., "Smoke rises from cooking fires," "Wind rustles through thatched roofs," "Dust swirls in abandoned spaces").
+4. **Camera Movement:** End with the camera instruction (e.g., "The camera slowly pans across the scene," "Static camera capturing quiet moments").
+5. **NO PHOTOGRAPHY TERMS:** You MUST strip out all static photography terms from the motion prompt. Do NOT include terms like "8K", "50mm", "f/8", "DSLR", "hyper-detailed", "sharp focus", or "ISO" in the motion prompt. Use cinematic pacing terms instead ("cinematic pacing," "fluid motion," "natural movement").
+
+**Example structure:**
+```
+"[Scene context with people/animals] + [Specific dynamic movements of subjects] + [Environmental effects like smoke/wind] + [Camera movement]. Cinematic pacing, realistic physics, fluid natural motion."
+```
+
 ## Output Format
 
 ```json
 [
   {
-    "image_prompt": "Full photorealistic Greek Dark Ages image prompt with historical accuracy and post-collapse atmosphere",
-    "motion_prompt": "Camera movement that enhances the immersive historical experience",
+    "image_prompt": "Full photorealistic Greek Dark Ages image prompt with historical accuracy and post-collapse atmosphere. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
+    "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "static | slow pan | walk | tracking | drone | orbit | zoom",
     "narration": "Voice-over narration text for this shot (from the story scene)"
   }

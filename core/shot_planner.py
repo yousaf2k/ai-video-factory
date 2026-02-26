@@ -8,7 +8,8 @@ from core.log_decorators import log_agent_call
 import json
 import re
 from config import (DEFAULT_SHOTS_PER_SCENE, MIN_SHOTS_PER_SCENE, MAX_SHOTS_PER_SCENE,
-                    SHOT_GENERATION_BATCH_SIZE, LLM_PROVIDER, MAX_PARALLEL_BATCH_THREADS)
+                    SHOT_GENERATION_BATCH_SIZE, LLM_PROVIDER, MAX_PARALLEL_BATCH_THREADS,
+                    DEFAULT_SHOT_LENGTH)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
@@ -324,11 +325,65 @@ def plan_shots(scene_graph, max_shots=None, image_agent="default", video_agent="
     if shots_per_scene is None:
         shots_per_scene = DEFAULT_SHOTS_PER_SCENE
 
+    # Check if scenes have scene_length field for intelligent distribution
+    has_scene_lengths = any("scene_length" in s or "scene_duration" in s for s in scenes)
+
     # Build enhanced shot instruction based on parameters
     max_shots_instruction = ""
-    if max_shots:
-        # Calculate shots per scene from max_shots
+    if has_scene_lengths:
+        # Use scene-based shot distribution
+        logger.info("Using scene-based shot distribution (scene_length detected)")
+        print(f"[INFO] Using scene-based shot distribution")
+
+        scene_shot_plan = []
+        total_shots_from_durations = 0
+
+        for i, scene in enumerate(scenes):
+            # Support both scene_length and scene_duration field names
+            scene_len = scene.get("scene_length") or scene.get("scene_duration", 0)
+            if scene_len > 0:
+                shots_for_scene = max(MIN_SHOTS_PER_SCENE, int(scene_len / DEFAULT_SHOT_LENGTH))
+                scene_shot_plan.append({
+                    'scene_idx': i,
+                    'shots': shots_for_scene,
+                    'duration': scene_len
+                })
+                total_shots_from_durations += shots_for_scene
+                logger.info(f"Scene {i}: {shots_for_scene} shots ({scene_len}s ÷ {DEFAULT_SHOT_LENGTH}s/shot)")
+                print(f"[INFO] Scene {i}: {shots_for_scene} shots ({scene_len}s ÷ {DEFAULT_SHOT_LENGTH}s/shot)")
+
+        # Update max_shots if calculated from durations
+        if max_shots is None:
+            max_shots = total_shots_from_durations
+
+        # Format scene shot plan for LLM instruction
+        scene_plan_text = "\n".join([
+            f"  Scene {s['scene_idx']}: {s['shots']} shots ({s['duration']}s)"
+            for s in scene_shot_plan
+        ])
+
+        max_shots_instruction = f"""
+SCENE-BASED SHOT DISTRIBUTION:
+Generate the following shots for each scene based on scene duration:
+{scene_plan_text}
+
+Total shots: {total_shots_from_durations} (~{total_shots_from_durations * DEFAULT_SHOT_LENGTH}s video)
+
+IMPORTANT:
+- Follow the exact shot count specified for each scene above
+- Each scene MUST have different camera angles (wide, close-up, detail, etc.)
+"""
+        logger.info(f"Total shots planned from scene durations: {total_shots_from_durations} (~{total_shots_from_durations * DEFAULT_SHOT_LENGTH}s video)")
+        print(f"[INFO] Total shots planned: {total_shots_from_durations} (~{total_shots_from_durations * DEFAULT_SHOT_LENGTH}s video)")
+
+    elif max_shots:
+        # Calculate shots per scene from max_shots (even distribution)
         shots_per_scene_target = max(MIN_SHOTS_PER_SCENE, max_shots // scene_count)
+
+        # Log shot distribution planning
+        print(f"[INFO] Shot distribution: {max_shots} shots across {scene_count} scenes (~{shots_per_scene_target} shots/scene)")
+        logger.info(f"Shot distribution: {max_shots} shots across {scene_count} scenes (~{shots_per_scene_target} shots/scene)")
+
         max_shots_instruction = f"""
 IMPORTANT SHOT DISTRIBUTION:
 - Generate exactly {max_shots} shots total ({shots_per_scene_target}-{max_shots // scene_count + 2} shots per scene)
@@ -365,10 +420,17 @@ IMPORTANT SHOT DISTRIBUTION:
 
             # Build batch-specific instruction
             batch_max_total = batch_max_shots or len(scenes_batch) * shots_per_scene
-            batch_instruction = max_shots_instruction.replace(
-                str(max_shots or scene_count * shots_per_scene),
-                str(batch_max_total)
-            )
+            scenes_in_batch = len(scenes_batch)
+            shots_per_batch_scene = max(MIN_SHOTS_PER_SCENE, batch_max_total // scenes_in_batch) if batch_max_total else shots_per_scene
+
+            # Create a clear batch-specific instruction (don't reuse the global one)
+            batch_instruction = f"""
+CRITICAL SHOT REQUIREMENTS:
+- You MUST generate exactly {batch_max_total} shots for this batch
+- This batch contains {scenes_in_batch} scene(s)
+- For EACH scene in this batch, generate {shots_per_batch_scene}-{shots_per_batch_scene + 2} unique shots with different camera angles
+- Each scene MUST have at least {MIN_SHOTS_PER_SCENE} shots (different angles: wide shot, close-up, detail, etc.)
+"""
 
             batches.append({
                 'scenes_batch': scenes_batch,
@@ -473,7 +535,16 @@ IMPORTANT SHOT DISTRIBUTION:
         # Enforce max_shots limit if specified
         if max_shots and len(all_shots) > max_shots:
             print(f"[INFO] Generated {len(all_shots)} shots, limiting to {max_shots}")
+            logger.info(f"Generated {len(all_shots)} shots, limiting to {max_shots}")
             all_shots = all_shots[:max_shots]
+
+        # Log results
+        if max_shots:
+            if len(all_shots) == max_shots:
+                print(f"[INFO] Target achieved: {len(all_shots)} shots = ~{len(all_shots) * DEFAULT_SHOT_LENGTH}s video")
+            else:
+                print(f"[INFO] Final shot count: {len(all_shots)} shots = ~{len(all_shots) * DEFAULT_SHOT_LENGTH}s video")
+            logger.info(f"Final shot count: {len(all_shots)} shots, ~{len(all_shots) * DEFAULT_SHOT_LENGTH}s video")
 
         return all_shots
 
@@ -493,7 +564,16 @@ IMPORTANT SHOT DISTRIBUTION:
         # Enforce max_shots limit if specified
         if max_shots and len(shots) > max_shots:
             print(f"[INFO] Generated {len(shots)} shots, limiting to {max_shots}")
+            logger.info(f"Generated {len(shots)} shots, limiting to {max_shots}")
             shots = shots[:max_shots]
+
+        # Log results
+        if max_shots:
+            if len(shots) == max_shots:
+                print(f"[INFO] Target achieved: {len(shots)} shots = ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
+            else:
+                print(f"[INFO] Final shot count: {len(shots)} shots = ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
+            logger.info(f"Final shot count: {len(shots)} shots, ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
 
         return shots
 

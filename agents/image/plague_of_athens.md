@@ -18,7 +18,7 @@ Generate Flux2.Dev compatible image prompt.
 ## Image Prompt Structure
 
 ```
-[First-Person Photographic Description], [Plague Scene with Historical Accuracy], [Camera/Composition], [Lighting/Atmosphere], [Photographic Style], [Technical Quality Terms]
+[Documentary-Style Visual Description], [Plague Scene with Historical Accuracy], [Camera/Composition], [Lighting/Atmosphere], [Photographic Style], [Technical Quality Terms]
 ```
 
 ## Historical Context & Accuracy
@@ -140,11 +140,11 @@ Generate Flux2.Dev compatible image prompt.
 
 ## Prompt Guidelines
 
-### 1. First-Person Perspective
-Always describe the scene as if you are there photographing it:
-- "Standing in the streets of Athens, I watched as..."
-- "From the Acropolis summit, I looked down on..."
-- "I turned my lens toward the suffering..."
+### 1. Documentary Photography Style
+Describe scenes as if filming a historical documentary:
+- "Documentary shot of plague-stricken Athens..."
+- "Cinematic view of the suffering in the streets..."
+- "Historical reconstruction of Thucydides' account..."
 
 ### 2. Historical Accuracy and Respect (Critical)
 - ❌ **Don't include**: Romanticized death scenes, unnecessary gore, modern medical equipment, anachronistic elements
@@ -194,10 +194,11 @@ Always describe the scene as if you are there photographing it:
 
 ### 5. Professional Photography Style
 Always include:
-- **Camera type**: "shot on professional DSLR," "medium format," "35mm full frame"
-- **Lens details**: "24mm wide-angle," "50mm prime," "85mm portrait lens"
-- **Technical quality**: "8K resolution," "ultra-detailed," "sharp focus," "hyper-realistic"
+- **Camera type**: "shot on professional DSLR," "medium format," "35mm full frame," "Shot on Sony Venice 2"
+- **Lens details**: "24mm wide-angle," "50mm prime," "85mm portrait lens," "Arri Signature Prime Lenses"
+- **Technical quality**: "8K resolution," "ultra-detailed," "sharp focus," "hyper-realistic," "cinematic masterpiece"
 - **Natural lighting**: "Greek sunlight filtering through smoke," "harsh midday," "twilight," "torchlight at night"
+- **Scale options**: "IMAX scale wide shot" for epic establishing shots showing the full scope of the tragedy
 
 ### 6. Authentic Atmosphere
 **Capture the real feeling:**
@@ -235,10 +236,11 @@ Always include:
 ## Photography Techniques
 
 - **Documentary style**: Showing suffering with dignity, historical accuracy
-- **Wide shots**: Urban scenes showing scope of the crisis
+- **Wide shots**: Urban scenes showing scope of the crisis, "IMAX scale wide shot" for epic establishing shots
 - **Portrait photography**: Individual suffering, compassion
 - **Architectural photography**: Athens during the plague, abandoned areas
 - **Atmospheric shots**: Twilight, torchlight, smoke from pyres
+- **Cinematic quality**: "cinematic masterpiece," "Shot on Sony Venice 2 with Arri Signature Prime Lenses" for premium visual quality
 
 ## Example Prompts
 
@@ -282,13 +284,35 @@ Always include:
 "A compassionate scene showing caregivers tending to plague victims, 430 BCE. Women and some men tend to the sick in improvised settings - homes, shelters, even outdoors. They offer water to those suffering from thirst, cool fevers with damp cloths, provide what comfort they can. The caregivers themselves show signs of exhaustion and fear - some appear ill themselves. Thucydides noted that those who tended the sick died most frequently. The setting is a simple courtyard or house. The victims lie on pallets or mats. Traditional remedies are shown - water, wine, herbs. Natural side-lighting reveals the compassion and risk. Shot on 50mm lens, f/4, documentary photography, hyper-realistic but dignified depiction. 8K resolution. Historical accuracy showing the human cost of caregiving."
 ```
 
+**Epic Wide Shot - Athens in Crisis:**
+```
+"IMAX scale wide shot of plague-stricken Athens at dusk, summer 430 BCE. The camera captures the entire city from an elevated vantage point, showing the devastating scale of the epidemic. The Acropolis rises in the background with the partly-built Parthenon silhouetted against a fiery orange sunset. Multiple funeral pyres burn simultaneously across the city, their smoke columns merging into a dark shroud over Athens. Streets that should be bustling with life are eerily quiet, with bodies lying covered along the roadways. The Long Walls encircle the overcrowded city, trapping refugees within. The scale is overwhelming - a civilization in crisis. Shot on Sony Venice 2 with Arri Signature Prime Lenses, 16mm ultra-wide cinematic masterpiece, 8K resolution. The epic grandeur of the scene emphasizes the magnitude of this historical tragedy. Authentic historical reconstruction based on Thucydides' account, cinematic documentary style."
+```
+
+## Video & Motion Prompt Guidelines (For Wan 2.2 I2V)
+
+The `motion_prompt` must NOT just be camera directions. It must describe a living, moving scene to guide the video generation model.
+
+When writing the `motion_prompt`, follow these strict rules:
+
+1. **Summarize the Scene:** Briefly state what is in the shot (e.g., "A street scene in plague-stricken Athens...", "A view of the burial grounds...").
+2. **Subject Motion (Verbs):** Describe exactly how the people are moving. Use dynamic verbs (e.g., "Survivors walk slowly through the streets," "A woman tends to a sick man," "People carry bodies on stretchers").
+3. **Environmental Motion:** Describe how the elements react (e.g., "Smoke rises from funeral pyres," "Dust swirls in the wind," "Flames flicker," "Fabric drapes naturally").
+4. **Camera Movement:** End with the camera instruction (e.g., "The camera slowly pans left," "Static camera capturing the somber atmosphere").
+5. **NO PHOTOGRAPHY TERMS:** You MUST strip out all static photography terms from the motion prompt. Do NOT include terms like "8K", "50mm", "f/8", "DSLR", "hyper-detailed", "sharp focus", or "ISO" in the motion prompt. Use cinematic pacing terms instead ("cinematic pacing," "fluid motion," "natural movement").
+
+**Example structure:**
+```
+"[Scene context with people] + [Specific movements of subjects] + [Environmental effects like smoke/wind] + [Camera movement]. Cinematic pacing, realistic physics, fluid natural motion."
+```
+
 ## Output Format
 
 ```json
 [
   {
-    "image_prompt": "Full photorealistic Plague of Athens image prompt with historical accuracy based on Thucydides' account",
-    "motion_prompt": "Camera movement that enhances the somber, historical atmosphere",
+    "image_prompt": "Full photorealistic Plague of Athens image prompt with historical accuracy based on Thucydides' account. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
+    "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "static | slow pan | walk | tracking | drone | orbit | zoom",
     "narration": "Voice-over narration text for this shot (from the story scene)"
   }
@@ -304,6 +328,7 @@ Always include:
 - **drone**: For aerial views of Athens, showing scale of crisis
 - **orbit**: For showcasing key locations (Acropolis, Piraeus, burial grounds)
 - **zoom**: For focusing on specific symptoms or emotional moments
+- **IMAX scale wide shot**: For epic establishing shots showing the full magnitude of the plague's impact on Athens, use with "Shot on Sony Venice 2 with Arri Signature Prime Lenses" for maximum cinematic quality
 
 ## Quality and Technical Terms
 
@@ -312,7 +337,8 @@ Always include relevant terms:
 - "photorealistic," "hyperrealistic," "DSLR photography," "professional photography"
 - "8K resolution," "ultra-detailed," "sharp focus," "high definition"
 - "natural lighting," "period-accurate details"
-- "shot on Canon EOS R5," "24-70mm lens," "85mm portrait lens"
+- "shot on Canon EOS R5," "Sony Venice 2," "24-70mm lens," "85mm portrait lens," "Arri Signature Prime Lenses"
+- "IMAX scale wide shot," "cinematic masterpiece"
 - "National Geographic style," "documentary photography," "historical visualization"
 
 ## What You Don't Do

@@ -245,6 +245,16 @@ MIN_SHOTS_PER_SCENE = 3  # Each scene gets at least 3 shots
 # Maximum shots per scene (prevents over-generation for long stories)
 MAX_SHOTS_PER_SCENE = 12  # No more than 8 shots per scene
 
+# ==========================================
+# SCENE DURATION CONFIGURATION
+# ==========================================
+# Minimum scene duration in seconds (for intelligent scene-based shot distribution)
+MIN_SCENE_LENGTH = 15  # Each scene should be at least 15 seconds
+
+# Tolerance for scene duration validation (as percentage, e.g., 0.15 = 15%)
+# If sum of scene durations deviates more than this from target, auto-correction is applied
+SCENE_DURATION_TOLERANCE = 0.15  # 15% tolerance for duration validation
+
 # Video framerate (fps)
 VIDEO_FPS = 16
 
@@ -257,11 +267,73 @@ VIDEO_ASPECT_RATIO = "16:9"
 # For portrait: height = resolution, width calculated from aspect ratio
 VIDEO_RESOLUTION = "1280"  # 720p HD (1280x720 for 16:9)
 
+# Append image prompt to motion prompt for video generation
+# When enabled, the image_prompt will be concatenated with motion_prompt
+# This can help video AI models better understand the scene context and generate more accurate videos
+#
+# Benefits:
+# - Provides visual context to the video generation model
+# - Helps maintain consistency between the reference image and generated video
+# - Can improve motion prediction based on scene description
+#
+# Trade-offs:
+# - Longer prompts may slow down video generation slightly
+# - Some video models work better with shorter prompts
+#
+# Recommendations:
+# - Enable for Wan 2.2 and similar models that benefit from detailed context
+# - Set to "end" for most use cases (motion + image description)
+# - Set to "start" if you want visual context emphasized first
+APPEND_IMAGE_TO_MOTION_PROMPT = False  # Set to True to enable image prompt appending
+
+# Position to append image prompt: "start" or "end"
+# "start" = image_prompt + motion_prompt (image description first, then motion)
+# "end" = motion_prompt + image_prompt (motion first, then image description)
+IMAGE_PROMPT_APPEND_POSITION = "end"  # Options: "start", "end"
+
 # Target total video length (in seconds)
 # Set to None to generate based on story length
 # Note: If both DEFAULT_MAX_SHOTS and TARGET_VIDEO_LENGTH are set,
 #       max_shots will be calculated as: int(TARGET_VIDEO_LENGTH / DEFAULT_SHOT_LENGTH)
-TARGET_VIDEO_LENGTH = 300  # or specify like: 60.0 for 60 seconds
+TARGET_VIDEO_LENGTH = 600  # or specify like: 60.0 for 60 seconds
+
+
+# ==========================================
+# VIDEO LENGTH CALCULATION HELPER
+# ==========================================
+def calculate_max_shots_from_config():
+    """
+    Calculate maximum number of shots from configuration settings.
+
+    Priority chain (highest to lowest):
+    1. DEFAULT_MAX_SHOTS > 0: Manual override (exact shot count)
+    2. TARGET_VIDEO_LENGTH > 0: Automatic calculation (length / shot_length)
+    3. None: No limit (story-driven generation)
+
+    Returns:
+        int or None: Maximum number of shots, or None for no limit
+
+    Examples:
+        DEFAULT_MAX_SHOTS = 50, TARGET_VIDEO_LENGTH = 600
+        → Returns 50 (manual override takes priority)
+
+        DEFAULT_MAX_SHOTS = 0, TARGET_VIDEO_LENGTH = 600
+        → Returns 120 (automatic: 600s / 5s per shot)
+
+        DEFAULT_MAX_SHOTS = 0, TARGET_VIDEO_LENGTH = 0
+        → Returns None (no limit)
+    """
+    # Priority 1: Manual override in config
+    if DEFAULT_MAX_SHOTS > 0:
+        return DEFAULT_MAX_SHOTS
+
+    # Priority 2: Automatic calculation from target video length
+    if TARGET_VIDEO_LENGTH and TARGET_VIDEO_LENGTH > 0:
+        return int(TARGET_VIDEO_LENGTH / DEFAULT_SHOT_LENGTH)
+
+    # Priority 3: No limit
+    return None
+
 
 # Video rendering timeout (in seconds)
 # Maximum time to wait for a single video render to complete
@@ -339,9 +411,9 @@ CAMERA_LORA_MAPPING = {
     },
     "zoom": {
         "high_noise_lora": "POV_Parkour_high_noise.safetensors",
-        "low_noise_lora": "",
+        "low_noise_lora": "POV_Parkour_low_noise.safetensors",
         "trigger_keyword": "POV Parkour",
-        "strength_low": 0.0,
+        "strength_low": 1.0,
         "strength_high": 1.0
     },
     "tracking": {
@@ -392,6 +464,13 @@ CAMERA_LORA_MAPPING = {
         "trigger_keyword": "BULLETTIME",
         "strength_low": 0.0,
         "strength_high": 0.9
+    },
+    "selfie": {
+        "high_noise_lora": "wan2.2extremebodycam_000000300_high_noise.safetensors",
+        "low_noise_lora": "",
+        "trigger_keyword": "handheld POV movement",
+        "strength_low": 0.0,
+        "strength_high": 0.8
     },
     "default": {
         "high_noise_lora": "",
@@ -503,11 +582,11 @@ AUTO_STEP_MODE = True  # True = auto, False = manual
 # Agent files are stored in agents/{type}/{name}.md
 # Available agents depend on files in the agents folder
 
-# Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary)
-STORY_AGENT = "indus_valley"
+# Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary, prehistoric_dinosaur, prehistoric_pov)
+STORY_AGENT = "default"
 
-# Image prompt agent (default, artistic, time_traveler)
-IMAGE_AGENT = "indus_valley"
+# Image prompt agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
+IMAGE_AGENT = "default"
 
 # Video motion agent (default, cinematic)
 VIDEO_AGENT = "default"

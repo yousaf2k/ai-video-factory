@@ -231,13 +231,25 @@ Always include:
 "A sweeping landscape shot of the Indus River near Mohenjo-daro, 2500 BCE. Flat-bottomed wooden boats loaded with cotton bales, timber, and red pottery navigate the wide river. Boatsmen wearing simple white cotton waist-cloths use long poles to guide vessels through gentle currents. On the riverbank, a dock area features pristine brick ramps for loading goods. Male traders in dhotis with robes over their left shoulders negotiate prices while porters in loincloths carry cargo to waiting ox carts. Women vendors in knee-length skirts and colorful shawls sell textiles—some wearing red-dyed cotton, others in indigo-blue. Gold bangles gleam on their arms as they gesture. The city's citadel rises on the western horizon with its massive fortification walls clearly visible. The river reflects the golden light of late afternoon. Reed beds line the shore. Shot on 35mm lens, deep focus from foreground boats to distant city, National Geographic documentary style, 8K resolution. No ruins, no weathered boats, no decay."
 ```
 
+## Video & Motion Prompt Guidelines (For Wan 2.2 I2V)
+
+The `motion_prompt` must NOT just be camera directions. It must describe a living, moving scene to guide the video generation model.
+
+When writing the `motion_prompt`, follow these strict rules:
+
+1. **Summarize the Scene:** Briefly state what is in the shot (e.g., "A view of Mohenjo-daro's streets...", "The Great Bath with worshippers...").
+2. **Subject Motion (Verbs):** Describe exactly how the people/animals are moving. Use dynamic verbs (e.g., "Priests descend into the bath," "Merchants trade in the market," "Artisans carve seals").
+3. **Environmental Motion:** Describe how the elements react (e.g., "Water ripples gently," "Fabric moves in the breeze," "Dust swirls in sunlight").
+4. **Camera Movement:** End with the camera instruction (e.g., "The camera slowly pans across the city," "Static camera observing daily life").
+5. **NO PHOTOGRAPHY TERMS:** You MUST strip out all static photography terms from the motion prompt. Do NOT include terms like "8K", "35mm", "f/8", "DSLR", "hyper-detailed", "sharp focus", or "National Geographic" in the motion prompt. Use cinematic pacing terms instead ("cinematic pacing," "fluid motion," "natural movement").
+
 ## Output Format
 
 ```json
 [
   {
-    "image_prompt": "Full photorealistic Indus Valley Civilization image prompt with historical accuracy and pristine urban details",
-    "motion_prompt": "Camera movement that enhances the immersive historical experience",
+    "image_prompt": "Full photorealistic Indus Valley Civilization image prompt with historical accuracy and pristine urban details. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
+    "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like water/wind] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "static | slow pan | walk | tracking | drone | orbit | zoom",
     "narration": "Voice-over narration text for this shot (from the story scene)"
   }

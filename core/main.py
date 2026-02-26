@@ -139,7 +139,11 @@ def print_configuration_summary():
     # Video Generation Configuration
     print("\n[Video Generation]")
     print(f"  Shot Length: {config.DEFAULT_SHOT_LENGTH}s")
-    print(f"  Max Shots: {config.DEFAULT_MAX_SHOTS} (0 = no limit)")
+    calculated_max_shots = config.calculate_max_shots_from_config()
+    if calculated_max_shots is not None:
+        print(f"  Max Shots: {calculated_max_shots} (calculated from config)")
+    else:
+        print(f"  Max Shots: No limit (story-driven)")
     print(f"  FPS: {config.VIDEO_FPS}")
     if config.TARGET_VIDEO_LENGTH:
         print(f"  Target Length: {config.TARGET_VIDEO_LENGTH}s")
@@ -1089,16 +1093,15 @@ def run_new_session(session_mgr, args=None):
     print("VIDEO CONFIGURATION")
     print("="*70)
 
-    # Determine total video length
-    if hasattr(args, 'total_length') and args.total_length:
-        total_length = args.total_length
-        print(f"[INFO] Total video length: {total_length}s (from command line)")
-    else:
-        total_length = config.TARGET_VIDEO_LENGTH
-        if total_length:
-            print(f"[INFO] Total video length: {total_length}s (from config)")
+    # Priority chain for determining max_shots:
+    # 1. --total-length N (CLI) → Calculate: N / shot_length
+    # 2. --max-shots N (CLI) → Exact shot count (including 0 for no limit)
+    # 3. Config automatic → calculate_max_shots_from_config()
+    #    a. DEFAULT_MAX_SHOTS > 0 → Manual override
+    #    b. TARGET_VIDEO_LENGTH > 0 → Automatic calculation
+    #    c. None → No limit
 
-    # Determine shot length
+    # Determine shot length first (needed for calculations)
     if hasattr(args, 'shot_length') and args.shot_length:
         shot_length = args.shot_length
         print(f"[INFO] Shot length: {shot_length}s (from command line)")
@@ -1106,25 +1109,35 @@ def run_new_session(session_mgr, args=None):
         shot_length = config.DEFAULT_SHOT_LENGTH
         print(f"[INFO] Shot length: {shot_length}s (from config)")
 
-    # Calculate number of shots needed
-    if total_length:
+    # Priority 1: CLI --total-length override
+    if hasattr(args, 'total_length') and args.total_length:
+        total_length = args.total_length
         max_shots = int(total_length / shot_length)
-        print(f"\n[INFO] Target: {total_length}s video, {shot_length}s per shot = {max_shots} shots")
+        print(f"[INFO] Target video length: {total_length}s (from --total-length)")
+        print(f"[INFO] Automatic calculation: {total_length}s ÷ {shot_length}s/shot = {max_shots} shots")
+
+    # Priority 2: CLI --max-shots override (including 0 for no limit)
     elif hasattr(args, 'max_shots') and args.max_shots is not None:
         max_shots = args.max_shots
         if max_shots > 0:
-            print(f"\n[INFO] Maximum shots limited to: {max_shots} (from command line)")
+            print(f"[INFO] Maximum shots: {max_shots} (from --max-shots CLI override)")
+        else:
+            print(f"[INFO] No shot limit (--max-shots 0)")
+
+    # Priority 3: Use config helper function
+    else:
+        config_max_shots = config.calculate_max_shots_from_config()
+        if config_max_shots is not None:
+            max_shots = config_max_shots
+            # Determine which config source was used
+            if config.DEFAULT_MAX_SHOTS > 0:
+                print(f"[INFO] Maximum shots: {max_shots} (from DEFAULT_MAX_SHOTS manual override)")
+            else:
+                total_length = config.TARGET_VIDEO_LENGTH
+                print(f"[INFO] Target video length: {total_length}s (from config)")
+                print(f"[INFO] Automatic calculation: {total_length}s ÷ {shot_length}s/shot = {max_shots} shots")
         else:
             max_shots = None
-            print(f"\n[INFO] Shot length: {shot_length}s (no shot limit)")
-    elif config.DEFAULT_MAX_SHOTS > 0:
-        max_shots = config.DEFAULT_MAX_SHOTS
-        print(f"\n[INFO] Maximum shots limited to: {max_shots} (set by DEFAULT_MAX_SHOTS)")
-        print(f"[INFO] Shot length: {shot_length}s")
-    else:
-        max_shots = None
-        print(f"\n[INFO] Shot length: {shot_length}s (number of shots based on story)")
-        if config.DEFAULT_MAX_SHOTS == 0:
             print(f"[INFO] No shot limit - all story scenes will be generated")
 
     # Check for shots-per-scene parameter
@@ -1251,11 +1264,22 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
     shots = None
     graph = None
 
+    # Calculate target video length for story generation
+    target_length = None
+    if shot_length and config.TARGET_VIDEO_LENGTH:
+        target_length = config.TARGET_VIDEO_LENGTH
+        logger.info(f"Target video length: {target_length}s")
+        print(f"[INFO] Target video length: {target_length}s")
+    elif shot_length and max_shots:
+        target_length = max_shots * shot_length
+        logger.info(f"Calculated target video length: {target_length}s ({max_shots} shots × {shot_length}s)")
+        print(f"[INFO] Target video length: {target_length}s ({max_shots} shots × {shot_length}s)")
+
     # STEP 2: Story
     if not steps.get('story', False):
         logger.info("STEP 2: Story Generation")
         print("\nSTEP 2: Story Generation")
-        story_json = build_story(idea, agent_name=story_agent)
+        story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
         session_mgr.save_story(session_id, story_json)
     else:
         # Check if this is a prompts file session (no story.json)
@@ -1499,6 +1523,17 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
     print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
     print(f"[INFO] Generating {images_per_shot} image(s) per shot")
 
+    # Calculate target video length for story generation
+    target_length = None
+    if shot_length and config.TARGET_VIDEO_LENGTH:
+        target_length = config.TARGET_VIDEO_LENGTH
+        logger.info(f"Target video length: {target_length}s")
+        print(f"[INFO] Target video length: {target_length}s")
+    elif shot_length and max_shots:
+        target_length = max_shots * shot_length
+        logger.info(f"Calculated target video length: {target_length}s ({max_shots} shots × {shot_length}s)")
+        print(f"[INFO] Target video length: {target_length}s ({max_shots} shots × {shot_length}s)")
+
     current_step = start_step
 
     while current_step <= 7:
@@ -1508,7 +1543,7 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
         if current_step == 2:  # Story
             if not session_meta.get('steps', {}).get('story', False):
                 print("\nSTEP 2: Story Generation")
-                story_json = build_story(idea, agent_name=story_agent)
+                story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
                 session_mgr.save_story(session_id, story_json)
             else:
                 # Check if this is a prompts file session (no story.json)
@@ -2610,7 +2645,7 @@ async def run_auto_mode(session_id: str, idea: str, resume_from: str = None,
             idea=idea,
             image_mode=args.image_mode or config.IMAGE_GENERATION_MODE,
             negative_prompt=args.negative_prompt or config.DEFAULT_NEGATIVE_PROMPT,
-            max_shots=args.max_shots or config.DEFAULT_MAX_SHOTS,
+            max_shots=args.max_shots if args.max_shots is not None else config.calculate_max_shots_from_config(),
             shot_length=args.shot_length or config.DEFAULT_SHOT_LENGTH,
             story_agent=args.story_agent,
             image_agent=args.image_agent,

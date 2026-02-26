@@ -354,11 +354,12 @@ def prompts_to_shots(prompts_data: List[Dict[str, any]]) -> List[Dict[str, any]]
             'image_prompt': text,
             'motion_prompt': motion_prompt,
             'camera': camera,
-            'narration': narration
+            'narration': narration,
+            'from_prompt_file': True  # Flag to indicate this came from a prompt file
         }
 
         shots.append(shot)
-        logger.debug(f"Created shot {seq_idx}: camera={camera}, narration={bool(narration)}")
+        logger.debug(f"Created shot {seq_idx}: camera={camera}, narration={bool(narration)}, from_prompt_file=True")
 
     logger.info(f"Converted {len(prompts_data)} prompts to {len(shots)} shots")
     return shots

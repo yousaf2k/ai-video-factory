@@ -45,20 +45,29 @@ Return a JSON list where each item contains:
 ```json
 [
   {
-    "image_prompt": "Full detailed image generation prompt",
-    "motion_prompt": "Description of desired camera movement",
+    "image_prompt": "Full detailed image generation prompt with all technical photography terms (8K, lens, lighting, etc.)",
+    "motion_prompt": "[Scene context] + [Subject/people movement] + [Environmental effects] + [Camera movement]. NO photography terms (8K, lens, f-stop). Use cinematic pacing terms like 'fluid motion', 'natural movement', 'cinematic pacing'.",
     "camera": "slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime ",
     "narration": "Voice-over narration text for this shot (from the story scene)"
   }
 ]
 ```
 
+**Important Motion Prompt Guidelines**:
+- The `motion_prompt` must describe living, moving scenes (people, animals, elements like wind/water/fire)
+- Include dynamic verbs for movement (walk, run, gesture, flow, flicker, etc.)
+- Describe environmental motion (smoke rising, water flowing, fabric moving)
+- **STRICTLY NO** photography terms in motion_prompt (no "8K", "50mm", "f/2.8", "DSLR", "sharp focus")
+- End with camera movement instruction
+
 **Important**: Include the narration text from each scene in the shot output.
 
 ## Shot Distribution Rules
 
+**CRITICAL**: Follow the shot count requirements specified in the user input EXACTLY.
+
 - **Minimum**: 3 shots per scene (no exceptions)
-- **Target**: 4-6 shots per scene (varies by scene importance)
+- **Target**: As specified in user request (will be explicitly stated)
 - **Maximum**: As specified in user request (default: no limit)
 - **Variety**: Each scene's shots must use different camera types
 

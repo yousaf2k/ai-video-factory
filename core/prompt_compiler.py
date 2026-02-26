@@ -165,6 +165,29 @@ def compile_workflow(template, shot, video_length_seconds=None):
     base_motion_prompt = shot.get("motion_prompt", "")
 
     # ==========================================
+    # APPEND IMAGE PROMPT TO MOTION PROMPT
+    # ==========================================
+    # If enabled, append image_prompt to motion_prompt to give video AI more context
+    # Skip this for shots from prompt files (user already provided their prompts)
+    from_prompt_file = shot.get("from_prompt_file", False)
+
+    if getattr(config, 'APPEND_IMAGE_TO_MOTION_PROMPT', False) and not from_prompt_file:
+        image_prompt = shot.get("image_prompt", "")
+        if image_prompt:
+            append_position = getattr(config, 'IMAGE_PROMPT_APPEND_POSITION', 'end')
+            if append_position == 'start':
+                # Image prompt first, then motion prompt
+                base_motion_prompt = f"{image_prompt}. {base_motion_prompt}"
+                print(f"\n[IMAGE->MOTION] Appended image_prompt at START (total length: {len(base_motion_prompt)} chars)")
+            else:
+                # Motion prompt first, then image prompt (default)
+                base_motion_prompt = f"{base_motion_prompt}. {image_prompt}"
+                print(f"\n[IMAGE->MOTION] Appended image_prompt at END (total length: {len(base_motion_prompt)} chars)")
+            logger.info(f"Image prompt appended to motion prompt at position: {append_position}")
+    elif from_prompt_file:
+        logger.debug("Skipping image_prompt appending - shot from prompt file")
+
+    # ==========================================
     # MULTI-CAMERA LORA SYSTEM
     # ==========================================
     # Parse camera field - can be:

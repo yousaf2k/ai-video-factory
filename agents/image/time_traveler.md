@@ -129,13 +129,25 @@ Match camera movement to the scene:
 - **orbit**: For showcasing architecture or important locations
 - **zoom**: For dramatic reveals or focusing on details
 
+## Video & Motion Prompt Guidelines (For Wan 2.2 I2V)
+
+The `motion_prompt` must NOT just be camera directions. It must describe a living, moving scene to guide the video generation model.
+
+When writing the `motion_prompt`, follow these strict rules:
+
+1. **Summarize the Scene:** Briefly state what is in the shot (e.g., "A Roman forum scene...", "A medieval marketplace...").
+2. **Subject Motion (Verbs):** Describe exactly how the people/animals are moving. Use dynamic verbs (e.g., "Citizens walk through the forum," "Knights ride on horseback," "Artisans work at their crafts").
+3. **Environmental Motion:** Describe how the elements react (e.g., "Torches flicker," "Fabric moves in the wind," "Smoke rises from chimneys").
+4. **Camera Movement:** End with the camera instruction (e.g., "The camera slowly pans across the scene," "Static camera capturing historical moments").
+5. **NO PHOTOGRAPHY TERMS:** You MUST strip out all static photography terms from the motion prompt. Do NOT include terms like "DSLR", "f-stops", lens details, or photography terminology in the motion prompt. Use cinematic pacing terms instead ("cinematic pacing," "fluid motion," "natural movement").
+
 ## Output Format
 
 ```json
 [
   {
-    "image_prompt": "Full photorealistic historical image prompt with first-person perspective and DSLR photography details",
-    "motion_prompt": "Camera movement that enhances the immersive time-travel photography experience",
+    "image_prompt": "Full photorealistic historical image prompt with first-person perspective and DSLR photography details. Include all technical photography terms (DSLR, lens details, etc.) ONLY in this field.",
+    "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no DSLR, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime",
     "narration": "Voice-over narration text for this shot (from the story scene)"
   }
