@@ -8,19 +8,24 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/hooks/useSessions';
 import { useUpdateStory } from '@/hooks/useStory';
+import { useShots } from '@/hooks/useShots';
 import { SceneList } from '@/components/scenes/SceneList';
-import { Scene, Story } from '@/types';
+import { ShotGrid } from '@/components/shots/ShotGrid';
+import { Scene, Story, Shot } from '@/types';
 import { Save, RefreshCw } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function SessionEditPage() {
   const params = useParams();
   const sessionId = params.id as string;
   const { data: session, isLoading, error } = useSession(sessionId);
+  const { data: shots } = useShots(sessionId);
   const updateStoryMutation = useUpdateStory(sessionId);
 
   // Local state for story editing
   const [story, setStory] = useState<Story | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState('story');
 
   // Initialize story when session loads
   if (session && session.story && !story) {
@@ -145,66 +150,103 @@ export default function SessionEditPage() {
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Edit Story</h1>
+            <h1 className="text-3xl font-bold">Edit Session</h1>
             <p className="text-muted-foreground">
-              {story.title} • {story.style}
+              Edit story structure and shot prompts
             </p>
           </div>
-          <div className="flex gap-2">
-            {hasChanges && (
-              <button
-                onClick={handleSaveStory}
-                disabled={updateStoryMutation.isPending}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" />
-                {updateStoryMutation.isPending ? 'Saving...' : 'Save Changes'}
-              </button>
-            )}
-          </div>
+          {activeTab === 'story' && hasChanges && (
+            <button
+              onClick={handleSaveStory}
+              disabled={updateStoryMutation.isPending}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {updateStoryMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Story Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="border rounded-lg p-4">
           <div className="text-sm text-muted-foreground">Total Scenes</div>
           <div className="text-2xl font-bold">{story.scenes.length}</div>
         </div>
         <div className="border rounded-lg p-4">
           <div className="text-sm text-muted-foreground">Total Duration</div>
-          <div className="text-2xl font-bold">{Math.floor(totalDuration / 60)}:{(totalDuration % 60).toString().padStart(2, '0')}</div>
+          <div className="text-2xl font-bold">
+            {Math.floor(totalDuration / 60)}:{(totalDuration % 60).toString().padStart(2, '0')}
+          </div>
+        </div>
+        <div className="border rounded-lg p-4">
+          <div className="text-sm text-muted-foreground">Total Shots</div>
+          <div className="text-2xl font-bold">
+            {shots ? shots.length : 0}
+          </div>
         </div>
         <div className="border rounded-lg p-4">
           <div className="text-sm text-muted-foreground">Status</div>
           <div className="text-2xl font-bold">
-            {hasChanges ? 'Unsaved' : 'Saved'}
+            {activeTab === 'story' && hasChanges ? 'Unsaved' : 'Saved'}
           </div>
         </div>
       </div>
 
-      {/* Scenes Editor */}
-      <div className="border rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Scenes</h2>
-        <SceneList
-          scenes={story.scenes}
-          onUpdate={handleUpdateScene}
-          onDelete={handleDeleteScene}
-          onReorder={handleReorderScenes}
-          onAdd={handleAddScene}
-        />
-      </div>
+      {/* Tabs for Story and Shots */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="story">Story</TabsTrigger>
+          <TabsTrigger value="shots">Shots</TabsTrigger>
+        </TabsList>
 
-      {/* Instructions */}
-      <div className="mt-8 p-4 bg-muted rounded-lg">
-        <h3 className="font-semibold mb-2">Tips for editing scenes:</h3>
-        <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-          <li>Drag scenes to reorder them in the story</li>
-          <li>Click the edit icon to modify scene details</li>
-          <li>Adjust scene durations to control pacing</li>
-          <li>Click "Save Changes" to persist your edits</li>
-        </ul>
-      </div>
+        <TabsContent value="story" className="mt-6">
+          {/* Scenes Editor */}
+          <div className="border rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">Scenes</h2>
+            <SceneList
+              scenes={story.scenes}
+              onUpdate={handleUpdateScene}
+              onDelete={handleDeleteScene}
+              onReorder={handleReorderScenes}
+              onAdd={handleAddScene}
+            />
+          </div>
+
+          {/* Instructions */}
+          <div className="mt-8 p-4 bg-muted rounded-lg">
+            <h3 className="font-semibold mb-2">Tips for editing scenes:</h3>
+            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+              <li>Drag scenes to reorder them in the story</li>
+              <li>Click the edit icon to modify scene details</li>
+              <li>Adjust scene durations to control pacing</li>
+              <li>Click "Save Changes" to persist your edits</li>
+            </ul>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="shots" className="mt-6">
+          {/* Shots Grid */}
+          <div className="border rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Shots ({shots?.length || 0})</h2>
+            </div>
+            <ShotGrid shots={shots || []} sessionId={sessionId} />
+          </div>
+
+          {/* Instructions */}
+          <div className="mt-8 p-4 bg-muted rounded-lg">
+            <h3 className="font-semibold mb-2">Tips for editing shots:</h3>
+            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+              <li>Click the edit icon to modify image/motion prompts</li>
+              <li>Click the rotation icon to regenerate an image</li>
+              <li>Click the video icon to regenerate a video</li>
+              <li>Changes are saved immediately</li>
+            </ul>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

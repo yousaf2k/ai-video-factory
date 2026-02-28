@@ -12,7 +12,7 @@ import logging
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import config
-from web_ui.backend.api import sessions, stories
+from web_ui.backend.api import sessions, stories, shots
 
 # Configure logging
 logging.basicConfig(
@@ -40,6 +40,7 @@ app.add_middleware(
 # Include routers
 app.include_router(sessions.router)
 app.include_router(stories.router)
+app.include_router(shots.router)
 
 
 @app.get("/")
