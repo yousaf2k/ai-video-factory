@@ -1,0 +1,12 @@
+2026-03-01 12:03:08 | DEBUG    | core.session_manager:load_session():106 | Loading session: session_20260228_012130
+2026-03-01 12:06:36 | INFO     | core.session_manager:create_session():72 | Creating new session: session_20260301_120636
+2026-03-01 12:06:36 | DEBUG    | core.session_manager:create_session():73 |   Idea: Test video idea...
+2026-03-01 12:06:36 | INFO     | core.session_manager:create_session():101 | Session created: session_20260301_120636
+2026-03-01 12:06:49 | DEBUG    | core.session_manager:load_session():106 | Loading session: session_20260228_012130
+2026-03-01 12:12:11 | INFO     | core.session_manager:create_session():72 | Creating new session: session_20260301_121211
+2026-03-01 12:12:11 | DEBUG    | core.session_manager:create_session():73 |   Idea: A majestic eagle soaring over snow-capped mountains at sunset, hunting for fish in a crystal clear a...
+2026-03-01 12:12:11 | INFO     | core.session_manager:create_session():101 | Session created: session_20260301_121211
+2026-03-01 12:12:15 | INFO     | core.session_manager:create_session():72 | Creating new session: session_20260301_121215
+2026-03-01 12:12:15 | DEBUG    | core.session_manager:create_session():73 |   Idea: A majestic eagle soaring over snow-capped mountains at sunset...
+2026-03-01 12:12:15 | INFO     | core.session_manager:create_session():101 | Session created: session_20260301_121215
+2026-03-01 12:12:24 | DEBUG    | core.session_manager:load_session():106 | Loading session: session_20260301_121215

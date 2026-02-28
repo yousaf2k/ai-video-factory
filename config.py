@@ -583,10 +583,10 @@ AUTO_STEP_MODE = True  # True = auto, False = manual
 # Available agents depend on files in the agents folder
 
 # Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary, prehistoric_dinosaur, prehistoric_pov)
-STORY_AGENT = "default"
+STORY_AGENT = "roman_kingdom"
 
 # Image prompt agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
-IMAGE_AGENT = "default"
+IMAGE_AGENT = "roman_kingdom"
 
 # Video motion agent (default, cinematic)
 VIDEO_AGENT = "default"
@@ -669,3 +669,19 @@ IMAGE_GENERATION_RETRY_DELAY = 5
 
 # Continue to video generation even if some images failed
 CONTINUE_ON_PARTIAL_IMAGE_FAILURE = True
+
+
+# ==========================================
+# WEB UI CONFIGURATION
+# ==========================================
+# Enable/disable Web UI server
+WEB_UI_ENABLED = os.getenv("WEB_UI_ENABLED", "true").lower() == "true"
+
+# Web UI backend host
+WEB_UI_HOST = os.getenv("WEB_UI_HOST", "127.0.0.1")
+
+# Web UI backend port
+WEB_UI_PORT = int(os.getenv("WEB_UI_PORT", "8000"))
+
+# CORS origins (comma-separated list of allowed origins for API)
+WEB_UI_CORS_ORIGINS = os.getenv("WEB_UI_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001").split(",")

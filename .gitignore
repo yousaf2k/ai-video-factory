@@ -23,3 +23,15 @@ tests/.pytest_cache/
 .coverage
 htmlcov/
 NUL
+
+# Web UI build artifacts and dependencies
+web_ui/frontend/.next/
+web_ui/frontend/node_modules/
+web_ui/frontend/out/
+web_ui/frontend/.turbo/
+
+# Python cache for web_ui
+web_ui/backend/__pycache__/
+web_ui/backend/services/__pycache__/
+web_ui/backend/api/__pycache__/
+web_ui/backend/models/__pycache__/
