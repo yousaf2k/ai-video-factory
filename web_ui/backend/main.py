@@ -76,12 +76,16 @@ async def startup_event():
     logger.info(f"CORS origins: {config.WEB_UI_CORS_ORIGINS}")
 
     # Ensure output directories exist
-    os.makedirs("output/sessions", exist_ok=True)
+    # Get project root from backend directory
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(current_dir))
+    sessions_dir = os.path.join(project_root, "output", "sessions")
+    os.makedirs(sessions_dir, exist_ok=True)
 
-    # Mount static files for each existing session
-    # This allows accessing images/videos via HTTP
-    sessions_dir = "output/sessions"
+    # Mount the entire sessions directory as static files
+    # This allows accessing images/videos via HTTP at /api/sessions/{session_id}/images/{filename}
     if os.path.exists(sessions_dir):
+        # Mount individual session directories
         for session_id in os.listdir(sessions_dir):
             session_path = os.path.join(sessions_dir, session_id)
             if os.path.isdir(session_path):
@@ -98,6 +102,8 @@ async def startup_event():
                     mount_path = f"/api/sessions/{session_id}/videos"
                     app.mount(mount_path, StaticFiles(directory=videos_dir), name=f"{session_id}_videos")
                     logger.info(f"Mounted {mount_path} -> {videos_dir}")
+    else:
+        logger.warning(f"Sessions directory not found: {sessions_dir}")
 
 
 def run_server(host: str = None, port: int = None):

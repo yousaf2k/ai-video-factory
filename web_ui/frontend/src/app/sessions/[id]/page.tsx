@@ -228,7 +228,7 @@ export default function SessionDetailPage() {
                 {shot.image_path && (
                   <div className="mb-2 aspect-video bg-muted rounded overflow-hidden">
                     <img
-                      src={shot.image_path}
+                      src={shot.image_path.replace(/^output\/sessions\//, '/api/sessions/')}
                       alt={`Shot ${shot.index}`}
                       className="w-full h-full object-cover"
                     />

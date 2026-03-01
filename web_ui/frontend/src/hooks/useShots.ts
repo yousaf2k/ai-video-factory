@@ -1,7 +1,7 @@
 /**
  * React hooks for shot management
  */
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import type { Shot, UpdateShotRequest } from '@/types';
 

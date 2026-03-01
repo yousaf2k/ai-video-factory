@@ -85,8 +85,10 @@ class SessionDetail(SessionMetadata):
 class CreateSessionRequest(BaseModel):
     """Request to create a new session"""
     idea: str = Field(..., description="Video idea/prompt", min_length=1)
-    agent: str = Field(default="default", description="Story agent to use")
     session_id: Optional[str] = Field(default=None, description="Optional custom session ID")
+    story_agent: str = Field(default="default", description="Story generation agent")
+    image_agent: str = Field(default="default", description="Image prompt agent")
+    video_agent: str = Field(default="default", description="Video motion agent")
 
 
 class UpdateSessionRequest(BaseModel):
