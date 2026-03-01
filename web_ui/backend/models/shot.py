@@ -53,11 +53,14 @@ class UpdateShotRequest(BaseModel):
 class RegenerateImageRequest(BaseModel):
     """Request to regenerate single shot image"""
     force: bool = Field(default=False, description="Force regeneration even if image exists")
+    image_mode: Optional[str] = Field(default=None, description="Override image generation mode (gemini/comfyui)")
+    image_workflow: Optional[str] = Field(default=None, description="Override image workflow for ComfyUI (e.g. flux2, sdxl)")
 
 
 class RegenerateVideoRequest(BaseModel):
     """Request to regenerate single shot video"""
     force: bool = Field(default=False, description="Force regeneration even if video exists")
+    video_workflow: Optional[str] = Field(default=None, description="Override video workflow")
 
 
 class BatchRegenerateRequest(BaseModel):
@@ -66,6 +69,9 @@ class BatchRegenerateRequest(BaseModel):
     regenerate_images: bool = Field(default=True, description="Regenerate images")
     regenerate_videos: bool = Field(default=True, description="Regenerate videos")
     force: bool = Field(default=False, description="Force regeneration")
+    image_mode: Optional[str] = Field(default=None, description="Override image generation mode")
+    image_workflow: Optional[str] = Field(default=None, description="Override image workflow")
+    video_workflow: Optional[str] = Field(default=None, description="Override video workflow")
 
 
 class ReplanShotsRequest(BaseModel):

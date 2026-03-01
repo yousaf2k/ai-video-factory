@@ -23,10 +23,21 @@ class GenerationService:
     """Service for async generation operations"""
 
     def __init__(self):
-        self.session_manager = SessionManager()
+        # Default to configured sessions directory
+        import config
+        sessions_dir = getattr(config, 'ABS_SESSIONS_DIR', None)
+        
+        if sessions_dir is None:
+            # Fallback
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+            sessions_dir = os.path.join(project_root, "output", "sessions")
+        
+        self.session_manager = SessionManager(sessions_dir)
 
     async def regenerate_shot_image(
-        self, session_id: str, shot_index: int, force: bool = False
+        self, session_id: str, shot_index: int, force: bool = False,
+        image_mode: Optional[str] = None, image_workflow: Optional[str] = None
     ) -> str:
         """
         Regenerate image for a single shot
@@ -35,6 +46,8 @@ class GenerationService:
             session_id: Session identifier
             shot_index: Shot number (1-based)
             force: Force regeneration even if image exists
+            image_mode: Override generation mode
+            image_workflow: Override ComfyUI workflow
 
         Returns:
             Path to generated image
@@ -60,7 +73,9 @@ class GenerationService:
             image_path = await asyncio.to_thread(
                 self._generate_single_image,
                 session_id,
-                shot
+                shot,
+                image_mode,
+                image_workflow
             )
 
             # Mark as generated
@@ -74,7 +89,8 @@ class GenerationService:
             raise
 
     async def regenerate_shot_video(
-        self, session_id: str, shot_index: int, force: bool = False
+        self, session_id: str, shot_index: int, force: bool = False,
+        video_workflow: Optional[str] = None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -83,6 +99,7 @@ class GenerationService:
             session_id: Session identifier
             shot_index: Shot number (1-based)
             force: Force regeneration even if video exists
+            video_workflow: Override workflow
 
         Returns:
             Path to generated video
@@ -112,7 +129,8 @@ class GenerationService:
             video_path = await asyncio.to_thread(
                 self._generate_single_video,
                 session_id,
-                shot
+                shot,
+                video_workflow
             )
 
             # Mark as rendered
@@ -177,10 +195,11 @@ class GenerationService:
             logger.error(f"Error re-planning shots: {e}")
             raise
 
-    def _generate_single_image(self, session_id: str, shot: Dict[str, Any]) -> str:
+    def _generate_single_image(self, session_id: str, shot: Dict[str, Any], 
+                               mode: Optional[str] = None, 
+                               workflow_name: Optional[str] = None) -> str:
         """Generate image for a single shot (synchronous)"""
-        # Import here to avoid issues
-        from core.image_generator import generate_image_gemini, generate_image_comfyui
+        from core.image_generator import generate_image
         import config
 
         images_dir = self.session_manager.get_images_dir(session_id)
@@ -188,30 +207,27 @@ class GenerationService:
 
         shot_index = shot['index']
         prompt = shot['image_prompt']
-        negative_prompt = getattr(config, 'DEFAULT_NEGATIVE_PROMPT', '')
+        
+        # Generate filename: shot_001.png
+        image_filename = f"shot_{shot_index:03d}.png"
+        image_path = os.path.join(images_dir, image_filename)
 
-        # Generate based on mode
-        if config.IMAGE_GENERATION_MODE == "gemini":
-            image_filename = f"shot_{shot_index:03d}.png"
-            image_path = os.path.join(images_dir, image_filename)
+        # Generate using the core image_generator module
+        # This correctly handles both Gemini and ComfyUI modes and workflows
+        result_path = generate_image(
+            prompt=prompt,
+            output_path=image_path,
+            mode=mode, # If None, uses config.IMAGE_GENERATION_MODE
+            workflow_name=workflow_name # If None, uses config.IMAGE_WORKFLOW
+        )
 
-            generate_image_gemini(
-                prompt=prompt,
-                output_path=image_path,
-                negative_prompt=negative_prompt
-            )
-        else:  # comfyui
-            # Use ComfyUI generation
-            image_filename = f"shot_{shot_index:03d}.png"
-            image_path = os.path.join(images_dir, image_filename)
+        if not result_path or not os.path.exists(result_path):
+            raise RuntimeError(f"Failed to generate image for shot {shot_index}")
 
-            # Call ComfyUI to generate image
-            # For now, return a placeholder path
-            logger.warning(f"ComfyUI generation not yet implemented for single shot")
+        return result_path
 
-        return image_path
-
-    def _generate_single_video(self, session_id: str, shot: Dict[str, Any]) -> str:
+    def _generate_single_video(self, session_id: str, shot: Dict[str, Any],
+                               workflow_path: Optional[str] = None) -> str:
         """Generate video for a single shot (synchronous)"""
         from core.video_regenerator import regenerate_video_for_shot
         import config
@@ -220,12 +236,15 @@ class GenerationService:
         os.makedirs(videos_dir, exist_ok=True)
 
         shot_index = shot['index']
-        video_filename = f"shot_{shot_index:03d}.mp4"
-        video_path = os.path.join(videos_dir, video_filename)
+        
+        # The video_regenerator handles the full generation and returns the path
+        video_path = regenerate_video_for_shot(
+            session_id=session_id,
+            shot_index=shot_index,
+            workflow_path=workflow_path # If None, uses config.WORKFLOW_PATH
+        )
 
-        # Generate video
-        # For now, this is a placeholder - the actual implementation would call
-        # the ComfyUI video generation pipeline
-        logger.info(f"Generating video for shot {shot_index}: {video_path}")
+        if not video_path or not os.path.exists(video_path):
+            raise RuntimeError(f"Failed to generate video for shot {shot_index}")
 
         return video_path

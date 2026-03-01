@@ -35,10 +35,9 @@ class SessionMetadata(BaseModel):
     steps: SessionStep = Field(default_factory=SessionStep)
     stats: SessionStats = Field(default_factory=SessionStats)
 
-    class Config:
-        json_encoders = {
-            # Add any custom encoders if needed
-        }
+    model_config = {
+        "extra": "allow"
+    }
 
 
 class SessionListItem(BaseModel):
@@ -72,9 +71,15 @@ class SessionDetail(SessionMetadata):
     story: Optional[Dict[str, Any]] = None
     shots: Optional[List[Dict[str, Any]]] = None
 
+    model_config = {
+        "extra": "allow"
+    }
+
     @classmethod
     def from_session_data(cls, meta: dict, story: dict = None, shots: list = None) -> "SessionDetail":
         """Create from SessionManager data"""
+        # Filter meta to only include fields in the model if Pydantic is strict
+        # But with extra="allow", this should work
         return cls(
             **meta,
             story=story,
@@ -95,6 +100,9 @@ class UpdateSessionRequest(BaseModel):
     """Request to update session metadata"""
     idea: Optional[str] = None
     completed: Optional[bool] = None
+    story_agent: Optional[str] = None
+    image_agent: Optional[str] = None
+    video_agent: Optional[str] = None
 
 
 class DuplicateSessionRequest(BaseModel):

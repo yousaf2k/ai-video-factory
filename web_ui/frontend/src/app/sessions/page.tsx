@@ -6,18 +6,25 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useSessions, useCreateSession, useDeleteSession, useDuplicateSession } from '@/hooks/useSessions';
+import { useAgents } from '@/hooks/useAgents';
 import { api } from '@/services/api';
 import type { CreateSessionRequest } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function SessionsPage() {
   const { data: sessions, isLoading, error } = useSessions();
+  const { data: agents } = useAgents();
   const createSessionMutation = useCreateSession();
   const deleteSessionMutation = useDeleteSession();
   const duplicateSessionMutation = useDuplicateSession();
 
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newIdea, setNewIdea] = useState('');
+  
+  // Agent selection state
+  const [selectedStoryAgent, setSelectedStoryAgent] = useState('default');
+  const [selectedImageAgent, setSelectedImageAgent] = useState('default');
+  const [selectedVideoAgent, setSelectedVideoAgent] = useState('default');
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +32,9 @@ export default function SessionsPage() {
 
     const request: CreateSessionRequest = {
       idea: newIdea,
-      agent: 'default',
+      story_agent: selectedStoryAgent,
+      image_agent: selectedImageAgent,
+      video_agent: selectedVideoAgent,
     };
 
     try {
@@ -116,7 +125,13 @@ export default function SessionsPage() {
                   {session.completed ? 'Completed' : 'In Progress'}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {formatDistanceToNow(new Date(session.started_at), { addSuffix: true })}
+                  {session.started_at ? (() => {
+                    try {
+                      return formatDistanceToNow(new Date(session.started_at), { addSuffix: true });
+                    } catch (e) {
+                      return 'Unknown date';
+                    }
+                  })() : 'Unknown date'}
                 </span>
               </div>
 
@@ -195,11 +210,54 @@ export default function SessionsPage() {
                   id="idea"
                   value={newIdea}
                   onChange={(e) => setNewIdea(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px]"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px] mb-4"
                   placeholder="Describe your video idea..."
                   required
                 />
               </div>
+
+              <div className="grid grid-cols-1 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Story Agent</label>
+                  <select 
+                    value={selectedStoryAgent}
+                    onChange={(e) => setSelectedStoryAgent(e.target.value)}
+                    className="w-full border rounded-md p-2 text-sm"
+                  >
+                    {!agents?.story.length && <option value="default">Default</option>}
+                    {agents?.story.map(agent => (
+                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Image Agent</label>
+                  <select 
+                    value={selectedImageAgent}
+                    onChange={(e) => setSelectedImageAgent(e.target.value)}
+                    className="w-full border rounded-md p-2 text-sm"
+                  >
+                    {!agents?.image.length && <option value="default">Default</option>}
+                    {agents?.image.map(agent => (
+                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Video Agent</label>
+                  <select 
+                    value={selectedVideoAgent}
+                    onChange={(e) => setSelectedVideoAgent(e.target.value)}
+                    className="w-full border rounded-md p-2 text-sm"
+                  >
+                    {!agents?.video.length && <option value="default">Default</option>}
+                    {agents?.video.map(agent => (
+                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"

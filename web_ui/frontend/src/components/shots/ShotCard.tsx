@@ -12,12 +12,33 @@ interface ShotCardProps {
   shot: Shot;
   sessionId: string;
   showIndex?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onSelectChange?: (selected: boolean) => void;
 }
 
-export function ShotCard({ shot, sessionId, showIndex = true }: ShotCardProps) {
+export function ShotCard({ 
+  shot, 
+  sessionId, 
+  showIndex = true,
+  selectable = false,
+  selected = false,
+  onSelectChange
+}: ShotCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);
+  const [viewMode, setViewMode] = useState<'image' | 'video'>(
+    shot.video_rendered && shot.video_path ? 'video' : 'image'
+  );
+  
+  // Regeneration modal state
+  const [showRegenModal, setShowRegenModal] = useState<'image' | 'video' | null>(null);
+  const [regenForce, setRegenForce] = useState(true);
+  const [regenImageMode, setRegenImageMode] = useState('comfyui');
+  const [regenImageWorkflow, setRegenImageWorkflow] = useState('flux2');
+  const [regenVideoWorkflow, setRegenVideoWorkflow] = useState('workflow/video/wan22_workflow.json');
 
+  // ... rest of the hook setup ...
   const updateShot = useUpdateShot(sessionId, shot.index);
   const regenerateImage = useRegenerateImage(sessionId);
   const regenerateVideo = useRegenerateVideo(sessionId);
@@ -43,28 +64,60 @@ export function ShotCard({ shot, sessionId, showIndex = true }: ShotCardProps) {
   };
 
   const handleRegenerateImage = async () => {
-    if (!confirm(`Regenerate image for Shot ${shot.index}?`)) return;
-    try {
-      await regenerateImage.mutateAsync({ shotIndex: shot.index, force: true });
-    } catch (error) {
-      console.error('Failed to regenerate image:', error);
-      alert('Failed to regenerate image. Please try again.');
-    }
+    setShowRegenModal('image');
   };
 
   const handleRegenerateVideo = async () => {
-    if (!confirm(`Regenerate video for Shot ${shot.index}?`)) return;
+    setShowRegenModal('video');
+  };
+
+  const handleRegenSubmit = async () => {
     try {
-      await regenerateVideo.mutateAsync({ shotIndex: shot.index, force: true });
+      if (showRegenModal === 'image') {
+        await regenerateImage.mutateAsync({ 
+          shotIndex: shot.index, 
+          force: regenForce,
+          imageMode: regenImageMode,
+          imageWorkflow: regenImageWorkflow
+        });
+      } else if (showRegenModal === 'video') {
+        await regenerateVideo.mutateAsync({ 
+          shotIndex: shot.index, 
+          force: regenForce,
+          videoWorkflow: regenVideoWorkflow
+        });
+        setViewMode('video');
+      }
+      setShowRegenModal(null);
     } catch (error) {
-      console.error('Failed to regenerate video:', error);
-      alert('Failed to regenerate video. Please try again.');
+      console.error(`Failed to regenerate ${showRegenModal}:`, error);
+      alert(`Failed to regenerate ${showRegenModal}. Please try again.`);
     }
   };
 
+  // Helper to convert internal output paths to API URLs
+  const getMediaUrl = (path: string | null) => {
+    if (!path) return '';
+    
+    // Normalize slashes
+    let normalizedPath = path.replace(/\\/g, '/');
+    
+    // If it's an absolute path (e.g. C:/... or /home/...), extract the part starting from 'output/'
+    const outputIndex = normalizedPath.indexOf('output/sessions/');
+    if (outputIndex !== -1) {
+      normalizedPath = normalizedPath.substring(outputIndex);
+    }
+    
+    return normalizedPath.replace(/^output[\\/]sessions[\\/]/, '/api/sessions/').replace(/\\/g, '/');
+  };
+
+  const imageUrl = getMediaUrl(shot.image_path);
+  const videoUrl = getMediaUrl(shot.video_path);
+
   if (isEditing) {
     return (
-      <div className="border rounded-lg p-4 bg-background">
+      <div className={cn("border rounded-lg p-4 bg-background", selected && "border-primary ring-1 ring-primary")}>
+        {/* ... editing UI ... */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-muted-foreground">
             Shot {shot.index}
@@ -134,19 +187,29 @@ export function ShotCard({ shot, sessionId, showIndex = true }: ShotCardProps) {
   }
 
   return (
-    <div className="border rounded-lg p-4 bg-background hover:shadow-md transition-shadow">
+    <div className={cn("border rounded-lg p-4 bg-background hover:shadow-md transition-shadow relative", selected && "border-primary ring-1 ring-primary")}>
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          {showIndex && (
-            <span className="text-sm font-medium text-muted-foreground">
-              Shot {shot.index}
-            </span>
+        <div className="flex items-center gap-2">
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={(e) => onSelectChange?.(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
           )}
-          <div className="flex gap-2 mt-1">
-            <span className="text-xs bg-muted px-2 py-0.5 rounded">
-              {shot.camera}
-            </span>
+          <div className="flex-1">
+            {showIndex && (
+              <span className="text-sm font-medium text-muted-foreground">
+                Shot {shot.index}
+              </span>
+            )}
+            <div className="flex gap-2 mt-1">
+              <span className="text-xs bg-muted px-2 py-0.5 rounded">
+                {shot.camera}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -196,16 +259,57 @@ export function ShotCard({ shot, sessionId, showIndex = true }: ShotCardProps) {
         </span>
       </div>
 
-      {/* Image Preview */}
-      {shot.image_path && (
-        <div className="mb-3 aspect-video bg-muted rounded overflow-hidden">
-          <img
-            src={shot.image_path.replace(/^output\/sessions\//, '/api/sessions/')}
-            alt={`Shot ${shot.index}`}
-            className="w-full h-full object-cover"
-          />
+      {/* Media Preview */}
+      <div className="mb-3 relative group">
+        <div className="aspect-video bg-muted rounded overflow-hidden flex items-center justify-center relative">
+          {viewMode === 'video' && videoUrl ? (
+            <video
+              src={videoUrl}
+              poster={imageUrl}
+              controls
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          ) : imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={`Shot ${shot.index}`}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-muted-foreground text-xs">No media available</span>
+          )}
         </div>
-      )}
+
+        {/* Media Toggle Controls */}
+        {shot.image_path && shot.video_path && (
+          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 backdrop-blur-sm p-1 rounded-md">
+            <button
+              onClick={() => setViewMode('image')}
+              className={cn(
+                "p-1.5 rounded transition-colors",
+                viewMode === 'image' ? "bg-white text-black" : "text-white hover:bg-white/20"
+              )}
+              title="View Image"
+            >
+              <Image className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('video')}
+              className={cn(
+                "p-1.5 rounded transition-colors",
+                viewMode === 'video' ? "bg-white text-black" : "text-white hover:bg-white/20"
+              )}
+              title="View Video"
+            >
+              <Video className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Prompts */}
       <div className="space-y-2 text-sm">
@@ -223,6 +327,106 @@ export function ShotCard({ shot, sessionId, showIndex = true }: ShotCardProps) {
       {shot.narration && (
         <div className="mt-2 text-sm italic text-muted-foreground">
           "{shot.narration}"
+        </div>
+      )}
+
+      {/* Regeneration Modal */}
+      {showRegenModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-background rounded-lg shadow-xl max-w-sm w-full p-6 relative">
+            <button 
+              onClick={() => setShowRegenModal(null)}
+              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <h2 className="text-lg font-semibold mb-4">
+              Regenerate {showRegenModal === 'image' ? 'Image' : 'Video'}
+            </h2>
+
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="regen-force"
+                  checked={regenForce}
+                  onChange={(e) => setRegenForce(e.target.checked)}
+                  className="rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label htmlFor="regen-force" className="text-sm">
+                  Force regeneration (ignore cache)
+                </label>
+              </div>
+
+              {showRegenModal === 'image' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">Generation Mode</label>
+                    <select 
+                      value={regenImageMode}
+                      onChange={(e) => setRegenImageMode(e.target.value)}
+                      className="w-full border rounded-md p-2 text-sm"
+                    >
+                      <option value="comfyui">ComfyUI (Local)</option>
+                      <option value="gemini">Gemini (Cloud)</option>
+                    </select>
+                  </div>
+
+                  {regenImageMode === 'comfyui' && (
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">Workflow</label>
+                      <select 
+                        value={regenImageWorkflow}
+                        onChange={(e) => setRegenImageWorkflow(e.target.value)}
+                        className="w-full border rounded-md p-2 text-sm"
+                      >
+                        <option value="flux2">Flux 2 (High Quality)</option>
+                        <option value="flux">Flux (Standard)</option>
+                        <option value="sdxl">SDXL</option>
+                        <option value="default">Default</option>
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {showRegenModal === 'video' && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Video Workflow</label>
+                  <input 
+                    type="text"
+                    value={regenVideoWorkflow}
+                    onChange={(e) => setRegenVideoWorkflow(e.target.value)}
+                    className="w-full border rounded-md p-2 text-sm"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowRegenModal(null)}
+                className="px-3 py-1.5 border rounded-md hover:bg-muted text-sm"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleRegenSubmit}
+                disabled={regenerateImage.isPending || regenerateVideo.isPending}
+                className="px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
+              >
+                {regenerateImage.isPending || regenerateVideo.isPending ? (
+                  <>
+                    <RotateCw className="w-3 h-3 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  'Start'
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

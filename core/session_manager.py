@@ -14,9 +14,15 @@ logger = get_logger(__name__)
 
 
 class SessionManager:
-    def __init__(self, sessions_dir="output/sessions"):
-        self.sessions_dir = sessions_dir
-        os.makedirs(sessions_dir, exist_ok=True)
+    def __init__(self, sessions_dir=None):
+        if sessions_dir is None:
+            # Import here to avoid circular dependencies
+            import config
+            self.sessions_dir = getattr(config, 'ABS_SESSIONS_DIR', "output/sessions")
+        else:
+            self.sessions_dir = sessions_dir
+            
+        os.makedirs(self.sessions_dir, exist_ok=True)
 
     def get_latest_session(self):
         """Get the most recent incomplete session, or None if all complete"""
@@ -55,12 +61,15 @@ class SessionManager:
             return latest['meta']
         return None
 
-    def create_session(self, idea, session_id=None):
+    def create_session(self, idea, session_id=None, story_agent="default", image_agent="default", video_agent="default"):
         """Create a new session
 
         Args:
             idea: The video idea/prompt
             session_id: Optional session ID. If not provided, generates timestamp-based ID
+            story_agent: Story generation agent
+            image_agent: Image prompt agent
+            video_agent: Video motion agent
         """
         if session_id is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -79,6 +88,9 @@ class SessionManager:
             'session_id': session_id,
             'timestamp': timestamp,
             'idea': idea,
+            'story_agent': story_agent,
+            'image_agent': image_agent,
+            'video_agent': video_agent,
             'started_at': datetime.now().isoformat(),
             'completed': False,
             'steps': {
@@ -181,6 +193,15 @@ class SessionManager:
         if 0 <= shot_index - 1 < len(shots):
             # Normalize path to use forward slashes (JSON-safe)
             normalized_path = image_path.replace('\\', '/')
+            
+            # Convert to relative path if absolute and inside project root
+            if os.path.isabs(normalized_path):
+                project_root = getattr(config, 'PROJECT_ROOT', None)
+                if project_root:
+                    project_root_norm = project_root.replace('\\', '/')
+                    if normalized_path.startswith(project_root_norm):
+                        normalized_path = os.path.relpath(normalized_path, project_root).replace('\\', '/')
+
             shots[shot_index - 1]['image_generated'] = True
             shots[shot_index - 1]['image_path'] = normalized_path
 
@@ -224,8 +245,17 @@ class SessionManager:
         if 0 <= shot_index - 1 < len(shots):
             shots[shot_index - 1]['video_rendered'] = True
             if video_path:
-                # Normalize path for JSON
+                # Normalize path to use forward slashes (JSON-safe)
                 normalized_path = video_path.replace('\\', '/')
+                
+                # Convert to relative path if absolute and inside project root
+                if os.path.isabs(normalized_path):
+                    project_root = getattr(config, 'PROJECT_ROOT', None)
+                    if project_root:
+                        project_root_norm = project_root.replace('\\', '/')
+                        if normalized_path.startswith(project_root_norm):
+                            normalized_path = os.path.relpath(normalized_path, project_root).replace('\\', '/')
+                
                 shots[shot_index - 1]['video_path'] = normalized_path
 
             # Update stats

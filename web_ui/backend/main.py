@@ -12,7 +12,7 @@ import logging
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import config
-from web_ui.backend.api import sessions, stories, shots
+from web_ui.backend.api import sessions, stories, shots, config as config_api
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +41,7 @@ app.add_middleware(
 app.include_router(sessions.router)
 app.include_router(stories.router)
 app.include_router(shots.router)
+app.include_router(config_api.router)
 
 
 @app.get("/")
@@ -76,10 +77,7 @@ async def startup_event():
     logger.info(f"CORS origins: {config.WEB_UI_CORS_ORIGINS}")
 
     # Ensure output directories exist
-    # Get project root from backend directory
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(current_dir))
-    sessions_dir = os.path.join(project_root, "output", "sessions")
+    sessions_dir = config.ABS_SESSIONS_DIR
     os.makedirs(sessions_dir, exist_ok=True)
 
     # Mount the entire sessions directory as static files

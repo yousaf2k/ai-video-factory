@@ -528,8 +528,13 @@ def regenerate_failed_images(session_id, session_meta, shots, session_mgr):
             # Normalize path for JSON
             normalized_path = image_path.replace('\\', '/')
             session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
-            regenerated_count += 1
-            print(f"[PASS] Successfully regenerated shot {shot_idx}")
+            
+            # Double-verify file existence on disk
+            if os.path.exists(image_path):
+                regenerated_count += 1
+                print(f"[PASS] Successfully regenerated shot {shot_idx} at {image_path}")
+            else:
+                print(f"[WARN] Shot {shot_idx}: Regeneration returned path but file not found on disk: {image_path}")
         else:
             print(f"[FAIL] Failed to regenerate shot {shot_idx}")
 
@@ -824,6 +829,12 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
                 # Normalize path for JSON
                 normalized_path = image_path.replace('\\', '/')
                 session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+                
+                # Double-verify file existence on disk
+                if not os.path.exists(image_path):
+                    print(f"[WARN] Shot {shot_idx}: image_path returned but file not found on disk: {image_path}")
+                else:
+                    print(f"[VERIFY] Shot {shot_idx}: Image verified at {image_path}")
 
         # Only mark images step as complete if ALL shots have at least one image
         shots_with_images = [s for s in shots if s.get('image_path')]

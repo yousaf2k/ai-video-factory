@@ -77,7 +77,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
         shots = [Shot(**shot) for shot in request.shots]
 
         # Update shots.json
-        session_dir = session_service.get_session_dir(session_id)
+        session_dir = os.path.join(config.ABS_SESSIONS_DIR, session_id)
         shots_path = os.path.join(session_dir, "shots.json")
 
         # Save updated shots
@@ -145,7 +145,8 @@ async def regenerate_shot_image(session_id: str, shot_index: int, request: Regen
     """Regenerate image for a single shot"""
     try:
         result = await generation_service.regenerate_shot_image(
-            session_id, shot_index, force=request.force
+            session_id, shot_index, force=request.force,
+            image_mode=request.image_mode, image_workflow=request.image_workflow
         )
         return {"status": "success", "image_path": result}
     except Exception as e:
@@ -161,7 +162,8 @@ async def regenerate_shot_video(session_id: str, shot_index: int, request: Regen
     """Regenerate video for a single shot"""
     try:
         result = await generation_service.regenerate_shot_video(
-            session_id, shot_index, force=request.force
+            session_id, shot_index, force=request.force,
+            video_workflow=request.video_workflow
         )
         return {"status": "success", "video_path": result}
     except Exception as e:
@@ -188,7 +190,8 @@ async def batch_regenerate(session_id: str, request: BatchRegenerateRequest):
             if request.regenerate_images:
                 try:
                     image_path = await generation_service.regenerate_shot_image(
-                        session_id, shot_index, force=request.force
+                        session_id, shot_index, force=request.force,
+                        image_mode=request.image_mode, image_workflow=request.image_workflow
                     )
                     result["image"] = "success"
                 except Exception as e:
@@ -197,7 +200,8 @@ async def batch_regenerate(session_id: str, request: BatchRegenerateRequest):
             if request.regenerate_videos:
                 try:
                     video_path = await generation_service.regenerate_shot_video(
-                        session_id, shot_index, force=request.force
+                        session_id, shot_index, force=request.force,
+                        video_workflow=request.video_workflow
                     )
                     result["video"] = "success"
                 except Exception as e:

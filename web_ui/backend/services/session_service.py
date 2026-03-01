@@ -20,13 +20,16 @@ class SessionService:
     """Service for session management operations"""
 
     def __init__(self, sessions_dir: str = None):
-        # Default to absolute path from project root
+        # Default to configured sessions directory
         if sessions_dir is None:
-            # Get the project root (parent of web_ui directory)
-            # web_ui/backend/services/session_service.py -> go up 3 levels to get to project root
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-            sessions_dir = os.path.join(project_root, "output", "sessions")
+            import config
+            sessions_dir = getattr(config, 'ABS_SESSIONS_DIR', None)
+            
+            if sessions_dir is None:
+                # Fallback if config not loaded properly
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+                sessions_dir = os.path.join(project_root, "output", "sessions")
 
         # Debug logging
         import logging
@@ -68,7 +71,10 @@ class SessionService:
         """Create a new session"""
         session_id, meta = self.session_manager.create_session(
             idea=request.idea,
-            session_id=request.session_id
+            session_id=request.session_id,
+            story_agent=request.story_agent,
+            image_agent=request.image_agent,
+            video_agent=request.video_agent
         )
         return SessionDetail.from_session_data(meta=meta)
 
@@ -78,6 +84,15 @@ class SessionService:
 
         if request.idea is not None:
             meta['idea'] = request.idea
+
+        if request.story_agent is not None:
+            meta['story_agent'] = request.story_agent
+
+        if request.image_agent is not None:
+            meta['image_agent'] = request.image_agent
+
+        if request.video_agent is not None:
+            meta['video_agent'] = request.video_agent
 
         if request.completed is not None:
             meta['completed'] = request.completed

@@ -62,15 +62,29 @@ export default function SessionDetailPage() {
               </span>
             </div>
             <p className="text-muted-foreground">
-              Started {formatDistanceToNow(new Date(session.started_at), { addSuffix: true })}
+              Started {session.started_at ? (() => {
+                try {
+                  return formatDistanceToNow(new Date(session.started_at), { addSuffix: true });
+                } catch (e) {
+                  return 'Unknown date';
+                }
+              })() : 'Unknown date'}
             </p>
           </div>
-          <Link
-            href={`/sessions/${sessionId}/edit`}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Edit Session
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              href={`/sessions/${sessionId}/settings`}
+              className="px-4 py-2 border rounded-md hover:bg-muted transition-colors"
+            >
+              Settings
+            </Link>
+            <Link
+              href={`/sessions/${sessionId}/edit`}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            >
+              Edit Session
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -224,16 +238,25 @@ export default function SessionDetailPage() {
                   <span className="text-xs text-muted-foreground">{shot.camera}</span>
                 </div>
 
-                {/* Image Preview */}
-                {shot.image_path && (
-                  <div className="mb-2 aspect-video bg-muted rounded overflow-hidden">
+                {/* Media Preview */}
+                <div className="mb-2 aspect-video bg-muted rounded overflow-hidden relative group flex items-center justify-center">
+                  {shot.video_rendered && shot.video_path ? (
+                    <video
+                      src={shot.video_path.replace(/^output[\\/]sessions[\\/]/, '/api/sessions/').replace(/\\/g, '/')}
+                      poster={shot.image_path ? shot.image_path.replace(/^output[\\/]sessions[\\/]/, '/api/sessions/').replace(/\\/g, '/') : undefined}
+                      controls
+                      className="w-full h-full object-cover"
+                    />
+                  ) : shot.image_path ? (
                     <img
-                      src={shot.image_path.replace(/^output\/sessions\//, '/api/sessions/')}
+                      src={shot.image_path.replace(/^output[\\/]sessions[\\/]/, '/api/sessions/').replace(/\\/g, '/')}
                       alt={`Shot ${shot.index}`}
                       className="w-full h-full object-cover"
                     />
-                  </div>
-                )}
+                  ) : (
+                    <span className="text-muted-foreground text-xs">No media</span>
+                  )}
+                </div>
 
                 {/* Status */}
                 <div className="flex gap-2 text-xs mb-2">

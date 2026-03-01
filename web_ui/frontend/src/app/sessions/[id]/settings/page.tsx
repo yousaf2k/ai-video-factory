@@ -1,0 +1,175 @@
+/**
+ * Session Settings Page
+ */
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useSession, useUpdateSession } from '@/hooks/useSessions';
+import { useAgents } from '@/hooks/useAgents';
+import { Save, RefreshCw, ChevronLeft } from 'lucide-react';
+
+export default function SessionSettingsPage() {
+  const params = useParams();
+  const sessionId = params.id as string;
+  const router = useRouter();
+  
+  const { data: session, isLoading, error } = useSession(sessionId);
+  const { data: agents } = useAgents();
+  const updateSessionMutation = useUpdateSession(sessionId);
+
+  const [formData, setFormData] = useState({
+    idea: '',
+    story_agent: 'default',
+    image_agent: 'default',
+    video_agent: 'default',
+  });
+
+  useEffect(() => {
+    if (session) {
+      setFormData({
+        idea: session.idea || '',
+        story_agent: session.story_agent || 'default',
+        image_agent: session.image_agent || 'default',
+        video_agent: session.video_agent || 'default',
+      });
+    }
+  }, [session]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateSessionMutation.mutateAsync(formData);
+      alert('Session settings updated successfully!');
+      router.push(`/sessions/${sessionId}`);
+    } catch (error) {
+      console.error('Failed to update session settings:', error);
+      alert('Failed to update session settings.');
+    }
+  };
+
+  if (isLoading) {
+    return <div className="container mx-auto px-4 py-8">Loading session settings...</div>;
+  }
+
+  if (error || !session) {
+    return <div className="container mx-auto px-4 py-8 text-red-500">Error loading session settings.</div>;
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <Link
+          href={`/sessions/${sessionId}`}
+          className="text-primary hover:underline mb-4 flex items-center gap-1"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          Back to Session
+        </Link>
+        <h1 className="text-3xl font-bold">Session Settings</h1>
+        <p className="text-muted-foreground">
+          Configuration for session: <span className="font-mono text-foreground">{sessionId}</span>
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="max-w-2xl space-y-8">
+        {/* Core Settings */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">Core Metadata</h2>
+          
+          <div>
+            <label className="block text-sm font-medium mb-1">Video Idea</label>
+            <textarea 
+              value={formData.idea}
+              onChange={(e) => setFormData({...formData, idea: e.target.value})}
+              className="w-full border rounded-md p-2 text-sm min-h-[100px]"
+              placeholder="Describe your video idea..."
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Changing the idea won't automatically regenerate existing content.
+            </p>
+          </div>
+        </section>
+
+        {/* Agent Settings */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">Agent Configuration</h2>
+          <p className="text-sm text-muted-foreground">
+            Default agents to use for regeneration steps in this session.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium mb-1">Story Agent</label>
+              <select 
+                value={formData.story_agent}
+                onChange={(e) => setFormData({...formData, story_agent: e.target.value})}
+                className="w-full border rounded-md p-2 text-sm"
+              >
+                {!agents?.story.length && <option value="default">Default</option>}
+                {agents?.story.map(agent => (
+                  <option key={agent.id} value={agent.id}>{agent.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Image Agent</label>
+              <select 
+                value={formData.image_agent}
+                onChange={(e) => setFormData({...formData, image_agent: e.target.value})}
+                className="w-full border rounded-md p-2 text-sm"
+              >
+                {!agents?.image.length && <option value="default">Default</option>}
+                {agents?.image.map(agent => (
+                  <option key={agent.id} value={agent.id}>{agent.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Video Agent</label>
+              <select 
+                value={formData.video_agent}
+                onChange={(e) => setFormData({...formData, video_agent: e.target.value})}
+                className="w-full border rounded-md p-2 text-sm"
+              >
+                {!agents?.video.length && <option value="default">Default</option>}
+                {agents?.video.map(agent => (
+                  <option key={agent.id} value={agent.id}>{agent.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <div className="flex justify-end pt-4 gap-3">
+          <Link
+            href={`/sessions/${sessionId}`}
+            className="px-6 py-2 border rounded-md hover:bg-muted transition-colors"
+          >
+            Cancel
+          </Link>
+          <button
+            type="submit"
+            disabled={updateSessionMutation.isPending}
+            className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            {updateSessionMutation.isPending ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Settings
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

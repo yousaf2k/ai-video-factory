@@ -20,10 +20,9 @@ export function useSession(sessionId: string) {
     queryKey: ['session', sessionId],
     queryFn: () => api.getSession(sessionId),
     enabled: !!sessionId,
-    staleTime: 10000, // 10 seconds
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Auto-refetch if session is not completed
-      return data && !data.completed ? 5000 : false;
+      return query.state.data && !query.state.data.completed ? 5000 : false;
     },
   });
 }

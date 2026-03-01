@@ -22,6 +22,9 @@ export interface Session {
   session_id: string;
   timestamp: string;
   idea: string;
+  story_agent?: string;
+  image_agent?: string;
+  video_agent?: string;
   started_at: string;
   completed: boolean;
   completed_at?: string;
@@ -70,16 +73,41 @@ export interface Shot {
   video_rendered: boolean;
   video_path: string | null;
 }
-
 export interface CreateSessionRequest {
   idea: string;
-  agent?: string;
   session_id?: string;
+  story_agent?: string;
+  image_agent?: string;
+  video_agent?: string;
 }
 
 export interface UpdateSessionRequest {
   idea?: string;
   completed?: boolean;
+  story_agent?: string;
+  image_agent?: string;
+  video_agent?: string;
+}
+
+export interface GlobalConfig {
+  llm_provider: string;
+  image_generation_mode: string;
+  video_generation_mode: string;
+  default_story_agent: string;
+  default_image_agent: string;
+  default_video_agent: string;
+  comfy_url: string;
+  target_video_length?: number;
+}
+
+export interface UpdateGlobalConfigRequest {
+  llm_provider?: string;
+  image_generation_mode?: string;
+  comfy_url?: string;
+  target_video_length?: number;
+  gemini_api_key?: string;
+  openai_api_key?: string;
+  elevenlabs_api_key?: string;
 }
 
 export interface UpdateStoryRequest {
@@ -111,4 +139,17 @@ export interface GenerationStatus {
   progress: number;
   total: number;
   eta?: number;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  type: string;
+}
+
+export interface AgentsByType {
+  story: Agent[];
+  image: Agent[];
+  video: Agent[];
+  narration: Agent[];
 }

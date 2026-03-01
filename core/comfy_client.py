@@ -27,7 +27,7 @@ def get_comfyui_output_directory():
 
     # First, check if it's manually set in config
     if config.COMFY_OUTPUT_DIR:
-        _comfy_output_dir = config.COMFY_OUTPUT_DIR
+        _comfy_output_dir = os.path.normpath(config.COMFY_OUTPUT_DIR)
         logger.info(f"ComfyUI output directory from config: {_comfy_output_dir}")
         return _comfy_output_dir
 

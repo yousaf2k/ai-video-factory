@@ -32,8 +32,8 @@ export function useRegenerateImage(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force }: { shotIndex: number; force?: boolean }) =>
-      api.regenerateShotImage(sessionId, shotIndex, force),
+    mutationFn: ({ shotIndex, force, imageMode, imageWorkflow }: { shotIndex: number; force?: boolean; imageMode?: string; imageWorkflow?: string }) =>
+      api.regenerateShotImage(sessionId, shotIndex, force, imageMode, imageWorkflow),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -46,8 +46,43 @@ export function useRegenerateVideo(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force }: { shotIndex: number; force?: boolean }) =>
-      api.regenerateShotVideo(sessionId, shotIndex, force),
+    mutationFn: ({ shotIndex, force, videoWorkflow }: { shotIndex: number; force?: boolean; videoWorkflow?: string }) =>
+      api.regenerateShotVideo(sessionId, shotIndex, force, videoWorkflow),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
+// Hook for batch regeneration
+export function useBatchRegenerate(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { 
+      shot_indices: number[]; 
+      regenerate_images: boolean; 
+      regenerate_videos: boolean; 
+      force?: boolean;
+      image_mode?: string;
+      image_workflow?: string;
+      video_workflow?: string;
+    }) => api.batchRegenerate(sessionId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
+// Hook to replan shots
+export function useReplanShots(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: { max_shots?: number; image_agent: string; video_agent: string }) => 
+      api.replanShots(sessionId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });

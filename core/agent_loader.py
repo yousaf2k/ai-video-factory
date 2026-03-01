@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 from core.logger_config import setup_agent_logger
 from core.log_decorators import log_agent_call
+import config
 
 
 # Get logger for agent operations
@@ -40,14 +41,19 @@ AGENT_TYPES = {
 class AgentLoader:
     """Load and manage agent system prompts from the agents folder."""
 
-    def __init__(self, agents_dir: str = "agents"):
+    def __init__(self, agents_dir: str = None):
         """
         Initialize the agent loader.
 
         Args:
-            agents_dir: Path to the agents directory (default: "agents")
+            agents_dir: Path to the agents directory (default: "agents" in project root)
         """
-        self.agents_dir = Path(agents_dir)
+        if agents_dir is None:
+            self.agents_dir = Path(config.PROJECT_ROOT) / "agents"
+        else:
+            self.agents_dir = Path(agents_dir)
+        
+        logger.debug(f"AgentLoader initialized with directory: {self.agents_dir}")
 
     def list_agents(self, agent_type: str) -> list:
         """
@@ -100,6 +106,28 @@ class AgentLoader:
 
         with open(agent_file, 'r', encoding='utf-8') as f:
             return f.read()
+
+    def save_prompt(self, agent_type: str, agent_name: str, content: str):
+        """
+        Save/update a system prompt for a specific agent.
+
+        Args:
+            agent_type: Type of agent ('story', 'narration', 'image', 'video')
+            agent_name: Name of the agent
+            content: The new system prompt content
+        """
+        if agent_type not in AGENT_TYPES:
+            raise ValueError(f"Unknown agent type: {agent_type}. Must be one of: {list(AGENT_TYPES.keys())}")
+
+        agent_dir = self.agents_dir / agent_type
+        os.makedirs(agent_dir, exist_ok=True)
+        
+        agent_file = agent_dir / f"{agent_name}.md"
+        
+        with open(agent_file, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        logger.info(f"Saved agent prompt: {agent_file}")
 
     def format_prompt(self, agent_type: str, user_input: str, agent_name: str = "default") -> str:
         """
@@ -177,6 +205,29 @@ def load_agent_prompt(agent_type: str, user_input: str, agent_name: str = "defau
     """
     loader = get_agent_loader()
     return loader.format_prompt(agent_type, user_input, agent_name)
+
+
+def list_agents() -> list:
+    """
+    List all available agents across all types.
+    Used by the Web UI API.
+
+    Returns:
+        List of dictionaries with agent info
+    """
+    loader = get_agent_loader()
+    all_agents = []
+    
+    for agent_type in AGENT_TYPES.keys():
+        agents = loader.list_agents(agent_type)
+        for agent_id in agents:
+            all_agents.append({
+                "id": agent_id,
+                "name": agent_id.replace('_', ' ').title(),
+                "type": agent_type
+            })
+            
+    return all_agents
 
 
 if __name__ == "__main__":

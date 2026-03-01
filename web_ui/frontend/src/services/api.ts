@@ -11,6 +11,9 @@ import type {
   UpdateStoryRequest,
   Shot,
   UpdateShotRequest,
+  AgentsByType,
+  GlobalConfig,
+  UpdateGlobalConfigRequest,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
@@ -114,21 +117,55 @@ class ApiClient {
   async regenerateShotImage(
     sessionId: string,
     shotIndex: number,
-    force: boolean = false
+    force: boolean = false,
+    imageMode?: string,
+    imageWorkflow?: string
   ): Promise<void> {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-image`, {
       force,
+      image_mode: imageMode,
+      image_workflow: imageWorkflow,
     });
   }
 
   async regenerateShotVideo(
     sessionId: string,
     shotIndex: number,
-    force: boolean = false
+    force: boolean = false,
+    videoWorkflow?: string
   ): Promise<void> {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-video`, {
       force,
+      video_workflow: videoWorkflow,
     });
+  }
+
+  async batchRegenerate(
+    sessionId: string,
+    data: {
+      shot_indices: number[];
+      regenerate_images: boolean;
+      regenerate_videos: boolean;
+      force?: boolean;
+      image_mode?: string;
+      image_workflow?: string;
+      video_workflow?: string;
+    }
+  ): Promise<any> {
+    const response = await this.client.post(`/api/sessions/${sessionId}/shots/batch-regenerate`, data);
+    return response.data;
+  }
+
+  async replanShots(
+    sessionId: string,
+    data: {
+      max_shots?: number;
+      image_agent: string;
+      video_agent: string;
+    }
+  ): Promise<any> {
+    const response = await this.client.post(`/api/sessions/${sessionId}/shots/replan`, data);
+    return response.data;
   }
 
   // Generation
@@ -148,6 +185,48 @@ class ApiClient {
   // Assets
   getAssetUrl(sessionId: string, assetType: 'images' | 'videos', filename: string): string {
     return `${API_BASE_URL}/api/sessions/${sessionId}/${assetType}/${filename}`;
+  }
+
+  // Config
+  async getAgents(): Promise<AgentsByType> {
+    const response = await this.client.get<AgentsByType>('/api/config/agents');
+    return response.data;
+  }
+
+  async getConfig(): Promise<GlobalConfig> {
+    const response = await this.client.get<GlobalConfig>('/api/config');
+    return response.data;
+  }
+
+  async updateConfig(request: UpdateGlobalConfigRequest): Promise<any> {
+    const response = await this.client.post('/api/config', request);
+    return response.data;
+  }
+
+  async getAgentContent(agentType: string, agentId: string): Promise<string> {
+    const response = await this.client.get<{ content: string }>(`/api/config/agents/${agentType}/${agentId}`);
+    return response.data.content;
+  }
+
+  async updateAgentContent(agentType: string, agentId: string, content: string): Promise<any> {
+    const response = await this.client.post(`/api/config/agents/${agentType}/${agentId}`, { content });
+    return response.data;
+  }
+
+  // Workflows
+  async listWorkflows(): Promise<Record<string, any[]>> {
+    const response = await this.client.get<Record<string, any[]>>('/api/config/workflows');
+    return response.data;
+  }
+
+  async getWorkflowContent(category: string, filename: string): Promise<string> {
+    const response = await this.client.get<{ content: string }>(`/api/config/workflows/${category}/${filename}`);
+    return response.data.content;
+  }
+
+  async updateWorkflowContent(category: string, filename: string, content: string): Promise<any> {
+    const response = await this.client.post(`/api/config/workflows/${category}/${filename}`, { content });
+    return response.data;
   }
 }
 
