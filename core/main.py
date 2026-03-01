@@ -987,16 +987,46 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
     print(f"[RESUME] Execution mode: {mode_str}")
     print(f"[RESUME] Starting from step {start_step}")
 
+    # Get and apply LLM config from session metadata
+    llm_config = session_meta.get('llm_config', {})
+    if llm_config:
+        config.LLM_PROVIDER = llm_config.get('provider', config.LLM_PROVIDER)
+        config.LLM_MAX_TOKENS = llm_config.get('max_tokens', config.LLM_MAX_TOKENS)
+        model = llm_config.get('text_model')
+        if model and model != "unknown":
+            if config.LLM_PROVIDER == "gemini":
+                config.GEMINI_TEXT_MODEL = model
+            else:
+                setattr(config, f"{config.LLM_PROVIDER.upper()}_MODEL", model)
+
+    # Get and apply workflow config from session metadata
+    workflow_config = session_meta.get('workflow_config', {})
+    if workflow_config:
+        config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE = workflow_config.get('continue_on_partial_failure', config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE)
+        # auto_step_mode is evaluated per run below so we don't necessarily override it globally
+
     # Get config from session metadata
     image_config = session_meta.get('image_config', {})
     image_mode = image_config.get('mode', config.IMAGE_GENERATION_MODE)
     negative_prompt = image_config.get('negative_prompt', config.DEFAULT_NEGATIVE_PROMPT)
     images_per_shot = image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
+    config.IMAGE_WORKFLOW = image_config.get('workflow', config.IMAGE_WORKFLOW)
+    config.IMAGE_ASPECT_RATIO = image_config.get('aspect_ratio', config.IMAGE_ASPECT_RATIO)
+    config.IMAGE_RESOLUTION = image_config.get('resolution', config.IMAGE_RESOLUTION)
+    config.IMAGE_WIDTH = image_config.get('width', config.IMAGE_WIDTH)
+    config.IMAGE_HEIGHT = image_config.get('height', config.IMAGE_HEIGHT)
 
     video_config = session_meta.get('video_config', {})
     shot_length = video_config.get('shot_length', config.DEFAULT_SHOT_LENGTH)
     total_length = video_config.get('total_length')
     shots_per_scene = video_config.get('shots_per_scene', config.DEFAULT_SHOTS_PER_SCENE)
+    config.WORKFLOW_PATH = video_config.get('workflow_path', config.WORKFLOW_PATH)
+    config.VIDEO_ASPECT_RATIO = video_config.get('aspect_ratio', config.VIDEO_ASPECT_RATIO)
+    config.VIDEO_RESOLUTION = video_config.get('resolution', config.VIDEO_RESOLUTION)
+    config.VIDEO_WIDTH = video_config.get('width', config.VIDEO_WIDTH)
+    config.VIDEO_HEIGHT = video_config.get('height', config.VIDEO_HEIGHT)
+    config.APPEND_IMAGE_TO_MOTION_PROMPT = video_config.get('append_image_prompt', config.APPEND_IMAGE_TO_MOTION_PROMPT)
+    config.IMAGE_PROMPT_APPEND_POSITION = video_config.get('append_position', config.IMAGE_PROMPT_APPEND_POSITION)
 
     # Calculate max_shots from total_length if specified
     if total_length and shot_length:
@@ -1153,12 +1183,33 @@ def run_new_session(session_mgr, args=None):
     session_id, session_meta = session_mgr.create_session(idea)
 
     logger.info(f"Session created: {session_id}")
+    # Store LLM config in session
+    provider = config.LLM_PROVIDER
+    provider_model_key = f"{provider.upper()}_MODEL"
+    if provider == "gemini":
+        provider_model_key = "GEMINI_TEXT_MODEL"
+        
+    llm_model = getattr(config, provider_model_key, "unknown")
+    
+    session_meta['llm_config'] = {
+        'provider': provider,
+        'text_model': llm_model,
+        'max_tokens': config.LLM_MAX_TOKENS
+    }
+
     # Store video config in session
     session_meta['video_config'] = {
         'total_length': total_length,
         'shot_length': shot_length,
         'fps': config.VIDEO_FPS,
-        'shots_per_scene': shots_per_scene
+        'shots_per_scene': shots_per_scene,
+        'workflow_path': config.WORKFLOW_PATH,
+        'aspect_ratio': config.VIDEO_ASPECT_RATIO,
+        'resolution': config.VIDEO_RESOLUTION,
+        'width': config.VIDEO_WIDTH,
+        'height': config.VIDEO_HEIGHT,
+        'append_image_prompt': config.APPEND_IMAGE_TO_MOTION_PROMPT,
+        'append_position': config.IMAGE_PROMPT_APPEND_POSITION
     }
 
     # Store image generation config
@@ -1166,7 +1217,18 @@ def run_new_session(session_mgr, args=None):
     session_meta['image_config'] = {
         'mode': image_mode,
         'negative_prompt': negative_prompt,
-        'images_per_shot': images_per_shot
+        'images_per_shot': images_per_shot,
+        'workflow': config.IMAGE_WORKFLOW,
+        'aspect_ratio': config.IMAGE_ASPECT_RATIO,
+        'resolution': config.IMAGE_RESOLUTION,
+        'width': config.IMAGE_WIDTH,
+        'height': config.IMAGE_HEIGHT
+    }
+
+    # Store workflow config in session
+    session_meta['workflow_config'] = {
+        'auto_step_mode': get_step_mode(args),
+        'continue_on_partial_failure': config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE
     }
 
     # Get agent selection from args or config
@@ -1939,16 +2001,49 @@ def _run_with_prompts_file(session_mgr, args):
     # Create session
     session_id, session_meta = session_mgr.create_session(idea)
 
+    # Store LLM config in session
+    provider = config.LLM_PROVIDER
+    provider_model_key = f"{provider.upper()}_MODEL"
+    if provider == "gemini":
+        provider_model_key = "GEMINI_TEXT_MODEL"
+        
+    llm_model = getattr(config, provider_model_key, "unknown")
+    
+    session_meta['llm_config'] = {
+        'provider': provider,
+        'text_model': llm_model,
+        'max_tokens': config.LLM_MAX_TOKENS
+    }
+
     # Store config in session
     session_meta['video_config'] = {
         'shot_length': shot_length,
-        'fps': config.VIDEO_FPS
+        'fps': config.VIDEO_FPS,
+        'workflow_path': config.WORKFLOW_PATH,
+        'aspect_ratio': config.VIDEO_ASPECT_RATIO,
+        'resolution': config.VIDEO_RESOLUTION,
+        'width': config.VIDEO_WIDTH,
+        'height': config.VIDEO_HEIGHT,
+        'append_image_prompt': config.APPEND_IMAGE_TO_MOTION_PROMPT,
+        'append_position': config.IMAGE_PROMPT_APPEND_POSITION
     }
     session_meta['image_config'] = {
         'mode': image_mode,
         'negative_prompt': negative_prompt,
-        'images_per_shot': images_per_shot
+        'images_per_shot': images_per_shot,
+        'workflow': config.IMAGE_WORKFLOW,
+        'aspect_ratio': config.IMAGE_ASPECT_RATIO,
+        'resolution': config.IMAGE_RESOLUTION,
+        'width': config.IMAGE_WIDTH,
+        'height': config.IMAGE_HEIGHT
     }
+    
+    # Store workflow config in session
+    session_meta['workflow_config'] = {
+        'auto_step_mode': True, # Prompts file implies auto running shots mostly
+        'continue_on_partial_failure': config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE
+    }
+    
     session_meta['prompts_file'] = prompts_file
 
     # Mark story and scene_graph as complete (skipped)
