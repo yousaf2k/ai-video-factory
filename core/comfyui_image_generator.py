@@ -15,7 +15,7 @@ from core.logger_config import get_logger
 logger = get_logger(__name__)
 
 
-def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = "", seed: int = None, workflow_name: str = None):
+def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = "", seed: int = None, workflow_name: str = None, progress_callback=None):
     """
     Generate a single image using ComfyUI workflow.
 
@@ -77,6 +77,16 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
 
         # If it was already in API format, we still need to inject dimensions into specific nodes
         if "nodes" not in workflow:
+            # Detect Flux v1 workflows and clamp width to 1536
+            node_classes = {nd.get("class_type", "") for nd in api_format.values()}
+            is_flux_v1 = ("ModelSamplingFlux" in node_classes or "EmptySD3LatentImage" in node_classes) \
+                         and "EmptyFlux2LatentImage" not in node_classes \
+                         and "Flux2Scheduler" not in node_classes
+            if is_flux_v1 and width > 1536:
+                logger.info(f"Flux v1 detected: clamping width from {width} to 1536")
+                height = int(height * (1536 / width))
+                width = 1536
+
             for node_id, node_data in api_format.items():
                 class_type = node_data.get("class_type", "")
                 if class_type == "EmptySD3LatentImage":
@@ -146,7 +156,7 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
             return None
 
         # Wait for completion and get the result
-        return _wait_for_image(prompt_id, output_path)
+        return _wait_for_image(prompt_id, output_path, progress_callback=progress_callback)
 
     except Exception as e:
         logger.error(f"ComfyUI image generation failed: {e}")
@@ -280,122 +290,93 @@ def _convert_workflow_to_api_format(workflow, width=None, height=None):
         return workflow
 
 
-def _wait_for_image(prompt_id, output_path, timeout=300):
+def _wait_for_image(prompt_id, output_path, timeout=300, progress_callback=None):
     """Wait for ComfyUI to finish generating the image"""
     import shutil
-    from core.comfy_client import get_output_file_path, get_comfyui_output_directory
+    from core.comfy_client import get_output_file_path, get_comfyui_output_directory, wait_for_prompt_completion_with_progress
 
-    start_time = time.time()
-    last_status_check = 0
+    if progress_callback:
+        wait_result = wait_for_prompt_completion_with_progress(prompt_id, progress_callback=progress_callback, timeout=timeout)
+    else:
+        from core.comfy_client import wait_for_prompt_completion
+        wait_result = wait_for_prompt_completion(prompt_id, timeout=timeout)
 
-    while True:
-        elapsed = time.time() - start_time
-        if elapsed > timeout:
-            logger.error(f"Timeout waiting for image generation after {int(elapsed)}s")
+    if not wait_result or not wait_result.get('success'):
+        logger.error(f"ComfyUI prompt failed or timed out: {wait_result}")
+        return None
+
+    logger.debug(f"Prompt {prompt_id} wait success, extracting results...")
+
+    # Get the history to extract outputs
+    try:
+        response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
+        if response.status_code != 200:
+            logger.error(f"Failed to get history for prompt {prompt_id}")
+            return None
+        
+        history = response.json()
+        if prompt_id not in history:
+            logger.error(f"Prompt {prompt_id} not found in history")
             return None
 
+        prompt_data = history[prompt_id]
+        outputs = prompt_data.get("outputs", {})
+        image_info = None
+
+        # Look for image outputs across all nodes
+        for node_id, node_output in outputs.items():
+            if "images" in node_output and len(node_output["images"]) > 0:
+                image_info = node_output["images"][0]
+                image_info['node_id'] = node_id
+                break
+
+        if not image_info:
+            logger.error(f"No image outputs found for prompt {prompt_id}. History: {prompt_data.get('outputs')}")
+            return None
+
+        image_filename = image_info.get("filename", "")
+        subfolder = image_info.get("subfolder", "")
+        
+        logger.info(f"Image generation complete: {image_filename}. Retrieving file...")
+
+        # STEP 1: Try to get the file via local filesystem if possible (faster/more reliable)
         try:
-            # Check history for prompt results
-            response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}")
-
-            if response.status_code != 200:
-                time.sleep(2)
-                continue
-
-            history = response.json()
-
-            if prompt_id not in history:
-                time.sleep(2)
-                continue
-
-            # Check if processing is complete
-            prompt_data = history[prompt_id]
-            status = prompt_data.get("status", {})
-
-            if status.get("completed", False):
-                # Get the output image info
-                outputs = prompt_data.get("outputs", {})
-                image_info = None
-
-                # Look for image outputs across all nodes
-                for node_id, node_output in outputs.items():
-                    if "images" in node_output and len(node_output["images"]) > 0:
-                        image_info = node_output["images"][0]
-                        image_info['node_id'] = node_id
-                        break
-
-                if not image_info:
-                    logger.error(f"No image outputs found for prompt {prompt_id}")
-                    return None
-
-                image_filename = image_info.get("filename", "")
-                subfolder = image_info.get("subfolder", "")
+            comfy_output_dir = get_comfyui_output_directory()
+            if comfy_output_dir:
+                if subfolder:
+                    local_source = os.path.join(comfy_output_dir, subfolder, image_filename)
+                else:
+                    local_source = os.path.join(comfy_output_dir, image_filename)
                 
-                logger.info(f"Image generation complete: {image_filename}")
-
-                # STEP 1: Try to get the file via local filesystem if possible (faster/more reliable)
-                try:
-                    comfy_output_dir = get_comfyui_output_directory()
-                    if comfy_output_dir:
-                        # Construct local path using same logic as comfy_client.get_output_file_path
-                        if subfolder:
-                            local_source = os.path.join(comfy_output_dir, subfolder, image_filename)
-                        else:
-                            local_source = os.path.join(comfy_output_dir, image_filename)
-                        
-                        if os.path.exists(local_source):
-                            os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                            shutil.copy2(local_source, output_path)
-                            logger.info(f"Retrieved image from local filesystem: {output_path}")
-                            print(f"[PASS] Generated (local): {output_path}")
-                            return output_path
-                except Exception as e:
-                    logger.debug(f"Failed to retrieve image via local filesystem: {e}")
-
-                # STEP 2: Fallback to /view API if local retrieval failed
-                try:
-                    # Construct the URL to download the image
-                    if subfolder:
-                        url = f"{config.COMFY_URL}/view?filename={image_filename}&subfolder={subfolder}&type=output"
-                    else:
-                        url = f"{config.COMFY_URL}/view?filename={image_filename}&type=output"
-
-                    logger.debug(f"Downloading image from URL: {url}")
-                    img_response = requests.get(url, timeout=30)
-
-                    if img_response.status_code == 200:
-                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-                        with open(output_path, 'wb') as f:
-                            f.write(img_response.content)
-
-                        logger.info(f"Retrieved image from API: {output_path}")
-                        print(f"[PASS] Generated (API): {output_path}")
-                        return output_path
-                    else:
-                        logger.error(f"Failed to download image via API: {img_response.status_code}")
-                except Exception as e:
-                    logger.error(f"Error during API image download: {e}")
-
-                # If we reach here, both methods failed
-                return None
-
-            # If still processing, wait
-            if status.get("status", "") in ["queued", "processing"]:
-                if elapsed - last_status_check > 10:
-                    last_status_check = elapsed
-                    logger.debug(f"Prompt {prompt_id[:8]}... still processing ({int(elapsed)}s elapsed)")
-                time.sleep(2)
-                continue
-            else:
-                # Error status
-                logger.error(f"ComfyUI returned error status: {status}")
-                return None
-
+                if os.path.exists(local_source):
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    shutil.copy2(local_source, output_path)
+                    logger.info(f"Retrieved image from local filesystem: {output_path}")
+                    return output_path
         except Exception as e:
-            logger.error(f"Error checking image status: {e}")
-            time.sleep(2)
-            continue
+            logger.debug(f"Failed to retrieve image via local filesystem: {e}")
+
+        # STEP 2: Fallback to /view API if local retrieval failed
+        try:
+            if subfolder:
+                url = f"{config.COMFY_URL}/view?filename={image_filename}&subfolder={subfolder}&type=output"
+            else:
+                url = f"{config.COMFY_URL}/view?filename={image_filename}&type=output"
+
+            img_response = requests.get(url, timeout=30)
+            if img_response.status_code == 200:
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                with open(output_path, 'wb') as f:
+                    f.write(img_response.content)
+                logger.info(f"Retrieved image from API: {output_path}")
+                return output_path
+        except Exception as e:
+            logger.error(f"Error during API image download: {e}")
+
+    except Exception as e:
+        logger.error(f"Error retrieving image: {e}")
+
+    return None
 
 
 def generate_images_for_shots_comfyui(shots: list, output_dir: str, negative_prompt: str = ""):
@@ -432,8 +413,9 @@ def generate_images_for_shots_comfyui(shots: list, output_dir: str, negative_pro
             continue
 
         logger.info(f"[{idx}/{len(shots)}] Generating image for prompt: {image_prompt[:60]}...")
-
-        image_path = generate_image_comfyui(image_prompt, output_path, negative_prompt)
+        
+        # 1st time generation for a shot uses seed 1
+        image_path = generate_image_comfyui(image_prompt, output_path, negative_prompt, seed=1)
 
         # Add image_path to shot dictionary
         shot['image_path'] = image_path

@@ -74,7 +74,8 @@ class SessionService:
             session_id=request.session_id,
             story_agent=request.story_agent,
             image_agent=request.image_agent,
-            video_agent=request.video_agent
+            video_agent=request.video_agent,
+            total_duration=request.total_duration
         )
         return SessionDetail.from_session_data(meta=meta)
 

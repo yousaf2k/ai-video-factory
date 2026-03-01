@@ -3,7 +3,7 @@ FastAPI Web UI for AI Video Factory
 """
 import os
 import sys
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import logging
@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import config
 from web_ui.backend.api import sessions, stories, shots, config as config_api
+from web_ui.backend.websocket.manager import manager
 
 # Configure logging
 logging.basicConfig(
@@ -69,11 +70,28 @@ async def health():
     }
 
 
+@app.websocket("/api/ws/progress/{session_id}")
+async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    """WebSocket endpoint for real-time progress updates"""
+    await manager.connect(websocket, session_id)
+    try:
+        while True:
+            # We don't expect messages from client, but handle ping/pong if needed
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, session_id)
+    except Exception as e:
+        logger.error(f"WebSocket error for session {session_id}: {e}")
+        manager.disconnect(websocket, session_id)
+
+
 
 # Mount static files for serving assets (images, videos)
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
+    import asyncio
+    manager.set_loop(asyncio.get_running_loop())
     logger.info("Starting AI Video Factory API")
     logger.info(f"CORS origins: {config.WEB_UI_CORS_ORIGINS}")
 

@@ -2,11 +2,12 @@
  * ShotCard component - Individual shot with editing and regeneration
  */
 import { useState } from 'react';
-import { Edit3, RotateCw, Image, Video, Check, X } from 'lucide-react';
+import { Edit3, RotateCw, RefreshCw, Image, Layers, Video, Check, X, Loader2 } from 'lucide-react';
 import { Shot } from '@/types';
-import { useUpdateShot, useRegenerateImage, useRegenerateVideo } from '@/hooks/useShots';
+import { useUpdateShot, useRegenerateImage, useRegenerateVideo, useSelectImage } from '@/hooks/useShots';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import { cn } from '@/lib/utils';
+import { cn, getMediaUrl } from '@/lib/utils';
 
 interface ShotCardProps {
   shot: Shot;
@@ -15,6 +16,9 @@ interface ShotCardProps {
   selectable?: boolean;
   selected?: boolean;
   onSelectChange?: (selected: boolean) => void;
+  isGenerating?: boolean;
+  progress?: number;
+  onCancel?: () => void;
 }
 
 export function ShotCard({
@@ -23,7 +27,10 @@ export function ShotCard({
   showIndex = true,
   selectable = false,
   selected = false,
-  onSelectChange
+  onSelectChange,
+  isGenerating = false,
+  progress,
+  onCancel
 }: ShotCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);
@@ -38,11 +45,27 @@ export function ShotCard({
   const [regenImageMode, setRegenImageMode] = useState('comfyui');
   const [regenImageWorkflow, setRegenImageWorkflow] = useState('flux2');
   const [regenVideoWorkflow, setRegenVideoWorkflow] = useState('workflow/video/wan22_workflow.json');
+  const [regenSeed, setRegenSeed] = useState<number | ''>('');
 
   // ... rest of the hook setup ...
+  const queryClient = useQueryClient();
   const updateShot = useUpdateShot(sessionId, shot.index);
   const regenerateImage = useRegenerateImage(sessionId);
   const regenerateVideo = useRegenerateVideo(sessionId);
+  const selectImage = useSelectImage(sessionId);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [cacheBuster, setCacheBuster] = useState(Date.now());
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
+
+  const hasMultipleImages = (shot.image_paths?.length ?? 0) > 1;
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+    await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    setCacheBuster(Date.now());
+    setTimeout(() => setIsRefreshing(false), 600);
+  };
 
   const handleSave = async () => {
     try {
@@ -74,46 +97,39 @@ export function ShotCard({
 
   const handleRegenSubmit = async () => {
     try {
-      if (showRegenModal === 'image') {
-        await regenerateImage.mutateAsync({
+      const type = showRegenModal;
+      // Close modal immediately
+      setShowRegenModal(null);
+
+      if (type === 'image') {
+        regenerateImage.mutate({
           shotIndex: shot.index,
           force: regenForce,
           imageMode: regenImageMode,
-          imageWorkflow: regenImageWorkflow
+          imageWorkflow: regenImageWorkflow,
+          seed: regenSeed === '' ? undefined : regenSeed
         });
-      } else if (showRegenModal === 'video') {
-        await regenerateVideo.mutateAsync({
+      } else if (type === 'video') {
+        regenerateVideo.mutate({
           shotIndex: shot.index,
           force: regenForce,
           videoWorkflow: regenVideoWorkflow
         });
         setViewMode('video');
       }
-      setShowRegenModal(null);
+      setCacheBuster(Date.now());
     } catch (error) {
-      console.error(`Failed to regenerate ${showRegenModal}:`, error);
-      alert(`Failed to regenerate ${showRegenModal}. Please try again.`);
+      console.error(`Failed to trigger regeneration:`, error);
     }
-  };
-
-  // Helper to convert internal output paths to API URLs
-  const getMediaUrl = (path: string | null) => {
-    if (!path) return '';
-
-    // Normalize slashes
-    let normalizedPath = path.replace(/\\/g, '/');
-
-    // If it's an absolute path (e.g. C:/... or /home/...), extract the part starting from 'output/'
-    const outputIndex = normalizedPath.indexOf('output/sessions/');
-    if (outputIndex !== -1) {
-      normalizedPath = normalizedPath.substring(outputIndex);
-    }
-
-    return normalizedPath.replace(/^output[\\/]sessions[\\/]/, '/api/sessions/').replace(/\\/g, '/');
   };
 
   const imageUrl = getMediaUrl(shot.image_path);
   const videoUrl = getMediaUrl(shot.video_path);
+
+  // Append cache-busting param so browser fetches the latest file from disk
+  const bustCache = (url: string) => url ? `${url}${url.includes('?') ? '&' : '?'}t=${cacheBuster}` : '';
+  const cachedImageUrl = bustCache(imageUrl);
+  const cachedVideoUrl = bustCache(videoUrl);
 
   if (isEditing) {
     return (
@@ -148,7 +164,7 @@ export function ShotCard({
             <textarea
               value={editedShot.image_prompt}
               onChange={(e) => setEditedShot({ ...editedShot, image_prompt: e.target.value })}
-              className="w-full px-2 py-1 border rounded text-sm mt-1 min-h-[60px]"
+              className="w-full px-2 py-1 border rounded text-sm mt-1 min-h-[120px]"
             />
           </div>
 
@@ -157,7 +173,7 @@ export function ShotCard({
             <textarea
               value={editedShot.motion_prompt}
               onChange={(e) => setEditedShot({ ...editedShot, motion_prompt: e.target.value })}
-              className="w-full px-2 py-1 border rounded text-sm mt-1 min-h-[60px]"
+              className="w-full px-2 py-1 border rounded text-sm mt-1 min-h-[120px]"
             />
           </div>
 
@@ -217,6 +233,14 @@ export function ShotCard({
         {/* Actions */}
         <div className="flex gap-2">
           <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="p-1 hover:bg-green-50 text-green-600 rounded disabled:opacity-50"
+            title="Refresh image from disk"
+          >
+            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+          </button>
+          <button
             onClick={() => setIsEditing(true)}
             className="p-1 hover:bg-muted rounded"
             title="Edit prompts"
@@ -239,6 +263,18 @@ export function ShotCard({
           >
             <Video className="w-4 h-4" />
           </button>
+          {hasMultipleImages && (
+            <button
+              onClick={() => setShowGalleryModal(true)}
+              className="p-1 hover:bg-amber-50 text-amber-600 rounded relative"
+              title="View image variations"
+            >
+              <Layers className="w-4 h-4" />
+              <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                {shot.image_paths.length}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -263,10 +299,26 @@ export function ShotCard({
       {/* Media Preview */}
       <div className="mb-3 relative group">
         <div className="aspect-video bg-muted rounded overflow-hidden flex items-center justify-center relative">
-          {viewMode === 'video' && videoUrl ? (
+          {(isGenerating || regenerateImage.isPending || regenerateVideo.isPending) && (
+            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg z-10">
+              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+              <span className="text-white font-medium">
+                {progress !== undefined ? `Generating... ${progress}%` : 'Generating...'}
+              </span>
+              {onCancel && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCancel(); }}
+                  className="mt-2 px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          )}
+          {viewMode === 'video' && cachedVideoUrl ? (
             <video
-              src={videoUrl}
-              poster={imageUrl}
+              src={cachedVideoUrl}
+              poster={cachedImageUrl}
               controls
               autoPlay
               muted
@@ -274,9 +326,9 @@ export function ShotCard({
               playsInline
               className="w-full h-full object-cover"
             />
-          ) : imageUrl ? (
+          ) : cachedImageUrl ? (
             <img
-              src={imageUrl}
+              src={cachedImageUrl}
               alt={`Shot ${shot.index}`}
               className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => setShowFullscreenImage(true)}
@@ -378,19 +430,35 @@ export function ShotCard({
                   </div>
 
                   {regenImageMode === 'comfyui' && (
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">Workflow</label>
-                      <select
-                        value={regenImageWorkflow}
-                        onChange={(e) => setRegenImageWorkflow(e.target.value)}
-                        className="w-full border rounded-md p-2 text-sm"
-                      >
-                        <option value="flux2">Flux 2 (High Quality)</option>
-                        <option value="flux">Flux (Standard)</option>
-                        <option value="sdxl">SDXL</option>
-                        <option value="default">Default</option>
-                      </select>
-                    </div>
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">Workflow</label>
+                        <select
+                          value={regenImageWorkflow}
+                          onChange={(e) => setRegenImageWorkflow(e.target.value)}
+                          className="w-full border rounded-md p-2 text-sm"
+                        >
+                          <option value="flux2">Flux 2 (High Quality)</option>
+                          <option value="flux">Flux (Standard)</option>
+                          <option value="sdxl">SDXL</option>
+                          <option value="default">Default</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">Noise Seed (Optional)</label>
+                        <input
+                          type="number"
+                          value={regenSeed}
+                          onChange={(e) => setRegenSeed(e.target.value === '' ? '' : parseInt(e.target.value))}
+                          placeholder="Random"
+                          className="w-full border rounded-md p-2 text-sm"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Leave blank for automatic seed (1 for 1st version, random otherwise).
+                        </p>
+                      </div>
+                    </>
                   )}
                 </>
               )}
@@ -435,13 +503,13 @@ export function ShotCard({
       )}
 
       {/* Fullscreen Image Modal */}
-      {showFullscreenImage && imageUrl && (
+      {showFullscreenImage && cachedImageUrl && (
         <div
           className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 cursor-zoom-out"
           onClick={() => setShowFullscreenImage(false)}
         >
           <img
-            src={imageUrl}
+            src={cachedImageUrl}
             alt={`Shot ${shot.index} Fullscreen`}
             className="max-w-full max-h-full object-contain"
           />
@@ -454,6 +522,78 @@ export function ShotCard({
           >
             <X className="w-8 h-8" />
           </button>
+        </div>
+      )}
+
+      {/* Image Gallery Modal */}
+      {showGalleryModal && hasMultipleImages && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+          <div className="bg-background rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col relative">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Shot {shot.index} — Image Variations ({shot.image_paths.length})</h2>
+              <button
+                onClick={() => setShowGalleryModal(false)}
+                className="text-muted-foreground hover:text-foreground p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {shot.image_paths.map((imgPath, idx) => {
+                  const url = getMediaUrl(imgPath);
+                  const cachedUrl = bustCache(url);
+                  const isActive = imgPath === shot.image_path;
+                  return (
+                    <div
+                      key={idx}
+                      className={cn(
+                        "relative group rounded-lg overflow-hidden border-2 transition-all",
+                        isActive ? "border-primary ring-2 ring-primary/30" : "border-transparent hover:border-muted-foreground/30"
+                      )}
+                    >
+                      <div className="aspect-video bg-muted">
+                        <img
+                          src={cachedUrl}
+                          alt={`Variation ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-end justify-center">
+                        <div className="p-2 w-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between">
+                          <span className="text-white text-xs font-medium drop-shadow">
+                            {imgPath.split('/').pop()?.split('\\').pop()}
+                          </span>
+                          {isActive ? (
+                            <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                              <Check className="w-3 h-3" /> Active
+                            </span>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await selectImage.mutateAsync({ shotIndex: shot.index, imagePath: imgPath });
+                                  setCacheBuster(Date.now());
+                                  setShowGalleryModal(false);
+                                } catch (error) {
+                                  console.error('Failed to select image:', error);
+                                  alert('Failed to select image. Please try again.');
+                                }
+                              }}
+                              disabled={selectImage.isPending}
+                              className="text-xs bg-white text-black px-2 py-0.5 rounded-full font-medium hover:bg-white/90 disabled:opacity-50"
+                            >
+                              Select
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

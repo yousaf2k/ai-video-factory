@@ -131,7 +131,8 @@ def submit(workflow):
 
     r = requests.post(
         f"{config.COMFY_URL}/prompt",
-        json=payload
+        json=payload,
+        timeout=10
     )
 
     if r.status_code != 200:
@@ -142,6 +143,178 @@ def submit(workflow):
     prompt_id = result.get('prompt_id')
     logger.info(f"Workflow submitted: prompt_id={prompt_id}")
     return result
+
+
+def interrupt_generation():
+    """Interrupt the currently running generation in ComfyUI."""
+    try:
+        r = requests.post(f"{config.COMFY_URL}/interrupt", timeout=5)
+        logger.info(f"ComfyUI interrupt sent, status: {r.status_code}")
+        return r.status_code == 200
+    except Exception as e:
+        logger.error(f"Failed to interrupt ComfyUI: {e}")
+        return False
+
+
+def clear_queue():
+    """Clear all pending items from the ComfyUI queue."""
+    try:
+        r = requests.post(
+            f"{config.COMFY_URL}/queue",
+            json={"clear": True},
+            timeout=5
+        )
+        logger.info(f"ComfyUI queue clear sent, status: {r.status_code}")
+        return r.status_code == 200
+    except Exception as e:
+        logger.error(f"Failed to clear ComfyUI queue: {e}")
+        return False
+
+
+def cancel_all():
+    """Interrupt current generation and clear the queue."""
+    interrupted = interrupt_generation()
+    cleared = clear_queue()
+    return interrupted or cleared
+
+
+def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, timeout=1800):
+    """
+    Wait for a specific prompt to complete using WebSockets to get real-time progress.
+    
+    Args:
+        prompt_id: The prompt ID to wait for
+        progress_callback: Function called with (current_step, total_steps)
+        timeout: Maximum time to wait in seconds
+    """
+    import asyncio
+    import json
+    import websockets
+    from urllib.parse import urlparse
+
+    # Convert http://... to ws://...
+    parsed_url = urlparse(config.COMFY_URL)
+    ws_url = f"ws://{parsed_url.netloc}/ws?clientId={str(uuid.uuid4())}"
+
+    # First, check if it's already in history (fast execution)
+    from core.comfy_client import wait_for_prompt_completion
+    try:
+        check_response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
+        if check_response.status_code == 200:
+            history = check_response.json()
+            if prompt_id in history:
+                logger.debug(f"Prompt {prompt_id} already in history, skipping WS progress.")
+                if progress_callback:
+                    progress_callback(100, 100)
+                return wait_for_prompt_completion(prompt_id, timeout=10)
+    except Exception as e:
+        logger.debug(f"Initial history check failed: {e}")
+
+    async def _listen():
+        logger.info(f"Connecting to ComfyUI WebSocket: {ws_url}")
+        try:
+            async with websockets.connect(ws_url) as websocket:
+                start_time = time.time()
+                last_history_check = time.time()
+                our_prompt_is_executing = False  # Only true when OUR prompt is actively running
+                currently_executing_prompt_id = None  # Track exactly which prompt is running (for progress filtering)
+                execution_start_time = None  # Track when our prompt actually starts
+                
+                while True:
+                    current_time = time.time()
+                    
+                    # Use execution_start_time for timeout if our prompt has started,
+                    # otherwise use a generous queue timeout
+                    if our_prompt_is_executing and execution_start_time:
+                        if current_time - execution_start_time > timeout:
+                            return {'success': False, 'error': f'Timeout after {timeout}s of execution', 'outputs': []}
+                    else:
+                        # While queued, use a very generous timeout (e.g., 1 hour)
+                        queue_timeout = max(timeout, 3600)
+                        if current_time - start_time > queue_timeout:
+                            return {'success': False, 'error': f'Queue timeout after {int(current_time - start_time)}s', 'outputs': []}
+
+                    # Occasionally check history manually as fallback
+                    if current_time - last_history_check > 5.0:
+                        last_history_check = current_time
+                        try:
+                            hist_result = await asyncio.to_thread(requests.get, f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
+                            if hist_result.status_code == 200:
+                                history = hist_result.json()
+                                if prompt_id in history:
+                                    logger.info(f"Prompt {prompt_id} completed (found via history poll)")
+                                    if progress_callback:
+                                        progress_callback(100, 100)
+                                    return wait_for_prompt_completion(prompt_id, timeout=5)
+                        except:
+                            pass
+
+                    try:
+                        message_raw = await asyncio.wait_for(websocket.recv(), timeout=2.0)
+                        message = json.loads(message_raw)
+                        
+                        msg_type = message.get("type")
+                        data = message.get("data", {})
+
+                        if msg_type == "executing":
+                            msg_prompt_id = data.get("prompt_id")
+                            node = data.get("node")
+                            
+                            # Update global tracker for what's currently running
+                            if msg_prompt_id:
+                                currently_executing_prompt_id = msg_prompt_id
+                                
+                            if msg_prompt_id == prompt_id:
+                                if node is None:
+                                    # Our prompt finished execution
+                                    logger.info(f"Prompt {prompt_id} execution finished (via WS)")
+                                    if progress_callback:
+                                        progress_callback(100, 100)
+                                    return wait_for_prompt_completion(prompt_id, timeout=10)
+                                else:
+                                    # Our prompt started or is executing a node
+                                    if not our_prompt_is_executing:
+                                        logger.info(f"Prompt {prompt_id} started executing")
+                                        our_prompt_is_executing = True
+                                        execution_start_time = time.time()
+                            else:
+                                our_prompt_is_executing = False
+
+                        elif msg_type == "progress":
+                            # Progress messages in newer ComfyUI versions include prompt_id
+                            prog_prompt_id = data.get("prompt_id")
+                            
+                            # If prompt_id is directly in the progress message, trust it
+                            is_our_progress = False
+                            if prog_prompt_id == prompt_id:
+                                is_our_progress = True
+                            # If no prompt_id in progress message, fallback to tracking 'executing' events
+                            elif prog_prompt_id is None:
+                                if currently_executing_prompt_id == prompt_id:
+                                    is_our_progress = True
+                                # If we haven't seen ANY prompt start executing yet, it might be an early progress event for us
+                                elif currently_executing_prompt_id is None and not our_prompt_is_executing:
+                                    is_our_progress = True
+
+                            if is_our_progress and progress_callback:
+                                value = data.get("value", 0)
+                                max_val = data.get("max", 0)
+                                progress_callback(value, max_val)
+
+                    except asyncio.TimeoutError:
+                        continue
+        except Exception as e:
+            logger.error(f"WebSocket error in comfy_client: {e}")
+            # Fallback to polling if WebSocket fails
+            return wait_for_prompt_completion(prompt_id, timeout=timeout)
+
+    # Run the async listener
+    try:
+        return asyncio.run(_listen())
+    except Exception as e:
+        logger.error(f"Error running asyncio loop in comfy_client: {e}")
+        # Always fallback to standard polling
+        return wait_for_prompt_completion(prompt_id, timeout=timeout)
 
 
 def wait_for_prompt_completion(prompt_id, timeout=1800):
@@ -165,7 +338,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
         if elapsed > timeout:
             # Check queue status before giving up
             try:
-                queue_response = requests.get(f"{config.COMFY_URL}/queue")
+                queue_response = requests.get(f"{config.COMFY_URL}/queue", timeout=5)
                 if queue_response.status_code == 200:
                     queue_data = queue_response.json()
                     queue_running = queue_data.get("queue_running", [])
@@ -186,7 +359,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
 
         try:
             # Check prompt status
-            response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}")
+            response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
 
             if response.status_code != 200:
                 time.sleep(2)
@@ -195,6 +368,31 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
             history = response.json()
 
             if prompt_id not in history:
+                # If it's not in history, check if it's still in the queue.
+                # If it's in neither, it was likely canceled/interrupted.
+                try:
+                    queue_resp = requests.get(f"{config.COMFY_URL}/queue", timeout=5)
+                    if queue_resp.status_code == 200:
+                        queue_data = queue_resp.json()
+                        queue_running = queue_data.get("queue_running", [])
+                        queue_pending = queue_data.get("queue_pending", [])
+                        
+                        is_in_queue = False
+                        for item in queue_running + queue_pending:
+                            if len(item) > 1 and item[1] == prompt_id:
+                                is_in_queue = True
+                                break
+                                
+                        if not is_in_queue:
+                            logger.info(f"Prompt {prompt_id} not found in history or queue. Assuming canceled.")
+                            return {
+                                'success': False,
+                                'error': f'Prompt {prompt_id} was canceled or removed from queue.',
+                                'outputs': []
+                            }
+                except Exception as e:
+                    logger.debug(f"Failed to check queue status: {e}")
+
                 time.sleep(2)
                 continue
 

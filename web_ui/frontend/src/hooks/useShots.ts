@@ -32,8 +32,8 @@ export function useRegenerateImage(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force, imageMode, imageWorkflow }: { shotIndex: number; force?: boolean; imageMode?: string; imageWorkflow?: string }) =>
-      api.regenerateShotImage(sessionId, shotIndex, force, imageMode, imageWorkflow),
+    mutationFn: ({ shotIndex, force, imageMode, imageWorkflow, seed }: { shotIndex: number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number }) =>
+      api.regenerateShotImage(sessionId, shotIndex, force, imageMode, imageWorkflow, seed),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -60,10 +60,10 @@ export function useBatchRegenerate(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { 
-      shot_indices: number[]; 
-      regenerate_images: boolean; 
-      regenerate_videos: boolean; 
+    mutationFn: (data: {
+      shot_indices: number[];
+      regenerate_images: boolean;
+      regenerate_videos: boolean;
       force?: boolean;
       image_mode?: string;
       image_workflow?: string;
@@ -76,12 +76,26 @@ export function useBatchRegenerate(sessionId: string) {
   });
 }
 
+// Hook to select a specific image as the active one
+export function useSelectImage(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shotIndex, imagePath }: { shotIndex: number; imagePath: string }) =>
+      api.selectShotImage(sessionId, shotIndex, imagePath),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
 // Hook to replan shots
 export function useReplanShots(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { max_shots?: number; image_agent: string; video_agent: string }) => 
+    mutationFn: (data: { max_shots?: number; image_agent: string; video_agent: string }) =>
       api.replanShots(sessionId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });

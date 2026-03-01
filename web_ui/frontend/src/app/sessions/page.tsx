@@ -20,11 +20,13 @@ export default function SessionsPage() {
 
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newIdea, setNewIdea] = useState('');
-  
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
+
   // Agent selection state
   const [selectedStoryAgent, setSelectedStoryAgent] = useState('default');
   const [selectedImageAgent, setSelectedImageAgent] = useState('default');
   const [selectedVideoAgent, setSelectedVideoAgent] = useState('default');
+  const [totalDuration, setTotalDuration] = useState(600);
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,10 +37,21 @@ export default function SessionsPage() {
       story_agent: selectedStoryAgent,
       image_agent: selectedImageAgent,
       video_agent: selectedVideoAgent,
+      total_duration: totalDuration,
     };
 
     try {
+      setIsGeneratingStory(true);
       const session = await createSessionMutation.mutateAsync(request);
+
+      try {
+        // Automatically generate the initial story
+        await api.regenerateStory(session.session_id, request.story_agent);
+      } catch (storyError) {
+        console.error('Failed to generate initial story:', storyError);
+        // Continue to the session page even if story generation fails
+      }
+
       setShowNewDialog(false);
       setNewIdea('');
       // Navigate to the new session
@@ -46,8 +59,11 @@ export default function SessionsPage() {
     } catch (error) {
       console.error('Failed to create session:', error);
       alert('Failed to create session. Please try again.');
+    } finally {
+      setIsGeneratingStory(false);
     }
   };
+
 
   const handleDeleteSession = async (sessionId: string) => {
     if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
@@ -116,11 +132,10 @@ export default function SessionsPage() {
               {/* Status Badge */}
               <div className="flex items-center justify-between mb-4">
                 <span
-                  className={`px-2 py-1 text-xs rounded-full ${
-                    session.completed
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}
+                  className={`px-2 py-1 text-xs rounded-full ${session.completed
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-yellow-100 text-yellow-800'
+                    }`}
                 >
                   {session.completed ? 'Completed' : 'In Progress'}
                 </span>
@@ -219,7 +234,7 @@ export default function SessionsPage() {
               <div className="grid grid-cols-1 gap-4 mb-6">
                 <div>
                   <label className="block text-sm font-medium mb-1">Story Agent</label>
-                  <select 
+                  <select
                     value={selectedStoryAgent}
                     onChange={(e) => setSelectedStoryAgent(e.target.value)}
                     className="w-full border rounded-md p-2 text-sm"
@@ -232,7 +247,7 @@ export default function SessionsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Image Agent</label>
-                  <select 
+                  <select
                     value={selectedImageAgent}
                     onChange={(e) => setSelectedImageAgent(e.target.value)}
                     className="w-full border rounded-md p-2 text-sm"
@@ -245,7 +260,7 @@ export default function SessionsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Video Agent</label>
-                  <select 
+                  <select
                     value={selectedVideoAgent}
                     onChange={(e) => setSelectedVideoAgent(e.target.value)}
                     className="w-full border rounded-md p-2 text-sm"
@@ -258,6 +273,29 @@ export default function SessionsPage() {
                 </div>
               </div>
 
+              <div className="mb-6">
+                <label htmlFor="duration" className="block text-sm font-medium mb-1">
+                  Target Duration (seconds)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="duration"
+                    type="number"
+                    value={totalDuration}
+                    onChange={(e) => setTotalDuration(parseInt(e.target.value) || 0)}
+                    className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    min="10"
+                    step="10"
+                  />
+                  <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">
+                    {Math.floor(totalDuration / 60)}m {totalDuration % 60}s
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  The AI will try to generate a story that fits this total length.
+                </p>
+              </div>
+
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
@@ -268,10 +306,10 @@ export default function SessionsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={createSessionMutation.isPending}
+                  disabled={createSessionMutation.isPending || isGeneratingStory}
                   className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
-                  {createSessionMutation.isPending ? 'Creating...' : 'Create'}
+                  {isGeneratingStory ? 'Generating Story...' : createSessionMutation.isPending ? 'Creating...' : 'Create'}
                 </button>
               </div>
             </form>

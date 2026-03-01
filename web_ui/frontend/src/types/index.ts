@@ -48,6 +48,7 @@ export interface SessionListItem {
 export interface Story {
   title: string;
   style: string;
+  total_duration?: number;
   scenes: Scene[];
 }
 
@@ -79,6 +80,7 @@ export interface CreateSessionRequest {
   story_agent?: string;
   image_agent?: string;
   video_agent?: string;
+  total_duration?: number;
 }
 
 export interface UpdateSessionRequest {

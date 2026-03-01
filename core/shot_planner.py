@@ -318,7 +318,14 @@ def plan_shots(scene_graph, max_shots=None, image_agent="default", video_agent="
             raise ValueError("scene_graph must be a non-empty list or valid JSON string")
 
     # Calculate scene count
-    scenes = json.loads(scene_graph) if isinstance(scene_graph, str) else scene_graph
+    parsed_graph = json.loads(scene_graph) if isinstance(scene_graph, str) else scene_graph
+    
+    # Extract scenes list from story wrapper if necessary
+    if isinstance(parsed_graph, dict) and "scenes" in parsed_graph:
+        scenes = parsed_graph["scenes"]
+    else:
+        scenes = parsed_graph
+        
     scene_count = len(scenes)
 
     # Determine shots per scene target
@@ -561,6 +568,18 @@ CRITICAL SHOT REQUIREMENTS:
         response = provider.ask(image_prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
 
+        # Ensure shots is a list
+        if isinstance(shots, dict):
+            # Check for common wrappers like {"shots": [...]}
+            for val in shots.values():
+                if isinstance(val, list):
+                    shots = val
+                    break
+            else:
+                shots = [shots]  # Wrap single object in list
+        elif not isinstance(shots, list):
+            shots = []
+
         # Enforce max_shots limit if specified
         if max_shots and len(shots) > max_shots:
             print(f"[INFO] Generated {len(shots)} shots, limiting to {max_shots}")
@@ -599,6 +618,17 @@ SCENES:
         provider = get_provider()
         response = provider.ask(prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
+
+        # Ensure shots is a list
+        if isinstance(shots, dict):
+            for val in shots.values():
+                if isinstance(val, list):
+                    shots = val
+                    break
+            else:
+                shots = [shots]
+        elif not isinstance(shots, list):
+            shots = []
 
         # Enforce max_shots limit if specified
         if max_shots and len(shots) > max_shots:

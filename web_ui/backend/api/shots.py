@@ -12,7 +12,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
-    RegenerateVideoRequest, BatchRegenerateRequest, ReplanShotsRequest
+    RegenerateVideoRequest, BatchRegenerateRequest, ReplanShotsRequest,
+    SelectImageRequest
 )
 from web_ui.backend.services.session_service import SessionService
 from web_ui.backend.services.generation_service import GenerationService
@@ -147,7 +148,8 @@ async def regenerate_shot_image(session_id: str, shot_index: int, request: Regen
     try:
         result = await generation_service.regenerate_shot_image(
             session_id, shot_index, force=request.force,
-            image_mode=request.image_mode, image_workflow=request.image_workflow
+            image_mode=request.image_mode, image_workflow=request.image_workflow,
+            seed=request.seed
         )
         return {"status": "success", "image_path": result}
     except Exception as e:
@@ -219,6 +221,48 @@ async def batch_regenerate(session_id: str, request: BatchRegenerateRequest):
             detail=f"Failed to batch regenerate: {str(e)}"
         )
 
+@router.post("/{shot_index}/select-image")
+async def select_shot_image(session_id: str, shot_index: int, request: SelectImageRequest):
+    """Select a specific image as the active one for a shot"""
+    try:
+        shots = await get_shots(session_id)
+
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        shot = shots[shot_index - 1]
+
+        # Verify the requested path exists in image_paths
+        image_paths = shot.get('image_paths', [])
+        if request.image_path not in image_paths:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image path not found in shot's image_paths"
+            )
+
+        # Update the active image_path
+        shot['image_path'] = request.image_path
+
+        # Save updated shots
+        session_dir = session_service.get_session_dir(session_id)
+        shots_path = os.path.join(session_dir, "shots.json")
+
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+        return {"status": "success", "image_path": request.image_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error selecting image for shot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to select image: {str(e)}"
+        )
+
 
 @router.post("/replan")
 async def replan_shots(session_id: str, request: ReplanShotsRequest):
@@ -236,4 +280,30 @@ async def replan_shots(session_id: str, request: ReplanShotsRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to replan shots: {str(e)}"
+        )
+
+
+@router.post("/cancel-generation")
+async def cancel_generation(session_id: str):
+    """Cancel all pending and running image/video generation for this session"""
+    from core.comfy_client import cancel_all
+    from web_ui.backend.websocket.manager import manager
+
+    try:
+        logger.info(f"Cancel generation requested for session {session_id}")
+        result = cancel_all()
+        logger.info(f"ComfyUI cancel result: {result}")
+
+        # Broadcast cancellation to frontend (use async since this handler is async)
+        await manager.broadcast_to_session(session_id, {
+            "type": "cancelled",
+            "session_id": session_id
+        })
+
+        return {"status": "success", "cancelled": result}
+    except Exception as e:
+        logger.error(f"Error cancelling generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel generation: {str(e)}"
         )

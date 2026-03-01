@@ -94,6 +94,7 @@ class CreateSessionRequest(BaseModel):
     story_agent: str = Field(default="default", description="Story generation agent")
     image_agent: str = Field(default="default", description="Image prompt agent")
     video_agent: str = Field(default="default", description="Video motion agent")
+    total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
 
 
 class UpdateSessionRequest(BaseModel):

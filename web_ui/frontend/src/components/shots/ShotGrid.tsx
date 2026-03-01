@@ -1,13 +1,15 @@
 /**
  * ShotGrid component - Grid view of shots with thumbnails and bulk actions
  */
-import { useState } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { ShotCard } from './ShotCard';
 import { Shot } from '@/types';
-import { useBatchRegenerate } from '@/hooks/useShots';
 import { useAgents } from '@/hooks/useAgents';
-import { CheckSquare, Square, Image as ImageIcon, Video, X, RotateCw } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '@/services/api';
+import { CheckSquare, Square, Image as ImageIcon, Video, X, RotateCw, Search, Filter, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useProgress } from '@/hooks/useProgress';
 
 interface ShotGridProps {
   shots: Shot[];
@@ -16,15 +18,58 @@ interface ShotGridProps {
 
 export function ShotGrid({ shots, sessionId }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
-  const [showBatchModal, setShowBatchModal] = useState<'image' | 'video' | null>(null);
+  const [showBatchModal, setShowBatchModal] = useState<'image' | 'video' | 'both' | null>(null);
+  const [generatingIndices, setGeneratingIndices] = useState<Set<number>>(new Set());
+  const { shotProgress } = useProgress(sessionId);
+
+  // Filter state
+  const [filterNoImages, setFilterNoImages] = useState(false);
+  const [filterNoVideos, setFilterNoVideos] = useState(false);
+  const [filterCamera, setFilterCamera] = useState<string>('');
+  const [filterText, setFilterText] = useState<string>('');
 
   // Overrides state
   const [imageMode, setImageMode] = useState<string>('comfyui');
   const [imageWorkflow, setImageWorkflow] = useState<string>('flux2');
   const [videoWorkflow, setVideoWorkflow] = useState<string>('workflow/video/wan22_workflow.json');
 
-  const batchRegenerate = useBatchRegenerate(sessionId);
+  const queryClient = useQueryClient();
   const { data: agents } = useAgents();
+
+  // Extract unique camera values for the dropdown
+  const cameraOptions = useMemo(() => {
+    const cameras = new Set(shots.map(s => s.camera).filter(Boolean));
+    return Array.from(cameras).sort();
+  }, [shots]);
+
+  // Apply filters
+  const filteredShots = useMemo(() => {
+    let result = shots;
+
+    if (filterNoImages) {
+      result = result.filter(s => !s.image_generated);
+    }
+    if (filterNoVideos) {
+      result = result.filter(s => !s.video_rendered);
+    }
+    if (filterCamera) {
+      result = result.filter(s => s.camera === filterCamera);
+    }
+    if (filterText.trim()) {
+      const q = filterText.trim().toLowerCase();
+      result = result.filter(s => {
+        return (
+          (s.image_prompt || '').toLowerCase().includes(q) ||
+          (s.motion_prompt || '').toLowerCase().includes(q) ||
+          (s.narration || '').toLowerCase().includes(q)
+        );
+      });
+    }
+
+    return result;
+  }, [shots, filterNoImages, filterNoVideos, filterCamera, filterText]);
+
+  const hasActiveFilters = filterNoImages || filterNoVideos || !!filterCamera || !!filterText.trim();
 
   if (shots.length === 0) {
     return (
@@ -35,10 +80,10 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
   }
 
   const toggleSelectAll = () => {
-    if (selectedIndices.length === shots.length) {
+    if (selectedIndices.length === filteredShots.length) {
       setSelectedIndices([]);
     } else {
-      setSelectedIndices(shots.map(s => s.index));
+      setSelectedIndices(filteredShots.map(s => s.index));
     }
   };
 
@@ -50,52 +95,236 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
     }
   };
 
-  const handleBatchSubmit = async () => {
+  const handleBatchSubmit = useCallback(async () => {
     if (selectedIndices.length === 0 || !showBatchModal) return;
 
-    try {
-      if (showBatchModal === 'image') {
-        await batchRegenerate.mutateAsync({
-          shot_indices: selectedIndices,
-          regenerate_images: true,
-          regenerate_videos: false,
-          force: true,
-          image_mode: imageMode,
-          image_workflow: imageWorkflow
-        });
-      } else {
-        await batchRegenerate.mutateAsync({
-          shot_indices: selectedIndices,
-          regenerate_images: false,
-          regenerate_videos: true,
-          force: true,
-          video_workflow: videoWorkflow
-        });
+    const indicesToProcess = [...selectedIndices];
+    const type = showBatchModal;
+
+    // Close modal and clear selection immediately
+    setShowBatchModal(null);
+    setSelectedIndices([]);
+
+    // Mark all selected shots as generating
+    setGeneratingIndices(prev => {
+      const next = new Set(prev);
+      indicesToProcess.forEach(i => next.add(i));
+      return next;
+    });
+
+    if (type === 'both') {
+      // Sequential: first all images, then all videos
+      // Phase 1: Generate images with concurrency limit (max 4)
+      // This leaves 2 browser connections free for UI updates (like invalidateQueries)
+      const inProgress = new Set<Promise<void>>();
+      for (const shotIndex of indicesToProcess) {
+        const p = (async () => {
+          try {
+            await api.regenerateShotImage(sessionId, shotIndex, true, imageMode, imageWorkflow);
+          } catch (error) {
+            console.error(`Failed to regenerate image for shot ${shotIndex}:`, error);
+          } finally {
+            // Invalidate and remove from generating as soon as each image finishes
+            queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+            setGeneratingIndices(prev => {
+              const next = new Set(prev);
+              next.delete(shotIndex);
+              return next;
+            });
+          }
+        })().finally(() => inProgress.delete(p));
+
+        inProgress.add(p);
+        if (inProgress.size >= 4) {
+          await Promise.race(inProgress);
+        }
       }
-      setShowBatchModal(null);
-      setSelectedIndices([]); // Clear selection after success
-      alert(`Successfully queued ${selectedIndices.length} shots for regeneration.`);
-    } catch (error) {
-      console.error('Batch generation failed:', error);
-      alert('Batch regeneration failed. Check console for details.');
+      await Promise.all(inProgress);
+
+      // Clear generating state and refresh to show new images
+      setGeneratingIndices(new Set());
+      await queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+
+      // Phase 2: Re-mark for video generation, then start videos with concurrency limit
+      setGeneratingIndices(new Set(indicesToProcess));
+      const inProgressVideos = new Set<Promise<void>>();
+      for (const shotIndex of indicesToProcess) {
+        const p = (async () => {
+          try {
+            await api.regenerateShotVideo(sessionId, shotIndex, true, videoWorkflow);
+          } catch (error) {
+            console.error(`Failed to regenerate video for shot ${shotIndex}:`, error);
+          } finally {
+            setGeneratingIndices(prev => {
+              const next = new Set(prev);
+              next.delete(shotIndex);
+              return next;
+            });
+            queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+          }
+        })().finally(() => inProgressVideos.delete(p));
+
+        inProgressVideos.add(p);
+        if (inProgressVideos.size >= 4) {
+          await Promise.race(inProgressVideos);
+        }
+      }
+      await Promise.all(inProgressVideos);
+
+    } else {
+      // Single type: fire individual requests with concurrency limit (max 4)
+      const inProgressSingle = new Set<Promise<void>>();
+      for (const shotIndex of indicesToProcess) {
+        const p = (async () => {
+          try {
+            if (type === 'image') {
+              await api.regenerateShotImage(sessionId, shotIndex, true, imageMode, imageWorkflow);
+            } else {
+              await api.regenerateShotVideo(sessionId, shotIndex, true, videoWorkflow);
+            }
+          } catch (error) {
+            console.error(`Failed to regenerate ${type} for shot ${shotIndex}:`, error);
+          } finally {
+            setGeneratingIndices(prev => {
+              const next = new Set(prev);
+              next.delete(shotIndex);
+              return next;
+            });
+            queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+          }
+        })().finally(() => inProgressSingle.delete(p));
+
+        inProgressSingle.add(p);
+        if (inProgressSingle.size >= 4) {
+          await Promise.race(inProgressSingle);
+        }
+      }
+      await Promise.all(inProgressSingle);
     }
-  };
+  }, [selectedIndices, showBatchModal, sessionId, imageMode, imageWorkflow, videoWorkflow, queryClient]);
+
+  const handleCancelAll = useCallback(async () => {
+    try {
+      await api.cancelGeneration(sessionId);
+      setGeneratingIndices(new Set());
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    } catch (error) {
+      console.error('Failed to cancel generation:', error);
+    }
+  }, [sessionId, queryClient]);
 
   return (
     <div className="relative">
       {/* Header Actions */}
       <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={toggleSelectAll}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          {selectedIndices.length === shots.length ? (
-            <CheckSquare className="w-4 h-4" />
-          ) : (
-            <Square className="w-4 h-4" />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSelectedIndices(filteredShots.map(s => s.index))}
+            className="flex items-center gap-1.5 text-sm px-2.5 py-1 border rounded-md hover:bg-muted transition-colors"
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+            Select All
+          </button>
+          <button
+            onClick={() => setSelectedIndices([])}
+            disabled={selectedIndices.length === 0}
+            className="flex items-center gap-1.5 text-sm px-2.5 py-1 border rounded-md hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Square className="w-3.5 h-3.5" />
+            Select None
+          </button>
+          {selectedIndices.length > 0 && (
+            <span className="text-xs text-muted-foreground ml-1">
+              {selectedIndices.length} of {shots.length} selected
+            </span>
           )}
-          {selectedIndices.length > 0 ? `${selectedIndices.length} Selected` : 'Select All'}
+        </div>
+        {generatingIndices.size > 0 && (
+          <button
+            onClick={handleCancelAll}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <XCircle className="w-4 h-4" />
+            Cancel All Generation
+          </button>
+        )}
+      </div>
+
+      {/* Filter Bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-muted/40 rounded-lg border">
+        <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+
+        <button
+          onClick={() => setFilterNoImages(v => !v)}
+          className={cn(
+            "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full border transition-colors",
+            filterNoImages
+              ? "bg-orange-100 border-orange-300 text-orange-700 dark:bg-orange-900/30 dark:border-orange-700 dark:text-orange-400"
+              : "hover:bg-muted"
+          )}
+        >
+          <ImageIcon className="w-3 h-3" />
+          No Images
         </button>
+
+        <button
+          onClick={() => setFilterNoVideos(v => !v)}
+          className={cn(
+            "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full border transition-colors",
+            filterNoVideos
+              ? "bg-purple-100 border-purple-300 text-purple-700 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-400"
+              : "hover:bg-muted"
+          )}
+        >
+          <Video className="w-3 h-3" />
+          No Videos
+        </button>
+
+        <select
+          value={filterCamera}
+          onChange={(e) => setFilterCamera(e.target.value)}
+          className="text-xs px-2.5 py-1.5 rounded-full border bg-background transition-colors"
+        >
+          <option value="">All Cameras</option>
+          {cameraOptions.map(cam => (
+            <option key={cam} value={cam}>{cam}</option>
+          ))}
+        </select>
+
+        <div className="relative flex-1 min-w-[180px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="Search prompts & narration..."
+            className="w-full text-xs pl-8 pr-3 py-1.5 rounded-full border bg-background"
+          />
+        </div>
+
+        {hasActiveFilters && (
+          <button
+            onClick={() => {
+              setFilterNoImages(false);
+              setFilterNoVideos(false);
+              setFilterCamera('');
+              setFilterText('');
+            }}
+            className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full border text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          >
+            <X className="w-3 h-3" />
+            Clear
+          </button>
+        )}
+
+        <span className="text-xs text-muted-foreground ml-auto">
+          {filteredShots.length} of {shots.length} shots
+        </span>
       </div>
 
       {/* Floating Bulk Actions Bar */}
@@ -121,6 +350,13 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
           Regenerate Videos
         </button>
         <button
+          onClick={() => setShowBatchModal('both')}
+          className="flex items-center gap-2 text-sm px-3 py-1.5 hover:bg-muted rounded-md transition-colors"
+        >
+          <RotateCw className="w-4 h-4 text-green-500" />
+          Both (Images + Videos)
+        </button>
+        <button
           onClick={() => setSelectedIndices([])}
           className="ml-2 p-1.5 hover:bg-muted rounded-full text-muted-foreground"
         >
@@ -130,14 +366,17 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {shots.map((shot) => (
+        {filteredShots.map((shot) => (
           <ShotCard
-            key={shot.index}
+            key={`${shot.index}-${shot.image_path}`}
             shot={shot}
             sessionId={sessionId}
             selectable={true}
             selected={selectedIndices.includes(shot.index)}
-            onSelectChange={(selected) => toggleSelectShot(shot.index, selected)}
+            onSelectChange={(selected: boolean) => toggleSelectShot(shot.index, selected)}
+            isGenerating={generatingIndices.has(shot.index)}
+            progress={shotProgress[shot.index]}
+            onCancel={generatingIndices.has(shot.index) ? handleCancelAll : undefined}
           />
         ))}
       </div>
@@ -154,10 +393,10 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
             </button>
 
             <h2 className="text-xl font-semibold mb-6">
-              Batch Regenerate {showBatchModal === 'image' ? 'Images' : 'Videos'} ({selectedIndices.length} shots)
+              Batch Regenerate {showBatchModal === 'image' ? 'Images' : showBatchModal === 'video' ? 'Videos' : 'Images + Videos'} ({selectedIndices.length} shots)
             </h2>
 
-            {showBatchModal === 'image' ? (
+            {(showBatchModal === 'image' || showBatchModal === 'both') && (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Generation Mode</label>
@@ -190,8 +429,11 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
                   </div>
                 )}
               </div>
-            ) : (
+            )}
+
+            {(showBatchModal === 'video' || showBatchModal === 'both') && (
               <div className="space-y-4">
+                {showBatchModal === 'both' && <hr className="my-3" />}
                 <div>
                   <label className="block text-sm font-medium mb-1">Video Workflow</label>
                   <input
@@ -215,17 +457,9 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
               </button>
               <button
                 onClick={handleBatchSubmit}
-                disabled={batchRegenerate.isPending}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2"
               >
-                {batchRegenerate.isPending ? (
-                  <>
-                    <RotateCw className="w-4 h-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  'Start Generation'
-                )}
+                Start Generation
               </button>
             </div>
           </div>

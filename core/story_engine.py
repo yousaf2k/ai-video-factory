@@ -141,6 +141,9 @@ IDEA:
     if target_length:
         try:
             story = json.loads(story_json)
+            # Add total_duration to story dict
+            story['total_duration'] = int(target_length)
+            
             is_valid, actual_total, diff, adjusted_story = validate_and_adjust_scene_durations(
                 story, target_length, config.SCENE_DURATION_TOLERANCE
             )

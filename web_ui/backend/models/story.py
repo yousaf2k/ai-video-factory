@@ -19,6 +19,7 @@ class Story(BaseModel):
     """Story model"""
     title: str
     style: str
+    total_duration: Optional[int] = None
     scenes: List[Scene]
 
     class Config:

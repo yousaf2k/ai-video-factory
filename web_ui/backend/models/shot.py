@@ -55,6 +55,7 @@ class RegenerateImageRequest(BaseModel):
     force: bool = Field(default=False, description="Force regeneration even if image exists")
     image_mode: Optional[str] = Field(default=None, description="Override image generation mode (gemini/comfyui)")
     image_workflow: Optional[str] = Field(default=None, description="Override image workflow for ComfyUI (e.g. flux2, sdxl)")
+    seed: Optional[int] = Field(default=None, description="Optional specific seed for regeneration")
 
 
 class RegenerateVideoRequest(BaseModel):
@@ -79,3 +80,9 @@ class ReplanShotsRequest(BaseModel):
     max_shots: Optional[int] = Field(default=None, description="Maximum shots to generate")
     image_agent: str = Field(default="default", description="Image agent to use")
     video_agent: str = Field(default="default", description="Video agent to use")
+
+
+class SelectImageRequest(BaseModel):
+    """Request to select a specific image as the active one for a shot"""
+    image_path: str = Field(..., description="Path of the image to set as active")
+

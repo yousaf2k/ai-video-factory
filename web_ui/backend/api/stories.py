@@ -104,7 +104,10 @@ async def regenerate_story(session_id: str, request: RegenerateStoryRequest):
 
         # Generate new story
         import config
-        target_length = config.TARGET_VIDEO_LENGTH if hasattr(config, 'TARGET_VIDEO_LENGTH') else None
+        # Use total_duration from meta if exists, otherwise fallback to config
+        target_length = meta.get("total_duration")
+        if target_length is None:
+            target_length = config.TARGET_VIDEO_LENGTH if hasattr(config, 'TARGET_VIDEO_LENGTH') else None
 
         story_json = build_story(idea, request.agent, target_length)
 

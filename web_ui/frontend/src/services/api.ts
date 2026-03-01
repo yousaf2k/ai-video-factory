@@ -119,12 +119,14 @@ class ApiClient {
     shotIndex: number,
     force: boolean = false,
     imageMode?: string,
-    imageWorkflow?: string
+    imageWorkflow?: string,
+    seed?: number
   ): Promise<void> {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-image`, {
       force,
       image_mode: imageMode,
       image_workflow: imageWorkflow,
+      seed,
     });
   }
 
@@ -137,6 +139,20 @@ class ApiClient {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-video`, {
       force,
       video_workflow: videoWorkflow,
+    });
+  }
+
+  async cancelGeneration(sessionId: string): Promise<void> {
+    await this.client.post(`/api/sessions/${sessionId}/shots/cancel-generation`);
+  }
+
+  async selectShotImage(
+    sessionId: string,
+    shotIndex: number,
+    imagePath: string
+  ): Promise<void> {
+    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/select-image`, {
+      image_path: imagePath,
     });
   }
 

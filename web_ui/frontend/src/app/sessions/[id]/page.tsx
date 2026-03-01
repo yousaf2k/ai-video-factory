@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from '@/hooks/useSessions';
 import { formatDistanceToNow } from 'date-fns';
+import { getMediaUrl } from '@/lib/utils';
 
 export default function SessionDetailPage() {
   const params = useParams();
@@ -52,11 +53,10 @@ export default function SessionDetailPage() {
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold">{session.session_id}</h1>
               <span
-                className={`px-3 py-1 text-sm rounded-full ${
-                  session.completed
+                className={`px-3 py-1 text-sm rounded-full ${session.completed
                     ? 'bg-green-100 text-green-800'
                     : 'bg-yellow-100 text-yellow-800'
-                }`}
+                  }`}
               >
                 {session.completed ? 'Completed' : 'In Progress'}
               </span>
@@ -109,9 +109,8 @@ export default function SessionDetailPage() {
               </div>
               <div className="w-full bg-muted rounded-full h-2">
                 <div
-                  className={`h-2 rounded-full transition-all ${
-                    session.steps.story ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
+                  className={`h-2 rounded-full transition-all ${session.steps.story ? 'bg-green-500' : 'bg-gray-300'
+                    }`}
                   style={{ width: session.steps.story ? '100%' : '0%' }}
                 />
               </div>
@@ -125,9 +124,8 @@ export default function SessionDetailPage() {
               </div>
               <div className="w-full bg-muted rounded-full h-2">
                 <div
-                  className={`h-2 rounded-full transition-all ${
-                    session.steps.shots ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
+                  className={`h-2 rounded-full transition-all ${session.steps.shots ? 'bg-green-500' : 'bg-gray-300'
+                    }`}
                   style={{ width: session.steps.shots ? '100%' : '0%' }}
                 />
               </div>
@@ -169,9 +167,8 @@ export default function SessionDetailPage() {
               </div>
               <div className="w-full bg-muted rounded-full h-2">
                 <div
-                  className={`h-2 rounded-full transition-all ${
-                    session.steps.narration ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
+                  className={`h-2 rounded-full transition-all ${session.steps.narration ? 'bg-green-500' : 'bg-gray-300'
+                    }`}
                   style={{ width: session.steps.narration ? '100%' : '0%' }}
                 />
               </div>
@@ -242,14 +239,14 @@ export default function SessionDetailPage() {
                 <div className="mb-2 aspect-video bg-muted rounded overflow-hidden relative group flex items-center justify-center">
                   {shot.video_rendered && shot.video_path ? (
                     <video
-                      src={shot.video_path.replace(/^output[\\/]sessions[\\/]/, '/api/sessions/').replace(/\\/g, '/')}
-                      poster={shot.image_path ? shot.image_path.replace(/^output[\\/]sessions[\\/]/, '/api/sessions/').replace(/\\/g, '/') : undefined}
+                      src={getMediaUrl(shot.video_path)}
+                      poster={getMediaUrl(shot.image_path)}
                       controls
                       className="w-full h-full object-cover"
                     />
                   ) : shot.image_path ? (
                     <img
-                      src={shot.image_path.replace(/^output[\\/]sessions[\\/]/, '/api/sessions/').replace(/\\/g, '/')}
+                      src={getMediaUrl(shot.image_path)}
                       alt={`Shot ${shot.index}`}
                       className="w-full h-full object-cover"
                     />

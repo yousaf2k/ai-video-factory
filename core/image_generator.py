@@ -112,7 +112,7 @@ def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = Non
         return None
 
 
-def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None, workflow_name: str = None) -> str:
+def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None, workflow_name: str = None, step_progress_callback=None) -> str:
     """
     Generate a single image using the configured mode (Gemini or ComfyUI).
 
@@ -134,7 +134,7 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
 
     if mode == "comfyui":
         from core.comfyui_image_generator import generate_image_comfyui
-        return generate_image_comfyui(prompt, output_path, seed=seed, workflow_name=workflow_name)
+        return generate_image_comfyui(prompt, output_path, seed=seed, workflow_name=workflow_name, progress_callback=step_progress_callback)
     elif mode == "geminiweb":
         from core.geminiweb_image_generator import generate_image_geminiweb
         return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio)
@@ -162,8 +162,11 @@ def generate_image_variations(prompt: str, output_dir: str, count: int = 1, mode
     generated_paths = []
 
     for variation_idx in range(count):
-        # Generate random seed for this variation
-        seed = random.randint(0, 2**32 - 1)
+        # 1st time generation for a shot uses seed 1, next generations use random
+        if variation_idx == 0:
+            seed = 1
+        else:
+            seed = random.randint(0, 2**32 - 1)
 
         # Generate filename: shot_001_001.png, shot_001_002.png, etc.
         filename = f"shot_{shot_idx:03d}_{variation_idx + 1:03d}.png"
@@ -257,8 +260,11 @@ def generate_images_for_shots(
         # Generate multiple variations
         image_paths = []
         for variation_idx in range(images_per_shot):
-            # Generate random seed for this variation
-            seed = random.randint(0, 2**32 - 1)
+            # 1st time generation for a shot uses seed 1, next generations use random
+            if variation_idx == 0:
+                seed = 1
+            else:
+                seed = random.randint(0, 2**32 - 1)
 
             # Generate filename: shot_001_001.png, shot_001_002.png, etc.
             filename = f"shot_{shot_idx:03d}_{variation_idx + 1:03d}.png"

@@ -1,7 +1,7 @@
 {
   "6": {
     "inputs": {
-      "text": "",
+      "text": "Close-up shot of a Pac-Man arcade game screen, Pac-Man navigating the maze, ghosts chasing closely, retro pixel art style, vibrant colors, 8K, macro lens, professional photography",
       "clip": [
         "43",
         0
@@ -30,7 +30,7 @@
   },
   "9": {
     "inputs": {
-      "filename_prefix": "shot_003_001",
+      "filename_prefix": "1772381716808_fca99454_shot_037_001",
       "images": [
         "8",
         0
@@ -120,7 +120,7 @@
   },
   "25": {
     "inputs": {
-      "noise_seed": 1402267562
+      "noise_seed": 3
     },
     "class_type": "RandomNoise",
     "_meta": {
@@ -142,8 +142,8 @@
   },
   "27": {
     "inputs": {
-      "width": 1280,
-      "height": 720,
+      "width": 1536,
+      "height": 864,
       "batch_size": 1
     },
     "class_type": "EmptySD3LatentImage",
@@ -155,25 +155,16 @@
     "inputs": {
       "max_shift": 0.5,
       "base_shift": 1.15,
-      "width": 1280,
-      "height": 720,
+      "width": 1536,
+      "height": 864,
       "model": [
-        "40",
+        "45",
         0
       ]
     },
     "class_type": "ModelSamplingFlux",
     "_meta": {
       "title": "ModelSamplingFlux"
-    }
-  },
-  "40": {
-    "inputs": {
-      "unet_name": "flux1-dev-Q8_0.gguf"
-    },
-    "class_type": "UnetLoaderGGUF",
-    "_meta": {
-      "title": "Unet Loader (GGUF)"
     }
   },
   "43": {
@@ -185,6 +176,16 @@
     "class_type": "DualCLIPLoaderGGUF",
     "_meta": {
       "title": "DualCLIPLoader (GGUF)"
+    }
+  },
+  "45": {
+    "inputs": {
+      "unet_name": "flux1-dev-nvfp4.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
     }
   }
 }
