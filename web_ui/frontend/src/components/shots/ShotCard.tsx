@@ -17,9 +17,9 @@ interface ShotCardProps {
   onSelectChange?: (selected: boolean) => void;
 }
 
-export function ShotCard({ 
-  shot, 
-  sessionId, 
+export function ShotCard({
+  shot,
+  sessionId,
   showIndex = true,
   selectable = false,
   selected = false,
@@ -30,9 +30,10 @@ export function ShotCard({
   const [viewMode, setViewMode] = useState<'image' | 'video'>(
     shot.video_rendered && shot.video_path ? 'video' : 'image'
   );
-  
+
   // Regeneration modal state
   const [showRegenModal, setShowRegenModal] = useState<'image' | 'video' | null>(null);
+  const [showFullscreenImage, setShowFullscreenImage] = useState(false);
   const [regenForce, setRegenForce] = useState(true);
   const [regenImageMode, setRegenImageMode] = useState('comfyui');
   const [regenImageWorkflow, setRegenImageWorkflow] = useState('flux2');
@@ -74,15 +75,15 @@ export function ShotCard({
   const handleRegenSubmit = async () => {
     try {
       if (showRegenModal === 'image') {
-        await regenerateImage.mutateAsync({ 
-          shotIndex: shot.index, 
+        await regenerateImage.mutateAsync({
+          shotIndex: shot.index,
           force: regenForce,
           imageMode: regenImageMode,
           imageWorkflow: regenImageWorkflow
         });
       } else if (showRegenModal === 'video') {
-        await regenerateVideo.mutateAsync({ 
-          shotIndex: shot.index, 
+        await regenerateVideo.mutateAsync({
+          shotIndex: shot.index,
           force: regenForce,
           videoWorkflow: regenVideoWorkflow
         });
@@ -98,16 +99,16 @@ export function ShotCard({
   // Helper to convert internal output paths to API URLs
   const getMediaUrl = (path: string | null) => {
     if (!path) return '';
-    
+
     // Normalize slashes
     let normalizedPath = path.replace(/\\/g, '/');
-    
+
     // If it's an absolute path (e.g. C:/... or /home/...), extract the part starting from 'output/'
     const outputIndex = normalizedPath.indexOf('output/sessions/');
     if (outputIndex !== -1) {
       normalizedPath = normalizedPath.substring(outputIndex);
     }
-    
+
     return normalizedPath.replace(/^output[\\/]sessions[\\/]/, '/api/sessions/').replace(/\\/g, '/');
   };
 
@@ -277,7 +278,9 @@ export function ShotCard({
             <img
               src={imageUrl}
               alt={`Shot ${shot.index}`}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => setShowFullscreenImage(true)}
+              title="Click to view full screen"
             />
           ) : (
             <span className="text-muted-foreground text-xs">No media available</span>
@@ -334,13 +337,13 @@ export function ShotCard({
       {showRegenModal && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
           <div className="bg-background rounded-lg shadow-xl max-w-sm w-full p-6 relative">
-            <button 
+            <button
               onClick={() => setShowRegenModal(null)}
               className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
             >
               <X className="w-5 h-5" />
             </button>
-            
+
             <h2 className="text-lg font-semibold mb-4">
               Regenerate {showRegenModal === 'image' ? 'Image' : 'Video'}
             </h2>
@@ -363,20 +366,21 @@ export function ShotCard({
                 <>
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">Generation Mode</label>
-                    <select 
+                    <select
                       value={regenImageMode}
                       onChange={(e) => setRegenImageMode(e.target.value)}
                       className="w-full border rounded-md p-2 text-sm"
                     >
                       <option value="comfyui">ComfyUI (Local)</option>
                       <option value="gemini">Gemini (Cloud)</option>
+                      <option value="geminiweb">GeminiWeb - Gemini Web (Browser)</option>
                     </select>
                   </div>
 
                   {regenImageMode === 'comfyui' && (
                     <div>
                       <label className="block text-xs font-medium text-muted-foreground mb-1">Workflow</label>
-                      <select 
+                      <select
                         value={regenImageWorkflow}
                         onChange={(e) => setRegenImageWorkflow(e.target.value)}
                         className="w-full border rounded-md p-2 text-sm"
@@ -394,7 +398,7 @@ export function ShotCard({
               {showRegenModal === 'video' && (
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Video Workflow</label>
-                  <input 
+                  <input
                     type="text"
                     value={regenVideoWorkflow}
                     onChange={(e) => setRegenVideoWorkflow(e.target.value)}
@@ -405,13 +409,13 @@ export function ShotCard({
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setShowRegenModal(null)}
                 className="px-3 py-1.5 border rounded-md hover:bg-muted text-sm"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleRegenSubmit}
                 disabled={regenerateImage.isPending || regenerateVideo.isPending}
                 className="px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
@@ -427,6 +431,29 @@ export function ShotCard({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Fullscreen Image Modal */}
+      {showFullscreenImage && imageUrl && (
+        <div
+          className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setShowFullscreenImage(false)}
+        >
+          <img
+            src={imageUrl}
+            alt={`Shot ${shot.index} Fullscreen`}
+            className="max-w-full max-h-full object-contain"
+          />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowFullscreenImage(false);
+            }}
+            className="absolute top-4 right-4 text-white/70 hover:text-white p-2 transition-colors"
+          >
+            <X className="w-8 h-8" />
+          </button>
         </div>
       )}
     </div>

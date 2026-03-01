@@ -140,6 +140,7 @@ async def update_shot(session_id: str, shot_index: int, request: UpdateShotReque
         )
 
 
+
 @router.post("/{shot_index}/regenerate-image")
 async def regenerate_shot_image(session_id: str, shot_index: int, request: RegenerateImageRequest):
     """Regenerate image for a single shot"""
@@ -196,6 +197,7 @@ async def batch_regenerate(session_id: str, request: BatchRegenerateRequest):
                     result["image"] = "success"
                 except Exception as e:
                     result["image"] = f"failed: {str(e)}"
+
 
             if request.regenerate_videos:
                 try:

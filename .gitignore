@@ -9,8 +9,7 @@ output/sessions/
 output/
 
 # Log files
-logs/*.log
-logs/*.log.*
+*.log
 
 # Environment variables with API keys
 .env

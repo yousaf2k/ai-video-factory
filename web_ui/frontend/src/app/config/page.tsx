@@ -73,13 +73,13 @@ export default function ConfigPage() {
         {/* Core Settings */}
         <section className="space-y-4">
           <h2 className="text-xl font-semibold border-b pb-2">Core Settings</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">LLM Provider</label>
-              <select 
+              <select
                 value={formData.llm_provider}
-                onChange={(e) => setFormData({...formData, llm_provider: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, llm_provider: e.target.value })}
                 className="w-full border rounded-md p-2 text-sm"
               >
                 <option value="gemini">Google Gemini</option>
@@ -92,23 +92,24 @@ export default function ConfigPage() {
 
             <div>
               <label className="block text-sm font-medium mb-1">Image Mode</label>
-              <select 
+              <select
                 value={formData.image_generation_mode}
-                onChange={(e) => setFormData({...formData, image_generation_mode: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, image_generation_mode: e.target.value })}
                 className="w-full border rounded-md p-2 text-sm"
               >
                 <option value="comfyui">ComfyUI (Local)</option>
                 <option value="gemini">Gemini (Cloud)</option>
+                <option value="geminiweb">GeminiWeb - Gemini Web (Browser)</option>
               </select>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">ComfyUI URL</label>
-            <input 
+            <input
               type="text"
               value={formData.comfy_url}
-              onChange={(e) => setFormData({...formData, comfy_url: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, comfy_url: e.target.value })}
               className="w-full border rounded-md p-2 text-sm"
               placeholder="http://127.0.0.1:8188"
             />
@@ -116,10 +117,10 @@ export default function ConfigPage() {
 
           <div>
             <label className="block text-sm font-medium mb-1">Default Target Video Length (seconds)</label>
-            <input 
+            <input
               type="number"
               value={formData.target_video_length}
-              onChange={(e) => setFormData({...formData, target_video_length: parseInt(e.target.value)})}
+              onChange={(e) => setFormData({ ...formData, target_video_length: parseInt(e.target.value) })}
               className="w-full border rounded-md p-2 text-sm"
             />
           </div>
@@ -131,14 +132,14 @@ export default function ConfigPage() {
           <p className="text-xs text-muted-foreground italic">
             Note: Keys are saved to the .env file. Leave blank to keep existing values.
           </p>
-          
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Gemini API Key</label>
-              <input 
+              <input
                 type="password"
                 value={formData.gemini_api_key}
-                onChange={(e) => setFormData({...formData, gemini_api_key: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, gemini_api_key: e.target.value })}
                 className="w-full border rounded-md p-2 text-sm"
                 placeholder="Paste new key to update..."
               />
@@ -146,10 +147,10 @@ export default function ConfigPage() {
 
             <div>
               <label className="block text-sm font-medium mb-1">OpenAI API Key</label>
-              <input 
+              <input
                 type="password"
                 value={formData.openai_api_key}
-                onChange={(e) => setFormData({...formData, openai_api_key: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, openai_api_key: e.target.value })}
                 className="w-full border rounded-md p-2 text-sm"
                 placeholder="Paste new key to update..."
               />
@@ -157,10 +158,10 @@ export default function ConfigPage() {
 
             <div>
               <label className="block text-sm font-medium mb-1">ElevenLabs API Key</label>
-              <input 
+              <input
                 type="password"
                 value={formData.elevenlabs_api_key}
-                onChange={(e) => setFormData({...formData, elevenlabs_api_key: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, elevenlabs_api_key: e.target.value })}
                 className="w-full border rounded-md p-2 text-sm"
                 placeholder="Paste new key to update..."
               />

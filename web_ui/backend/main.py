@@ -69,6 +69,7 @@ async def health():
     }
 
 
+
 # Mount static files for serving assets (images, videos)
 @app.on_event("startup")
 async def startup_event():

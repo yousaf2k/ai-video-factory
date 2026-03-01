@@ -17,7 +17,7 @@ interface ShotGridProps {
 export function ShotGrid({ shots, sessionId }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<'image' | 'video' | null>(null);
-  
+
   // Overrides state
   const [imageMode, setImageMode] = useState<string>('comfyui');
   const [imageWorkflow, setImageWorkflow] = useState<string>('flux2');
@@ -85,7 +85,7 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
     <div className="relative">
       {/* Header Actions */}
       <div className="flex items-center justify-between mb-4">
-        <button 
+        <button
           onClick={toggleSelectAll}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
@@ -146,13 +146,13 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
       {showBatchModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 relative">
-            <button 
+            <button
               onClick={() => setShowBatchModal(null)}
               className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
             >
               <X className="w-5 h-5" />
             </button>
-            
+
             <h2 className="text-xl font-semibold mb-6">
               Batch Regenerate {showBatchModal === 'image' ? 'Images' : 'Videos'} ({selectedIndices.length} shots)
             </h2>
@@ -161,20 +161,21 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Generation Mode</label>
-                  <select 
+                  <select
                     value={imageMode}
                     onChange={(e) => setImageMode(e.target.value)}
                     className="w-full border rounded-md p-2 text-sm"
                   >
                     <option value="comfyui">ComfyUI (Local)</option>
                     <option value="gemini">Gemini (Cloud)</option>
+                    <option value="geminiweb">GeminiWeb - Gemini Web (Browser)</option>
                   </select>
                 </div>
 
                 {imageMode === 'comfyui' && (
                   <div>
                     <label className="block text-sm font-medium mb-1">ComfyUI Workflow</label>
-                    <select 
+                    <select
                       value={imageWorkflow}
                       onChange={(e) => setImageWorkflow(e.target.value)}
                       className="w-full border rounded-md p-2 text-sm"
@@ -193,7 +194,7 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Video Workflow</label>
-                  <input 
+                  <input
                     type="text"
                     value={videoWorkflow}
                     onChange={(e) => setVideoWorkflow(e.target.value)}
@@ -206,13 +207,13 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
             )}
 
             <div className="mt-8 flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setShowBatchModal(null)}
                 className="px-4 py-2 border rounded-md hover:bg-muted text-sm"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleBatchSubmit}
                 disabled={batchRegenerate.isPending}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
