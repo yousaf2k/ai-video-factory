@@ -528,8 +528,13 @@ def regenerate_failed_images(session_id, session_meta, shots, session_mgr):
             # Normalize path for JSON
             normalized_path = image_path.replace('\\', '/')
             session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
-            regenerated_count += 1
-            print(f"[PASS] Successfully regenerated shot {shot_idx}")
+            
+            # Double-verify file existence on disk
+            if os.path.exists(image_path):
+                regenerated_count += 1
+                print(f"[PASS] Successfully regenerated shot {shot_idx} at {image_path}")
+            else:
+                print(f"[WARN] Shot {shot_idx}: Regeneration returned path but file not found on disk: {image_path}")
         else:
             print(f"[FAIL] Failed to regenerate shot {shot_idx}")
 
@@ -824,6 +829,12 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
                 # Normalize path for JSON
                 normalized_path = image_path.replace('\\', '/')
                 session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+                
+                # Double-verify file existence on disk
+                if not os.path.exists(image_path):
+                    print(f"[WARN] Shot {shot_idx}: image_path returned but file not found on disk: {image_path}")
+                else:
+                    print(f"[VERIFY] Shot {shot_idx}: Image verified at {image_path}")
 
         # Only mark images step as complete if ALL shots have at least one image
         shots_with_images = [s for s in shots if s.get('image_path')]
@@ -987,16 +998,46 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
     print(f"[RESUME] Execution mode: {mode_str}")
     print(f"[RESUME] Starting from step {start_step}")
 
+    # Get and apply LLM config from session metadata
+    llm_config = session_meta.get('llm_config', {})
+    if llm_config:
+        config.LLM_PROVIDER = llm_config.get('provider', config.LLM_PROVIDER)
+        config.LLM_MAX_TOKENS = llm_config.get('max_tokens', config.LLM_MAX_TOKENS)
+        model = llm_config.get('text_model')
+        if model and model != "unknown":
+            if config.LLM_PROVIDER == "gemini":
+                config.GEMINI_TEXT_MODEL = model
+            else:
+                setattr(config, f"{config.LLM_PROVIDER.upper()}_MODEL", model)
+
+    # Get and apply workflow config from session metadata
+    workflow_config = session_meta.get('workflow_config', {})
+    if workflow_config:
+        config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE = workflow_config.get('continue_on_partial_failure', config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE)
+        # auto_step_mode is evaluated per run below so we don't necessarily override it globally
+
     # Get config from session metadata
     image_config = session_meta.get('image_config', {})
     image_mode = image_config.get('mode', config.IMAGE_GENERATION_MODE)
     negative_prompt = image_config.get('negative_prompt', config.DEFAULT_NEGATIVE_PROMPT)
     images_per_shot = image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
+    config.IMAGE_WORKFLOW = image_config.get('workflow', config.IMAGE_WORKFLOW)
+    config.IMAGE_ASPECT_RATIO = image_config.get('aspect_ratio', config.IMAGE_ASPECT_RATIO)
+    config.IMAGE_RESOLUTION = image_config.get('resolution', config.IMAGE_RESOLUTION)
+    config.IMAGE_WIDTH = image_config.get('width', config.IMAGE_WIDTH)
+    config.IMAGE_HEIGHT = image_config.get('height', config.IMAGE_HEIGHT)
 
     video_config = session_meta.get('video_config', {})
     shot_length = video_config.get('shot_length', config.DEFAULT_SHOT_LENGTH)
     total_length = video_config.get('total_length')
     shots_per_scene = video_config.get('shots_per_scene', config.DEFAULT_SHOTS_PER_SCENE)
+    config.WORKFLOW_PATH = video_config.get('workflow_path', config.WORKFLOW_PATH)
+    config.VIDEO_ASPECT_RATIO = video_config.get('aspect_ratio', config.VIDEO_ASPECT_RATIO)
+    config.VIDEO_RESOLUTION = video_config.get('resolution', config.VIDEO_RESOLUTION)
+    config.VIDEO_WIDTH = video_config.get('width', config.VIDEO_WIDTH)
+    config.VIDEO_HEIGHT = video_config.get('height', config.VIDEO_HEIGHT)
+    config.APPEND_IMAGE_TO_MOTION_PROMPT = video_config.get('append_image_prompt', config.APPEND_IMAGE_TO_MOTION_PROMPT)
+    config.IMAGE_PROMPT_APPEND_POSITION = video_config.get('append_position', config.IMAGE_PROMPT_APPEND_POSITION)
 
     # Calculate max_shots from total_length if specified
     if total_length and shot_length:
@@ -1153,12 +1194,33 @@ def run_new_session(session_mgr, args=None):
     session_id, session_meta = session_mgr.create_session(idea)
 
     logger.info(f"Session created: {session_id}")
+    # Store LLM config in session
+    provider = config.LLM_PROVIDER
+    provider_model_key = f"{provider.upper()}_MODEL"
+    if provider == "gemini":
+        provider_model_key = "GEMINI_TEXT_MODEL"
+        
+    llm_model = getattr(config, provider_model_key, "unknown")
+    
+    session_meta['llm_config'] = {
+        'provider': provider,
+        'text_model': llm_model,
+        'max_tokens': config.LLM_MAX_TOKENS
+    }
+
     # Store video config in session
     session_meta['video_config'] = {
         'total_length': total_length,
         'shot_length': shot_length,
         'fps': config.VIDEO_FPS,
-        'shots_per_scene': shots_per_scene
+        'shots_per_scene': shots_per_scene,
+        'workflow_path': config.WORKFLOW_PATH,
+        'aspect_ratio': config.VIDEO_ASPECT_RATIO,
+        'resolution': config.VIDEO_RESOLUTION,
+        'width': config.VIDEO_WIDTH,
+        'height': config.VIDEO_HEIGHT,
+        'append_image_prompt': config.APPEND_IMAGE_TO_MOTION_PROMPT,
+        'append_position': config.IMAGE_PROMPT_APPEND_POSITION
     }
 
     # Store image generation config
@@ -1166,7 +1228,18 @@ def run_new_session(session_mgr, args=None):
     session_meta['image_config'] = {
         'mode': image_mode,
         'negative_prompt': negative_prompt,
-        'images_per_shot': images_per_shot
+        'images_per_shot': images_per_shot,
+        'workflow': config.IMAGE_WORKFLOW,
+        'aspect_ratio': config.IMAGE_ASPECT_RATIO,
+        'resolution': config.IMAGE_RESOLUTION,
+        'width': config.IMAGE_WIDTH,
+        'height': config.IMAGE_HEIGHT
+    }
+
+    # Store workflow config in session
+    session_meta['workflow_config'] = {
+        'auto_step_mode': get_step_mode(args),
+        'continue_on_partial_failure': config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE
     }
 
     # Get agent selection from args or config
@@ -1678,8 +1751,9 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
 
 
 def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot=1):
-    """Generate images for all shots with optional multiple variations"""
+    """Generate images for all shots with optional multiple variations and automatic retry mechanism"""
     from core.image_generator import generate_images_for_shots
+    from core.retry_tracker import RetryTracker
 
     images_dir = session_mgr.get_images_dir(session_id)
     os.makedirs(images_dir, exist_ok=True)
@@ -1720,16 +1794,20 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
         normalized_path = image_path.replace('\\', '/')
         session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
 
+    # Initialize retry tracker
+    retry_tracker = RetryTracker(max_retries=config.IMAGE_GENERATION_MAX_RETRIES)
+
     # Generate images for shots that don't have them with progress callback for immediate state updates
     if shots_needing_images:
         print(f"\n[INFO] Generating images for {len(shots_needing_images)} shot(s)...")
-        shots_needing_images = generate_images_for_shots(
+        shots_needing_images, retry_tracker = generate_images_for_shots(
             shots=shots_needing_images,
             output_dir=images_dir,
             mode=image_mode,
             negative_prompt=negative_prompt,
             images_per_shot=images_per_shot,
-            progress_callback=update_state_callback
+            progress_callback=update_state_callback,
+            retry_tracker=retry_tracker
         )
 
         # Mark newly generated images in session
@@ -1737,8 +1815,9 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
             shot_idx = shot.get('index', shots.index(shot) + 1)
             image_paths = shot.get('image_paths', [])
             for img_path in image_paths:
-                normalized_path = img_path.replace('\\', '/')
-                session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+                if img_path:  # Only mark if path exists (not None)
+                    normalized_path = img_path.replace('\\', '/')
+                    session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
 
         # Update the shots list with newly generated image paths
         for new_shot in shots_needing_images:
@@ -1749,15 +1828,27 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
                     orig_shot['image_path'] = new_shot.get('image_path')
                     break
 
-    # Only mark images step as complete if ALL shots have at least one image
+    # Check final status and handle partial success
     shots_with_images = [s for s in shots if s.get('image_path')]
+
     if len(shots_with_images) == len(shots):
+        # All shots have images
         session_mgr.mark_step_complete(session_id, 'images')
         print(f"\n[INFO] All {len(shots)} shots have images generated.")
+    elif len(shots_with_images) > 0:
+        # Partial success - some shots have images
+        if config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE:
+            print(f"\n[WARNING] {len(shots) - len(shots_with_images)} shot(s) failed to generate images.")
+            print(f"[INFO] Will continue to video generation with {len(shots_with_images)} shots that have images.")
+            print(f"[INFO] Images step NOT marked as complete. You can regenerate images when resuming.")
+        else:
+            print(f"\n[ERROR] {len(shots) - len(shots_with_images)} shot(s) failed to generate images.")
+            print(f"[ERROR] CONTINUE_ON_PARTIAL_IMAGE_FAILURE is False. Stopping pipeline.")
+            raise Exception(f"Image generation failed for {len(shots) - len(shots_with_images)} shots")
     else:
-        shots_without_images = len(shots) - len(shots_with_images)
-        print(f"\n[WARNING] {shots_without_images} shot(s) failed to generate images.")
-        print(f"[INFO] Images step NOT marked as complete. You can regenerate images when resuming.")
+        # Complete failure - no shots have images
+        print(f"\n[ERROR] All shots failed to generate images. Cannot continue to video generation.")
+        raise Exception("Image generation failed for all shots")
 
 def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
     """Render videos for all shots and all image variations"""
@@ -1766,6 +1857,16 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
     # Load shots status from shots.json to check which videos are already rendered
     shots_status = session_mgr.get_shots(session_id)
     shots_status_dict = {s['index']: s for s in shots_status}
+
+    # Filter out shots without images (in case of partial failure)
+    shots_with_images = [s for s in valid_shots if s.get('image_path')]
+
+    if len(shots_with_images) < len(valid_shots):
+        skipped = len(valid_shots) - len(shots_with_images)
+        print(f"[INFO] Skipping {skipped} shot(s) without images (partial image generation failure)")
+
+    # Update valid_shots to only include shots with images
+    valid_shots = shots_with_images
 
     # Track results
     successful_renders = 0
@@ -1911,16 +2012,49 @@ def _run_with_prompts_file(session_mgr, args):
     # Create session
     session_id, session_meta = session_mgr.create_session(idea)
 
+    # Store LLM config in session
+    provider = config.LLM_PROVIDER
+    provider_model_key = f"{provider.upper()}_MODEL"
+    if provider == "gemini":
+        provider_model_key = "GEMINI_TEXT_MODEL"
+        
+    llm_model = getattr(config, provider_model_key, "unknown")
+    
+    session_meta['llm_config'] = {
+        'provider': provider,
+        'text_model': llm_model,
+        'max_tokens': config.LLM_MAX_TOKENS
+    }
+
     # Store config in session
     session_meta['video_config'] = {
         'shot_length': shot_length,
-        'fps': config.VIDEO_FPS
+        'fps': config.VIDEO_FPS,
+        'workflow_path': config.WORKFLOW_PATH,
+        'aspect_ratio': config.VIDEO_ASPECT_RATIO,
+        'resolution': config.VIDEO_RESOLUTION,
+        'width': config.VIDEO_WIDTH,
+        'height': config.VIDEO_HEIGHT,
+        'append_image_prompt': config.APPEND_IMAGE_TO_MOTION_PROMPT,
+        'append_position': config.IMAGE_PROMPT_APPEND_POSITION
     }
     session_meta['image_config'] = {
         'mode': image_mode,
         'negative_prompt': negative_prompt,
-        'images_per_shot': images_per_shot
+        'images_per_shot': images_per_shot,
+        'workflow': config.IMAGE_WORKFLOW,
+        'aspect_ratio': config.IMAGE_ASPECT_RATIO,
+        'resolution': config.IMAGE_RESOLUTION,
+        'width': config.IMAGE_WIDTH,
+        'height': config.IMAGE_HEIGHT
     }
+    
+    # Store workflow config in session
+    session_meta['workflow_config'] = {
+        'auto_step_mode': True, # Prompts file implies auto running shots mostly
+        'continue_on_partial_failure': config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE
+    }
+    
     session_meta['prompts_file'] = prompts_file
 
     # Mark story and scene_graph as complete (skipped)

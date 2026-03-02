@@ -1,0 +1,448 @@
+"""
+Shots API endpoints
+"""
+from fastapi import APIRouter, HTTPException, status
+import sys
+import os
+import json
+import logging
+
+# Add parent directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
+
+from web_ui.backend.models.shot import (
+    UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
+    RegenerateVideoRequest, BatchRegenerateRequest, ReplanShotsRequest,
+    SelectImageRequest
+)
+from web_ui.backend.services.session_service import SessionService
+from web_ui.backend.services.generation_service import GenerationService
+from web_ui.backend.models.shot import Shot
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/sessions/{session_id}/shots", tags=["shots"])
+
+# Initialize services
+session_service = SessionService()
+generation_service = GenerationService()
+
+
+@router.get("")
+async def get_shots(session_id: str):
+    """Get all shots for a session"""
+    try:
+        session = session_service.get_session(session_id)
+        return session.shots or []
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found"
+        )
+    except Exception as e:
+        logger.error(f"Error getting shots: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get shots: {str(e)}"
+        )
+
+
+@router.get("/{shot_index}")
+async def get_shot(session_id: str, shot_index: int):
+    """Get a single shot by index"""
+    try:
+        shots = await get_shots(session_id)
+
+        # shot_index is 1-based in the API, 0-based in the list
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        return shots[shot_index - 1]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting shot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get shot: {str(e)}"
+        )
+
+
+@router.put("")
+async def update_shots(session_id: str, request: UpdateShotsRequest):
+    """Update shots (reorder, edit prompts)"""
+    try:
+        # We take the raw dicts directly because we will manually update string paths inside them later without fighting the immutable pydantic models
+        shots_dicts = [shot.dict() for shot in request.shots]
+
+        # Update shots.json and perform safe renaming of associated media
+        session_dir = os.path.join(config.ABS_SESSIONS_DIR, session_id)
+        shots_path = os.path.join(session_dir, "shots.json")
+        images_dir = os.path.join(session_dir, "images")
+        videos_dir = os.path.join(session_dir, "videos")
+
+        # Create dirs if they don't exist yet (e.g., if inserting a shot very early on)
+        os.makedirs(images_dir, exist_ok=True)
+        os.makedirs(videos_dir, exist_ok=True)
+
+        # ----------------------------------------------------
+        # Two-Pass File Renaming Strategy for Shot Reordering/Deletion
+        # ----------------------------------------------------
+        # We need to rename physical files like `shot_003_001.png` to `shot_002_001.png`
+        # if shot 3 became shot 2.
+        
+        # Build maps for renamed files. We use a UUID `.tmp` pass first to prevent collisions (e.g. 2->3 while 3->4)
+        tmp_id = str(uuid.uuid4())[:8]
+
+        # Regex to extract the shot prefix: "shot_003_..."
+        prefix_re = re.compile(r"^(shot_)(\d+)(_.*)$")
+
+        def get_new_filename(current_filename: str, new_index: int) -> str:
+            """Given 'shot_003_001.png' and new_index 2, returns 'shot_002_001.png'"""
+            if not current_filename:
+                return current_filename
+            match = prefix_re.match(current_filename)
+            if match:
+                return f"{match.group(1)}{new_index:03d}{match.group(3)}"
+            return current_filename
+
+        # List of all renaming instructions
+        # Tuple format: (absolute_source_path, absolute_tmp_path, absolute_final_path, file_type)
+        rename_operations = []
+
+        # Iterate over all incoming shots to detect discrepancies between their current index vs string names
+        for shot in shots_dicts:
+            true_index = shot['index']
+
+            # Check primary image_path
+            current_image_path = shot.get('image_path')
+            if current_image_path:
+                basename = os.path.basename(current_image_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        # Index shifted. Schedule rename.
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+                        
+                        src = os.path.join(images_dir, basename)
+                        tmp = os.path.join(images_dir, tmp_basename)
+                        dst = os.path.join(images_dir, new_basename)
+                        
+                        rename_operations.append((src, tmp, dst))
+                        # Update the dict path explicitly
+                        shot['image_path'] = os.path.join(session_id, "images", new_basename).replace('\\', '/')
+
+            # Check alternative image_paths
+            current_image_paths = shot.get('image_paths', [])
+            new_image_paths = []
+            for img_path in current_image_paths:
+                basename = os.path.basename(img_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+                        
+                        src = os.path.join(images_dir, basename)
+                        tmp = os.path.join(images_dir, tmp_basename)
+                        dst = os.path.join(images_dir, new_basename)
+                        
+                        rename_operations.append((src, tmp, dst))
+                        new_image_paths.append(os.path.join(session_id, "images", new_basename).replace('\\', '/'))
+                    else:
+                        new_image_paths.append(img_path) # unchanged
+                else:
+                    new_image_paths.append(img_path)
+            shot['image_paths'] = new_image_paths
+
+            # Check video_path
+            current_video_path = shot.get('video_path')
+            if current_video_path:
+                basename = os.path.basename(current_video_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+                        
+                        src = os.path.join(videos_dir, basename)
+                        tmp = os.path.join(videos_dir, tmp_basename)
+                        dst = os.path.join(videos_dir, new_basename)
+                        
+                        rename_operations.append((src, tmp, dst))
+                        shot['video_path'] = os.path.join(session_id, "videos", new_basename).replace('\\', '/')
+
+        # Execute Pass 1: Move to temporary files (prevents filename collisions during shifting)
+        for src, tmp, dst in rename_operations:
+            if os.path.exists(src):
+                try:
+                    shutil.move(src, tmp)
+                except Exception as e:
+                    logger.warning(f"Failed temp rename {src} -> {tmp}: {e}")
+
+        # Execute Pass 2: Move temporary files to final correct destinations
+        for src, tmp, dst in rename_operations:
+            if os.path.exists(tmp):
+                try:
+                    # Cleanup if destination already exists (from an orphaned file)
+                    if os.path.exists(dst):
+                        os.remove(dst)
+                    shutil.move(tmp, dst)
+                    logger.info(f"Permanently renamed shot media to {dst}")
+                except Exception as e:
+                    logger.warning(f"Failed final rename {tmp} -> {dst}: {e}")
+
+        # Save updated shots JSON
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots_dicts, f, indent=2, ensure_ascii=False)
+
+        # Return updated session
+        return session_service.get_session(session_id)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session {session_id} not found"
+        )
+    except Exception as e:
+        logger.error(f"Error updating shots: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update shots: {str(e)}"
+        )
+
+
+@router.put("/{shot_index}")
+async def update_shot(session_id: str, shot_index: int, request: UpdateShotRequest):
+    """Update a single shot's prompts"""
+    try:
+        shots = await get_shots(session_id)
+
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        # Update only the fields that are provided
+        shot = shots[shot_index - 1]
+        if request.image_prompt is not None:
+            shot['image_prompt'] = request.image_prompt
+        if request.motion_prompt is not None:
+            shot['motion_prompt'] = request.motion_prompt
+        if request.camera is not None:
+            shot['camera'] = request.camera
+        if request.narration is not None:
+            shot['narration'] = request.narration
+
+        # Save updated shots
+        session_dir = session_service.get_session_dir(session_id)
+        shots_path = os.path.join(session_dir, "shots.json")
+
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+        return shot
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating shot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update shot: {str(e)}"
+        )
+
+
+
+@router.post("/{shot_index}/regenerate-image")
+async def regenerate_shot_image(session_id: str, shot_index: int, request: RegenerateImageRequest):
+    """Regenerate image for a single shot"""
+    try:
+        result = await generation_service.regenerate_shot_image(
+            session_id, shot_index, force=request.force,
+            image_mode=request.image_mode, image_workflow=request.image_workflow,
+            seed=request.seed
+        )
+        return {"status": "success", "image_path": result}
+    except Exception as e:
+        logger.error(f"Error regenerating image: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to regenerate image: {str(e)}"
+        )
+
+
+@router.post("/{shot_index}/regenerate-video")
+async def regenerate_shot_video(session_id: str, shot_index: int, request: RegenerateVideoRequest):
+    """Regenerate video for a single shot"""
+    try:
+        result = await generation_service.regenerate_shot_video(
+            session_id, shot_index, force=request.force,
+            video_workflow=request.video_workflow
+        )
+        return {"status": "success", "video_path": result}
+    except Exception as e:
+        logger.error(f"Error regenerating video: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to regenerate video: {str(e)}"
+        )
+
+
+from fastapi import BackgroundTasks
+
+@router.post("/batch-regenerate")
+async def batch_regenerate(session_id: str, request: BatchRegenerateRequest, background_tasks: BackgroundTasks):
+    """Queue multiple shots for regeneration using a background task"""
+    try:
+        # Schedule the batch string on the backend
+        background_tasks.add_task(
+            generation_service.run_batch_generation,
+            session_id,
+            request
+        )
+        
+        return {
+            "status": "queued", 
+            "message": f"Queued {len(request.shot_indices)} shots for generation",
+            "shot_count": len(request.shot_indices)
+        }
+    except Exception as e:
+        logger.error(f"Error queuing batch generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to queue batch generation: {str(e)}"
+        )
+
+@router.post("/{shot_index}/select-image")
+async def select_shot_image(session_id: str, shot_index: int, request: SelectImageRequest):
+    """Select a specific image as the active one for a shot"""
+    try:
+        shots = await get_shots(session_id)
+
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        shot = shots[shot_index - 1]
+
+        # Verify the requested path exists in image_paths
+        image_paths = shot.get('image_paths', [])
+        if request.image_path not in image_paths:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Image path not found in shot's image_paths"
+            )
+
+        # Update the active image_path
+        shot['image_path'] = request.image_path
+
+        # Save updated shots
+        session_dir = session_service.get_session_dir(session_id)
+        shots_path = os.path.join(session_dir, "shots.json")
+
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+        return {"status": "success", "image_path": request.image_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error selecting image for shot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to select image: {str(e)}"
+        )
+
+
+@router.post("/replan")
+async def replan_shots(session_id: str, request: ReplanShotsRequest):
+    """Re-plan shots from story"""
+    try:
+        shots = await generation_service.replan_shots(
+            session_id,
+            max_shots=request.max_shots,
+            image_agent=request.image_agent,
+            video_agent=request.video_agent
+        )
+        return {"status": "success", "shots": shots}
+    except Exception as e:
+        logger.error(f"Error replanning shots: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to replan shots: {str(e)}"
+        )
+
+
+@router.post("/cancel-generation")
+async def cancel_generation(session_id: str):
+    """Cancel all pending and running image/video generation for this session"""
+    from core.comfy_client import cancel_all
+    from web_ui.backend.websocket.manager import manager
+
+    try:
+        logger.info(f"Cancel generation requested for session {session_id}")
+        result = cancel_all()
+        generation_service.cancel_session(session_id)
+        logger.info(f"ComfyUI cancel result: {result}")
+
+        # Broadcast cancellation to frontend (use async since this handler is async)
+        await manager.broadcast_to_session(session_id, {
+            "type": "cancelled",
+            "session_id": session_id
+        })
+
+        return {"status": "success", "cancelled": result}
+    except Exception as e:
+        logger.error(f"Error cancelling generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel generation: {str(e)}"
+        )
+
+@router.post("/{shot_index}/cancel-generation")
+async def cancel_single_shot_generation(session_id: str, shot_index: int):
+    """Cancel pending generation for a specific shot in this session"""
+    from web_ui.backend.websocket.manager import manager
+
+    try:
+        logger.info(f"Cancel generation requested for session {session_id}, shot {shot_index}")
+        
+        # Mark the specific shot as cancelled so the backend loop skips it
+        generation_service.cancel_single_shot(session_id, shot_index)
+
+        # Broadcast cancellation for this specific shot to the frontend
+        await manager.broadcast_to_session(session_id, {
+            "type": "cancelled",
+            "session_id": session_id,
+            "shot_index": shot_index
+        })
+
+        return {"status": "success", "message": f"Shot {shot_index} generation cancelled"}
+    except Exception as e:
+        logger.error(f"Error cancelling single shot generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel single shot generation: {str(e)}"
+        )
+
+@router.get("/queue-status")
+async def get_queue_status(session_id: str):
+    """Get the current queue of shots waiting to be generated"""
+    try:
+        # Get the queued shots from the generation service
+        queued = generation_service.queued_shots.get(session_id, set())
+        return {"queued_indices": list(queued)}
+    except Exception as e:
+        logger.error(f"Error getting queue status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get queue status: {str(e)}"
+        )

@@ -9,6 +9,11 @@ logger = logging.getLogger(__name__)
 
 def load_workflow(path, video_length_seconds=None):
     """Load workflow and optionally set video length and dimensions"""
+    if not os.path.isabs(path):
+        # Resolve relative to the project root (one level up from core/)
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(base_dir, path)
+
     with open(path,"r",encoding="utf-8") as f:
         workflow = json.load(f)
 

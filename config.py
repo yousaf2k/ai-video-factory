@@ -25,6 +25,10 @@ SHOT_GENERATION_BATCH_SIZE = int(os.getenv("SHOT_GENERATION_BATCH_SIZE", "1"))  
 # Recommended: 3-5 for most APIs, 1-2 for free tier accounts
 MAX_PARALLEL_BATCH_THREADS = int(os.getenv("MAX_PARALLEL_BATCH_THREADS", "5"))  # Default: 5 parallel threads
 
+# Maximum concurrent generations in the background queue (useful for local GPUs and API limits)
+# Set to 1-4 depending on your GPU VRAM or queue backend capability
+CONCURRENT_GENERATION_LIMIT = int(os.getenv("CONCURRENT_GENERATION_LIMIT", "1"))  # Default: 1 concurrent generations
+
 # ==========================================
 # GEMINI API CONFIGURATION
 # ==========================================
@@ -95,6 +99,131 @@ LMSTUDIO_MODEL = os.getenv("LMSTUDIO_MODEL", "lmstudio-community/qwen2")
 GEMINI_IMAGE_MODEL = "gemini-3-pro-image-preview"
 
 # ==========================================
+# SYSTEM PATHS CONFIGURATION
+# ==========================================
+# Project root directory (absolute path to the folder containing this config.py)
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+# Global output directory
+OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
+
+# Sessions directory (where project data is stored)
+SESSIONS_DIR = os.path.join(OUTPUT_DIR, "sessions")
+
+# Helper to resolve relative paths to project root
+def resolve_path(relative_path):
+    if not relative_path:
+        return relative_path
+    if os.path.isabs(relative_path):
+        return relative_path
+    return os.path.join(PROJECT_ROOT, relative_path)
+
+# Absolute versions of directories
+ABS_OUTPUT_DIR = resolve_path(OUTPUT_DIR)
+ABS_SESSIONS_DIR = resolve_path(SESSIONS_DIR)
+
+# ==========================================
+# CONFIGURATION UTILITY WRAPPERS
+# ==========================================
+# These wrapper functions provide convenient access to utility functions
+# with config values pre-filled, maintaining backward compatibility
+
+def get_max_shots_from_config():
+    """
+    Wrapper that calls calculate_max_shots_from_config with current config values.
+    
+    Returns:
+        int or None: Maximum number of shots, or None for no limit
+    """
+    from core.config_utils import calculate_max_shots_from_config as _calculate_max_shots
+    return _calculate_max_shots(
+        default_max_shots=DEFAULT_MAX_SHOTS,
+        target_video_length=TARGET_VIDEO_LENGTH,
+        default_shot_length=DEFAULT_SHOT_LENGTH
+    )
+
+
+def get_image_dimensions():
+    """
+    Wrapper that calls calculate_image_dimensions with current config values.
+    
+    Returns:
+        Tuple of (width, height) as integers
+    """
+    from core.config_utils import calculate_image_dimensions as _calculate_image_dims
+    return _calculate_image_dims(
+        aspect_ratio=IMAGE_ASPECT_RATIO,
+        resolution=IMAGE_RESOLUTION
+    )
+
+
+def get_video_dimensions():
+    """
+    Wrapper that calls calculate_video_dimensions with current config values.
+    
+    Returns:
+        Tuple of (width, height) as integers
+    """
+    from core.config_utils import calculate_video_dimensions as _calculate_video_dims
+    return _calculate_video_dims(
+        aspect_ratio=VIDEO_ASPECT_RATIO,
+        resolution=VIDEO_RESOLUTION
+    )
+
+
+# Backward compatibility - original function names
+def calculate_max_shots_from_config():
+    """
+    Calculate maximum number of shots from configuration settings.
+    
+    This is a wrapper that maintains backward compatibility with existing code.
+    
+    Returns:
+        int or None: Maximum number of shots, or None for no limit
+    """
+    return get_max_shots_from_config()
+
+
+def calculate_image_dimensions(aspect_ratio=None, resolution=None):
+    """
+    Calculate image width and height from aspect ratio and resolution.
+    
+    Args:
+        aspect_ratio: String like "16:9", "9:16", "1:1", "4:3", "3:4" (uses IMAGE_ASPECT_RATIO if None)
+        resolution: String like "512", "1024", "2048" (uses IMAGE_RESOLUTION if None)
+    
+    Returns:
+        Tuple of (width, height) as integers
+    """
+    if aspect_ratio is None:
+        aspect_ratio = IMAGE_ASPECT_RATIO
+    if resolution is None:
+        resolution = IMAGE_RESOLUTION
+    
+    from core.config_utils import calculate_image_dimensions as _calculate_image_dims
+    return _calculate_image_dims(aspect_ratio, resolution)
+
+
+def calculate_video_dimensions(aspect_ratio=None, resolution=None):
+    """
+    Calculate video width and height from aspect ratio and resolution.
+    
+    Args:
+        aspect_ratio: String like "16:9", "9:16", "1:1", "4:3", "3:4" (uses VIDEO_ASPECT_RATIO if None)
+        resolution: String like "512", "720", "1024", "1080", "1280", "2048" (uses VIDEO_RESOLUTION if None)
+    
+    Returns:
+        Tuple of (width, height) as integers
+    """
+    if aspect_ratio is None:
+        aspect_ratio = VIDEO_ASPECT_RATIO
+    if resolution is None:
+        resolution = VIDEO_RESOLUTION
+    
+    from core.config_utils import calculate_video_dimensions as _calculate_video_dims
+    return _calculate_video_dims(aspect_ratio, resolution)
+
+# ==========================================
 # COMFYUI CONFIGURATION
 # ==========================================
 # ComfyUI server URL
@@ -107,10 +236,10 @@ COMFY_URL = "http://127.0.0.1:8188"
 #   COMFY_OUTPUT_DIR = ""  # Auto-detect (recommended)
 #   COMFY_OUTPUT_DIR = "C:/ComfyUI/output"  # Manual path for Windows
 #   COMFY_OUTPUT_DIR = "/home/user/ComfyUI/output"  # Manual path for Linux/Mac
-COMFY_OUTPUT_DIR = "C:/ComfyUI_Portable/ComfyUI/output"
+COMFY_OUTPUT_DIR = os.getenv("COMFY_OUTPUT_DIR", r"E:\ComfyUI\Output")
 
 # Path to your Wan 2.2 workflow template
-WORKFLOW_PATH = "workflow/video/wan22_workflow.json"
+WORKFLOW_PATH = resolve_path("workflow/video/wan22_workflow.json")
 
 # Node IDs in your workflow
 # IMPORTANT: Open your workflow in ComfyUI, right-click the LoadImage node → "Node ID for Save"
@@ -126,8 +255,8 @@ WAN_VIDEO_NODE_ID = "98"
 # ==========================================
 # IMAGE GENERATION CONFIGURATION
 # ==========================================
-# Image generation mode: "gemini" or "comfyui"
-IMAGE_GENERATION_MODE = "comfyui"  # Options: "gemini", "comfyui"
+# Image generation mode: "gemini", "comfyui", or "geminiweb"
+IMAGE_GENERATION_MODE = "comfyui"  # Options: "gemini", "comfyui", "geminiweb"
 
 # Default negative prompt for ComfyUI image generation
 # Common negative prompts: "blurry, low quality, distorted, deformed"
@@ -139,7 +268,7 @@ DEFAULT_NEGATIVE_PROMPT = "Vibrant colors, overexposed, static, blurry details, 
 IMAGES_PER_SHOT = 1
 
 # Output directory for generated images
-IMAGES_OUTPUT_DIR = "output/generated_images"
+IMAGES_OUTPUT_DIR = resolve_path(os.path.join(OUTPUT_DIR, "generated_images"))
 
 # Image aspect ratio (options: "1:1", "16:9", "9:16", "4:3", "3:4")
 IMAGE_ASPECT_RATIO = "16:9"
@@ -158,7 +287,7 @@ IMAGE_WORKFLOW = "flux2"
 # Add new workflows here and set IMAGE_WORKFLOW to the desired key
 IMAGE_WORKFLOWS = {
     "flux": {
-        "workflow_path": "workflow/image/flux.json",
+        "workflow_path": resolve_path("workflow/image/flux.json"),
         "text_node_id": "6",           # CLIPTextEncode node for positive prompt
         "neg_text_node_id": None,      # Flux doesn't use negative prompts
         "ksampler_node_id": "13",      # SamplerCustomAdvanced node
@@ -167,7 +296,7 @@ IMAGE_WORKFLOWS = {
         "description": "Flux model for high-quality image generation"
     },
     "flux2": {
-        "workflow_path": "workflow/image/flux2_4g_2k.json",
+        "workflow_path": resolve_path("workflow/image/flux2_4g_2k.json"),
         "text_node_id": "98:6",
         "neg_text_node_id": None,
         "ksampler_node_id": "98:16",
@@ -176,7 +305,7 @@ IMAGE_WORKFLOWS = {
         "description": "Flux2.Dev for high quality images workflow"
     },
     "sdxl": {
-        "workflow_path": "workflow/image/sdxl.json",
+        "workflow_path": resolve_path("workflow/image/sdxl.json"),
         "text_node_id": "6",           # CLIPTextEncode node for positive prompt
         "neg_text_node_id": "7",       # CLIPTextEncode node for negative prompt
         "ksampler_node_id": "13",      # KSampler node
@@ -185,7 +314,7 @@ IMAGE_WORKFLOWS = {
         "description": "SDXL model for image generation"
     },
     "hidream": {
-        "workflow_path": "workflow/image/hidream.json",
+        "workflow_path": resolve_path("workflow/image/hidream.json"),
         "text_node_id": "6",
         "neg_text_node_id": None,
         "ksampler_node_id": "13",
@@ -194,7 +323,7 @@ IMAGE_WORKFLOWS = {
         "description": "HiDream model for image generation"
     },
     "qwen": {
-        "workflow_path": "workflow/image/qwen.json",
+        "workflow_path": resolve_path("workflow/image/qwen.json"),
         "text_node_id": "6",
         "neg_text_node_id": None,
         "ksampler_node_id": "13",
@@ -203,7 +332,7 @@ IMAGE_WORKFLOWS = {
         "description": "Qwen model for image generation"
     },
     "default": {
-        "workflow_path": "workflow/image/image_generation_workflow.json",
+        "workflow_path": resolve_path("workflow/image/image_generation_workflow.json"),
         "text_node_id": "6",
         "neg_text_node_id": None,
         "ksampler_node_id": "13",
@@ -215,7 +344,7 @@ IMAGE_WORKFLOWS = {
 
 # Legacy single workflow settings (deprecated, use IMAGE_WORKFLOWS instead)
 # Kept for backward compatibility
-IMAGE_WORKFLOW_PATH = "workflow/image/image_generation_workflow.json"
+IMAGE_WORKFLOW_PATH = resolve_path("workflow/image/image_generation_workflow.json")
 IMAGE_TEXT_NODE_ID = "6"
 IMAGE_NEG_TEXT_NODE_ID = None
 IMAGE_KSAMPLER_NODE_ID = "13"
@@ -296,44 +425,6 @@ IMAGE_PROMPT_APPEND_POSITION = "end"  # Options: "start", "end"
 # Note: If both DEFAULT_MAX_SHOTS and TARGET_VIDEO_LENGTH are set,
 #       max_shots will be calculated as: int(TARGET_VIDEO_LENGTH / DEFAULT_SHOT_LENGTH)
 TARGET_VIDEO_LENGTH = 600  # or specify like: 60.0 for 60 seconds
-
-
-# ==========================================
-# VIDEO LENGTH CALCULATION HELPER
-# ==========================================
-def calculate_max_shots_from_config():
-    """
-    Calculate maximum number of shots from configuration settings.
-
-    Priority chain (highest to lowest):
-    1. DEFAULT_MAX_SHOTS > 0: Manual override (exact shot count)
-    2. TARGET_VIDEO_LENGTH > 0: Automatic calculation (length / shot_length)
-    3. None: No limit (story-driven generation)
-
-    Returns:
-        int or None: Maximum number of shots, or None for no limit
-
-    Examples:
-        DEFAULT_MAX_SHOTS = 50, TARGET_VIDEO_LENGTH = 600
-        → Returns 50 (manual override takes priority)
-
-        DEFAULT_MAX_SHOTS = 0, TARGET_VIDEO_LENGTH = 600
-        → Returns 120 (automatic: 600s / 5s per shot)
-
-        DEFAULT_MAX_SHOTS = 0, TARGET_VIDEO_LENGTH = 0
-        → Returns None (no limit)
-    """
-    # Priority 1: Manual override in config
-    if DEFAULT_MAX_SHOTS > 0:
-        return DEFAULT_MAX_SHOTS
-
-    # Priority 2: Automatic calculation from target video length
-    if TARGET_VIDEO_LENGTH and TARGET_VIDEO_LENGTH > 0:
-        return int(TARGET_VIDEO_LENGTH / DEFAULT_SHOT_LENGTH)
-
-    # Priority 3: No limit
-    return None
-
 
 # Video rendering timeout (in seconds)
 # Maximum time to wait for a single video render to complete
@@ -481,91 +572,6 @@ CAMERA_LORA_MAPPING = {
     }
 }
 
-
-# ==========================================
-# DIMENSION CALCULATION HELPERS
-# ==========================================
-def calculate_image_dimensions(aspect_ratio=IMAGE_ASPECT_RATIO, resolution=IMAGE_RESOLUTION):
-    """
-    Calculate image width and height from aspect ratio and resolution.
-
-    Args:
-        aspect_ratio: String like "16:9", "9:16", "1:1", "4:3", "3:4"
-        resolution: String like "512", "1024", "2048" (width for landscape, height for portrait)
-
-    Returns:
-        Tuple of (width, height) as integers
-    """
-    res = int(resolution)
-
-    # Parse aspect ratio
-    if ':' in aspect_ratio:
-        parts = aspect_ratio.split(':')
-        ar_w = int(parts[0])
-        ar_h = int(parts[1])
-    else:
-        # Default to 1:1 if format is wrong
-        ar_w = 1
-        ar_h = 1
-
-    # Determine orientation and calculate dimensions
-    if ar_w >= ar_h:
-        # Landscape or square: resolution is width
-        width = res
-        height = int(res * ar_h / ar_w)
-    else:
-        # Portrait: resolution is height
-        height = res
-        width = int(res * ar_w / ar_h)
-
-    # Ensure dimensions are multiples of 8 (required by most AI models)
-    width = (width // 8) * 8
-    height = (height // 8) * 8
-
-    return width, height
-
-
-def calculate_video_dimensions(aspect_ratio=VIDEO_ASPECT_RATIO, resolution=VIDEO_RESOLUTION):
-    """
-    Calculate video width and height from aspect ratio and resolution.
-
-    Args:
-        aspect_ratio: String like "16:9", "9:16", "1:1", "4:3", "3:4"
-        resolution: String like "512", "720", "1024", "1080", "1280", "2048"
-                   (width for landscape, height for portrait)
-
-    Returns:
-        Tuple of (width, height) as integers
-    """
-    res = int(resolution)
-
-    # Parse aspect ratio
-    if ':' in aspect_ratio:
-        parts = aspect_ratio.split(':')
-        ar_w = int(parts[0])
-        ar_h = int(parts[1])
-    else:
-        # Default to 1:1 if format is wrong
-        ar_w = 1
-        ar_h = 1
-
-    # Determine orientation and calculate dimensions
-    if ar_w >= ar_h:
-        # Landscape or square: resolution is width
-        width = res
-        height = int(res * ar_h / ar_w)
-    else:
-        # Portrait: resolution is height
-        height = res
-        width = int(res * ar_w / ar_h)
-
-    # Ensure dimensions are multiples of 8 (required by most AI models)
-    width = (width // 8) * 8
-    height = (height // 8) * 8
-
-    return width, height
-
-
 # ==========================================
 # WORKFLOW EXECUTION MODE
 # ==========================================
@@ -605,7 +611,7 @@ GENERATE_NARRATION = False  # Set to True to enable narration by default
 TTS_METHOD = "local"  # Options: "comfyui", "local", "elevenlabs"
 
 # ComfyUI TTS workflow path
-TTS_WORKFLOW_PATH = "workflow/voice/tts_workflow.json"
+TTS_WORKFLOW_PATH = resolve_path("workflow/voice/tts_workflow.json")
 
 # ==========================================
 # ELEVENLABS API CONFIGURATION
@@ -631,7 +637,7 @@ ELEVENLABS_SIMILARITY = 0.75  # 0.0 to 1.0 (higher = more similar to original vo
 # ==========================================
 # LOGGING CONFIGURATION
 # ==========================================
-LOG_DIR = "logs"
+LOG_DIR = resolve_path(os.path.join(OUTPUT_DIR, "logs"))
 CONSOLE_LOG_LEVEL = "INFO"
 FILE_LOG_LEVEL = "DEBUG"
 LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
@@ -652,7 +658,49 @@ AUTO_DETECT_CAMERA_FROM_PROMPTS = True
 
 
 # Pre-calculate current dimensions
-IMAGE_WIDTH, IMAGE_HEIGHT = calculate_image_dimensions()
+IMAGE_WIDTH, IMAGE_HEIGHT = get_image_dimensions()
 
 # Pre-calculate video dimensions
-VIDEO_WIDTH, VIDEO_HEIGHT = calculate_video_dimensions()
+VIDEO_WIDTH, VIDEO_HEIGHT = get_video_dimensions()
+
+
+# ==========================================
+# IMAGE GENERATION RETRY CONFIGURATION
+# ==========================================
+# Maximum retry attempts for failed image generation (including initial attempt)
+IMAGE_GENERATION_MAX_RETRIES = 3
+
+# Delay between retry attempts in seconds
+IMAGE_GENERATION_RETRY_DELAY = 5
+
+# Continue to video generation even if some images failed
+CONTINUE_ON_PARTIAL_IMAGE_FAILURE = True
+
+
+# ==========================================
+# GEMINIWEB (BROWSER-BASED) IMAGE GENERATION
+# ==========================================
+# Chrome user data directory for persistent Google login
+GEMINIWEB_CHROME_PROFILE = resolve_path(os.path.join(OUTPUT_DIR, "chrome_profile"))
+
+# Timeout for waiting for image generation (seconds)
+GEMINIWEB_TIMEOUT = 120
+
+# Gemini web URL
+GEMINIWEB_URL = "https://gemini.google.com/app"
+
+
+# ==========================================
+# WEB UI CONFIGURATION
+# ==========================================
+# Enable/disable Web UI server
+WEB_UI_ENABLED = os.getenv("WEB_UI_ENABLED", "true").lower() == "true"
+
+# Web UI backend host
+WEB_UI_HOST = os.getenv("WEB_UI_HOST", "127.0.0.1")
+
+# Web UI backend port
+WEB_UI_PORT = int(os.getenv("WEB_UI_PORT", "8000"))
+
+# CORS origins (comma-separated list of allowed origins for API)
+WEB_UI_CORS_ORIGINS = os.getenv("WEB_UI_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001").split(",")

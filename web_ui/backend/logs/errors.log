@@ -1,0 +1,11 @@
+2026-03-01 15:07:33 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():73 | Error regenerating shot 7 image: Shot 7 not found
+2026-03-01 15:07:33 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():73 | Error regenerating shot 8 image: Shot 8 not found
+2026-03-01 15:11:23 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():73 | Error regenerating shot 7 image: Shot 7 not found
+2026-03-01 15:11:23 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():73 | Error regenerating shot 8 image: Shot 8 not found
+2026-03-01 15:12:13 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():73 | Error regenerating shot 7 image: Shot 7 not found
+2026-03-01 15:14:10 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():73 | Error regenerating shot 7 image: Shot 7 not found
+2026-03-01 15:14:39 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():73 | Error regenerating shot 7 image: Shot 7 not found
+2026-03-01 15:24:56 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():78 | Error regenerating shot 7 image: Shot 7 not found
+2026-03-01 15:33:20 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():83 | Error regenerating shot 7 image: Failed to generate image for shot 7
+2026-03-01 15:41:56 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():83 | Error regenerating shot 7 image: Failed to generate image for shot 7
+2026-03-01 15:52:59 | ERROR    | web_ui.backend.services.generation_service:regenerate_shot_image():83 | Error regenerating shot 7 image: Failed to generate image for shot 7
