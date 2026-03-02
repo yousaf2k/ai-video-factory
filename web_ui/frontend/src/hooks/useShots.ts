@@ -27,6 +27,19 @@ export function useUpdateShot(sessionId: string, shotIndex: number) {
   });
 }
 
+// Hook to bulk update/reorder all shots
+export function useUpdateShots(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (shots: Shot[]) => api.updateShots(sessionId, shots),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
 // Hook to regenerate shot image
 export function useRegenerateImage(sessionId: string) {
   const queryClient = useQueryClient();

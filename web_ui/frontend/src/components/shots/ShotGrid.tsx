@@ -7,7 +7,8 @@ import { Shot } from '@/types';
 import { useAgents } from '@/hooks/useAgents';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import { CheckSquare, Square, Image as ImageIcon, Video, X, RotateCw, Search, Filter, XCircle } from 'lucide-react';
+import { useUpdateShots } from '@/hooks/useShots';
+import { CheckSquare, Square, Image as ImageIcon, Video, X, RotateCw, Search, Filter, XCircle, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProgress } from '@/hooks/useProgress';
 
@@ -22,6 +23,17 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
   const [generatingIndices, setGeneratingIndices] = useState<Set<number>>(new Set());
   const [queuedIndices, setQueuedIndices] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
+  const updateShotsMutation = useUpdateShots(sessionId);
+
+  // Insert modal state
+  const [insertModalConfig, setInsertModalConfig] = useState<{ position: number } | null>(null);
+  const [newShotData, setNewShotData] = useState<Partial<Shot>>({
+    image_prompt: '',
+    motion_prompt: '',
+    camera: 'static',
+    narration: ''
+  });
+
   const { shotProgress } = useProgress(sessionId, useCallback((shotIndex: number) => {
     // Whenever a WebSocket progress message broadcasts 'completed', refresh this session's UI!
     queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
@@ -237,6 +249,73 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
     }
   }, [sessionId, queryClient]);
 
+  const handleDeleteShot = async (indexToRemove: number) => {
+    if (!confirm('Are you sure you want to delete this shot? This cannot be undone.')) return;
+
+    // Filter out the deleted shot
+    const updatedShots = shots.filter(s => s.index !== indexToRemove);
+
+    // Re-index remaining shots cleanly 1..N
+    const reindexedShots = updatedShots.map((s, idx) => ({
+      ...s,
+      index: idx + 1
+    }));
+
+    try {
+      await updateShotsMutation.mutateAsync(reindexedShots);
+    } catch (error) {
+      console.error('Failed to delete shot:', error);
+      alert('Failed to delete shot. Please try again.');
+    }
+  };
+
+  const handleInsertShot = async () => {
+    if (!insertModalConfig) return;
+
+    // Build a clean default shot
+    const defaultShot: Shot = {
+      index: 0, // Temporarily 0, will be overwritten by re-indexing below
+      image_prompt: newShotData.image_prompt || '',
+      motion_prompt: newShotData.motion_prompt || '',
+      camera: newShotData.camera || 'static',
+      narration: newShotData.narration || '',
+      batch_number: 1,
+      image_generated: false,
+      video_rendered: false,
+      image_path: null,
+      image_paths: [],
+      video_path: null
+    };
+
+    // Slice the array and insert exactly at position
+    const pos = insertModalConfig.position;
+    const newShotsList = [
+      ...shots.slice(0, pos),
+      defaultShot,
+      ...shots.slice(pos)
+    ];
+
+    // Re-index cleanly 1..N
+    const reindexedShots = newShotsList.map((s, idx) => ({
+      ...s,
+      index: idx + 1
+    }));
+
+    try {
+      await updateShotsMutation.mutateAsync(reindexedShots);
+      setInsertModalConfig(null);
+      setNewShotData({
+        image_prompt: '',
+        motion_prompt: '',
+        camera: 'static',
+        narration: ''
+      });
+    } catch (error) {
+      console.error('Failed to insert shot:', error);
+      alert('Failed to insert shot. Please try again.');
+    }
+  };
+
   return (
     <div className="relative">
       {/* Header Actions */}
@@ -400,10 +479,98 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
               isQueued={isCurrentlyQueued}
               progress={shotProgress[shot.index]}
               onCancel={isCurrentlyGenerating || isCurrentlyQueued ? () => handleCancelShot(shot.index) : undefined}
+              onInsertBefore={() => setInsertModalConfig({ position: shot.index - 1 })}
+              onInsertAfter={() => setInsertModalConfig({ position: shot.index })}
+              onDelete={() => handleDeleteShot(shot.index)}
             />
           );
         })}
       </div>
+
+      <div className="mt-8 flex justify-center">
+        <button
+          onClick={() => setInsertModalConfig({ position: shots.length })}
+          className="flex items-center gap-2 px-6 py-3 border-2 border-dashed rounded-lg hover:border-primary/50 hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+        >
+          <Plus className="w-5 h-5" />
+          Add Shot to End
+        </button>
+      </div>
+
+      {/* Insert Shot Modal Overlay */}
+      {insertModalConfig && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-background rounded-lg shadow-xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setInsertModalConfig(null)}
+              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h2 className="text-xl font-semibold mb-6">Insert New Shot</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Image Prompt</label>
+                <textarea
+                  value={newShotData.image_prompt}
+                  onChange={(e) => setNewShotData({ ...newShotData, image_prompt: e.target.value })}
+                  className="w-full border rounded-md p-2 text-sm h-32"
+                  placeholder="Describe the initial visual frame of the shot..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Motion Prompt</label>
+                <textarea
+                  value={newShotData.motion_prompt}
+                  onChange={(e) => setNewShotData({ ...newShotData, motion_prompt: e.target.value })}
+                  className="w-full border rounded-md p-2 text-sm h-24"
+                  placeholder="Describe the motion/video prompt..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Camera Movement</label>
+                <input
+                  type="text"
+                  value={newShotData.camera}
+                  onChange={(e) => setNewShotData({ ...newShotData, camera: e.target.value })}
+                  className="w-full border rounded-md p-2 text-sm"
+                  placeholder="e.g. static, pan right, zoom in..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Narration (Optional)</label>
+                <textarea
+                  value={newShotData.narration}
+                  onChange={(e) => setNewShotData({ ...newShotData, narration: e.target.value })}
+                  className="w-full border rounded-md p-2 text-sm h-20"
+                  placeholder="Voiceover narration for this section..."
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex justify-end gap-3">
+              <button
+                onClick={() => setInsertModalConfig(null)}
+                className="px-4 py-2 border rounded-md hover:bg-muted text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInsertShot}
+                disabled={updateShotsMutation.isPending || (!newShotData.image_prompt && !newShotData.motion_prompt)}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
+              >
+                {updateShotsMutation.isPending ? 'Inserting...' : 'Insert Shot'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Batch Modal Overlay */}
       {showBatchModal && (

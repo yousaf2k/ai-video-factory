@@ -74,16 +74,133 @@ async def get_shot(session_id: str, shot_index: int):
 async def update_shots(session_id: str, request: UpdateShotsRequest):
     """Update shots (reorder, edit prompts)"""
     try:
-        # Convert dicts to Shot models
-        shots = [Shot(**shot) for shot in request.shots]
+        # We take the raw dicts directly because we will manually update string paths inside them later without fighting the immutable pydantic models
+        shots_dicts = [shot.dict() for shot in request.shots]
 
-        # Update shots.json
+        # Update shots.json and perform safe renaming of associated media
         session_dir = os.path.join(config.ABS_SESSIONS_DIR, session_id)
         shots_path = os.path.join(session_dir, "shots.json")
+        images_dir = os.path.join(session_dir, "images")
+        videos_dir = os.path.join(session_dir, "videos")
 
-        # Save updated shots
+        # Create dirs if they don't exist yet (e.g., if inserting a shot very early on)
+        os.makedirs(images_dir, exist_ok=True)
+        os.makedirs(videos_dir, exist_ok=True)
+
+        # ----------------------------------------------------
+        # Two-Pass File Renaming Strategy for Shot Reordering/Deletion
+        # ----------------------------------------------------
+        # We need to rename physical files like `shot_003_001.png` to `shot_002_001.png`
+        # if shot 3 became shot 2.
+        
+        # Build maps for renamed files. We use a UUID `.tmp` pass first to prevent collisions (e.g. 2->3 while 3->4)
+        tmp_id = str(uuid.uuid4())[:8]
+
+        # Regex to extract the shot prefix: "shot_003_..."
+        prefix_re = re.compile(r"^(shot_)(\d+)(_.*)$")
+
+        def get_new_filename(current_filename: str, new_index: int) -> str:
+            """Given 'shot_003_001.png' and new_index 2, returns 'shot_002_001.png'"""
+            if not current_filename:
+                return current_filename
+            match = prefix_re.match(current_filename)
+            if match:
+                return f"{match.group(1)}{new_index:03d}{match.group(3)}"
+            return current_filename
+
+        # List of all renaming instructions
+        # Tuple format: (absolute_source_path, absolute_tmp_path, absolute_final_path, file_type)
+        rename_operations = []
+
+        # Iterate over all incoming shots to detect discrepancies between their current index vs string names
+        for shot in shots_dicts:
+            true_index = shot['index']
+
+            # Check primary image_path
+            current_image_path = shot.get('image_path')
+            if current_image_path:
+                basename = os.path.basename(current_image_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        # Index shifted. Schedule rename.
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+                        
+                        src = os.path.join(images_dir, basename)
+                        tmp = os.path.join(images_dir, tmp_basename)
+                        dst = os.path.join(images_dir, new_basename)
+                        
+                        rename_operations.append((src, tmp, dst))
+                        # Update the dict path explicitly
+                        shot['image_path'] = os.path.join(session_id, "images", new_basename).replace('\\', '/')
+
+            # Check alternative image_paths
+            current_image_paths = shot.get('image_paths', [])
+            new_image_paths = []
+            for img_path in current_image_paths:
+                basename = os.path.basename(img_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+                        
+                        src = os.path.join(images_dir, basename)
+                        tmp = os.path.join(images_dir, tmp_basename)
+                        dst = os.path.join(images_dir, new_basename)
+                        
+                        rename_operations.append((src, tmp, dst))
+                        new_image_paths.append(os.path.join(session_id, "images", new_basename).replace('\\', '/'))
+                    else:
+                        new_image_paths.append(img_path) # unchanged
+                else:
+                    new_image_paths.append(img_path)
+            shot['image_paths'] = new_image_paths
+
+            # Check video_path
+            current_video_path = shot.get('video_path')
+            if current_video_path:
+                basename = os.path.basename(current_video_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+                        
+                        src = os.path.join(videos_dir, basename)
+                        tmp = os.path.join(videos_dir, tmp_basename)
+                        dst = os.path.join(videos_dir, new_basename)
+                        
+                        rename_operations.append((src, tmp, dst))
+                        shot['video_path'] = os.path.join(session_id, "videos", new_basename).replace('\\', '/')
+
+        # Execute Pass 1: Move to temporary files (prevents filename collisions during shifting)
+        for src, tmp, dst in rename_operations:
+            if os.path.exists(src):
+                try:
+                    shutil.move(src, tmp)
+                except Exception as e:
+                    logger.warning(f"Failed temp rename {src} -> {tmp}: {e}")
+
+        # Execute Pass 2: Move temporary files to final correct destinations
+        for src, tmp, dst in rename_operations:
+            if os.path.exists(tmp):
+                try:
+                    # Cleanup if destination already exists (from an orphaned file)
+                    if os.path.exists(dst):
+                        os.remove(dst)
+                    shutil.move(tmp, dst)
+                    logger.info(f"Permanently renamed shot media to {dst}")
+                except Exception as e:
+                    logger.warning(f"Failed final rename {tmp} -> {dst}: {e}")
+
+        # Save updated shots JSON
         with open(shots_path, 'w', encoding='utf-8') as f:
-            json.dump([shot.dict() for shot in shots], f, indent=2, ensure_ascii=False)
+            json.dump(shots_dicts, f, indent=2, ensure_ascii=False)
 
         # Return updated session
         return session_service.get_session(session_id)

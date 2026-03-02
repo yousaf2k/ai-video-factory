@@ -2,7 +2,7 @@
  * ShotCard component - Individual shot with editing and regeneration
  */
 import { useState } from 'react';
-import { Edit3, RotateCw, RefreshCw, Image, Layers, Video, Check, X, Loader2, Clock } from 'lucide-react';
+import { Edit3, RotateCw, RefreshCw, Image, Layers, Video, Check, X, Loader2, Clock, Plus, Trash2 } from 'lucide-react';
 import { Shot } from '@/types';
 import { useUpdateShot, useRegenerateImage, useRegenerateVideo, useSelectImage } from '@/hooks/useShots';
 import { useQueryClient } from '@tanstack/react-query';
@@ -20,6 +20,9 @@ interface ShotCardProps {
   isQueued?: boolean;
   progress?: number;
   onCancel?: () => void;
+  onInsertBefore?: () => void;
+  onInsertAfter?: () => void;
+  onDelete?: () => void;
 }
 
 export function ShotCard({
@@ -32,7 +35,10 @@ export function ShotCard({
   isGenerating = false,
   isQueued = false,
   progress,
-  onCancel
+  onCancel,
+  onInsertBefore,
+  onInsertAfter,
+  onDelete
 }: ShotCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);
@@ -275,6 +281,27 @@ export function ShotCard({
               <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
                 {shot.image_paths.length}
               </span>
+            </button>
+          )}
+
+          <div className="w-px h-6 bg-border mx-1 my-auto"></div>
+
+          {onInsertBefore && (
+            <button
+              onClick={onInsertBefore}
+              className="p-1 hover:bg-muted rounded"
+              title="Insert a new shot before this one"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="p-1 hover:bg-red-50 text-red-600 rounded"
+              title="Delete this shot entirely"
+            >
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
