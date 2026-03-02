@@ -37,6 +37,120 @@ class GenerationService:
             sessions_dir = os.path.join(project_root, "output", "sessions")
         
         self.session_manager = SessionManager(sessions_dir)
+        self.cancelled_sessions = set()
+        self.cancelled_shots: dict[str, set[int]] = {}
+        self.queued_shots: dict[str, set[int]] = {}
+
+    def cancel_session(self, session_id: str):
+        """Mark a session as cancelled to halt background queue processing."""
+        self.cancelled_sessions.add(session_id)
+        if session_id in self.queued_shots:
+            self.queued_shots.pop(session_id)
+        logger.info(f"Marked session {session_id} as cancelled. Future queued items will be skipped.")
+
+    def cancel_single_shot(self, session_id: str, shot_index: int):
+        """Mark a single shot as cancelled to halt it from entering the queue."""
+        if session_id not in self.cancelled_shots:
+            self.cancelled_shots[session_id] = set()
+        self.cancelled_shots[session_id].add(shot_index)
+        if session_id in self.queued_shots and shot_index in self.queued_shots[session_id]:
+            self.queued_shots[session_id].remove(shot_index)
+        logger.info(f"Marked shot {shot_index} in session {session_id} as cancelled.")
+
+    async def run_batch_generation(self, session_id: str, request: Any):
+        """
+        Background task to process a batch of generations sequentially with a concurrency limit.
+        Since ComfyUI takes time, this prevents destroying progress on browser refresh.
+        """
+        from web_ui.backend.websocket.manager import manager
+        import config
+        
+        # Clear any old cancellation flags from previous runs
+        if session_id in self.cancelled_sessions:
+            self.cancelled_sessions.remove(session_id)
+        if session_id in self.cancelled_shots:
+            self.cancelled_shots.pop(session_id)
+            
+        limit = getattr(config, 'CONCURRENT_GENERATION_LIMIT', 2)
+        logger.info(f"Using concurrency limit of {limit} for batch generation")
+        semaphore = asyncio.Semaphore(limit)
+        
+        # Populate the queued tracking dict for UI refreshes
+        self.queued_shots[session_id] = set(request.shot_indices)
+        
+        # Helper to process a single shot synchronously within the bounded async loop
+        async def process_shot(shot_index: int):
+            # Abort before even acquiring semaphore if session or shot was cancelled
+            if session_id in self.cancelled_sessions:
+                logger.info(f"Session {session_id} cancelled. Skipping background shot {shot_index}.")
+                return
+            if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
+                logger.info(f"Shot {shot_index} cancelled explicitly. Skipping background generation.")
+                return
+                
+            async with semaphore:
+                try:
+                    # Double check inside semaphore just in case it took a while to acquire
+                    if session_id in self.cancelled_sessions:
+                        logger.info(f"Session {session_id} cancelled (after wait). Skipping shot {shot_index}.")
+                        return
+                    if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
+                        logger.info(f"Shot {shot_index} cancelled explicitly (after wait). Skipping.")
+                        return
+
+                    # Drop from queued tracking state (it is now actively generating)
+                    if session_id in self.queued_shots and shot_index in self.queued_shots[session_id]:
+                        self.queued_shots[session_id].remove(shot_index)
+
+                    # Load current shot state in case we need to skip existing images
+                    # (only load if we're actually generating images to save disk IO)
+                    shot_wants_skip = False
+                    if request.regenerate_images and not request.force:
+                        try:
+                            session = self.session_manager.get_session(session_id)
+                            if session and session.shots:
+                                shot_data = next((s for s in session.shots if s.get('index') == shot_index), None)
+                                if shot_data and shot_data.get('image_generated') and shot_data.get('image_path'):
+                                    shot_wants_skip = True
+                                    logger.info(f"Batch generation skipping existing image for shot {shot_index}")
+                        except Exception as e:
+                            logger.warning(f"Failed to check shot state before batch: {e}")
+
+                    # 1. Regenerate Image
+                    if request.regenerate_images and not shot_wants_skip:
+                        await self.regenerate_shot_image(
+                            session_id, shot_index, force=request.force,
+                            image_mode=request.image_mode, image_workflow=request.image_workflow
+                        )
+
+                    # 2. Regenerate Video
+                    if request.regenerate_videos:
+                        await self.regenerate_shot_video(
+                            session_id, shot_index, force=request.force,
+                            video_workflow=request.video_workflow
+                        )
+                    
+                    # Ensure websocket completes for this shot if it hasn't somehow
+                    manager.broadcast_sync(session_id, {
+                        "type": "completed",
+                        "session_id": session_id,
+                        "shot_index": shot_index
+                    })
+
+                except Exception as e:
+                    logger.error(f"Batch error on shot {shot_index}: {str(e)}")
+                    # Broadcast error/cancel so UI spinner doesn't run forever
+                    manager.broadcast_sync(session_id, {
+                        "type": "cancelled",
+                        "session_id": session_id,
+                        "shot_index": shot_index
+                    })
+
+        # Launch all tasks bounded by the semaphore
+        logger.info(f"Starting server-side batch generation for {len(request.shot_indices)} shots")
+        tasks = [process_shot(idx) for idx in request.shot_indices]
+        await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info(f"Completed server-side batch generation for session {session_id}")
 
     async def regenerate_shot_image(
         self, session_id: str, shot_index: int, force: bool = False,
@@ -154,6 +268,14 @@ class GenerationService:
 
             # Generate video for single shot
             logger.info(f"Regenerating video for shot {shot_index}")
+            
+            # Broadcast initial 0% so UI resets from any stale progress
+            manager.broadcast_sync(session_id, {
+                "type": "progress",
+                "session_id": session_id,
+                "shot_index": shot_index,
+                "progress": 0
+            })
 
             # Run in thread pool to avoid blocking
             video_path = await asyncio.to_thread(
@@ -165,6 +287,13 @@ class GenerationService:
 
             # Mark as rendered
             self.session_manager.mark_video_rendered(session_id, shot_index, video_path)
+            
+            # Broadcast completion to clear progress on frontend
+            manager.broadcast_sync(session_id, {
+                "type": "completed",
+                "session_id": session_id,
+                "shot_index": shot_index
+            })
 
             logger.info(f"Shot {shot_index} video regenerated: {video_path}")
             return video_path
@@ -172,6 +301,7 @@ class GenerationService:
         except Exception as e:
             logger.error(f"Error regenerating shot {shot_index} video: {e}")
             raise
+
 
     async def replan_shots(
         self,
@@ -301,7 +431,7 @@ class GenerationService:
         """Generate video for a single shot (synchronous)"""
         import shutil
         from core.prompt_compiler import load_workflow, compile_workflow
-        from core.comfy_client import submit, wait_for_prompt_completion, get_output_file_path
+        from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
         from core.video_regenerator import generate_unique_video_filename
         import config
 
@@ -327,8 +457,22 @@ class GenerationService:
 
         logger.info(f"Video submitted for shot {shot_index}: prompt_id={prompt_id}")
 
-        # Wait for completion
-        wait_result = wait_for_prompt_completion(prompt_id, timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800))
+        # Progress callback to bridge ComfyUI steps to our WebSocket
+        def on_step_progress(current, total):
+            progress = int((current / total) * 100) if total > 0 else 0
+            manager.broadcast_sync(session_id, {
+                "type": "progress",
+                "session_id": session_id,
+                "shot_index": shot_index,
+                "progress": progress
+            })
+
+        # Wait for completion with progress updates
+        wait_result = wait_for_prompt_completion_with_progress(
+            prompt_id, 
+            progress_callback=on_step_progress,
+            timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
+        )
 
         if not wait_result.get('success'):
             raise RuntimeError(f"Video render failed for shot {shot_index}: {wait_result.get('error')}")

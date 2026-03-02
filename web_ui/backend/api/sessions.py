@@ -2,8 +2,10 @@
 Sessions API endpoints
 """
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import FileResponse
 from typing import List
 import logging
+import os
 
 from web_ui.backend.models.session import (
     SessionListItem, SessionDetail, CreateSessionRequest,
@@ -121,3 +123,52 @@ async def duplicate_session(session_id: str, request: DuplicateSessionRequest = 
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to duplicate session: {str(e)}"
         )
+
+
+@router.get("/{session_id}/images/{filename}", response_class=FileResponse)
+async def get_session_image(session_id: str, filename: str):
+    """Serve a session image file directly"""
+    try:
+        images_dir = session_service.get_images_dir(session_id)
+        image_path = os.path.join(images_dir, filename)
+        
+        if not os.path.exists(image_path) or not os.path.isfile(image_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Image {filename} not found for session {session_id}"
+            )
+            
+        return FileResponse(image_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving image {filename} for session {session_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve image: {str(e)}"
+        )
+
+
+@router.get("/{session_id}/videos/{filename}", response_class=FileResponse)
+async def get_session_video(session_id: str, filename: str):
+    """Serve a session video file directly"""
+    try:
+        videos_dir = session_service.get_videos_dir(session_id)
+        video_path = os.path.join(videos_dir, filename)
+        
+        if not os.path.exists(video_path) or not os.path.isfile(video_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Video {filename} not found for session {session_id}"
+            )
+            
+        return FileResponse(video_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving video {filename} for session {session_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve video: {str(e)}"
+        )
+

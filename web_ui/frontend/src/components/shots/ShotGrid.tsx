@@ -1,7 +1,7 @@
 /**
  * ShotGrid component - Grid view of shots with thumbnails and bulk actions
  */
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { ShotCard } from './ShotCard';
 import { Shot } from '@/types';
 import { useAgents } from '@/hooks/useAgents';
@@ -20,7 +20,13 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<'image' | 'video' | 'both' | null>(null);
   const [generatingIndices, setGeneratingIndices] = useState<Set<number>>(new Set());
-  const { shotProgress } = useProgress(sessionId);
+  const [queuedIndices, setQueuedIndices] = useState<Set<number>>(new Set());
+  const queryClient = useQueryClient();
+  const { shotProgress } = useProgress(sessionId, useCallback((shotIndex: number) => {
+    // Whenever a WebSocket progress message broadcasts 'completed', refresh this session's UI!
+    queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+    queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+  }, [queryClient, sessionId]));
 
   // Filter state
   const [filterNoImages, setFilterNoImages] = useState(false);
@@ -32,8 +38,8 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
   const [imageMode, setImageMode] = useState<string>('comfyui');
   const [imageWorkflow, setImageWorkflow] = useState<string>('flux2');
   const [videoWorkflow, setVideoWorkflow] = useState<string>('workflow/video/wan22_workflow.json');
+  const [batchSkipImages, setBatchSkipImages] = useState<boolean>(true);
 
-  const queryClient = useQueryClient();
   const { data: agents } = useAgents();
 
   // Extract unique camera values for the dropdown
@@ -113,108 +119,121 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
     });
 
     if (type === 'both') {
-      // Sequential: first all images, then all videos
-      // Phase 1: Generate images with concurrency limit (max 4)
-      // This leaves 2 browser connections free for UI updates (like invalidateQueries)
-      const inProgress = new Set<Promise<void>>();
-      for (const shotIndex of indicesToProcess) {
-        const p = (async () => {
-          try {
-            await api.regenerateShotImage(sessionId, shotIndex, true, imageMode, imageWorkflow);
-          } catch (error) {
-            console.error(`Failed to regenerate image for shot ${shotIndex}:`, error);
-          } finally {
-            // Invalidate and remove from generating as soon as each image finishes
-            queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
-            setGeneratingIndices(prev => {
-              const next = new Set(prev);
-              next.delete(shotIndex);
-              return next;
-            });
-          }
-        })().finally(() => inProgress.delete(p));
-
-        inProgress.add(p);
-        if (inProgress.size >= 4) {
-          await Promise.race(inProgress);
-        }
+      try {
+        await api.batchRegenerate(sessionId, {
+          shot_indices: indicesToProcess,
+          regenerate_images: true,
+          regenerate_videos: true,
+          force: !batchSkipImages,
+          image_mode: imageMode,
+          image_workflow: imageWorkflow,
+          video_workflow: videoWorkflow
+        });
+      } catch (error) {
+        console.error('Failed to start batch both generation:', error);
       }
-      await Promise.all(inProgress);
-
-      // Clear generating state and refresh to show new images
-      setGeneratingIndices(new Set());
-      await queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
-
-      // Phase 2: Re-mark for video generation, then start videos with concurrency limit
-      setGeneratingIndices(new Set(indicesToProcess));
-      const inProgressVideos = new Set<Promise<void>>();
-      for (const shotIndex of indicesToProcess) {
-        const p = (async () => {
-          try {
-            await api.regenerateShotVideo(sessionId, shotIndex, true, videoWorkflow);
-          } catch (error) {
-            console.error(`Failed to regenerate video for shot ${shotIndex}:`, error);
-          } finally {
-            setGeneratingIndices(prev => {
-              const next = new Set(prev);
-              next.delete(shotIndex);
-              return next;
-            });
-            queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
-          }
-        })().finally(() => inProgressVideos.delete(p));
-
-        inProgressVideos.add(p);
-        if (inProgressVideos.size >= 4) {
-          await Promise.race(inProgressVideos);
-        }
+    } else if (type === 'image') {
+      try {
+        await api.batchRegenerate(sessionId, {
+          shot_indices: indicesToProcess,
+          regenerate_images: true,
+          regenerate_videos: false,
+          force: true,
+          image_mode: imageMode,
+          image_workflow: imageWorkflow
+        });
+      } catch (error) {
+        console.error('Failed to start batch image generation:', error);
       }
-      await Promise.all(inProgressVideos);
-
-    } else {
-      // Single type: fire individual requests with concurrency limit (max 4)
-      const inProgressSingle = new Set<Promise<void>>();
-      for (const shotIndex of indicesToProcess) {
-        const p = (async () => {
-          try {
-            if (type === 'image') {
-              await api.regenerateShotImage(sessionId, shotIndex, true, imageMode, imageWorkflow);
-            } else {
-              await api.regenerateShotVideo(sessionId, shotIndex, true, videoWorkflow);
-            }
-          } catch (error) {
-            console.error(`Failed to regenerate ${type} for shot ${shotIndex}:`, error);
-          } finally {
-            setGeneratingIndices(prev => {
-              const next = new Set(prev);
-              next.delete(shotIndex);
-              return next;
-            });
-            queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
-          }
-        })().finally(() => inProgressSingle.delete(p));
-
-        inProgressSingle.add(p);
-        if (inProgressSingle.size >= 4) {
-          await Promise.race(inProgressSingle);
-        }
+    } else if (type === 'video') {
+      try {
+        await api.batchRegenerate(sessionId, {
+          shot_indices: indicesToProcess,
+          regenerate_images: false,
+          regenerate_videos: true,
+          force: true,
+          video_workflow: videoWorkflow
+        });
+      } catch (error) {
+        console.error('Failed to start batch video generation:', error);
       }
-      await Promise.all(inProgressSingle);
     }
-  }, [selectedIndices, showBatchModal, sessionId, imageMode, imageWorkflow, videoWorkflow, queryClient]);
+
+    // Modal cleanup - the actual progress will be tracked organically via the WebSocket state we implemented
+    setShowBatchModal(null);
+    setSelectedIndices([]);
+    setGeneratingIndices(new Set()); // Fallback visual clear, websocket will fill valid ones
+    setQueuedIndices(new Set(indicesToProcess));
+
+    // We optionally fetch the latest data just in case
+    queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+    queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+  }, [selectedIndices, showBatchModal, sessionId, imageMode, imageWorkflow, videoWorkflow, queryClient, batchSkipImages]);
+
+  // Remove shots from queued status once the backend confirms they started generating
+  useEffect(() => {
+    if (Object.keys(shotProgress).length > 0) {
+      setQueuedIndices(prev => {
+        const next = new Set(prev);
+        let changed = false;
+        Object.keys(shotProgress).forEach(idx => {
+          const index = Number(idx);
+          if (next.has(index)) {
+            next.delete(index);
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [shotProgress]);
+
+  // Request the backend queue status on initial load/mount to hydrate the UI after a page refresh
+  useEffect(() => {
+    const fetchQueueStatus = async () => {
+      try {
+        const data = await api.getQueueStatus(sessionId);
+        if (data.queued_indices && data.queued_indices.length > 0) {
+          setQueuedIndices(prev => new Set([...prev, ...data.queued_indices]));
+        }
+      } catch (err) {
+        console.error("Failed to fetch queue status:", err);
+      }
+    };
+    fetchQueueStatus();
+  }, [sessionId]);
 
   const handleCancelAll = useCallback(async () => {
     try {
       await api.cancelGeneration(sessionId);
       setGeneratingIndices(new Set());
+      setQueuedIndices(new Set());
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
     } catch (error) {
       console.error('Failed to cancel generation:', error);
+    }
+  }, [sessionId, queryClient]);
+
+  const handleCancelShot = useCallback(async (shotIndex: number) => {
+    try {
+      await api.cancelShotGeneration(sessionId, shotIndex);
+
+      // Remove just this one shot from local sets
+      setGeneratingIndices(prev => {
+        const next = new Set(prev);
+        next.delete(shotIndex);
+        return next;
+      });
+      setQueuedIndices(prev => {
+        const next = new Set(prev);
+        next.delete(shotIndex);
+        return next;
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+    } catch (error) {
+      console.error(`Failed to cancel shot ${shotIndex}:`, error);
     }
   }, [sessionId, queryClient]);
 
@@ -244,7 +263,7 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
             </span>
           )}
         </div>
-        {generatingIndices.size > 0 && (
+        {(generatingIndices.size > 0 || Object.keys(shotProgress).length > 0) && (
           <button
             onClick={handleCancelAll}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -366,19 +385,24 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
 
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredShots.map((shot) => (
-          <ShotCard
-            key={`${shot.index}-${shot.image_path}`}
-            shot={shot}
-            sessionId={sessionId}
-            selectable={true}
-            selected={selectedIndices.includes(shot.index)}
-            onSelectChange={(selected: boolean) => toggleSelectShot(shot.index, selected)}
-            isGenerating={generatingIndices.has(shot.index)}
-            progress={shotProgress[shot.index]}
-            onCancel={generatingIndices.has(shot.index) ? handleCancelAll : undefined}
-          />
-        ))}
+        {filteredShots.map((shot) => {
+          const isCurrentlyGenerating = generatingIndices.has(shot.index) || shotProgress[shot.index] !== undefined;
+          const isCurrentlyQueued = queuedIndices.has(shot.index) && !isCurrentlyGenerating;
+          return (
+            <ShotCard
+              key={`${shot.index}-${shot.image_path}`}
+              shot={shot}
+              sessionId={sessionId}
+              selectable={true}
+              selected={selectedIndices.includes(shot.index)}
+              onSelectChange={(selected: boolean) => toggleSelectShot(shot.index, selected)}
+              isGenerating={isCurrentlyGenerating}
+              isQueued={isCurrentlyQueued}
+              progress={shotProgress[shot.index]}
+              onCancel={isCurrentlyGenerating || isCurrentlyQueued ? () => handleCancelShot(shot.index) : undefined}
+            />
+          );
+        })}
       </div>
 
       {/* Batch Modal Overlay */}
@@ -398,8 +422,23 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
 
             {(showBatchModal === 'image' || showBatchModal === 'both') && (
               <div className="space-y-4">
+                {showBatchModal === 'both' && (
+                  <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md border text-sm">
+                    <input
+                      type="checkbox"
+                      id="skip-existing"
+                      checked={batchSkipImages}
+                      onChange={(e) => setBatchSkipImages(e.target.checked)}
+                      className="rounded border-gray-300 text-primary w-4 h-4"
+                    />
+                    <label htmlFor="skip-existing" className="font-medium cursor-pointer">
+                      Skip generating images if they already exist
+                    </label>
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-sm font-medium mb-1">Generation Mode</label>
+                  <label className="block text-sm font-medium mb-1">Image Generation Mode</label>
                   <select
                     value={imageMode}
                     onChange={(e) => setImageMode(e.target.value)}

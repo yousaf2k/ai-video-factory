@@ -2,7 +2,7 @@
  * ShotCard component - Individual shot with editing and regeneration
  */
 import { useState } from 'react';
-import { Edit3, RotateCw, RefreshCw, Image, Layers, Video, Check, X, Loader2 } from 'lucide-react';
+import { Edit3, RotateCw, RefreshCw, Image, Layers, Video, Check, X, Loader2, Clock } from 'lucide-react';
 import { Shot } from '@/types';
 import { useUpdateShot, useRegenerateImage, useRegenerateVideo, useSelectImage } from '@/hooks/useShots';
 import { useQueryClient } from '@tanstack/react-query';
@@ -17,6 +17,7 @@ interface ShotCardProps {
   selected?: boolean;
   onSelectChange?: (selected: boolean) => void;
   isGenerating?: boolean;
+  isQueued?: boolean;
   progress?: number;
   onCancel?: () => void;
 }
@@ -29,6 +30,7 @@ export function ShotCard({
   selected = false,
   onSelectChange,
   isGenerating = false,
+  isQueued = false,
   progress,
   onCancel
 }: ShotCardProps) {
@@ -299,7 +301,7 @@ export function ShotCard({
       {/* Media Preview */}
       <div className="mb-3 relative group">
         <div className="aspect-video bg-muted rounded overflow-hidden flex items-center justify-center relative">
-          {(isGenerating || regenerateImage.isPending || regenerateVideo.isPending) && (
+          {isGenerating ? (
             <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg z-10">
               <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
               <span className="text-white font-medium">
@@ -314,7 +316,22 @@ export function ShotCard({
                 </button>
               )}
             </div>
-          )}
+          ) : isQueued ? (
+            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg z-10">
+              <Clock className="w-8 h-8 text-white/70 mb-2" />
+              <span className="text-white/90 font-medium text-sm">
+                Queued...
+              </span>
+              {onCancel && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCancel(); }}
+                  className="mt-2 px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          ) : null}
           {viewMode === 'video' && cachedVideoUrl ? (
             <video
               src={cachedVideoUrl}

@@ -177,48 +177,29 @@ async def regenerate_shot_video(session_id: str, shot_index: int, request: Regen
         )
 
 
+from fastapi import BackgroundTasks
+
 @router.post("/batch-regenerate")
-async def batch_regenerate(session_id: str, request: BatchRegenerateRequest):
-    """Regenerate multiple shots"""
+async def batch_regenerate(session_id: str, request: BatchRegenerateRequest, background_tasks: BackgroundTasks):
+    """Queue multiple shots for regeneration using a background task"""
     try:
-        results = []
-
-        for shot_index in request.shot_indices:
-            result = {
-                "shot_index": shot_index,
-                "image": None,
-                "video": None
-            }
-
-            if request.regenerate_images:
-                try:
-                    image_path = await generation_service.regenerate_shot_image(
-                        session_id, shot_index, force=request.force,
-                        image_mode=request.image_mode, image_workflow=request.image_workflow
-                    )
-                    result["image"] = "success"
-                except Exception as e:
-                    result["image"] = f"failed: {str(e)}"
-
-
-            if request.regenerate_videos:
-                try:
-                    video_path = await generation_service.regenerate_shot_video(
-                        session_id, shot_index, force=request.force,
-                        video_workflow=request.video_workflow
-                    )
-                    result["video"] = "success"
-                except Exception as e:
-                    result["video"] = f"failed: {str(e)}"
-
-            results.append(result)
-
-        return {"status": "completed", "results": results}
+        # Schedule the batch string on the backend
+        background_tasks.add_task(
+            generation_service.run_batch_generation,
+            session_id,
+            request
+        )
+        
+        return {
+            "status": "queued", 
+            "message": f"Queued {len(request.shot_indices)} shots for generation",
+            "shot_count": len(request.shot_indices)
+        }
     except Exception as e:
-        logger.error(f"Error in batch regeneration: {e}")
+        logger.error(f"Error queuing batch generation: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to batch regenerate: {str(e)}"
+            detail=f"Failed to queue batch generation: {str(e)}"
         )
 
 @router.post("/{shot_index}/select-image")
@@ -292,6 +273,7 @@ async def cancel_generation(session_id: str):
     try:
         logger.info(f"Cancel generation requested for session {session_id}")
         result = cancel_all()
+        generation_service.cancel_session(session_id)
         logger.info(f"ComfyUI cancel result: {result}")
 
         # Broadcast cancellation to frontend (use async since this handler is async)
@@ -306,4 +288,44 @@ async def cancel_generation(session_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to cancel generation: {str(e)}"
+        )
+
+@router.post("/{shot_index}/cancel-generation")
+async def cancel_single_shot_generation(session_id: str, shot_index: int):
+    """Cancel pending generation for a specific shot in this session"""
+    from web_ui.backend.websocket.manager import manager
+
+    try:
+        logger.info(f"Cancel generation requested for session {session_id}, shot {shot_index}")
+        
+        # Mark the specific shot as cancelled so the backend loop skips it
+        generation_service.cancel_single_shot(session_id, shot_index)
+
+        # Broadcast cancellation for this specific shot to the frontend
+        await manager.broadcast_to_session(session_id, {
+            "type": "cancelled",
+            "session_id": session_id,
+            "shot_index": shot_index
+        })
+
+        return {"status": "success", "message": f"Shot {shot_index} generation cancelled"}
+    except Exception as e:
+        logger.error(f"Error cancelling single shot generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel single shot generation: {str(e)}"
+        )
+
+@router.get("/queue-status")
+async def get_queue_status(session_id: str):
+    """Get the current queue of shots waiting to be generated"""
+    try:
+        # Get the queued shots from the generation service
+        queued = generation_service.queued_shots.get(session_id, set())
+        return {"queued_indices": list(queued)}
+    except Exception as e:
+        logger.error(f"Error getting queue status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get queue status: {str(e)}"
         )

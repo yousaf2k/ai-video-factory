@@ -7,7 +7,7 @@ interface ProgressMessage {
     progress: number;
 }
 
-export const useProgress = (sessionId: string | undefined) => {
+export const useProgress = (sessionId: string | undefined, onCompleted?: (shotIndex: number) => void) => {
     const [shotProgress, setShotProgress] = useState<Record<number, number>>({});
 
     useEffect(() => {
@@ -47,8 +47,19 @@ export const useProgress = (sessionId: string | undefined) => {
                             delete next[data.shot_index];
                             return next;
                         });
+                        if (onCompleted) {
+                            onCompleted(data.shot_index);
+                        }
                     } else if (data.type === 'cancelled') {
-                        setShotProgress({});
+                        if (data.shot_index !== undefined) {
+                            setShotProgress((prev) => {
+                                const next = { ...prev };
+                                delete next[data.shot_index];
+                                return next;
+                            });
+                        } else {
+                            setShotProgress({}); // Cancel all
+                        }
                     }
                 } catch (err) {
                     console.error('Error parsing progress message:', err);
@@ -56,6 +67,10 @@ export const useProgress = (sessionId: string | undefined) => {
             };
 
             socket.onclose = () => {
+                // If connection drops unexpectedly (e.g. backend crash), clear active states
+                // so the user isn't stuck with frozen spinners and can restart or refresh
+                setShotProgress({});
+
                 if (!intentionallyClosed) {
                     console.log('Progress WebSocket disconnected. Reconnecting in 3s...');
                     reconnectTimeout = setTimeout(connect, 3000);

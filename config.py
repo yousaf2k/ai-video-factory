@@ -25,6 +25,10 @@ SHOT_GENERATION_BATCH_SIZE = int(os.getenv("SHOT_GENERATION_BATCH_SIZE", "1"))  
 # Recommended: 3-5 for most APIs, 1-2 for free tier accounts
 MAX_PARALLEL_BATCH_THREADS = int(os.getenv("MAX_PARALLEL_BATCH_THREADS", "5"))  # Default: 5 parallel threads
 
+# Maximum concurrent generations in the background queue (useful for local GPUs and API limits)
+# Set to 1-4 depending on your GPU VRAM or queue backend capability
+CONCURRENT_GENERATION_LIMIT = int(os.getenv("CONCURRENT_GENERATION_LIMIT", "1"))  # Default: 1 concurrent generations
+
 # ==========================================
 # GEMINI API CONFIGURATION
 # ==========================================
