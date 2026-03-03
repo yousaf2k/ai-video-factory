@@ -4,11 +4,13 @@ interface ProgressMessage {
     type: string;
     session_id: string;
     shot_index: number;
+    shot_id?: string;
     progress: number;
 }
 
-export const useProgress = (sessionId: string | undefined, onCompleted?: (shotIndex: number) => void) => {
-    const [shotProgress, setShotProgress] = useState<Record<number, number>>({});
+export const useProgress = (sessionId: string | undefined, onCompleted?: (shotId: string) => void) => {
+    // We now map progress by stable UUID strings rather than index integers, to survive insertion/deletion reindexes
+    const [shotProgress, setShotProgress] = useState<Record<string, number>>({});
 
     useEffect(() => {
         if (!sessionId) return;
@@ -36,25 +38,30 @@ export const useProgress = (sessionId: string | undefined, onCompleted?: (shotIn
             socket.onmessage = (event) => {
                 try {
                     const data: ProgressMessage = JSON.parse(event.data);
-                    if (data.type === 'progress') {
+                    // Use shot_id if provided by new backend, fallback to shot_index string for backwards compatibility
+                    const targetKey = data.shot_id || (data.shot_index !== undefined ? data.shot_index.toString() : null);
+
+                    if (!targetKey && data.type !== 'cancelled' && data.type !== 'completed') return;
+
+                    if (data.type === 'progress' && targetKey) {
                         setShotProgress((prev) => ({
                             ...prev,
-                            [data.shot_index]: data.progress,
+                            [targetKey]: data.progress,
                         }));
-                    } else if (data.type === 'completed') {
+                    } else if (data.type === 'completed' && targetKey) {
                         setShotProgress((prev) => {
                             const next = { ...prev };
-                            delete next[data.shot_index];
+                            delete next[targetKey];
                             return next;
                         });
                         if (onCompleted) {
-                            onCompleted(data.shot_index);
+                            onCompleted(targetKey);
                         }
                     } else if (data.type === 'cancelled') {
-                        if (data.shot_index !== undefined) {
+                        if (targetKey) {
                             setShotProgress((prev) => {
                                 const next = { ...prev };
-                                delete next[data.shot_index];
+                                delete next[targetKey];
                                 return next;
                             });
                         } else {

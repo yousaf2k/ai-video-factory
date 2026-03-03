@@ -202,6 +202,7 @@ class GenerationService:
                 "type": "progress",
                 "session_id": session_id,
                 "shot_index": shot_index,
+                "shot_id": shot.get('id'),
                 "progress": 0
             })
 
@@ -222,7 +223,8 @@ class GenerationService:
             manager.broadcast_sync(session_id, {
                 "type": "completed",
                 "session_id": session_id,
-                "shot_index": shot_index
+                "shot_index": shot_index,
+                "shot_id": shot.get('id')
             })
 
             logger.info(f"Shot {shot_index} image regenerated: {image_path}")
@@ -274,6 +276,7 @@ class GenerationService:
                 "type": "progress",
                 "session_id": session_id,
                 "shot_index": shot_index,
+                "shot_id": shot.get('id'),
                 "progress": 0
             })
 
@@ -292,7 +295,8 @@ class GenerationService:
             manager.broadcast_sync(session_id, {
                 "type": "completed",
                 "session_id": session_id,
-                "shot_index": shot_index
+                "shot_index": shot_index,
+                "shot_id": shot.get('id')
             })
 
             logger.info(f"Shot {shot_index} video regenerated: {video_path}")
@@ -407,6 +411,7 @@ class GenerationService:
                 "type": "progress",
                 "session_id": session_id,
                 "shot_index": shot_index,
+                "shot_id": shot.get('id'),
                 "progress": progress
             })
 
@@ -464,6 +469,7 @@ class GenerationService:
                 "type": "progress",
                 "session_id": session_id,
                 "shot_index": shot_index,
+                "shot_id": shot.get('id'),
                 "progress": progress
             })
 

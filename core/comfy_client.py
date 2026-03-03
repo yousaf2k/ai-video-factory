@@ -217,8 +217,9 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                 start_time = time.time()
                 last_history_check = time.time()
                 our_prompt_is_executing = False  # Only true when OUR prompt is actively running
-                currently_executing_prompt_id = None  # Track exactly which prompt is running (for progress filtering)
+                another_prompt_is_executing = False  # True when we've confirmed another prompt is running
                 execution_start_time = None  # Track when our prompt actually starts
+                currently_executing_prompt_id = None  # Track what prompt is executing right now
                 
                 while True:
                     current_time = time.time()
@@ -255,6 +256,8 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                         
                         msg_type = message.get("type")
                         data = message.get("data", {})
+                        
+
 
                         if msg_type == "executing":
                             msg_prompt_id = data.get("prompt_id")
@@ -284,22 +287,20 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                             # Progress messages in newer ComfyUI versions include prompt_id
                             prog_prompt_id = data.get("prompt_id")
                             
-                            # If prompt_id is directly in the progress message, trust it
                             is_our_progress = False
+                            # 1. Direct match (best)
                             if prog_prompt_id == prompt_id:
                                 is_our_progress = True
-                            # If no prompt_id in progress message, fallback to tracking 'executing' events
+                            # 2. Fallback to global execution state tracker
                             elif prog_prompt_id is None:
                                 if currently_executing_prompt_id == prompt_id:
-                                    is_our_progress = True
-                                # If we haven't seen ANY prompt start executing yet, it might be an early progress event for us
-                                elif currently_executing_prompt_id is None and not our_prompt_is_executing:
                                     is_our_progress = True
 
                             if is_our_progress and progress_callback:
                                 value = data.get("value", 0)
                                 max_val = data.get("max", 0)
                                 progress_callback(value, max_val)
+
 
                     except asyncio.TimeoutError:
                         continue

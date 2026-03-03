@@ -332,7 +332,7 @@ export function ShotCard({
             <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg z-10">
               <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
               <span className="text-white font-medium">
-                {progress !== undefined ? `Generating... ${progress}%` : 'Generating...'}
+                {progress === 0 ? 'Initializing Generation...' : progress !== undefined ? `Generating... ${progress}%` : 'Generating...'}
               </span>
               {onCancel && (
                 <button

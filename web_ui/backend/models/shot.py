@@ -3,10 +3,11 @@ Pydantic models for shot data
 """
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-
+import uuid
 
 class Shot(BaseModel):
     """Shot model"""
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8], description="Unique stable ID for this shot")
     index: int = Field(..., description="Shot index (1-based)")
     image_prompt: str = Field(..., description="Image generation prompt")
     motion_prompt: str = Field(..., description="Motion/video generation prompt")

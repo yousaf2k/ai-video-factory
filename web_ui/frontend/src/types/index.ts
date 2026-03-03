@@ -62,6 +62,7 @@ export interface Scene {
 }
 
 export interface Shot {
+  id?: string;
   index: number;
   image_prompt: string;
   motion_prompt: string;
