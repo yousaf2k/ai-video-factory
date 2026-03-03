@@ -32,7 +32,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
       "characters": "Inhabitants of this future world",
       "action": "Technological events and transformations unfolding",
       "emotion": "Human/AI emotional response to future conditions",
-      "narration": "Voice-over narration (2-3 sentences, immersive and thought-provoking)",
+      "narration": "Voice-over narration Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -81,7 +81,7 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
       "characters": "Inhabitants of this future world",
       "action": "Technological events and transformations unfolding",
       "emotion": "Human/AI emotional response to future conditions",
-      "narration": "Voice-over narration (2-3 sentences, immersive and thought-provoking)"
+      "narration": "Voice-over narration Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }

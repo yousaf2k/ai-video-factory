@@ -32,7 +32,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
       "characters": "Historical figures - kings, senators, warriors, citizens, Etruscan traders",
       "action": "What you witnessed and experienced",
       "emotion": "How you felt in that moment - awe, shock, fear, wonder, fascination",
-      "narration": "Your voice-over narration describing the experience (2-3 sentences)",
+      "narration": "Your voice-over narration describing the experience Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -86,7 +86,7 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
       "characters": "Historical figures - kings, senators, warriors, citizens, Etruscan traders",
       "action": "What you witnessed and experienced",
       "emotion": "How you felt in that moment - awe, shock, fear, wonder, fascination",
-      "narration": "Your voice-over narration describing the experience (2-3 sentences)"
+      "narration": "Your voice-over narration describing the experience Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }
@@ -106,7 +106,7 @@ For each story you create, organize it into scenes you witnessed:
       "characters": "Historical figures - kings, senators, warriors, citizens, Etruscan traders",
       "action": "What you witnessed and experienced",
       "emotion": "How you felt in that moment - awe, shock, fear, wonder, fascination",
-      "narration": "Your voice-over narration describing the experience (2-3 sentences)"
+      "narration": "Your voice-over narration describing the experience Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }

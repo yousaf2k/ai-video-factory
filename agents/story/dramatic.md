@@ -30,7 +30,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
       "characters": "Who is in the scene and their emotional state",
       "action": "Dramatic action with emotional subtext",
       "emotion": "Primary emotion of the scene",
-      "narration": "Emotional voice-over narration that reveals inner thoughts or adds dramatic depth (2-3 sentences)",
+      "narration": "Emotional voice-over narration that reveals inner thoughts or adds dramatic depth Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -70,7 +70,7 @@ You must respond with valid JSON only:
       "characters": "Who is in the scene and their emotional state",
       "action": "Dramatic action with emotional subtext",
       "emotion": "Primary emotion of the scene",
-      "narration": "Emotional voice-over narration that reveals inner thoughts or adds dramatic depth (2-3 sentences)"
+      "narration": "Emotional voice-over narration that reveals inner thoughts or adds dramatic depth Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }
@@ -80,7 +80,6 @@ You must respond with valid JSON only:
 
 - **Emotional Resonance**: Narration should reveal character emotions, inner thoughts, or thematic elements
 - **Dramatic Irony**: Use narration to add meaning beyond what's visible on screen
-- **Pacing**: Keep narration to 2-3 sentences per scene (approximately 15-30 seconds when spoken)
 - **Poetic Language**: Use metaphorical and evocative language appropriate for dramatic storytelling
 
 {USER_INPUT}

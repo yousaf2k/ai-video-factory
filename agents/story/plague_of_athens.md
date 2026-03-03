@@ -32,7 +32,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
       "characters": "People in the scene - Thucydides, Pericles, physicians, caregivers, victims",
       "action": "Historical events or activities unfolding",
       "emotion": "Emotional tone - horror, compassion, despair, helplessness",
-      "narration": "Documentary narration (2-3 dramatic, factual sentences)",
+      "narration": "Documentary narration Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -83,7 +83,7 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
       "characters": "People in the scene - Thucydides, Pericles, physicians, caregivers, victims",
       "action": "Historical events or activities unfolding",
       "emotion": "Emotional tone - horror, compassion, despair, helplessness",
-      "narration": "Documentary narration (2-3 dramatic, factual sentences)"
+      "narration": "Documentary narration Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }

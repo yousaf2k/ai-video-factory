@@ -48,7 +48,7 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
       "action": "What happens - focus on excitement, surprise, or revelation",
       "emotion": "Primary emotion - shock, curiosity, excitement, awe, urgency",
       "hook_type": "shock | question | tease | pattern_interrupt | breadcrumb | cta",
-      "narration": "Energetic narration (2-3 punchy sentences) that hooks, reveals, or engages",
+      "narration": "Energetic narration that hooks, reveals, or engages Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -114,7 +114,6 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 - "Stick around for..." (breadcrumb)
 
 **Pacing**:
-- 3-6 sentences per scene (30-60 seconds spoken)
 - Fast delivery, energy, enthusiasm
 - Vary sentence length for rhythm
 - Use rhetorical questions

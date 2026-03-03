@@ -32,7 +32,7 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
       "characters": "Dinosaurs, prehistoric creatures, and their behaviors/interactions",
       "action": "What happens - focus on spectacular events, hunting, migration, battles, daily life",
       "emotion": "Primary emotion - awe, terror, majesty, wonder, suspense, triumph",
-      "narration": "Epic narration (2-3 sentences) that combines scientific insight with cinematic grandeur, perfect for Netflix/YouTube",
+      "narration": "Epic narration that combines scientific insight with cinematic grandeur, perfect for Netflix/YouTube Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -70,7 +70,6 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 
 - **Epic & Educational**: Combine cinematic storytelling with scientific facts
 - **IMAX Language**: Use grand, sweeping phrases that match visual spectacle
-- **Pacing**: 2-3 sentences per scene (approximately 15-30 seconds when spoken)
 - **Netflix Quality**: Professional documentary narration style (think David Attenborough meets IMDb epics)
 - **Scientific Accuracy**: Include real dinosaur names, time periods, behaviors
 - **Cinematic Phrasing**: "Standing as tall as a three-story building..." / "In a world before continents had taken their current form..."
@@ -237,7 +236,7 @@ Return your story plan as a JSON object with the following structure:
       "characters": "Characters present (e.g., 'T-Rex family hunting, Edmontosaurus herd grazing')",
       "action": "What happens in the scene, dinosaur behavior, camera movements",
       "emotion": "Emotional tone (e.g., 'tension', 'awe', 'terror', 'wonder')",
-      "narration": "Documentary narration text (what the narrator says)"
+      "narration": "Documentary narration text (what the narrator says) Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }

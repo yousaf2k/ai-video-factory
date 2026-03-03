@@ -30,7 +30,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
       "characters": "Experts, witnesses, or subjects",
       "action": "Informative or revealing actions",
       "emotion": "The tone (curiosity, wonder, concern, etc.)",
-      "narration": "Informative voice-over explaining facts, context, or significance (2-3 sentences)",
+      "narration": "Informative voice-over explaining facts, context, or significance Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -61,7 +61,6 @@ For a **{VIDEO_LENGTH}-second documentary** with 8 scenes:
 ## Narration Guidelines
 
 - **Educational**: Narration should provide facts, context, explanations, or expert insights
-- **Clear and Concise**: Keep narration to 2-3 sentences per scene (approximately 15-30 seconds when spoken)
 - **Objective Tone**: Maintain informative, balanced perspective
 - **Story Integration**: Narration should connect visual evidence to broader themes or discoveries
 

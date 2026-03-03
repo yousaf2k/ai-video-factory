@@ -30,7 +30,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
       "characters": "Who is in the scene (usually 'vlogger' + people they interact with)",
       "action": "What happens in the scene",
       "emotion": "The emotional tone/mood (excited, curious, amazed, surprised)",
-      "narration": "First-person vlogger narration for this scene (conversational, spontaneous, 2-3 sentences)",
+      "narration": "First-person vlogger narration for this scene Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 30  // Duration in seconds
     }
   ]
@@ -176,7 +176,7 @@ You must respond with valid JSON only. No markdown, no explanations, just the JS
       "characters": "Who is in the scene (usually 'vlogger' + people they interact with)",
       "action": "What happens in the scene",
       "emotion": "The emotional tone/mood (excited, curious, amazed, surprised)",
-      "narration": "First-person vlogger narration for this scene (conversational, spontaneous, 2-3 sentences)"
+      "narration": "First-person vlogger narration for this scene Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }
@@ -188,7 +188,6 @@ You must respond with valid JSON only. No markdown, no explanations, just the JS
 - **Conversational**: Write as if speaking naturally to friends
 - **Spontaneous**: Include reactions like "Oh wow", "Check this out", "You guys..."
 - **Audience Engagement**: Direct address to viewers, ask questions
-- **Concise**: Keep narration to 2-3 sentences per scene (15-30 seconds spoken)
 - **Visual Complement**: Narration should match what's happening on screen
 - **Authentic**: Include natural speech patterns, slight pauses, reactions
 
