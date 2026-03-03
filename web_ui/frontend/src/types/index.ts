@@ -43,11 +43,13 @@ export interface SessionListItem {
   total_shots: number;
   images_generated: number;
   videos_rendered: number;
+  story?: Story;
 }
 
 export interface Story {
   title: string;
   style: string;
+  master_script?: string;
   total_duration?: number;
   scenes: Scene[];
 }
@@ -100,6 +102,7 @@ export interface GlobalConfig {
   default_video_agent: string;
   comfy_url: string;
   target_video_length?: number;
+  default_max_shots?: number;
 }
 
 export interface UpdateGlobalConfigRequest {

@@ -40,38 +40,38 @@ def generate_narration_script(story_json, shots, total_duration=None, agent_name
     return generate_narration_from_shots(shots)
 
 
-def generate_narration_from_shots(shots, story_json=None):
+def generate_narration_from_story(story_json):
     """
-    Extract narration script from shots (generated during story creation).
+    Extract narration script from story scenes (generated during story creation).
 
     Args:
-        shots: List of shot dictionaries with 'narration' field
-        story_json: Optional story data for title/header
+        story_json: Story data as JSON string or dict
 
     Returns:
         Narration script as formatted text
     """
-    if not shots:
+    if not story_json:
         return ""
 
-    # Build narration script from shots
+    story_data = json.loads(story_json) if isinstance(story_json, str) else story_json
+    
+    # Build narration script from scenes
     script_parts = []
 
-    # Add header if story provided
-    if story_json:
-        story_data = json.loads(story_json) if isinstance(story_json, str) else story_json
-        title = story_data.get('title', 'Video')
-        style = story_data.get('style', 'cinematic')
-        script_parts.append(f"# {title}\n")
-        script_parts.append(f"# Style: {style}\n")
+    # Add header
+    title = story_data.get('title', 'Video')
+    style = story_data.get('style', 'cinematic')
+    script_parts.append(f"# {title}\n")
+    script_parts.append(f"# Style: {style}\n")
 
-    # Add narration from each shot
-    for i, shot in enumerate(shots, 1):
-        narration = shot.get('narration', '')
+    # Add narration from each scene
+    scenes = story_data.get('scenes', [])
+    for i, scene in enumerate(scenes, 1):
+        narration = scene.get('narration', '')
 
         if narration:
-            # Add scene/shot number
-            script_parts.append(f"\n## Shot {i}")
+            # Add scene number
+            script_parts.append(f"\n## Scene {i}")
             script_parts.append(f"{narration}")
 
     return "\n".join(script_parts)
@@ -448,7 +448,7 @@ def _generate_with_local_tts(script, output_path, voice):
         return None
 
 
-def generate_narration_for_session(session_id, story_json, shots, total_duration, agent_name="default",
+def generate_narration_for_session(session_id, story_json, total_duration, agent_name="default",
                                    tts_method="local", tts_workflow_path=None, voice="default",
                                    use_comfyui=False):
     """
@@ -459,8 +459,7 @@ def generate_narration_for_session(session_id, story_json, shots, total_duration
 
     Args:
         session_id: Session identifier
-        story_json: Story data (for title/header)
-        shots: Shot list with narration fields
+        story_json: Story data (for title/header/scenes)
         total_duration: Total video duration (not used, kept for compatibility)
         agent_name: Narration agent (not used, kept for compatibility)
         tts_method: TTS method ("local", "comfyui", "elevenlabs")
@@ -477,9 +476,9 @@ def generate_narration_for_session(session_id, story_json, shots, total_duration
     narration_dir = session_mgr.get_session_dir(session_id) / "narration"
     os.makedirs(narration_dir, exist_ok=True)
 
-    # Step 1: Extract narration from shots
-    print("\n[NARRATION] Step 1: Extracting narration from shots...")
-    script = generate_narration_from_shots(shots, story_json)
+    # Step 1: Extract narration from scenes
+    print("\n[NARRATION] Step 1: Extracting narration from story scenes...")
+    script = generate_narration_from_story(story_json)
 
     if not script.strip():
         print("[WARN] No narration found in shots. Skipping narration generation.")

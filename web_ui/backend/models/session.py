@@ -50,9 +50,10 @@ class SessionListItem(BaseModel):
     total_shots: int
     images_generated: int
     videos_rendered: int
+    story: Optional[Dict[str, Any]] = None
 
     @classmethod
-    def from_metadata(cls, meta: dict) -> "SessionListItem":
+    def from_metadata(cls, meta: dict, story: dict = None) -> "SessionListItem":
         """Create from SessionManager metadata dict"""
         return cls(
             session_id=meta.get("session_id", ""),
@@ -63,6 +64,7 @@ class SessionListItem(BaseModel):
             total_shots=meta.get("stats", {}).get("total_shots", 0),
             images_generated=meta.get("stats", {}).get("images_generated", 0),
             videos_rendered=meta.get("stats", {}).get("videos_rendered", 0),
+            story=story,
         )
 
 

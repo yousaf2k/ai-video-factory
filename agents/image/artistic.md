@@ -25,8 +25,7 @@ You are an artistic visual designer specializing in AI-generated imagery with a 
   {
     "image_prompt": "Full artistic image prompt with style references and all technical photography terms",
     "motion_prompt": "[Scene context] + [Subject/people movement] + [Environmental/atmospheric effects] + [Camera movement]. NO photography terms (8K, lens, f-stop). Use cinematic pacing terms like 'fluid motion', 'natural movement', 'cinematic pacing'.",
-    "camera": "slow pan | dolly | static | orbit | zoom",
-    "narration": "Voice-over narration text for this shot (from the story scene)"
+    "camera": "slow pan | dolly | static | orbit | zoom"
   }
 ]
 ```
@@ -39,8 +38,6 @@ You are an artistic visual designer specializing in AI-generated imagery with a 
 - Focus on artistic, atmospheric motion that enhances the mood
 - End with camera movement instruction
 
-**Important**: Include the narration text from each scene in the shot output.
-
 ## Art Style References to Use
 
 - Film Noir (high contrast B&W)
@@ -52,7 +49,5 @@ You are an artistic visual designer specializing in AI-generated imagery with a 
 - Cyberpunk (neon, dark, tech)
 
 ## Important Note
-
-Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 {USER_INPUT}

@@ -1150,6 +1150,7 @@ def run_new_session(session_mgr, args=None):
         shot_length = config.DEFAULT_SHOT_LENGTH
         print(f"[INFO] Shot length: {shot_length}s (from config)")
 
+    total_length = None
     # Priority 1: CLI --total-length override
     if hasattr(args, 'total_length') and args.total_length:
         total_length = args.total_length
@@ -1542,7 +1543,6 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
             script_path, audio_path = generate_narration_for_session(
                 session_id=session_id,
                 story_json=story_json,
-                shots=shots,
                 total_duration=total_duration,
                 agent_name=narration_agent,
                 tts_method=tts_method,
@@ -1696,12 +1696,9 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
                     total_duration = video_config.get('total_length') or (len(shots) * shot_length)
 
                     # Generate narration
-                    from core.narration_generator import generate_narration_for_session
-
                     script_path, audio_path = generate_narration_for_session(
                         session_id=session_id,
                         story_json=story_json,
-                        shots=shots,
                         total_duration=total_duration,
                         agent_name=narration_agent,
                         use_comfyui=(tts_method == 'comfyui'),

@@ -55,13 +55,12 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
         prompt = f"""
 Create cinematic shots for WAN 2.2.{batch_instruction}
 
-Return JSON list (each shot MUST include narration from scene):
+Return JSON list (each shot):
 [
   {{
    "image_prompt":"",
    "motion_prompt":"",
-   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime ",
-   "narration":""
+   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]
 
@@ -602,13 +601,12 @@ CRITICAL SHOT REQUIREMENTS:
         prompt = f"""
 Create cinematic shots for WAN 2.2.{max_shots_instruction}
 
-Return JSON list (each shot MUST include narration from scene):
+Return JSON list (each shot):
 [
   {{
    "image_prompt":"",
    "motion_prompt":"",
-   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime ",
-   "narration":""
+   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]
 

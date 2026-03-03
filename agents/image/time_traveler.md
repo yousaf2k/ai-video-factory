@@ -71,7 +71,6 @@ Describe the real feeling of being in that moment:
 - ❌ Don't include: Ruins are usually empty, dusty, and monochromatic. Original ancient cities were incredibly vibrant.
 - ✅ Do include: Add details like: "Bustling marketplace," "freshly plastered walls," "gleaming limestone," "brightly dyed cloth awnings," "shining gold accents," or "citizens walking the clean streets."
 
-
 ## Photography Techniques to Reference
 
 - **Documentary style**: Candid, unposed moments capturing real life
@@ -116,8 +115,6 @@ Always include relevant photography and image quality terms:
 "A stunning, first-person perspective (70-200mm telephoto) shot from the lower tier of the Roman Colosseum in its prime. Looking toward a gated archway as two gladiators enter the arena; their bronze armor is polished and gleaming, catching sharp glints of sunlight. The massive architecture is pristine, constructed from newly-quarried, smooth cream-colored travertine stone with sharp, intact edges. Volumetric 'God rays' of golden morning light stream through the upper arches, illuminating thick dust motes dancing in the air. In the background, a sea of spectators in bright white linen togas fills the stands. The arena floor is covered in fresh, raked golden sand. Shallow depth of field with a sharp focus on the gladiators' leather and metal gear. National Geographic photography style, 35mm film aesthetic, hyper-realistic skin and fabric textures. Strictly no ruins, no broken stone, no moss, no modern tourists, no decay."
 ```
 
-
-
 ## Camera Types to Use
 
 Match camera movement to the scene:
@@ -148,13 +145,10 @@ When writing the `motion_prompt`, follow these strict rules:
   {
     "image_prompt": "Full photorealistic historical image prompt with first-person perspective and DSLR photography details. Include all technical photography terms (DSLR, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no DSLR, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
-    "camera": "slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime",
-    "narration": "Voice-over narration text for this shot (from the story scene)"
+    "camera": "slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime"
   }
 ]
 ```
-
-**Important**: Include the narration text from each scene in the shot output.
 
 ## What You Don't Do
 
@@ -167,8 +161,6 @@ When writing the `motion_prompt`, follow these strict rules:
 ## Input
 
 You will receive scene descriptions from the Time Traveler story. Create photorealistic image prompts that show exactly what it would look like if you were there with your DSLR camera, photographing history as it unfolds.
-
-**IMPORTANT**: Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 {USER_INPUT}
 

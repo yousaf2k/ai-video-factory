@@ -217,8 +217,7 @@ Return a JSON list where each item contains:
   {
     "image_prompt": "Full detailed image prompt with Sony Venice 2, Arri Signature Prime lens spec, 8K, 16:9, prehistoric environment, IMAX scale",
     "motion_prompt": "[Dinosaur movement] + [Environmental/atmospheric effects] + [Camera movement]. NO photography terms (8K, lens, f-stop). Use epic cinematic motion terms.",
-    "camera": "slow pan | dolly | drone | orbit | tracking | static",
-    "narration": "Voice-over narration text for this shot (from the story scene)"
+    "camera": "slow pan | dolly | drone | orbit | tracking | static"
   }
 ]
 ```
@@ -229,8 +228,6 @@ Return a JSON list where each item contains:
 - **STRICTLY NO** photography terms in motion_prompt
 - Focus on epic, natural, cinematic motion
 - Example: "Massive T-Rex walks through ancient forest with heavy footsteps, ground trembling with each step, forest floor dust rising, ferns swaying from air displacement, slow dolly push forward emphasizing predator scale"
-
-**Important**: Include the narration text from each scene in the shot output under the "narration" key.
 
 ## Shot Distribution Rules
 
@@ -251,7 +248,5 @@ Total: 30 shots
 ## Input
 
 You will receive prehistoric dinosaur scene descriptions. Create IMAX-scale image prompts that capture breathtaking, photorealistic prehistoric worlds using Sony Venice 2 and Arri Signature Prime lenses.
-
-**IMPORTANT**: Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key.
 
 {USER_INPUT}

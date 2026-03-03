@@ -1,20 +1,21 @@
 /**
  * Session editor page - Story and shot editing
  */
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import { useSession } from '@/hooks/useSessions';
-import { useUpdateStory, useRegenerateStory } from '@/hooks/useStory';
-import { useShots, useReplanShots } from '@/hooks/useShots';
-import { useAgents } from '@/hooks/useAgents';
-import { SceneList } from '@/components/scenes/SceneList';
-import { ShotGrid } from '@/components/shots/ShotGrid';
-import { Scene, Story, Shot } from '@/types';
-import { Save, RefreshCw, X } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useSession } from "@/hooks/useSessions";
+import { useUpdateStory, useRegenerateStory } from "@/hooks/useStory";
+import { useShots, useReplanShots } from "@/hooks/useShots";
+import { useAgents } from "@/hooks/useAgents";
+import { SceneList } from "@/components/scenes/SceneList";
+import { ShotGrid } from "@/components/shots/ShotGrid";
+import { Scene, Story, Shot } from "@/types";
+import { api } from "@/services/api";
+import { Save, RefreshCw, X } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function SessionEditPage() {
   const params = useParams();
@@ -22,7 +23,7 @@ export default function SessionEditPage() {
   const { data: session, isLoading, error } = useSession(sessionId);
   const { data: shots } = useShots(sessionId);
   const { data: agents } = useAgents();
-  
+
   const updateStoryMutation = useUpdateStory(sessionId);
   const regenerateStoryMutation = useRegenerateStory(sessionId);
   const replanShotsMutation = useReplanShots(sessionId);
@@ -30,22 +31,32 @@ export default function SessionEditPage() {
   // Local state for story editing
   const [story, setStory] = useState<Story | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [activeTab, setActiveTab] = useState('story');
+  const [activeTab, setActiveTab] = useState("story");
 
   // Modal states
   const [showRegenStoryModal, setShowRegenStoryModal] = useState(false);
   const [showReplanShotsModal, setShowReplanShotsModal] = useState(false);
-  
+
   // Selection states
-  const [selectedStoryAgent, setSelectedStoryAgent] = useState('default');
-  const [selectedImageAgent, setSelectedImageAgent] = useState('default');
-  const [selectedVideoAgent, setSelectedVideoAgent] = useState('default');
-  const [maxShots, setMaxShots] = useState(15);
+  const [selectedStoryAgent, setSelectedStoryAgent] = useState("default");
+  const [selectedImageAgent, setSelectedImageAgent] = useState("default");
+  const [selectedVideoAgent, setSelectedVideoAgent] = useState("default");
+  const [maxShots, setMaxShots] = useState(0);
 
   // Initialize story when session loads
   if (session && session.story && !story) {
     setStory(session.story);
   }
+
+  // Load backend config for replan shots dialog default values
+  useEffect(() => {
+    api
+      .getConfig()
+      .then((cfg) => {
+        setMaxShots(cfg.default_max_shots ?? 0);
+      })
+      .catch(console.error);
+  }, []);
 
   const handleUpdateScene = (index: number, updatedScene: Scene) => {
     if (!story) return;
@@ -62,7 +73,7 @@ export default function SessionEditPage() {
 
   const handleDeleteScene = (index: number) => {
     if (!story) return;
-    if (!confirm('Are you sure you want to delete this scene?')) return;
+    if (!confirm("Are you sure you want to delete this scene?")) return;
 
     const newScenes = story.scenes.filter((_, i) => i !== index);
 
@@ -87,11 +98,11 @@ export default function SessionEditPage() {
     if (!story) return;
 
     const newScene: Scene = {
-      location: 'New Location',
-      characters: 'Characters',
-      action: 'Action happening',
-      emotion: 'Emotional tone',
-      narration: 'Narration text',
+      location: "New Location",
+      characters: "Characters",
+      action: "Action happening",
+      emotion: "Emotional tone",
+      narration: "Narration text",
       scene_duration: 30,
     };
 
@@ -108,10 +119,10 @@ export default function SessionEditPage() {
     try {
       await updateStoryMutation.mutateAsync(story);
       setHasChanges(false);
-      alert('Story updated successfully!');
+      alert("Story updated successfully!");
     } catch (error) {
-      console.error('Failed to update story:', error);
-      alert('Failed to update story. Please try again.');
+      console.error("Failed to update story:", error);
+      alert("Failed to update story. Please try again.");
     }
   };
 
@@ -119,10 +130,10 @@ export default function SessionEditPage() {
     try {
       await regenerateStoryMutation.mutateAsync(selectedStoryAgent);
       setShowRegenStoryModal(false);
-      alert('Story regeneration started. The page will update when complete.');
+      alert("Story regeneration started. The page will update when complete.");
     } catch (error) {
-      console.error('Failed to regenerate story:', error);
-      alert('Failed to regenerate story. Please try again.');
+      console.error("Failed to regenerate story:", error);
+      alert("Failed to regenerate story. Please try again.");
     }
   };
 
@@ -134,10 +145,10 @@ export default function SessionEditPage() {
         video_agent: selectedVideoAgent,
       });
       setShowReplanShotsModal(false);
-      alert('Shot re-planning started.');
+      alert("Shot re-planning started.");
     } catch (error) {
-      console.error('Failed to re-plan shots:', error);
-      alert('Failed to re-plan shots. Please try again.');
+      console.error("Failed to re-plan shots:", error);
+      alert("Failed to re-plan shots. Please try again.");
     }
   };
 
@@ -177,7 +188,10 @@ export default function SessionEditPage() {
   }
 
   // Calculate total duration
-  const totalDuration = story.scenes.reduce((sum, scene) => sum + (scene.scene_duration || 0), 0);
+  const totalDuration = story.scenes.reduce(
+    (sum, scene) => sum + (scene.scene_duration || 0),
+    0,
+  );
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -196,7 +210,7 @@ export default function SessionEditPage() {
               Edit story structure and shot prompts
             </p>
           </div>
-          {activeTab === 'story' && hasChanges && (
+          {activeTab === "story" && hasChanges && (
             <div className="flex items-center gap-3">
               <Link
                 href={`/sessions/${sessionId}/settings`}
@@ -210,7 +224,7 @@ export default function SessionEditPage() {
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
-                {updateStoryMutation.isPending ? 'Saving...' : 'Save Changes'}
+                {updateStoryMutation.isPending ? "Saving..." : "Save Changes"}
               </button>
             </div>
           )}
@@ -226,25 +240,28 @@ export default function SessionEditPage() {
         <div className="border rounded-lg p-4">
           <div className="text-sm text-muted-foreground">Total Duration</div>
           <div className="text-2xl font-bold">
-            {Math.floor(totalDuration / 60)}:{(totalDuration % 60).toString().padStart(2, '0')}
+            {Math.floor(totalDuration / 60)}:
+            {(totalDuration % 60).toString().padStart(2, "0")}
           </div>
         </div>
         <div className="border rounded-lg p-4">
           <div className="text-sm text-muted-foreground">Total Shots</div>
-          <div className="text-2xl font-bold">
-            {shots ? shots.length : 0}
-          </div>
+          <div className="text-2xl font-bold">{shots ? shots.length : 0}</div>
         </div>
         <div className="border rounded-lg p-4">
           <div className="text-sm text-muted-foreground">Status</div>
           <div className="text-2xl font-bold">
-            {activeTab === 'story' && hasChanges ? 'Unsaved' : 'Saved'}
+            {activeTab === "story" && hasChanges ? "Unsaved" : "Saved"}
           </div>
         </div>
       </div>
 
       {/* Tabs for Story and Shots */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as any)}
+        className="w-full"
+      >
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="story">Story</TabsTrigger>
           <TabsTrigger value="shots">Shots</TabsTrigger>
@@ -289,7 +306,9 @@ export default function SessionEditPage() {
           {/* Shots Grid */}
           <div className="border rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Shots ({shots?.length || 0})</h2>
+              <h2 className="text-xl font-semibold">
+                Shots ({shots?.length || 0})
+              </h2>
               <button
                 onClick={() => setShowReplanShotsModal(true)}
                 className="flex items-center gap-2 text-sm px-3 py-1.5 border rounded-md hover:bg-muted transition-colors text-purple-600"
@@ -319,42 +338,49 @@ export default function SessionEditPage() {
       {showRegenStoryModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 relative">
-            <button 
+            <button
               onClick={() => setShowRegenStoryModal(false)}
               className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
             >
               <X className="w-5 h-5" />
             </button>
-            
+
             <h2 className="text-xl font-semibold mb-4">Regenerate Story</h2>
             <p className="text-sm text-muted-foreground mb-6">
-              This will overwrite your current story structure. This action cannot be undone.
+              This will overwrite your current story structure. This action
+              cannot be undone.
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Story Agent</label>
-                <select 
+                <label className="block text-sm font-medium mb-1">
+                  Story Agent
+                </label>
+                <select
                   value={selectedStoryAgent}
                   onChange={(e) => setSelectedStoryAgent(e.target.value)}
                   className="w-full border rounded-md p-2 text-sm"
                 >
-                  {!agents?.story.length && <option value="default">Default Agent</option>}
-                  {agents?.story.map(agent => (
-                    <option key={agent.id} value={agent.id}>{agent.name}</option>
+                  {!agents?.story.length && (
+                    <option value="default">Default Agent</option>
+                  )}
+                  {agents?.story.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </option>
                   ))}
                 </select>
               </div>
             </div>
 
             <div className="mt-8 flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setShowRegenStoryModal(false)}
                 className="px-4 py-2 border rounded-md hover:bg-muted text-sm"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleRegenStory}
                 disabled={regenerateStoryMutation.isPending}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
@@ -365,7 +391,7 @@ export default function SessionEditPage() {
                     Regenerating...
                   </>
                 ) : (
-                  'Start Regeneration'
+                  "Start Regeneration"
                 )}
               </button>
             </div>
@@ -377,69 +403,84 @@ export default function SessionEditPage() {
       {showReplanShotsModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 relative">
-            <button 
+            <button
               onClick={() => setShowReplanShotsModal(false)}
               className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
             >
               <X className="w-5 h-5" />
             </button>
-            
+
             <h2 className="text-xl font-semibold mb-4">Re-plan Shots</h2>
             <p className="text-sm text-muted-foreground mb-6">
-              This will re-calculate all shots based on the current story. All existing shot prompts will be overwritten.
+              This will re-calculate all shots based on the current story. All
+              existing shot prompts will be overwritten.
             </p>
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Image Agent</label>
-                  <select 
+                  <label className="block text-sm font-medium mb-1">
+                    Image Agent
+                  </label>
+                  <select
                     value={selectedImageAgent}
                     onChange={(e) => setSelectedImageAgent(e.target.value)}
                     className="w-full border rounded-md p-2 text-sm"
                   >
-                    {!agents?.image.length && <option value="default">Default</option>}
-                    {agents?.image.map(agent => (
-                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    {!agents?.image.length && (
+                      <option value="default">Default</option>
+                    )}
+                    {agents?.image.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Video Agent</label>
-                  <select 
+                  <label className="block text-sm font-medium mb-1">
+                    Video Agent
+                  </label>
+                  <select
                     value={selectedVideoAgent}
                     onChange={(e) => setSelectedVideoAgent(e.target.value)}
                     className="w-full border rounded-md p-2 text-sm"
                   >
-                    {!agents?.video.length && <option value="default">Default</option>}
-                    {agents?.video.map(agent => (
-                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    {!agents?.video.length && (
+                      <option value="default">Default</option>
+                    )}
+                    {agents?.video.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Max Shots</label>
-                <input 
+                <label className="block text-sm font-medium mb-1">
+                  Max Shots (0 = Auto)
+                </label>
+                <input
                   type="number"
                   value={maxShots}
-                  onChange={(e) => setMaxShots(parseInt(e.target.value))}
+                  onChange={(e) => setMaxShots(parseInt(e.target.value) || 0)}
                   className="w-full border rounded-md p-2 text-sm"
-                  min="1"
+                  min="0"
                   max="100"
                 />
               </div>
             </div>
 
             <div className="mt-8 flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setShowReplanShotsModal(false)}
                 className="px-4 py-2 border rounded-md hover:bg-muted text-sm"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleReplanShots}
                 disabled={replanShotsMutation.isPending}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
@@ -450,7 +491,7 @@ export default function SessionEditPage() {
                     Re-planning...
                   </>
                 ) : (
-                  'Start Re-planning'
+                  "Start Re-planning"
                 )}
               </button>
             </div>

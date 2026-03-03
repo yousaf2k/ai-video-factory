@@ -159,7 +159,7 @@ class SessionManager:
                 'image_prompt': shot.get('image_prompt', ''),
                 'motion_prompt': shot.get('motion_prompt', ''),
                 'camera': shot.get('camera', ''),
-                'narration': shot.get('narration', ''),
+                'scene_index': shot.get('scene_index', 0),
                 'batch_number': shot.get('batch_number', idx),
                 # Status fields
                 'image_generated': False,

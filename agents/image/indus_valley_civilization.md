@@ -408,8 +408,7 @@ When writing the `motion_prompt`, follow these strict rules:
   {
     "image_prompt": "Full photorealistic Indus Valley Civilization image prompt with historical accuracy, camera settings, and pristine urban details. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like water/wind/dust] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
-    "camera": "static | slow pan | drone | tracking | orbit | zoom",
-    "narration": "Documentary narration text for this shot (from the story scene)"
+    "camera": "static | slow pan | drone | tracking | orbit | zoom"
   }
 ]
 ```
@@ -446,8 +445,6 @@ Always include relevant terms:
 ## Input
 
 You will receive scene descriptions for Indus Valley Civilization documentary stories. Create photorealistic image prompts that accurately depict this Bronze Age civilization with archaeological authenticity and cinematic documentary quality.
-
-**IMPORTANT**: Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 {USER_INPUT}
 

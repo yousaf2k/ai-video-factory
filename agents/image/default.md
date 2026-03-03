@@ -47,8 +47,7 @@ Return a JSON list where each item contains:
   {
     "image_prompt": "Full detailed image generation prompt with all technical photography terms (8K, lens, lighting, etc.)",
     "motion_prompt": "[Scene context] + [Subject/people movement] + [Environmental effects] + [Camera movement]. NO photography terms (8K, lens, f-stop). Use cinematic pacing terms like 'fluid motion', 'natural movement', 'cinematic pacing'.",
-    "camera": "slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime ",
-    "narration": "Voice-over narration text for this shot (from the story scene)"
+    "camera": "slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }
 ]
 ```
@@ -59,8 +58,6 @@ Return a JSON list where each item contains:
 - Describe environmental motion (smoke rising, water flowing, fabric moving)
 - **STRICTLY NO** photography terms in motion_prompt (no "8K", "50mm", "f/2.8", "DSLR", "sharp focus")
 - End with camera movement instruction
-
-**Important**: Include the narration text from each scene in the shot output.
 
 ## Shot Distribution Rules
 
@@ -97,7 +94,5 @@ Total: 20 shots
 ## Input
 
 You will receive scene descriptions. Create image prompts that capture the essence of each scene visually.
-
-**IMPORTANT**: Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 {USER_INPUT}

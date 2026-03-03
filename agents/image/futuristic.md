@@ -136,8 +136,7 @@ When writing the `motion_prompt`, follow these strict rules:
   {
     "image_prompt": "Full futuristic image prompt with all visual details, lighting, and style. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/technology movement with dynamic verbs] + [Environmental movement like lights/steam] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
-    "camera": "fpv | drone | dolly | orbit | pan | static | zoom",
-    "narration": "Voice-over narration text for this shot (from the story scene)"
+    "camera": "fpv | drone | dolly | orbit | pan | static | zoom"
   }
 ]
 ```
@@ -153,7 +152,5 @@ When writing the `motion_prompt`, follow these strict rules:
 - **zoom**: Dramatic reveals or focus on important tech details
 
 ## Important Note
-
-Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 {USER_INPUT}

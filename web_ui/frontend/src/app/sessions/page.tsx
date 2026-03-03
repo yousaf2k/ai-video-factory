@@ -1,15 +1,20 @@
 /**
  * Sessions list page
  */
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { useSessions, useCreateSession, useDeleteSession, useDuplicateSession } from '@/hooks/useSessions';
-import { useAgents } from '@/hooks/useAgents';
-import { api } from '@/services/api';
-import type { CreateSessionRequest } from '@/types';
-import { formatDistanceToNow } from 'date-fns';
+import { useState } from "react";
+import Link from "next/link";
+import {
+  useSessions,
+  useCreateSession,
+  useDeleteSession,
+  useDuplicateSession,
+} from "@/hooks/useSessions";
+import { useAgents } from "@/hooks/useAgents";
+import { api } from "@/services/api";
+import type { CreateSessionRequest } from "@/types";
+import { formatDistanceToNow } from "date-fns";
 
 export default function SessionsPage() {
   const { data: sessions, isLoading, error } = useSessions();
@@ -19,13 +24,13 @@ export default function SessionsPage() {
   const duplicateSessionMutation = useDuplicateSession();
 
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [newIdea, setNewIdea] = useState('');
+  const [newIdea, setNewIdea] = useState("");
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
 
   // Agent selection state
-  const [selectedStoryAgent, setSelectedStoryAgent] = useState('default');
-  const [selectedImageAgent, setSelectedImageAgent] = useState('default');
-  const [selectedVideoAgent, setSelectedVideoAgent] = useState('default');
+  const [selectedStoryAgent, setSelectedStoryAgent] = useState("default");
+  const [selectedImageAgent, setSelectedImageAgent] = useState("default");
+  const [selectedVideoAgent, setSelectedVideoAgent] = useState("default");
   const [totalDuration, setTotalDuration] = useState(600);
 
   const handleCreateSession = async (e: React.FormEvent) => {
@@ -48,33 +53,36 @@ export default function SessionsPage() {
         // Automatically generate the initial story
         await api.regenerateStory(session.session_id, request.story_agent);
       } catch (storyError) {
-        console.error('Failed to generate initial story:', storyError);
+        console.error("Failed to generate initial story:", storyError);
         // Continue to the session page even if story generation fails
       }
 
       setShowNewDialog(false);
-      setNewIdea('');
+      setNewIdea("");
       // Navigate to the new session
       window.location.href = `/sessions/${session.session_id}`;
     } catch (error) {
-      console.error('Failed to create session:', error);
-      alert('Failed to create session. Please try again.');
+      console.error("Failed to create session:", error);
+      alert("Failed to create session. Please try again.");
     } finally {
       setIsGeneratingStory(false);
     }
   };
 
-
   const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to delete this session? This action cannot be undone.')) {
+    if (
+      !confirm(
+        "Are you sure you want to delete this session? This action cannot be undone.",
+      )
+    ) {
       return;
     }
 
     try {
       await deleteSessionMutation.mutateAsync(sessionId);
     } catch (error) {
-      console.error('Failed to delete session:', error);
-      alert('Failed to delete session. Please try again.');
+      console.error("Failed to delete session:", error);
+      alert("Failed to delete session. Please try again.");
     }
   };
 
@@ -84,8 +92,8 @@ export default function SessionsPage() {
       // Navigate to the duplicated session
       window.location.href = `/sessions/${session.session_id}`;
     } catch (error) {
-      console.error('Failed to duplicate session:', error);
-      alert('Failed to duplicate session. Please try again.');
+      console.error("Failed to duplicate session:", error);
+      alert("Failed to duplicate session. Please try again.");
     }
   };
 
@@ -111,7 +119,9 @@ export default function SessionsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold">AI Video Factory</h1>
-          <p className="text-muted-foreground mt-1">Generate cinematic videos from text ideas</p>
+          <p className="text-muted-foreground mt-1">
+            Generate cinematic videos from text ideas
+          </p>
         </div>
         <button
           onClick={() => setShowNewDialog(true)}
@@ -132,26 +142,34 @@ export default function SessionsPage() {
               {/* Status Badge */}
               <div className="flex items-center justify-between mb-4">
                 <span
-                  className={`px-2 py-1 text-xs rounded-full ${session.completed
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-yellow-100 text-yellow-800'
-                    }`}
+                  className={`px-2 py-1 text-xs rounded-full ${
+                    session.completed
+                      ? "bg-green-100 text-green-800"
+                      : "bg-yellow-100 text-yellow-800"
+                  }`}
                 >
-                  {session.completed ? 'Completed' : 'In Progress'}
+                  {session.completed ? "Completed" : "In Progress"}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {session.started_at ? (() => {
-                    try {
-                      return formatDistanceToNow(new Date(session.started_at), { addSuffix: true });
-                    } catch (e) {
-                      return 'Unknown date';
-                    }
-                  })() : 'Unknown date'}
+                  {session.started_at
+                    ? (() => {
+                        try {
+                          return formatDistanceToNow(
+                            new Date(session.started_at),
+                            { addSuffix: true },
+                          );
+                        } catch (e) {
+                          return "Unknown date";
+                        }
+                      })()
+                    : "Unknown date"}
                 </span>
               </div>
 
               {/* Title */}
-              <h3 className="text-lg font-semibold mb-2 line-clamp-2">{session.idea}</h3>
+              <h3 className="text-lg font-semibold mb-2 line-clamp-2">
+                {session.idea}
+              </h3>
 
               {/* Stats */}
               <div className="grid grid-cols-3 gap-4 mb-4 text-sm">
@@ -201,7 +219,9 @@ export default function SessionsPage() {
         </div>
       ) : (
         <div className="text-center py-12">
-          <p className="text-muted-foreground mb-4">No sessions yet. Create your first session!</p>
+          <p className="text-muted-foreground mb-4">
+            No sessions yet. Create your first session!
+          </p>
           <button
             onClick={() => setShowNewDialog(true)}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
@@ -218,7 +238,10 @@ export default function SessionsPage() {
             <h2 className="text-xl font-bold mb-4">Create New Session</h2>
             <form onSubmit={handleCreateSession}>
               <div className="mb-4">
-                <label htmlFor="idea" className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="idea"
+                  className="block text-sm font-medium mb-2"
+                >
                   Video Idea
                 </label>
                 <textarea
@@ -233,48 +256,69 @@ export default function SessionsPage() {
 
               <div className="grid grid-cols-1 gap-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Story Agent</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Story Agent
+                  </label>
                   <select
                     value={selectedStoryAgent}
                     onChange={(e) => setSelectedStoryAgent(e.target.value)}
                     className="w-full border rounded-md p-2 text-sm"
                   >
-                    {!agents?.story.length && <option value="default">Default</option>}
-                    {agents?.story.map(agent => (
-                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    {!agents?.story.length && (
+                      <option value="default">Default</option>
+                    )}
+                    {agents?.story.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Image Agent</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Image Agent
+                  </label>
                   <select
                     value={selectedImageAgent}
                     onChange={(e) => setSelectedImageAgent(e.target.value)}
                     className="w-full border rounded-md p-2 text-sm"
                   >
-                    {!agents?.image.length && <option value="default">Default</option>}
-                    {agents?.image.map(agent => (
-                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    {!agents?.image.length && (
+                      <option value="default">Default</option>
+                    )}
+                    {agents?.image.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Video Agent</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Video Agent
+                  </label>
                   <select
                     value={selectedVideoAgent}
                     onChange={(e) => setSelectedVideoAgent(e.target.value)}
                     className="w-full border rounded-md p-2 text-sm"
                   >
-                    {!agents?.video.length && <option value="default">Default</option>}
-                    {agents?.video.map(agent => (
-                      <option key={agent.id} value={agent.id}>{agent.name}</option>
+                    {!agents?.video.length && (
+                      <option value="default">Default</option>
+                    )}
+                    {agents?.video.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div className="mb-6">
-                <label htmlFor="duration" className="block text-sm font-medium mb-1">
+                <label
+                  htmlFor="duration"
+                  className="block text-sm font-medium mb-1"
+                >
                   Target Duration (seconds)
                 </label>
                 <div className="flex items-center gap-3">
@@ -282,7 +326,9 @@ export default function SessionsPage() {
                     id="duration"
                     type="number"
                     value={totalDuration}
-                    onChange={(e) => setTotalDuration(parseInt(e.target.value) || 0)}
+                    onChange={(e) =>
+                      setTotalDuration(parseInt(e.target.value) || 0)
+                    }
                     className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                     min="10"
                     step="10"
@@ -292,7 +338,8 @@ export default function SessionsPage() {
                   </span>
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  The AI will try to generate a story that fits this total length.
+                  The AI will try to generate a story that fits this total
+                  length.
                 </p>
               </div>
 
@@ -306,10 +353,16 @@ export default function SessionsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={createSessionMutation.isPending || isGeneratingStory}
+                  disabled={
+                    createSessionMutation.isPending || isGeneratingStory
+                  }
                   className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
-                  {isGeneratingStory ? 'Generating Story...' : createSessionMutation.isPending ? 'Creating...' : 'Create'}
+                  {isGeneratingStory
+                    ? "Generating Story..."
+                    : createSessionMutation.isPending
+                      ? "Creating..."
+                      : "Create"}
                 </button>
               </div>
             </form>

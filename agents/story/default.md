@@ -30,7 +30,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
       "characters": "Who is in the scene",
       "action": "What happens in the scene",
       "emotion": "The emotional tone/mood",
-      "narration": "Voice-over narration text for this scene (2-3 sentences spoken by narrator)",
+      "narration": "Voice-over narration text for this scene. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -70,7 +70,7 @@ You must respond with valid JSON only. No markdown, no explanations, just the JS
       "characters": "Who is in the scene",
       "action": "What happens in the scene",
       "emotion": "The emotional tone/mood",
-      "narration": "Voice-over narration text for this scene (2-3 sentences spoken by narrator)"
+      "narration": "Voice-over narration text for this scene. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }
@@ -80,7 +80,7 @@ You must respond with valid JSON only. No markdown, no explanations, just the JS
 
 - **Scene-Specific**: Each scene should have its own narration that describes what's happening
 - **Story-Driven**: Narration should advance the story, provide context, or add emotional depth
-- **Concise**: Keep narration to 2-3 sentences per scene (approximately 15-30 seconds when spoken)
+- **Dynamic Length**: Calculate the exact amount of narration needed based on the scene_duration. At ~2.5 words per second, a 20s scene needs ~50 words, a 60s scene needs ~150 words. Do not under-write or over-write.
 - **Conversational**: Write as if speaking naturally to the audience
 - **Visual Complement**: Narration should enhance what's seen on screen, not just describe it
 

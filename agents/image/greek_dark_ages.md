@@ -298,8 +298,7 @@ When writing the `motion_prompt`, follow these strict rules:
   {
     "image_prompt": "Full photorealistic Greek Dark Ages image prompt with historical accuracy and post-collapse atmosphere. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
-    "camera": "static | slow pan | walk | tracking | drone | orbit | zoom",
-    "narration": "Voice-over narration text for this shot (from the story scene)"
+    "camera": "static | slow pan | walk | tracking | drone | orbit | zoom"
   }
 ]
 ```
@@ -336,8 +335,6 @@ Always include relevant terms:
 ## Input
 
 You will receive scene descriptions for Greek Dark Ages stories. Create photorealistic image prompts that accurately depict this period of collapse and recovery - showing the reality of life after the fall of Mycenaean civilization.
-
-**IMPORTANT**: Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 {USER_INPUT}
 

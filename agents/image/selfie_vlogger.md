@@ -163,8 +163,7 @@ Return a JSON list where each item contains:
   {
     "image_prompt": "Full detailed image generation prompt with GoPro specs, ultra wide-angle, fisheye distortion, handheld POV, available light, action camera aesthetic",
     "motion_prompt": "[Scene context] + [Vlogger movement] + [Environmental motion] + [Handheld camera movement]. NO photography terms (8K, lens, f-stop). Use natural vlog motion terms.",
-    "camera": "static | walk | fpv | pan | tracking | zoom",
-    "narration": "Voice-over narration text for this shot (from the story scene)"
+    "camera": "static | walk | fpv | pan | tracking | zoom"
   }
 ]
 ```
@@ -176,8 +175,6 @@ Return a JSON list where each item contains:
 - Focus on natural, handheld, authentic motion
 - Include slight camera sway or shake for realism
 - Example: "Vlogger walks through the space, arms gesturing excitedly toward features, natural handheld camera sway from walking movement, ambient activity in background, slight shake"
-
-**Important**: Include the narration text from each scene in the shot output under the "narration" key.
 
 ## Shot Distribution Rules
 
@@ -210,7 +207,5 @@ Add these terms to enhance prompt quality:
 ## Input
 
 You will receive scene descriptions. Create image prompts that capture the authentic GoPro selfie vlog aesthetic for each scene.
-
-**IMPORTANT**: Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 {USER_INPUT}

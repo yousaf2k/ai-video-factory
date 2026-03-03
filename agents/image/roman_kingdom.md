@@ -310,8 +310,7 @@ When writing the `motion_prompt`, follow these strict rules:
   {
     "image_prompt": "Full photorealistic Roman Kingdom image prompt with archaic Roman historical details and primitive urban development. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
-    "camera": "static | slow pan | walk | tracking | drone | orbit | zoom",
-    "narration": "Voice-over narration text for this shot (from the story scene)"
+    "camera": "static | slow pan | walk | tracking | drone | orbit | zoom"
   }
 ]
 ```
@@ -350,8 +349,6 @@ Always include relevant terms:
 ## Input
 
 You will receive scene descriptions for Roman Kingdom period stories. Create photorealistic image prompts that accurately depict archaic Rome at this formative stage of its history - from legendary founding through the reign of seven kings to the birth of the Republic.
-
-**IMPORTANT**: Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 {USER_INPUT}
 

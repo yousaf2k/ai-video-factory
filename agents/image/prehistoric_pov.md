@@ -226,15 +226,13 @@ Return each shot as a JSON object with:
 - **image_prompt**: Detailed POV prompt with hands visible, camera specs, dinosaur, environment
 - **motion_prompt**: Movement description for video generation (hands, body, dinosaur motion)
 - **camera**: POV-appropriate camera movement type (handheld, slow pan, tracking, static, panic shake)
-- **narration**: Present tense, first-person voice-over text (what protagonist says/thinks)
 
 **Example Output**:
 ```json
 {
   "image_prompt": "First person POV shot with hands visible in frame, massive Triceratops herd grazing in sunlit Cretaceous clearing, human hands with fingers spread visible at bottom of frame reaching toward the scene, three-horned dinosaurs peacefully feeding on ferns. Shot on Sony Venice 2 with Arri Signature Prime 21mm wide lens, 8K resolution, 16:9 widescreen format. Warm golden hour sunlight filtering through ancient forest canopy, dust particles dancing in light beams, rich greens and browns. Photorealistic, hands visible, POV immersion, hyper-realistic dinosaur detail, cinematic establishing shot, IMAX scale.",
   "motion_prompt": "Hands reaching forward slightly as Triceratops herd grazes peacefully in clearing, subtle breathing movement, dust motes floating in golden light beams, ferns swaying gently in background air, immersive first-person presence with gentle sway, calm observational moment",
-  "camera": "handheld",
-  "narration": "My hands shake as I reach out. Three Triceratops graze in a sunlit clearing. I hold my breath, afraid even the sound of my heartbeat might give me away. Sixty-six million years away from home, I'm the first human to ever see this."
+  "camera": "handheld"
 }
 ```
 
@@ -261,13 +259,9 @@ Return each shot as a JSON object with:
 - **static**: Character standing still
 - **panic shake**: Fear-induced movement (intense scenes)
 
-**Important**: Include the narration text from each scene in the shot output.
-
 ## Input
 
 You will receive scene descriptions with specific shot count requirements. Create image prompts that capture the essence of each scene visually.
-
-**IMPORTANT**: Each scene includes a "narration" field. You must include this narration text in the shot output under the "narration" key. This narration will be used as voice-over for the video.
 
 **CRITICAL**: The user input will specify EXACTLY how many shots to generate for each scene. You MUST follow this requirement precisely.
 

@@ -44,7 +44,23 @@ class SessionService:
     def list_sessions(self) -> List[SessionListItem]:
         """List all sessions"""
         sessions_data = self.session_manager.list_all_sessions()
-        return [SessionListItem.from_metadata(s) for s in sessions_data]
+        
+        result = []
+        for meta in sessions_data:
+            session_id = meta.get("session_id")
+            story = None
+            if session_id:
+                session_dir = self.session_manager.get_session_dir(session_id)
+                story_path = os.path.join(session_dir, "story.json")
+                if os.path.exists(story_path):
+                    try:
+                        with open(story_path, 'r', encoding='utf-8') as f:
+                            story = json.load(f)
+                    except Exception:
+                        pass
+            result.append(SessionListItem.from_metadata(meta, story))
+            
+        return result
 
     def get_session(self, session_id: str) -> SessionDetail:
         """Get session detail with story and shots"""
