@@ -77,6 +77,72 @@ class SessionService:
             video_agent=request.video_agent,
             total_duration=request.total_duration
         )
+
+        # Handle prompts file if provided
+        if request.prompts_file:
+            try:
+                from core.prompts_parser import parse_prompts_file, prompts_to_shots, validate_and_fix_prompts
+                import config
+
+                # Resolve path
+                resolved_prompts_file = config.resolve_path(request.prompts_file)
+
+                # Parse and create shots
+                prompts_data, overall_title = parse_prompts_file(resolved_prompts_file)
+                prompts_data = validate_and_fix_prompts(prompts_data)
+                shots = prompts_to_shots(prompts_data)
+
+                # Update idea if overall_title found
+                if overall_title:
+                    meta['idea'] = overall_title
+
+                # Mark steps as complete
+                meta['steps']['story'] = True
+                meta['steps']['scene_graph'] = True
+                meta['steps']['shots'] = True
+                meta['prompts_file'] = resolved_prompts_file
+
+                # Calculate duration based on number of prompts (5 sec per prompt)
+                calculated_duration = len(shots) * 5
+                meta['total_duration'] = calculated_duration
+
+                # Save shots
+                self.session_manager.save_shots(session_id, shots)
+
+                # Create dummy story.json
+                session_dir = self.session_manager.get_session_dir(session_id)
+                story_path = os.path.join(session_dir, "story.json")
+                
+                dummy_story = {
+                    "title": overall_title or request.idea,
+                    "style": "imported from prompts file",
+                    "scenes": [
+                        {
+                            "index": 1,
+                            "location": "N/A",
+                            "characters": "N/A",
+                            "action": "Imported from prompts file",
+                            "emotion": "N/A",
+                            "scene_duration": calculated_duration
+                        }
+                    ],
+                    "total_duration": calculated_duration
+                }
+                
+                with open(story_path, 'w', encoding='utf-8') as f:
+                    json.dump(dummy_story, f, indent=2, ensure_ascii=False)
+
+                # Save updated metadata
+                self.session_manager._save_meta(session_id, meta)
+
+            except Exception as e:
+                # Log error but don't fail session creation completely?
+                # Actually, it's better to log it and maybe the user can retry story generation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Failed to process prompts file {request.prompts_file}: {e}")
+                print(f"[ERROR] Failed to process prompts file: {e}")
+
         return SessionDetail.from_session_data(meta=meta)
 
     def update_session(self, session_id: str, request: UpdateSessionRequest) -> SessionMetadata:

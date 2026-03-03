@@ -82,6 +82,7 @@ export interface CreateSessionRequest {
   image_agent?: string;
   video_agent?: string;
   total_duration?: number;
+  prompts_file?: string;
 }
 
 export interface UpdateSessionRequest {
