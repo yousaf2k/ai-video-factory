@@ -10,6 +10,7 @@ import os
 import time
 import uuid
 from core.logger_config import get_logger
+from core.comfy_client import http_session
 
 # Get logger for ComfyUI image generation
 logger = get_logger(__name__)
@@ -139,7 +140,7 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
             "prompt": api_format
         }
 
-        response = requests.post(
+        response = http_session.post(
             f"{config.COMFY_URL}/prompt",
             json=payload
         )
@@ -309,7 +310,7 @@ def _wait_for_image(prompt_id, output_path, timeout=300, progress_callback=None)
 
     # Get the history to extract outputs
     try:
-        response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
+        response = http_session.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
         if response.status_code != 200:
             logger.error(f"Failed to get history for prompt {prompt_id}")
             return None
@@ -363,7 +364,7 @@ def _wait_for_image(prompt_id, output_path, timeout=300, progress_callback=None)
             else:
                 url = f"{config.COMFY_URL}/view?filename={image_filename}&type=output"
 
-            img_response = requests.get(url, timeout=30)
+            img_response = http_session.get(url, timeout=30)
             if img_response.status_code == 200:
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 with open(output_path, 'wb') as f:

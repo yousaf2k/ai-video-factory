@@ -5,6 +5,8 @@ import config
 import os
 from core.logger_config import get_logger
 
+# Use a session to pool TCP connections and prevent socket exhaustion (WinError 10055)
+http_session = requests.Session()
 
 # Get logger for ComfyUI API operations
 logger = get_logger(__name__)
@@ -35,7 +37,7 @@ def get_comfyui_output_directory():
 
     try:
         # Try to get ComfyUI settings - this includes path information
-        r = requests.get(f"{config.COMFY_URL}/settings", timeout=5)
+        r = http_session.get(f"{config.COMFY_URL}/settings", timeout=5)
 
         if r.status_code == 200:
             settings = r.json()
@@ -59,7 +61,7 @@ def get_comfyui_output_directory():
 
     try:
         # Alternative: Try the system_stats endpoint
-        r = requests.get(f"{config.COMFY_URL}/system_stats", timeout=5)
+        r = http_session.get(f"{config.COMFY_URL}/system_stats", timeout=5)
 
         if r.status_code == 200:
             stats = r.json()
@@ -79,7 +81,7 @@ def get_comfyui_output_directory():
 
     try:
         # Another approach: Check the extension settings
-        r = requests.get(f"{config.COMFY_URL}/extension_manager", timeout=5)
+        r = http_session.get(f"{config.COMFY_URL}/extension_manager", timeout=5)
 
         if r.status_code == 200:
             ext_data = r.json()
@@ -129,7 +131,7 @@ def submit(workflow):
         "client_id": str(uuid.uuid4())
     }
 
-    r = requests.post(
+    r = http_session.post(
         f"{config.COMFY_URL}/prompt",
         json=payload,
         timeout=10
@@ -148,7 +150,7 @@ def submit(workflow):
 def interrupt_generation():
     """Interrupt the currently running generation in ComfyUI."""
     try:
-        r = requests.post(f"{config.COMFY_URL}/interrupt", timeout=5)
+        r = http_session.post(f"{config.COMFY_URL}/interrupt", timeout=5)
         logger.info(f"ComfyUI interrupt sent, status: {r.status_code}")
         return r.status_code == 200
     except Exception as e:
@@ -159,7 +161,7 @@ def interrupt_generation():
 def clear_queue():
     """Clear all pending items from the ComfyUI queue."""
     try:
-        r = requests.post(
+        r = http_session.post(
             f"{config.COMFY_URL}/queue",
             json={"clear": True},
             timeout=5
@@ -199,7 +201,7 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
     # First, check if it's already in history (fast execution)
     from core.comfy_client import wait_for_prompt_completion
     try:
-        check_response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
+        check_response = http_session.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
         if check_response.status_code == 200:
             history = check_response.json()
             if prompt_id in history:
@@ -239,7 +241,7 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                     if current_time - last_history_check > 5.0:
                         last_history_check = current_time
                         try:
-                            hist_result = await asyncio.to_thread(requests.get, f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
+                            hist_result = await asyncio.to_thread(http_session.get, f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
                             if hist_result.status_code == 200:
                                 history = hist_result.json()
                                 if prompt_id in history:
@@ -339,7 +341,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
         if elapsed > timeout:
             # Check queue status before giving up
             try:
-                queue_response = requests.get(f"{config.COMFY_URL}/queue", timeout=5)
+                queue_response = http_session.get(f"{config.COMFY_URL}/queue", timeout=5)
                 if queue_response.status_code == 200:
                     queue_data = queue_response.json()
                     queue_running = queue_data.get("queue_running", [])
@@ -360,7 +362,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
 
         try:
             # Check prompt status
-            response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
+            response = http_session.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
 
             if response.status_code != 200:
                 time.sleep(2)
@@ -372,7 +374,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
                 # If it's not in history, check if it's still in the queue.
                 # If it's in neither, it was likely canceled/interrupted.
                 try:
-                    queue_resp = requests.get(f"{config.COMFY_URL}/queue", timeout=5)
+                    queue_resp = http_session.get(f"{config.COMFY_URL}/queue", timeout=5)
                     if queue_resp.status_code == 200:
                         queue_data = queue_resp.json()
                         queue_running = queue_data.get("queue_running", [])

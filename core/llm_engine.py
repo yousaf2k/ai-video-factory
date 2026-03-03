@@ -9,6 +9,7 @@ import time
 import requests
 import config
 import os
+from core.comfy_client import http_session
 
 # Get logger for provider operations
 logger = logging.getLogger(__name__)
@@ -259,7 +260,7 @@ class ZAIProvider(LLMProvider):
             }
 
             # Make request
-            response = requests.post(
+            response = http_session.post(
                 url,
                 json=data,
                 headers=headers,
@@ -324,7 +325,7 @@ class QwenProvider(LLMProvider):
             }
 
             # Make request
-            response = requests.post(url, json=data, headers=headers, timeout=self.timeout)
+            response = http_session.post(url, json=data, headers=headers, timeout=self.timeout)
 
             if response.status_code == 200:
                 result = response.json()
@@ -382,7 +383,7 @@ class KimiProvider(LLMProvider):
             }
 
             # Make request
-            response = requests.post(url, json=data, headers=headers, timeout=self.timeout)
+            response = http_session.post(url, json=data, headers=headers, timeout=self.timeout)
 
             if response.status_code == 200:
                 result = response.json()
@@ -438,7 +439,7 @@ class OllamaProvider(LLMProvider):
             }
 
             # Make request
-            response = requests.post(url, json=data, headers=headers, timeout=self.timeout)
+            response = http_session.post(url, json=data, headers=headers, timeout=self.timeout)
 
             if response.status_code == 200:
                 result = response.json()
@@ -494,7 +495,7 @@ class LMStudioProvider(LLMProvider):
             }
 
             # Make request
-            response = requests.post(url, json=data, headers=headers, timeout=self.timeout)
+            response = http_session.post(url, json=data, headers=headers, timeout=self.timeout)
 
             if response.status_code == 200:
                 result = response.json()
