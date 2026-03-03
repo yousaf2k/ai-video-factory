@@ -46,6 +46,21 @@ async def get_shots(session_id: str):
         )
 
 
+@router.get("/queue-status")
+async def get_queue_status(session_id: str):
+    """Get the current queue of shots waiting to be generated"""
+    try:
+        # Get the queued shots from the generation service
+        queued = generation_service.queued_shots.get(session_id, set())
+        return {"queued_indices": list(queued)}
+    except Exception as e:
+        logger.error(f"Error getting queue status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get queue status: {str(e)}"
+        )
+
+
 @router.get("/{shot_index}")
 async def get_shot(session_id: str, shot_index: int):
     """Get a single shot by index"""
@@ -76,6 +91,11 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
     try:
         # We take the raw dicts directly because we will manually update string paths inside them later without fighting the immutable pydantic models
         shots_dicts = [shot.dict() for shot in request.shots]
+
+        # Ensure all incoming shots have an ID (for backwards compatibility with old sessions or newly inserted UI blank shots)
+        for shot in shots_dicts:
+            if 'id' not in shot or not shot.get('id'):
+                shot['id'] = str(uuid.uuid4())[:8]
 
         # Update shots.json and perform safe renaming of associated media
         session_dir = os.path.join(config.ABS_SESSIONS_DIR, session_id)
@@ -433,16 +453,3 @@ async def cancel_single_shot_generation(session_id: str, shot_index: int):
             detail=f"Failed to cancel single shot generation: {str(e)}"
         )
 
-@router.get("/queue-status")
-async def get_queue_status(session_id: str):
-    """Get the current queue of shots waiting to be generated"""
-    try:
-        # Get the queued shots from the generation service
-        queued = generation_service.queued_shots.get(session_id, set())
-        return {"queued_indices": list(queued)}
-    except Exception as e:
-        logger.error(f"Error getting queue status: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get queue status: {str(e)}"
-        )

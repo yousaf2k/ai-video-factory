@@ -32,6 +32,7 @@ export default function SessionsPage() {
   const [selectedImageAgent, setSelectedImageAgent] = useState("default");
   const [selectedVideoAgent, setSelectedVideoAgent] = useState("default");
   const [totalDuration, setTotalDuration] = useState(600);
+  const [promptsFile, setPromptsFile] = useState("");
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +44,7 @@ export default function SessionsPage() {
       image_agent: selectedImageAgent,
       video_agent: selectedVideoAgent,
       total_duration: totalDuration,
+      prompts_file: promptsFile.trim() || undefined,
     };
 
     try {
@@ -50,8 +52,10 @@ export default function SessionsPage() {
       const session = await createSessionMutation.mutateAsync(request);
 
       try {
-        // Automatically generate the initial story
-        await api.regenerateStory(session.session_id, request.story_agent);
+        // Automatically generate the initial story ONLY if not using a prompts file
+        if (!request.prompts_file) {
+          await api.regenerateStory(session.session_id, request.story_agent);
+        }
       } catch (storyError) {
         console.error("Failed to generate initial story:", storyError);
         // Continue to the session page even if story generation fails
@@ -59,6 +63,7 @@ export default function SessionsPage() {
 
       setShowNewDialog(false);
       setNewIdea("");
+      setPromptsFile("");
       // Navigate to the new session
       window.location.href = `/sessions/${session.session_id}`;
     } catch (error) {
@@ -252,6 +257,27 @@ export default function SessionsPage() {
                   placeholder="Describe your video idea..."
                   required
                 />
+              </div>
+
+              <div className="mb-4">
+                <label
+                  htmlFor="promptsFile"
+                  className="block text-sm font-medium mb-2"
+                >
+                  Prompts File Path (optional)
+                </label>
+                <input
+                  id="promptsFile"
+                  type="text"
+                  value={promptsFile}
+                  onChange={(e) => setPromptsFile(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  placeholder="e.g., input/my_prompts.txt"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Skip story generation and import shots directly from this
+                  file.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 gap-4 mb-6">

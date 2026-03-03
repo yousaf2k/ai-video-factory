@@ -151,10 +151,13 @@ class SessionManager:
         # Sort by batch_number first, then by original index to maintain order within batches
         shots_with_batch.sort(key=lambda x: (x[1].get('batch_number', x[0] + 1), x[0]))
 
+        import uuid
+        
         # Add status fields to each shot with reindexed values (1 to n)
         shots_with_status = []
         for idx, (original_idx, shot) in enumerate(shots_with_batch, start=1):
             shot_data = {
+                'id': shot.get('id', str(uuid.uuid4())[:8]),
                 'index': idx,
                 'image_prompt': shot.get('image_prompt', ''),
                 'motion_prompt': shot.get('motion_prompt', ''),

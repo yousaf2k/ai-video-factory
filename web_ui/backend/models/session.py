@@ -97,6 +97,7 @@ class CreateSessionRequest(BaseModel):
     image_agent: str = Field(default="default", description="Image prompt agent")
     video_agent: str = Field(default="default", description="Video motion agent")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
+    prompts_file: Optional[str] = Field(default=None, description="Path to a custom prompts file")
 
 
 class UpdateSessionRequest(BaseModel):

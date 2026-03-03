@@ -12,6 +12,7 @@ from config import (DEFAULT_SHOTS_PER_SCENE, MIN_SHOTS_PER_SCENE, MAX_SHOTS_PER_
                     DEFAULT_SHOT_LENGTH)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+import uuid
 
 
 # Get logger for agent operations
@@ -552,6 +553,11 @@ CRITICAL SHOT REQUIREMENTS:
                 print(f"[INFO] Final shot count: {len(all_shots)} shots = ~{len(all_shots) * DEFAULT_SHOT_LENGTH}s video")
             logger.info(f"Final shot count: {len(all_shots)} shots, ~{len(all_shots) * DEFAULT_SHOT_LENGTH}s video")
 
+        # Inject stable UUIDs and correct indices
+        for i, shot in enumerate(all_shots):
+            shot['id'] = uuid.uuid4().hex[:8]
+            shot['index'] = i + 1
+
         return all_shots
 
     # Single batch processing (original logic)
@@ -593,6 +599,11 @@ CRITICAL SHOT REQUIREMENTS:
                 print(f"[INFO] Final shot count: {len(shots)} shots = ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
             logger.info(f"Final shot count: {len(shots)} shots, ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
 
+        # Inject stable UUIDs and correct indices
+        for i, shot in enumerate(shots):
+            shot['id'] = uuid.uuid4().hex[:8]
+            shot['index'] = i + 1
+
         return shots
 
     except (FileNotFoundError, ValueError):
@@ -632,5 +643,10 @@ SCENES:
         if max_shots and len(shots) > max_shots:
             print(f"[INFO] Generated {len(shots)} shots, limiting to {max_shots}")
             shots = shots[:max_shots]
+
+        # Inject stable UUIDs and correct indices
+        for i, shot in enumerate(shots):
+            shot['id'] = uuid.uuid4().hex[:8]
+            shot['index'] = i + 1
 
         return shots

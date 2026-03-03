@@ -34,7 +34,7 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
     narration: ''
   });
 
-  const { shotProgress } = useProgress(sessionId, useCallback((shotIndex: number) => {
+  const { shotProgress } = useProgress(sessionId, useCallback((shotId: string) => {
     // Whenever a WebSocket progress message broadcasts 'completed', refresh this session's UI!
     queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
     queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -188,17 +188,18 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
       setQueuedIndices(prev => {
         const next = new Set(prev);
         let changed = false;
-        Object.keys(shotProgress).forEach(idx => {
-          const index = Number(idx);
-          if (next.has(index)) {
-            next.delete(index);
+        // shotProgress is keyed by shot_id, so we need to iterate all shots to find matches
+        shots.forEach(shot => {
+          const key = shot.id || shot.index.toString();
+          if (shotProgress[key] !== undefined && next.has(shot.index)) {
+            next.delete(shot.index);
             changed = true;
           }
         });
         return changed ? next : prev;
       });
     }
-  }, [shotProgress]);
+  }, [shotProgress, shots]);
 
   // Request the backend queue status on initial load/mount to hydrate the UI after a page refresh
   useEffect(() => {
@@ -465,11 +466,12 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredShots.map((shot) => {
-          const isCurrentlyGenerating = generatingIndices.has(shot.index) || shotProgress[shot.index] !== undefined;
+          const progressKey = shot.id || shot.index.toString();
+          const isCurrentlyGenerating = generatingIndices.has(shot.index) || shotProgress[progressKey] !== undefined;
           const isCurrentlyQueued = queuedIndices.has(shot.index) && !isCurrentlyGenerating;
           return (
             <ShotCard
-              key={`${shot.index}-${shot.image_path}`}
+              key={`${progressKey}-${shot.image_path}`}
               shot={shot}
               sessionId={sessionId}
               selectable={true}
@@ -477,7 +479,7 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
               onSelectChange={(selected: boolean) => toggleSelectShot(shot.index, selected)}
               isGenerating={isCurrentlyGenerating}
               isQueued={isCurrentlyQueued}
-              progress={shotProgress[shot.index]}
+              progress={shotProgress[progressKey]}
               onCancel={isCurrentlyGenerating || isCurrentlyQueued ? () => handleCancelShot(shot.index) : undefined}
               onInsertBefore={() => setInsertModalConfig({ position: shot.index - 1 })}
               onInsertAfter={() => setInsertModalConfig({ position: shot.index })}
