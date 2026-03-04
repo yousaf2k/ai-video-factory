@@ -173,6 +173,10 @@ class ApiClient {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/cancel-generation`);
   }
 
+  async removeWatermark(sessionId: string, shotIndex: number): Promise<void> {
+    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/remove-watermark`);
+  }
+
   async getQueueStatus(sessionId: string): Promise<{ queued_indices: number[] }> {
     const response = await this.client.get<{ queued_indices: number[] }>(`/api/sessions/${sessionId}/shots/queue-status`);
     return response.data;

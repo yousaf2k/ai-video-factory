@@ -6,6 +6,10 @@ import sys
 import os
 import json
 import logging
+import uuid
+import re
+import shutil
+import config
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
@@ -278,7 +282,51 @@ async def update_shot(session_id: str, shot_index: int, request: UpdateShotReque
         )
 
 
+@router.post("/{shot_index}/remove-watermark")
+async def remove_shot_watermark(session_id: str, shot_index: int):
+    """Remove watermark from the currently active image of this shot"""
+    from core.geminiweb_subprocess import _remove_watermark
 
+    try:
+        shots = await get_shots(session_id)
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        shot = shots[shot_index - 1]
+        image_path = shot.get('image_path')
+        if not image_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Shot has no image"
+            )
+
+        # Build absolute path
+        abs_image_path = os.path.join(config.PROJECT_ROOT, "output", image_path.replace("/", os.sep))
+        if not os.path.exists(abs_image_path):
+            abs_image_path = os.path.join(config.ABS_OUTPUT_DIR, image_path.replace("/", os.sep))
+        
+        if not os.path.exists(abs_image_path):
+             raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image file not found on disk"
+            )
+
+        logger.info(f"Removing watermark for shot {shot_index}: {abs_image_path}")
+        _remove_watermark(abs_image_path)
+        
+        return {"status": "success"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing watermark: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove watermark: {str(e)}"
+        )
 @router.post("/{shot_index}/regenerate-image")
 async def regenerate_shot_image(session_id: str, shot_index: int, request: RegenerateImageRequest):
     """Regenerate image for a single shot"""

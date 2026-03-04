@@ -15,6 +15,7 @@ import {
   Clock,
   Plus,
   Trash2,
+  Wand2,
 } from "lucide-react";
 import { Shot } from "@/types";
 import {
@@ -22,6 +23,7 @@ import {
   useRegenerateImage,
   useRegenerateVideo,
   useSelectImage,
+  useRemoveWatermark,
 } from "@/hooks/useShots";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
@@ -93,6 +95,7 @@ export function ShotCard({
   const regenerateImage = useRegenerateImage(sessionId);
   const regenerateVideo = useRegenerateVideo(sessionId);
   const selectImage = useSelectImage(sessionId);
+  const removeWatermark = useRemoveWatermark(sessionId);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [showGalleryModal, setShowGalleryModal] = useState(false);
@@ -305,6 +308,25 @@ export function ShotCard({
               className={cn("w-4 h-4", isRefreshing && "animate-spin")}
             />
           </button>
+          {shot.image_generated && (
+            <button
+              onClick={async () => {
+                try {
+                  await removeWatermark.mutateAsync(shot.index);
+                  // Refresh the cache buster to show the updated image
+                  setCacheBuster(Date.now());
+                } catch (error) {
+                  console.error("Failed to remove watermark:", error);
+                  alert("Failed to remove watermark. Ensure the image exists.");
+                }
+              }}
+              disabled={removeWatermark.isPending}
+              className="p-1 hover:bg-teal-50 text-teal-600 rounded disabled:opacity-50"
+              title="Remove Gemini Watermark"
+            >
+              <Wand2 className={cn("w-4 h-4", removeWatermark.isPending && "animate-pulse")} />
+            </button>
+          )}
           <button
             onClick={() => setIsEditing(true)}
             className="p-1 hover:bg-muted rounded"

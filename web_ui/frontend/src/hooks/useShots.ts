@@ -116,3 +116,16 @@ export function useReplanShots(sessionId: string) {
     },
   });
 }
+
+// Hook to remove watermark from a shot
+export function useRemoveWatermark(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (shotIndex: number) => api.removeWatermark(sessionId, shotIndex),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
