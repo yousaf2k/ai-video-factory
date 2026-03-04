@@ -17,6 +17,7 @@ import {
   Trash2,
   Wand2,
   Upload,
+  Maximize2,
 } from "lucide-react";
 import { Shot } from "@/types";
 import {
@@ -26,6 +27,7 @@ import {
   useSelectImage,
   useRemoveWatermark,
   useUploadShotImage,
+  useDeleteVariationImage,
 } from "@/hooks/useShots";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
@@ -99,11 +101,13 @@ export function ShotCard({
   const selectImage = useSelectImage(sessionId);
   const removeWatermark = useRemoveWatermark(sessionId);
   const uploadShotImage = useUploadShotImage(sessionId);
+  const deleteVariation = useDeleteVariationImage(sessionId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [fullscreenVariationUrl, setFullscreenVariationUrl] = useState<string | null>(null);
 
   const hasMultipleImages = (shot.image_paths?.length ?? 0) > 1;
 
@@ -713,14 +717,14 @@ export function ShotCard({
         </div>
       )}
 
-      {/* Fullscreen Image Modal */}
-      {showFullscreenImage && cachedImageUrl && (
+      {/* Fullscreen Image Modal — main shot image OR gallery variation */}
+      {(showFullscreenImage || fullscreenVariationUrl) && (cachedImageUrl || fullscreenVariationUrl) && (
         <div
           className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 cursor-zoom-out"
-          onClick={() => setShowFullscreenImage(false)}
+          onClick={() => { setShowFullscreenImage(false); setFullscreenVariationUrl(null); }}
         >
           <img
-            src={cachedImageUrl}
+            src={fullscreenVariationUrl ?? cachedImageUrl}
             alt={`Shot ${shot.index} Fullscreen`}
             className="max-w-full max-h-full object-contain"
           />
@@ -728,6 +732,7 @@ export function ShotCard({
             onClick={(e) => {
               e.stopPropagation();
               setShowFullscreenImage(false);
+              setFullscreenVariationUrl(null);
             }}
             className="absolute top-4 right-4 text-white/70 hover:text-white p-2 transition-colors"
           >
@@ -774,13 +779,47 @@ export function ShotCard({
                           className="w-full h-full object-cover"
                         />
                       </div>
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-end justify-center">
-                        <div className="p-2 w-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between">
-                          <span className="text-white text-xs font-medium drop-shadow">
-                            {imgPath.split("/").pop()?.split("\\").pop()}
-                          </span>
+
+                      {/* Hover overlay */}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors">
+                        {/* Fullscreen button — top right */}
+                        <button
+                          onClick={() => setFullscreenVariationUrl(cachedUrl)}
+                          className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                          title="View fullscreen"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Bottom bar: filename + select/active + delete */}
+                        <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between gap-1">
+                          {/* Delete button — always visible on hover */}
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Delete this variation? This cannot be undone.`)) return;
+                              try {
+                                const result = await deleteVariation.mutateAsync({
+                                  shotIndex: shot.index,
+                                  imagePath: imgPath,
+                                });
+                                setCacheBuster(Date.now());
+                                // Close gallery if no variations remain
+                                if (result.remaining === 0) setShowGalleryModal(false);
+                              } catch (error) {
+                                console.error("Failed to delete variation:", error);
+                                alert("Failed to delete variation. Please try again.");
+                              }
+                            }}
+                            disabled={deleteVariation.isPending}
+                            className="p-1.5 bg-red-600/80 text-white rounded-md hover:bg-red-600 disabled:opacity-50 flex-shrink-0"
+                            title="Delete this variation"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Select / Active badge */}
                           {isActive ? (
-                            <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                            <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ml-auto">
                               <Check className="w-3 h-3" /> Active
                             </span>
                           ) : (
@@ -794,17 +833,12 @@ export function ShotCard({
                                   setCacheBuster(Date.now());
                                   setShowGalleryModal(false);
                                 } catch (error) {
-                                  console.error(
-                                    "Failed to select image:",
-                                    error,
-                                  );
-                                  alert(
-                                    "Failed to select image. Please try again.",
-                                  );
+                                  console.error("Failed to select image:", error);
+                                  alert("Failed to select image. Please try again.");
                                 }
                               }}
                               disabled={selectImage.isPending}
-                              className="text-xs bg-white text-black px-2 py-0.5 rounded-full font-medium hover:bg-white/90 disabled:opacity-50"
+                              className="text-xs bg-white text-black px-2 py-0.5 rounded-full font-medium hover:bg-white/90 disabled:opacity-50 ml-auto"
                             >
                               Select
                             </button>

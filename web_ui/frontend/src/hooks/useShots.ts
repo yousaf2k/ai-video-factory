@@ -143,3 +143,17 @@ export function useUploadShotImage(sessionId: string) {
     },
   });
 }
+
+// Hook to delete a specific image variation for a shot
+export function useDeleteVariationImage(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shotIndex, imagePath }: { shotIndex: number; imagePath: string }) =>
+      api.deleteVariationImage(sessionId, shotIndex, imagePath),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}

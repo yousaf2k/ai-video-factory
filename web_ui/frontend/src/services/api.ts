@@ -192,6 +192,18 @@ class ApiClient {
     });
   }
 
+  async deleteVariationImage(
+    sessionId: string,
+    shotIndex: number,
+    imagePath: string
+  ): Promise<{ remaining: number; active_image_path: string | null }> {
+    const response = await this.client.delete<{ status: string; remaining: number; active_image_path: string | null }>(
+      `/api/sessions/${sessionId}/shots/${shotIndex}/images`,
+      { params: { image_path: imagePath } }
+    );
+    return response.data;
+  }
+
   async uploadShotImage(
     sessionId: string,
     shotIndex: number,

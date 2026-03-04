@@ -430,6 +430,81 @@ async def select_shot_image(session_id: str, shot_index: int, request: SelectIma
         )
 
 
+@router.delete("/{shot_index}/images")
+async def delete_shot_image_variation(session_id: str, shot_index: int, image_path: str):
+    """Delete a specific image variation from disk and from the shot record.
+
+    Query param: image_path — the relative path of the image to delete.
+    If the deleted image was the active one, the next available variation is promoted.
+    """
+    try:
+        shots = await get_shots(session_id)
+
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        shot = shots[shot_index - 1]
+        image_paths: list = shot.get('image_paths', [])
+
+        if image_path not in image_paths:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image path not found in shot's image_paths"
+            )
+
+        # Remove from the list
+        image_paths.remove(image_path)
+        shot['image_paths'] = image_paths
+
+        # If it was the active image, promote the first remaining variation (if any)
+        if shot.get('image_path') == image_path:
+            shot['image_path'] = image_paths[0] if image_paths else None
+            shot['image_generated'] = bool(image_paths)
+
+        # Attempt to delete the physical file
+        abs_path = None
+        for base in [config.PROJECT_ROOT, config.ABS_OUTPUT_DIR if hasattr(config, 'ABS_OUTPUT_DIR') else None]:
+            if base:
+                candidate = os.path.join(base, image_path.replace("/", os.sep))
+                if os.path.exists(candidate):
+                    abs_path = candidate
+                    break
+        # Fallback: treat image_path as relative to ABS_SESSIONS_DIR parent
+        if abs_path is None:
+            candidate = os.path.join(os.path.dirname(config.ABS_SESSIONS_DIR), image_path.replace("/", os.sep))
+            if os.path.exists(candidate):
+                abs_path = candidate
+
+        if abs_path and os.path.isfile(abs_path):
+            try:
+                os.remove(abs_path)
+                logger.info(f"Deleted image variation: {abs_path}")
+            except Exception as e:
+                logger.warning(f"Could not delete file {abs_path}: {e}")
+        else:
+            logger.warning(f"Image file not found on disk for deletion: {image_path}")
+
+        # Persist updated shots.json
+        session_dir = session_service.get_session_dir(session_id)
+        shots_path = os.path.join(session_dir, "shots.json")
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+        return {"status": "success", "remaining": len(image_paths), "active_image_path": shot.get('image_path')}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting image variation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete image variation: {str(e)}"
+        )
+
+
 @router.post("/{shot_index}/upload-image")
 async def upload_shot_image(session_id: str, shot_index: int, file: UploadFile = File(...)):
     """Upload a custom image from disk for a shot (bypasses AI generation)"""
