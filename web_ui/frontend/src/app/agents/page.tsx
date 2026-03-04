@@ -68,7 +68,7 @@ export default function AgentsPage() {
     return <div className="container mx-auto px-4 py-8">Loading agents...</div>;
   }
 
-  const agentTypes = ["story", "image", "video", "narration"];
+  const agentTypes = ["story", "shots"];
 
   return (
     <div className="container mx-auto px-4 py-8">
