@@ -30,6 +30,7 @@ export default function SessionDetailPage() {
   const [generatingThumbnails, setGeneratingThumbnails] = useState<
     Record<string, boolean>
   >({});
+  const [imageVersion, setImageVersion] = useState<number>(Date.now());
 
   // Regeneration Modal State
   const [showRegenModal, setShowRegenModal] = useState<"16:9" | "9:16" | null>(
@@ -52,6 +53,7 @@ export default function SessionDetailPage() {
         regenImageWorkflow,
         regenSeed === "" ? undefined : regenSeed,
       );
+      setImageVersion(Date.now());
       queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
     } catch (error) {
@@ -243,7 +245,7 @@ export default function SessionDetailPage() {
                   className={`bg-card border border-border rounded-xl relative ${session.thumbnail_url ? "sm:w-1/4" : "w-full max-w-sm mx-auto"} aspect-[9/16] overflow-hidden`}
                 >
                   <img
-                    src={getMediaUrl(session.thumbnail_url_9_16)}
+                    src={getMediaUrl(session.thumbnail_url_9_16, imageVersion)}
                     alt="9:16 Thumbnail"
                     className="w-full h-full object-contain bg-black"
                   />
@@ -254,7 +256,7 @@ export default function SessionDetailPage() {
                   className={`bg-card border border-border rounded-xl overflow-hidden relative ${session.thumbnail_url_9_16 ? "sm:w-3/4" : "w-full"} aspect-video`}
                 >
                   <img
-                    src={getMediaUrl(session.thumbnail_url)}
+                    src={getMediaUrl(session.thumbnail_url, imageVersion)}
                     alt="16:9 Thumbnail"
                     className="w-full h-full object-cover"
                   />
@@ -316,7 +318,10 @@ export default function SessionDetailPage() {
                       <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
                         {session.thumbnail_url ? (
                           <img
-                            src={getMediaUrl(session.thumbnail_url)}
+                            src={getMediaUrl(
+                              session.thumbnail_url,
+                              imageVersion,
+                            )}
                             alt="16:9 Thumbnail"
                             className="w-full h-full object-cover"
                           />
@@ -369,7 +374,10 @@ export default function SessionDetailPage() {
                       <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted/80 border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex justify-center items-center">
                         {session.thumbnail_url_9_16 ? (
                           <img
-                            src={getMediaUrl(session.thumbnail_url_9_16)}
+                            src={getMediaUrl(
+                              session.thumbnail_url_9_16,
+                              imageVersion,
+                            )}
                             alt="9:16 Thumbnail"
                             className="w-full h-full object-contain max-w-[56.25%] mx-auto bg-black"
                           />

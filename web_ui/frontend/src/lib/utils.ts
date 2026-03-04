@@ -9,11 +9,15 @@ export function cn(...inputs: ClassValue[]) {
  * Convert internal filesystem paths to API-accessible URLs.
  * Handles both relative (output/sessions/...) and absolute (C:/output/sessions/...) paths.
  */
-export function getMediaUrl(path: string | null): string {
+export function getMediaUrl(path: string | null, cacheBuster?: string | number): string {
   if (!path) return '';
 
   // If path already starts with /api/ or http, return it directly
   if (path.startsWith('/api/') || path.startsWith('http://') || path.startsWith('https://')) {
+    if (cacheBuster) {
+      const separator = path.includes('?') ? '&' : '?';
+      return `${path}${separator}t=${cacheBuster}`;
+    }
     return path;
   }
 
@@ -27,5 +31,11 @@ export function getMediaUrl(path: string | null): string {
   }
 
   // Replace output/sessions/ prefix with /api/sessions/ for API routing
-  return normalizedPath.replace(/^output\/sessions\//, '/api/sessions/').replace(/\\/g, '/');
+  let finalUrl = normalizedPath.replace(/^output\/sessions\//, '/api/sessions/').replace(/\\/g, '/');
+  
+  if (cacheBuster) {
+    finalUrl += `?t=${cacheBuster}`;
+  }
+  
+  return finalUrl;
 }
