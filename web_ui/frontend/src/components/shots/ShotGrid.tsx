@@ -125,14 +125,6 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
   const hasActiveFilters =
     filterNoImages || filterNoVideos || !!filterCamera || !!filterText.trim();
 
-  if (shots.length === 0) {
-    return (
-      <div className="text-center py-12 text-muted-foreground">
-        No shots yet. Generate story and plan shots first.
-      </div>
-    );
-  }
-
   const toggleSelectAll = () => {
     if (selectedIndices.length === filteredShots.length) {
       setSelectedIndices([]);
@@ -371,6 +363,14 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
       alert("Failed to insert shot. Please try again.");
     }
   };
+
+  if (shots.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        No shots yet. Generate story and plan shots first.
+      </div>
+    );
+  }
 
   return (
     <div className="relative">
