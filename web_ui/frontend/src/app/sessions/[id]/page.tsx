@@ -387,7 +387,7 @@ export default function SessionDetailPage() {
                             variant="secondary"
                             size="sm"
                             className="gap-2 shadow-lg"
-                            onClick={() => handleGenerateThumbnail("9:16")}
+                            onClick={() => setShowRegenModal("9:16")}
                             disabled={generatingThumbnails["9:16"]}
                           >
                             {generatingThumbnails["9:16"] ? (
