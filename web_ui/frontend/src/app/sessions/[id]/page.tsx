@@ -153,7 +153,7 @@ export default function SessionDetailPage() {
               <span className="w-4 h-4 rounded-full bg-primary flex items-center justify-center text-[10px] text-primary-foreground">
                 💡
               </span>
-              Video Prompt
+              Idea
             </h2>
             <div className="bg-input/50 border border-border/50 rounded-lg p-3 min-h-[120px]">
               <p className="text-sm text-foreground/90 whitespace-pre-wrap">
@@ -229,76 +229,37 @@ export default function SessionDetailPage() {
               </div>
             </div>
 
-            {/* 9:16 Portrait Thumbnail */}
-            <div className="bg-card border border-border rounded-xl p-5 shadow-lg">
-              <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center text-[10px] text-primary-foreground">
-                  📱
-                </span>
-                Portrait Thumbnail (9:16)
-              </h2>
-              {session.thumbnail_url_9_16 ? (
-                <div className="relative aspect-[9/16] w-full max-w-[200px] mx-auto overflow-hidden rounded-lg group shadow-md outline outline-1 outline-transparent group-hover:outline-border transition-all">
-                  <img
-                    src={getMediaUrl(session.thumbnail_url_9_16)}
-                    alt="Portrait Thumbnail"
-                    className="object-cover w-full h-full"
-                  />
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="gap-2 shadow-lg"
-                      onClick={() => setShowRegenModal("9:16")}
-                      disabled={generatingThumbnails["9:16"]}
-                    >
-                      {generatingThumbnails["9:16"] ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-4 h-4" />
-                      )}
-                      Regenerate
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="relative aspect-[9/16] w-full max-w-[200px] mx-auto bg-muted/60 rounded-lg flex flex-col items-center justify-center border border-dashed border-border/70 hover:bg-muted transition-colors">
-                  <ImageIcon className="w-8 h-8 text-muted-foreground/40 mb-3" />
-                  <span className="text-xs text-muted-foreground mb-4 font-medium">
-                    No 9:16 Thumbnail
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => setShowRegenModal("9:16")}
-                    disabled={generatingThumbnails["9:16"]}
-                  >
-                    {generatingThumbnails["9:16"] ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <ImageIcon className="w-4 h-4" />
-                    )}
-                    Generate
-                  </Button>
-                </div>
-              )}
-            </div>
+            {/* 9:16 Portrait Thumbnail moved to main canvas */}
           </div>
         </div>
 
         {/* Right Main Canvas (LumeFlow Style "Output" area) */}
         <div className="w-full lg:w-2/3 space-y-6">
           {/* Main Thumbnail Banner */}
-          {session.thumbnail_url && (
-            <div className="bg-card border border-border rounded-xl overflow-hidden shadow-lg">
-              <div className="aspect-video w-full relative">
-                <img
-                  src={getMediaUrl(session.thumbnail_url)}
-                  alt="Session Thumbnail"
-                  className="w-full h-full object-cover"
-                />
-              </div>
+          {(session.thumbnail_url || session.thumbnail_url_9_16) && (
+            <div className="flex flex-col sm:flex-row shadow-lg mb-6 gap-2">
+              {session.thumbnail_url_9_16 && (
+                <div
+                  className={`bg-card border border-border rounded-xl relative ${session.thumbnail_url ? "sm:w-1/4" : "w-full max-w-sm mx-auto"} aspect-[9/16] overflow-hidden`}
+                >
+                  <img
+                    src={getMediaUrl(session.thumbnail_url_9_16)}
+                    alt="9:16 Thumbnail"
+                    className="w-full h-full object-contain bg-black"
+                  />
+                </div>
+              )}
+              {session.thumbnail_url && (
+                <div
+                  className={`bg-card border border-border rounded-xl overflow-hidden relative ${session.thumbnail_url_9_16 ? "sm:w-3/4" : "w-full"} aspect-video`}
+                >
+                  <img
+                    src={getMediaUrl(session.thumbnail_url)}
+                    alt="16:9 Thumbnail"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
             </div>
           )}
 
