@@ -118,10 +118,7 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
         image_path = shot.get('image_path')
         if image_path:
             # Convert to absolute path if relative
-            if not os.path.isabs(image_path):
-                # Get absolute path relative to current directory
-                abs_path = os.path.abspath(image_path)
-                shot['image_path'] = abs_path
+            shot['image_path'] = config.resolve_path(image_path)
 
             if os.path.exists(shot['image_path']):
                 valid_shots.append(shot)

@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(taskkill:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(npm run dev)",
+      "Bash(start http://localhost:3000)",
+      "Bash(start http://localhost:3001/sessions)"
     ]
   }
 }

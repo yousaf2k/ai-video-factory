@@ -529,7 +529,7 @@ def get_output_file_path(output_info):
 
     # Try each candidate path
     for path in candidate_paths:
-        abs_path = os.path.abspath(path)
+        abs_path = config.resolve_path(path)
         if os.path.exists(abs_path):
             logger.debug(f"Output file found: {abs_path}")
             return abs_path
@@ -549,7 +549,7 @@ def get_output_file_path(output_info):
                     if file.startswith(base_name) and file.endswith('.mp4'):
                         found_path = os.path.join(comfy_output_dir, file)
                         logger.info(f"Found video with similar name: {found_path}")
-                        return os.path.abspath(found_path)
+                        return config.resolve_path(found_path)
 
     # Log the expected path even if not found
     logger.warning(f"Output file not found at any expected path")

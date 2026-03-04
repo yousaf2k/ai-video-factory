@@ -188,22 +188,39 @@ class SessionManager:
         meta['steps']['shots'] = True
         self._save_meta(session_id, meta)
 
+    def _relativize_path(self, path):
+        """Convert an absolute path to a relative path if it's within the project root"""
+        if not path:
+            return path
+            
+        # Normalize slashes
+        path = path.replace('\\', '/')
+        
+        project_root = getattr(config, 'PROJECT_ROOT', None)
+        if not project_root:
+            return path
+            
+        project_root_norm = project_root.replace('\\', '/')
+        
+        # Case-insensitive check for Windows
+        if path.lower().startswith(project_root_norm.lower()):
+            try:
+                # Use os.path.relpath but ensure we handle the slashes correctly
+                rel_path = os.path.relpath(path, project_root).replace('\\', '/')
+                return rel_path
+            except Exception:
+                # Handle cases where paths are on different drives or other errors
+                return path
+        return path
+
     def mark_image_generated(self, session_id, shot_index, image_path):
         """Mark that an image has been generated for a shot"""
         # Load shots from shots.json
         shots = self._load_shots(session_id)
 
         if 0 <= shot_index - 1 < len(shots):
-            # Normalize path to use forward slashes (JSON-safe)
-            normalized_path = image_path.replace('\\', '/')
-            
             # Convert to relative path if absolute and inside project root
-            if os.path.isabs(normalized_path):
-                project_root = getattr(config, 'PROJECT_ROOT', None)
-                if project_root:
-                    project_root_norm = project_root.replace('\\', '/')
-                    if normalized_path.startswith(project_root_norm):
-                        normalized_path = os.path.relpath(normalized_path, project_root).replace('\\', '/')
+            normalized_path = self._relativize_path(image_path)
 
             shots[shot_index - 1]['image_generated'] = True
             shots[shot_index - 1]['image_path'] = normalized_path
@@ -248,16 +265,8 @@ class SessionManager:
         if 0 <= shot_index - 1 < len(shots):
             shots[shot_index - 1]['video_rendered'] = True
             if video_path:
-                # Normalize path to use forward slashes (JSON-safe)
-                normalized_path = video_path.replace('\\', '/')
-                
                 # Convert to relative path if absolute and inside project root
-                if os.path.isabs(normalized_path):
-                    project_root = getattr(config, 'PROJECT_ROOT', None)
-                    if project_root:
-                        project_root_norm = project_root.replace('\\', '/')
-                        if normalized_path.startswith(project_root_norm):
-                            normalized_path = os.path.relpath(normalized_path, project_root).replace('\\', '/')
+                normalized_path = self._relativize_path(video_path)
                 
                 shots[shot_index - 1]['video_path'] = normalized_path
 
@@ -321,7 +330,7 @@ class SessionManager:
         self._save_shots(session_id, shots)
 
     def _load_shots(self, session_id):
-        """Load shots from shots.json"""
+        """Load shots from shots.json, resolving relative paths to absolute"""
         session_dir = self.get_session_dir(session_id)
         shots_path = os.path.join(session_dir, "shots.json")
 
@@ -329,12 +338,32 @@ class SessionManager:
             return []
 
         with open(shots_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            shots = json.load(f)
+            
+        # Resolve paths to absolute at runtime
+        for shot in shots:
+            if 'image_path' in shot and shot['image_path']:
+                shot['image_path'] = config.resolve_path(shot['image_path'])
+            if 'image_paths' in shot and shot['image_paths']:
+                shot['image_paths'] = [config.resolve_path(p) for p in shot['image_paths']]
+            if 'video_path' in shot and shot['video_path']:
+                shot['video_path'] = config.resolve_path(shot['video_path'])
+                
+        return shots
 
     def _save_shots(self, session_id, shots):
-        """Save shots to shots.json"""
+        """Save shots to shots.json, ensuring paths are relative"""
         session_dir = self.get_session_dir(session_id)
         shots_path = os.path.join(session_dir, "shots.json")
+
+        # Ensure all paths are relative before saving
+        for shot in shots:
+            if 'image_path' in shot:
+                shot['image_path'] = self._relativize_path(shot.get('image_path'))
+            if 'image_paths' in shot:
+                shot['image_paths'] = [self._relativize_path(p) for p in shot.get('image_paths', [])]
+            if 'video_path' in shot:
+                shot['video_path'] = self._relativize_path(shot.get('video_path'))
 
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots, f, indent=2, ensure_ascii=False)

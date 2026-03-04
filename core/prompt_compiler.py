@@ -354,8 +354,7 @@ def compile_workflow(template, shot, video_length_seconds=None):
         if load_image_node_id and load_image_node_id in wf:
             image_path = shot["image_path"]
             # Convert to absolute path if relative (ComfyUI requires absolute paths)
-            if image_path and not os.path.isabs(image_path):
-                image_path = os.path.abspath(image_path)
+            image_path = config.resolve_path(image_path)
             # Normalize to use forward slashes (ComfyUI handles this better)
             image_path = image_path.replace('\\', '/')
             wf[load_image_node_id]["inputs"]["image"] = image_path

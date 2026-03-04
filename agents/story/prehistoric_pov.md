@@ -82,6 +82,7 @@ Every scene must include what the protagonist's hands are doing:
 - **Physical Interaction**: Climbing terrain, defensive actions, gripping tools/weapons
 - **Emotional Expression**: Trembling hands, clenching fists, hands covering mouth
 - **Survival Actions**: Grasping weapons, gripping ledges, protecting oneself
+- **Visual Framing**: Hands appear at edges/sides of frame, providing POV context while the main scene remains sharp and clear
 
 **Examples**:
 - "My hands tremble as I reach out..."
@@ -89,6 +90,8 @@ Every scene must include what the protagonist's hands are doing:
 - "I shield my eyes with one hand while pointing with the other..."
 - "My hands clamp over my mouth to hide my gasp..."
 - "Hands raised, I take a step back..."
+
+**Important Visual Note**: When hands are visible in the scene description, the background (prehistoric world, dinosaurs) should always be sharp and in focus. Hands can appear slightly soft/blurred at frame edges to create depth, but the main visual subject (what viewers are there to see) must remain crystal clear.
 
 ### 3. Personal Survival Stakes
 
@@ -298,6 +301,28 @@ Every scene should include:
 ✅ **Emotional State**: Fear, awe, wonder, panic, scientific focus
 ✅ **Present Tense**: Everything is happening now
 
+## Visual Focus Guidelines
+
+**CRITICAL: Background and Hands Focus**
+
+When describing POV shots with visible hands:
+- **Background Scene MUST be Sharp and Clear**: The prehistoric world the viewer is watching (dinosaurs, landscape, action) should always be in sharp focus. This is what viewers came to see.
+- **Hands Can Be Slightly Blurred**: The protagonist's hands at the edges/sides of frame can be slightly out of focus (shallow depth of field) to create depth and draw attention to the scene.
+- **NO Bokeh Effect**: Do not add bokeh (blurry light points) or heavy blur effects that obscure the background scene.
+- **Background Takes Priority**: The prehistoric environment and dinosaurs are the primary visual subject - hands are secondary framing elements.
+
+**Examples of Correct Focus:**
+- "Sharp view of Triceratops grazing in clearing, my slightly blurred hands gripping the foreground tree trunk"
+- "T-Rex emerges clearly from jungle, my out-of-focus hands at frame edges holding the camera still"
+- "Crystal-clear Patagotitan herd migration, my soft-focus hands reaching toward the scene"
+
+**What to Avoid:**
+- ❌ "Blurry background with sharp hands" (WRONG - obscures the dinosaurs)
+- ❌ "Heavy bokeh effect hiding the scenery" (WRONG - ruins the immersion)
+- ❌ "Sharp hands, everything else blurred" (WRONG - hands are framing, not the subject)
+
+**Remember**: Viewers want to see the prehistoric world clearly. Hands are just there to provide POV context - they should never distract from or obscure the main visual subject.
+
 ## Example Complete Scene
 
 ```json
@@ -366,6 +391,8 @@ Return your story plan as a JSON object with the following structure:
 
 - **First-Person POV**: Every scene from the protagonist's eyes
 - **Hands Visible**: Always mention what the hands are doing
+- **Sharp Background Scene**: The prehistoric world/dinosaurs must be clear and in focus
+- **Hands Can Be Soft**: Hands at frame edges can be slightly blurred for depth (but never sharper than the scene)
 - **Present Tense**: Happening now, immediate and urgent
 - **Personal Stakes**: Survival, danger, fear mixed with wonder
 - **Cinematic Quality**: Netflix/IMAX standards, even in POV format
