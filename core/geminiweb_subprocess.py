@@ -231,6 +231,30 @@ def _try_download_full_size(page, output_path: str) -> Optional[str]:
     return None
 
 
+def _remove_watermark(image_path: str):
+    """Remove the transparent Gemini watermark from the bottom right corner."""
+    try:
+        import cv2
+        import numpy as np
+        img = cv2.imread(image_path)
+        if img is None:
+            return
+            
+        h, w = img.shape[:2]
+        mask = np.zeros((h, w), dtype=np.uint8)
+        # Gemini watermark is typically in the bottom right ~64x64 pixels. 
+        # We mask a slightly larger 80x80 box to ensure complete removal.
+        mask[max(0, h-80):h, max(0, w-80):w] = 255
+        
+        inpainted = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
+        cv2.imwrite(image_path, inpainted)
+        logger.info(f"Successfully removed watermark from {image_path}")
+    except ImportError:
+        logger.warning("opencv-python-headless not installed; skipping watermark removal")
+    except Exception as e:
+        logger.warning(f"Failed to remove watermark: {e}")
+
+
 def run(prompt: str, output_path: str, aspect_ratio: str = None) -> Optional[str]:
     """Main entry point — run Playwright and generate an image."""
     from playwright.sync_api import sync_playwright
@@ -387,6 +411,7 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None) -> Optional[str
                 result = _download_image(page, image_src, output_path)
 
             if result:
+                _remove_watermark(result)
                 file_size = os.path.getsize(result)
                 logger.info(f"Generated (GeminiWeb): {result} ({file_size:,} bytes)")
                 return result
