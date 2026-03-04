@@ -1,7 +1,7 @@
 /**
  * ShotCard component - Individual shot with editing and regeneration
  */
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Edit3,
   RotateCw,
@@ -16,6 +16,7 @@ import {
   Plus,
   Trash2,
   Wand2,
+  Upload,
 } from "lucide-react";
 import { Shot } from "@/types";
 import {
@@ -24,6 +25,7 @@ import {
   useRegenerateVideo,
   useSelectImage,
   useRemoveWatermark,
+  useUploadShotImage,
 } from "@/hooks/useShots";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
@@ -96,6 +98,9 @@ export function ShotCard({
   const regenerateVideo = useRegenerateVideo(sessionId);
   const selectImage = useSelectImage(sessionId);
   const removeWatermark = useRemoveWatermark(sessionId);
+  const uploadShotImage = useUploadShotImage(sessionId);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [showGalleryModal, setShowGalleryModal] = useState(false);
@@ -298,6 +303,29 @@ export function ShotCard({
 
         {/* Actions */}
         <div className="flex gap-2">
+          {/* Hidden file input for image upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              // Reset so the same file can be re-selected later
+              e.target.value = "";
+              setIsUploading(true);
+              try {
+                await uploadShotImage.mutateAsync({ shotIndex: shot.index, file });
+                setCacheBuster(Date.now());
+              } catch (error) {
+                console.error("Failed to upload image:", error);
+                alert("Failed to upload image. Please try again.");
+              } finally {
+                setIsUploading(false);
+              }
+            }}
+          />
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -307,6 +335,18 @@ export function ShotCard({
             <RefreshCw
               className={cn("w-4 h-4", isRefreshing && "animate-spin")}
             />
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="p-1 hover:bg-indigo-50 text-indigo-600 rounded disabled:opacity-50"
+            title="Upload image from disk"
+          >
+            {isUploading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
           </button>
           {shot.image_generated && (
             <button

@@ -129,3 +129,17 @@ export function useRemoveWatermark(sessionId: string) {
     },
   });
 }
+
+// Hook to upload a custom image from disk for a shot
+export function useUploadShotImage(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shotIndex, file }: { shotIndex: number; file: File }) =>
+      api.uploadShotImage(sessionId, shotIndex, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}

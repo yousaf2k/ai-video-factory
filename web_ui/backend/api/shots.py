@@ -1,7 +1,7 @@
 """
 Shots API endpoints
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, UploadFile, File
 import sys
 import os
 import json
@@ -427,6 +427,89 @@ async def select_shot_image(session_id: str, shot_index: int, request: SelectIma
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to select image: {str(e)}"
+        )
+
+
+@router.post("/{shot_index}/upload-image")
+async def upload_shot_image(session_id: str, shot_index: int, file: UploadFile = File(...)):
+    """Upload a custom image from disk for a shot (bypasses AI generation)"""
+    try:
+        shots = await get_shots(session_id)
+
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        shot = shots[shot_index - 1]
+
+        # Determine file extension (default to .png if none)
+        original_filename = file.filename or "upload.png"
+        ext = os.path.splitext(original_filename)[1].lower() or ".png"
+        # Only allow image extensions
+        allowed_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff", ".tif"}
+        if ext not in allowed_exts:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type: {ext}. Allowed types: {', '.join(allowed_exts)}"
+            )
+
+        # Build target path using the same versioned naming convention as AI-generated images:
+        # shot_001_001.png, shot_001_002.jpg, etc.
+        # Scan all existing files for this shot index across all extensions so that
+        # uploaded and AI-generated images share the same version counter.
+        session_dir = os.path.join(config.ABS_SESSIONS_DIR, session_id)
+        images_dir = os.path.join(session_dir, "images")
+        os.makedirs(images_dir, exist_ok=True)
+
+        version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.[^.]+$")
+        max_version = 0
+        if os.path.isdir(images_dir):
+            for fname in os.listdir(images_dir):
+                m = version_re.match(fname)
+                if m:
+                    max_version = max(max_version, int(m.group(1)))
+        next_version = max_version + 1
+
+        filename = f"shot_{shot_index:03d}_{next_version:03d}{ext}"
+
+        abs_dest = os.path.join(images_dir, filename)
+
+        # Write uploaded bytes to disk
+        contents = await file.read()
+        with open(abs_dest, "wb") as f:
+            f.write(contents)
+
+        logger.info(f"Uploaded image for shot {shot_index} saved to {abs_dest}")
+
+        # Build the relative path using the same logic as mark_image_generated
+        # so the stored format is always consistent with AI-generated images.
+        rel_path = session_service.session_manager._relativize_path(abs_dest)
+
+        # Update the shot record
+        shot['image_path'] = rel_path
+        shot['image_generated'] = True
+        image_paths = shot.get('image_paths', [])
+        if rel_path not in image_paths:
+            image_paths.append(rel_path)
+        shot['image_paths'] = image_paths
+
+        # Persist to shots.json
+        session_dir2 = session_service.get_session_dir(session_id)
+        shots_path = os.path.join(session_dir2, "shots.json")
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+        return {"status": "success", "image_path": rel_path, "filename": filename}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading image for shot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload image: {str(e)}"
         )
 
 

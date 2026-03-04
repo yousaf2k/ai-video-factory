@@ -82,7 +82,7 @@ class ApiClient {
   ): Promise<string> {
     const response = await this.client.post<{ status: string, thumbnail_url: string }>(
       `/api/sessions/${sessionId}/thumbnail`,
-      { 
+      {
         aspect_ratio: aspectRatio,
         force,
         image_mode: imageMode,
@@ -190,6 +190,21 @@ class ApiClient {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/select-image`, {
       image_path: imagePath,
     });
+  }
+
+  async uploadShotImage(
+    sessionId: string,
+    shotIndex: number,
+    file: File
+  ): Promise<{ image_path: string; filename: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await this.client.post<{ status: string; image_path: string; filename: string }>(
+      `/api/sessions/${sessionId}/shots/${shotIndex}/upload-image`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
   }
 
   async batchRegenerate(
