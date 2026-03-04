@@ -40,7 +40,7 @@ export default function SessionEditPage() {
   // Local state for story editing
   const [story, setStory] = useState<Story | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [activeTab, setActiveTab] = useState("story");
+  const [activeTab, setActiveTab] = useState("shots");
 
   // Modal states
   const [showRegenStoryModal, setShowRegenStoryModal] = useState(false);

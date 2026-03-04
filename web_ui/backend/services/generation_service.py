@@ -357,7 +357,8 @@ class GenerationService:
             raise
 
     async def generate_thumbnail(
-        self, session_id: str, aspect_ratio: str = "16:9", force: bool = False
+        self, session_id: str, aspect_ratio: str = "16:9", force: bool = False,
+        image_mode: str = None, image_workflow: str = None, seed: int = None
     ) -> str:
         """Generate a thumbnail image for the session"""
         try:
@@ -412,6 +413,9 @@ class GenerationService:
                 prompt=prompt,
                 output_path=image_path,
                 aspect_ratio=aspect_ratio,
+                mode=image_mode,
+                workflow_name=image_workflow,
+                seed=seed,
                 step_progress_callback=on_step_progress
             )
             
