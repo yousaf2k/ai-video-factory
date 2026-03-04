@@ -45,8 +45,8 @@ export function useRegenerateImage(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force, imageMode, imageWorkflow, seed }: { shotIndex: number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number }) =>
-      api.regenerateShotImage(sessionId, shotIndex, force, imageMode, imageWorkflow, seed),
+    mutationFn: ({ shotIndex, force, imageMode, imageWorkflow, seed, promptOverride }: { shotIndex: number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number; promptOverride?: string }) =>
+      api.regenerateShotImage(sessionId, shotIndex, force, imageMode, imageWorkflow, seed, promptOverride),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });

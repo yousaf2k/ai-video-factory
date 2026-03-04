@@ -141,13 +141,15 @@ class ApiClient {
     force: boolean = false,
     imageMode?: string,
     imageWorkflow?: string,
-    seed?: number
+    seed?: number,
+    promptOverride?: string
   ): Promise<void> {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-image`, {
       force,
       image_mode: imageMode,
       image_workflow: imageWorkflow,
       seed,
+      prompt_override: promptOverride || undefined,
     });
   }
 

@@ -57,6 +57,8 @@ class RegenerateImageRequest(BaseModel):
     image_mode: Optional[str] = Field(default=None, description="Override image generation mode (gemini/comfyui)")
     image_workflow: Optional[str] = Field(default=None, description="Override image workflow for ComfyUI (e.g. flux2, sdxl)")
     seed: Optional[int] = Field(default=None, description="Optional specific seed for regeneration")
+    prompt_override: Optional[str] = Field(default=None, description="Override the image prompt for this generation only")
+
 
 
 class RegenerateVideoRequest(BaseModel):

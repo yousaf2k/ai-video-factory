@@ -334,7 +334,7 @@ async def regenerate_shot_image(session_id: str, shot_index: int, request: Regen
         result = await generation_service.regenerate_shot_image(
             session_id, shot_index, force=request.force,
             image_mode=request.image_mode, image_workflow=request.image_workflow,
-            seed=request.seed
+            seed=request.seed, prompt_override=request.prompt_override
         )
         return {"status": "success", "image_path": result}
     except Exception as e:

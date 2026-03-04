@@ -93,6 +93,7 @@ export function ShotCard({
     "workflow/video/wan22_workflow.json",
   );
   const [regenSeed, setRegenSeed] = useState<number | "">("");
+  const [regenPromptOverride, setRegenPromptOverride] = useState<string>("");
 
   // ... rest of the hook setup ...
   const queryClient = useQueryClient();
@@ -172,6 +173,8 @@ export function ShotCard({
   };
 
   const handleRegenerateImage = async () => {
+    // Pre-populate prompt textarea with the shot's current prompt
+    setRegenPromptOverride(shot.image_prompt ?? "");
     setShowRegenModal("image");
   };
 
@@ -192,6 +195,7 @@ export function ShotCard({
           imageMode: regenImageMode,
           imageWorkflow: regenImageWorkflow,
           seed: regenSeed === "" ? undefined : regenSeed,
+          promptOverride: regenPromptOverride.trim() || undefined,
         });
       } else if (type === "video") {
         regenerateVideo.mutate({
@@ -711,6 +715,22 @@ export function ShotCard({
                         <p className="text-[10px] text-muted-foreground mt-1">
                           Leave blank for automatic seed (1 for 1st version,
                           random otherwise).
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          Prompt Override
+                        </label>
+                        <Textarea
+                          value={regenPromptOverride}
+                          onChange={(e) => setRegenPromptOverride(e.target.value)}
+                          rows={4}
+                          placeholder="Leave blank to use the shot's saved image prompt…"
+                          className="text-xs resize-y"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Edits here are one-time only — they won't change the saved shot prompt.
                         </p>
                       </div>
                     </>

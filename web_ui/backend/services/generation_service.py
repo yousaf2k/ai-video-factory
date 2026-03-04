@@ -155,7 +155,7 @@ class GenerationService:
     async def regenerate_shot_image(
         self, session_id: str, shot_index: int, force: bool = False,
         image_mode: Optional[str] = None, image_workflow: Optional[str] = None,
-        seed: Optional[int] = None
+        seed: Optional[int] = None, prompt_override: Optional[str] = None
     ) -> str:
         """
         Regenerate image for a single shot
@@ -213,7 +213,8 @@ class GenerationService:
                 shot,
                 image_mode,
                 image_workflow,
-                seed
+                seed,
+                prompt_override
             )
 
             # Mark as generated
@@ -462,7 +463,8 @@ class GenerationService:
     def _generate_single_image(self, session_id: str, shot: Dict[str, Any], 
                                mode: Optional[str] = None, 
                                workflow_name: Optional[str] = None,
-                               seed: Optional[int] = None) -> str:
+                               seed: Optional[int] = None,
+                               prompt_override: Optional[str] = None) -> str:
         """Generate image for a single shot (synchronous)"""
         from core.image_generator import generate_image
         import config
@@ -471,7 +473,9 @@ class GenerationService:
         os.makedirs(images_dir, exist_ok=True)
 
         shot_index = shot['index']
-        prompt = shot['image_prompt']
+        # Use override prompt if provided, otherwise fall back to saved shot prompt
+        prompt = prompt_override.strip() if prompt_override and prompt_override.strip() else shot['image_prompt']
+
         
         # Generate versioned filename: shot_001_001.png, shot_001_002.png, etc.
         next_version = self._get_next_image_version(images_dir, shot_index)
