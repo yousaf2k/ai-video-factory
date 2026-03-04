@@ -435,26 +435,33 @@ def _remove_watermark(image_path: str):
         m96 = _get_mask(_MASK_96_B64)
         
         best_match = None
-        # Robust multi-scale detection
+        
+        # Step 1: Try native scale (1.0) first — fast path for full-res downloads.
         for mask in [m48, m96]:
-            # Slightly denser scale search for sub-pixel accuracy
-            for s in np.linspace(0.4, 1.6, 20):
-                mh, mw = mask.shape[:2]
-                nh, nw = int(mh * s), int(mw * s)
-                if nh < 10 or nh > quad.shape[0] or nw > quad.shape[1]:
-                    continue
-                
-                resized_mask = cv2.resize(mask, (nw, nh), interpolation=cv2.INTER_LANCZOS4)
-                res = cv2.matchTemplate(quad, resized_mask, cv2.TM_CCOEFF_NORMED)
-                _, max_val, _, max_loc = cv2.minMaxLoc(res)
-                
-                if best_match is None or max_val > best_match['val']:
-                    best_match = {
-                        'val': max_val,
-                        'loc': max_loc,
-                        'scale': s,
-                        'mask': resized_mask
-                    }
+            mh, mw = mask.shape[:2]
+            if mh > quad.shape[0] or mw > quad.shape[1]:
+                continue
+            res = cv2.matchTemplate(quad, mask, cv2.TM_CCOEFF_NORMED)
+            _, max_val, _, max_loc = cv2.minMaxLoc(res)
+            if best_match is None or max_val > best_match['val']:
+                best_match = {'val': max_val, 'loc': max_loc, 'scale': 1.0, 'mask': mask}
+
+        # Step 2: If native scale is not confident enough, do multi-scale search.
+        # This handles resized screenshots where the watermark was downscaled.
+        if not best_match or best_match['val'] < 0.7:
+            for mask in [m48, m96]:
+                for s in np.linspace(0.4, 1.6, 20):
+                    mh_s, mw_s = mask.shape[:2]
+                    nh, nw = int(mh_s * s), int(mw_s * s)
+                    if nh < 10 or nh > quad.shape[0] or nw > quad.shape[1]:
+                        continue
+                    resized_mask = cv2.resize(mask, (nw, nh), interpolation=cv2.INTER_LANCZOS4)
+                    res = cv2.matchTemplate(quad, resized_mask, cv2.TM_CCOEFF_NORMED)
+                    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+                    if best_match is None or max_val > best_match['val']:
+                        best_match = {'val': max_val, 'loc': max_loc, 'scale': s, 'mask': resized_mask}
+
+        is_native_scale = best_match and abs(best_match['scale'] - 1.0) < 0.05
 
         if not best_match or best_match['val'] < 0.35:
             logger.info(f"No watermark detected in {image_path} (confidence={best_match['val'] if best_match else 0:.3f})")
@@ -463,30 +470,43 @@ def _remove_watermark(image_path: str):
         mx, my = best_match['loc']
         mh, mw = best_match['mask'].shape[:2]
         gx, gy = mx + (w // 2), my + (h // 2)
-        
-        # Region of Interest
-        roi = img[gy:gy+mh, gx:gx+mw].astype(np.float32)
+
         alpha = best_match['mask'].astype(np.float32) / 255.0
-        alpha_3ch = cv2.merge([alpha, alpha, alpha])
-        
-        # REFINED: Assume logo color is 252.0 to handle JPEG compression headroom
         LOGO_COLOR = 252.0
-        denom = 1.0 - alpha_3ch
-        denom = np.maximum(denom, 0.05) # Increased epsilon for stability
-        
+
+        roi = img[gy:gy+mh, gx:gx+mw].astype(np.float32)
+        alpha_3ch = cv2.merge([alpha, alpha, alpha])
+        denom = np.maximum(1.0 - alpha_3ch, 0.05)
         restored = (roi - (alpha_3ch * LOGO_COLOR)) / denom
         restored = np.clip(restored, 0, 255).astype(np.uint8)
-        
-        # REFINED: Dilated cleanup mask to catch aliasing halos/residues
-        # We dilate by 3 sectors
-        cleanup_mask = (best_match['mask'] > 2).astype(np.uint8) * 255
-        kernel = np.ones((3, 3), np.uint8)
-        cleanup_mask = cv2.dilate(cleanup_mask, kernel, iterations=1)
-        
-        # Use a slightly larger inpaint radius (2-3) to bridge edges
-        final_roi = cv2.inpaint(restored, cleanup_mask, inpaintRadius=2, flags=cv2.INPAINT_TELEA)
-        
-        img[gy:gy+mh, gx:gx+mw] = final_roi
+
+        if is_native_scale:
+            # Full-res native download: mask fits perfectly.
+            # Pure reverse alpha-blending — no inpainting needed (avoids artifacts on sharp PNGs).
+            img[gy:gy+mh, gx:gx+mw] = restored
+        else:
+            # Screenshot / resized image: use inpainting to handle compression halos,
+            # then surgical corner fix for any bright pixels just outside the mask.
+            cleanup_mask = (best_match['mask'] > 2).astype(np.uint8) * 255
+            kernel = np.ones((3, 3), np.uint8)
+            cleanup_mask = cv2.dilate(cleanup_mask, kernel, iterations=1)
+            final_roi = cv2.inpaint(restored, cleanup_mask, inpaintRadius=2, flags=cv2.INPAINT_TELEA)
+            img[gy:gy+mh, gx:gx+mw] = final_roi
+
+            PAD = 1
+            ey1 = max(gy - PAD, 0);  ey2 = min(gy + mh + PAD, h)
+            ex1 = max(gx - PAD, 0);  ex2 = min(gx + mw + PAD, w)
+            band = img[ey1:ey2, ex1:ex2].copy()
+            smooth = cv2.medianBlur(band, 3)
+            diff = np.abs(band.astype(np.int32) - smooth.astype(np.int32)).max(axis=2)
+            ph, pw = band.shape[:2]
+            outer_only = np.zeros((ph, pw), dtype=bool)
+            outer_only[:PAD, :] = True;   outer_only[-PAD:, :] = True
+            outer_only[:, :PAD] = True;   outer_only[:, -PAD:] = True
+            to_fix = outer_only & (diff > 20)
+            if to_fix.any():
+                band[to_fix] = smooth[to_fix]
+                img[ey1:ey2, ex1:ex2] = band
         cv2.imwrite(image_path, img)
         logger.info(f"Precise restoration success: {image_path} @ ({gx},{gy}) scale={best_match['scale']:.2f} conf={best_match['val']:.3f} (JPG refined)")
 
