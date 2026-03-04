@@ -50,6 +50,7 @@ class SessionListItem(BaseModel):
     total_shots: int
     images_generated: int
     videos_rendered: int
+    thumbnail_url: Optional[str] = None
     story: Optional[Dict[str, Any]] = None
 
     @classmethod
@@ -64,6 +65,7 @@ class SessionListItem(BaseModel):
             total_shots=meta.get("stats", {}).get("total_shots", 0),
             images_generated=meta.get("stats", {}).get("images_generated", 0),
             videos_rendered=meta.get("stats", {}).get("videos_rendered", 0),
+            thumbnail_url=meta.get("thumbnail_url"),
             story=story,
         )
 

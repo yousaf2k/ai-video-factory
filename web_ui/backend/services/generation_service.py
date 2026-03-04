@@ -390,6 +390,9 @@ class GenerationService:
                 if aspect_ratio == "16:9" and "thumbnail_url" not in session_meta:
                     session_meta['thumbnail_url'] = f"/api/sessions/{session_id}/images/{filename}"
                     self.session_manager._save_meta(session_id, session_meta)
+                elif aspect_ratio == "9:16" and "thumbnail_url_9_16" not in session_meta:
+                    session_meta['thumbnail_url_9_16'] = f"/api/sessions/{session_id}/images/{filename}"
+                    self.session_manager._save_meta(session_id, session_meta)
                 return image_path
                 
             # Progress callback
@@ -414,6 +417,9 @@ class GenerationService:
             
             if aspect_ratio == "16:9":
                 session_meta['thumbnail_url'] = f"/api/sessions/{session_id}/images/{filename}"
+                self.session_manager._save_meta(session_id, session_meta)
+            elif aspect_ratio == "9:16":
+                session_meta['thumbnail_url_9_16'] = f"/api/sessions/{session_id}/images/{filename}"
                 self.session_manager._save_meta(session_id, session_meta)
 
             manager.broadcast_sync(session_id, {

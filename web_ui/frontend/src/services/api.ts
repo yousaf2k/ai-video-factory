@@ -72,10 +72,23 @@ class ApiClient {
     return response.data;
   }
 
-  async generateThumbnail(sessionId: string, aspectRatio: string = '16:9', force: boolean = false): Promise<string> {
+  async generateThumbnail(
+    sessionId: string,
+    aspectRatio: string = '16:9',
+    force: boolean = false,
+    imageMode?: string,
+    imageWorkflow?: string,
+    seed?: number
+  ): Promise<string> {
     const response = await this.client.post<{ status: string, thumbnail_url: string }>(
       `/api/sessions/${sessionId}/thumbnail`,
-      { aspect_ratio: aspectRatio, force }
+      { 
+        aspect_ratio: aspectRatio,
+        force,
+        image_mode: imageMode,
+        image_workflow: imageWorkflow,
+        seed
+      }
     );
     return response.data.thumbnail_url;
   }

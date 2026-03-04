@@ -3,7 +3,7 @@ Sessions API endpoints
 """
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
-from typing import List
+from typing import List, Optional
 import logging
 import os
 
@@ -16,6 +16,9 @@ from pydantic import BaseModel
 class GenerateThumbnailRequest(BaseModel):
     aspect_ratio: str = "16:9"
     force: bool = False
+    image_mode: Optional[str] = None
+    image_workflow: Optional[str] = None
+    seed: Optional[int] = None
 
 from web_ui.backend.services.session_service import SessionService
 
@@ -187,7 +190,12 @@ async def generate_thumbnail(session_id: str, request: GenerateThumbnailRequest)
         gen_service = GenerationService()
         
         image_path = await gen_service.generate_thumbnail(
-            session_id, aspect_ratio=request.aspect_ratio, force=request.force
+            session_id, 
+            aspect_ratio=request.aspect_ratio, 
+            force=request.force,
+            image_mode=request.image_mode,
+            image_workflow=request.image_workflow,
+            seed=request.seed
         )
         
         filename = os.path.basename(image_path)

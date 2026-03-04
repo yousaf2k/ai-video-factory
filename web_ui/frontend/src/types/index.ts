@@ -30,6 +30,7 @@ export interface Session {
   steps: SessionStep;
   stats: SessionStats;
   thumbnail_url?: string;
+  thumbnail_url_9_16?: string;
   story?: Story;
   shots?: Shot[];
 }
@@ -44,6 +45,7 @@ export interface SessionListItem {
   images_generated: number;
   videos_rendered: number;
   thumbnail_url?: string;
+  thumbnail_url_9_16?: string;
   story?: Story;
 }
 

@@ -12,6 +12,11 @@ export function cn(...inputs: ClassValue[]) {
 export function getMediaUrl(path: string | null): string {
   if (!path) return '';
 
+  // If path already starts with /api/ or http, return it directly
+  if (path.startsWith('/api/') || path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+
   // Normalize slashes to forward slashes
   let normalizedPath = path.replace(/\\/g, '/');
 

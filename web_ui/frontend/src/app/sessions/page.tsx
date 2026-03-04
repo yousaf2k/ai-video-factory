@@ -14,6 +14,7 @@ import {
   useDuplicateSession,
 } from "@/hooks/useSessions";
 import { useAgents } from "@/hooks/useAgents";
+import { getMediaUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -169,39 +170,40 @@ export default function SessionsPage() {
               <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted outline outline-1 outline-transparent group-hover:outline-border transition-all">
                 {session.thumbnail_url ? (
                   <img
-                    src={session.thumbnail_url}
+                    src={getMediaUrl(session.thumbnail_url)}
                     alt={session.idea}
                     className="object-cover w-full h-full"
                   />
                 ) : (
                   <div className="flex w-full h-full flex-col items-center justify-center bg-card text-muted-foreground relative">
                     <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                    <span className="text-sm font-medium">Coming Soon</span>
                   </div>
                 )}
 
                 {/* Generate Button Overlay */}
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="gap-2 shadow-lg"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleGenerateThumbnail(session.session_id);
-                    }}
-                    disabled={generatingThumbnails[session.session_id]}
-                  >
-                    {generatingThumbnails[session.session_id] ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <ImageIcon className="w-4 h-4" />
-                    )}
-                    {generatingThumbnails[session.session_id]
-                      ? "Generating..."
-                      : "Generate Thumbnail"}
-                  </Button>
-                </div>
+                {!session.thumbnail_url && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="gap-2 shadow-lg"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleGenerateThumbnail(session.session_id);
+                      }}
+                      disabled={generatingThumbnails[session.session_id]}
+                    >
+                      {generatingThumbnails[session.session_id] ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ImageIcon className="w-4 h-4" />
+                      )}
+                      {generatingThumbnails[session.session_id]
+                        ? "Generating..."
+                        : "Generate Thumbnail"}
+                    </Button>
+                  </div>
+                )}
 
                 {/* Duration / Status Badges on Thumbnail */}
                 <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium text-white bg-black/80 rounded z-10">
