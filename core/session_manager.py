@@ -189,28 +189,37 @@ class SessionManager:
         self._save_meta(session_id, meta)
 
     def _relativize_path(self, path):
-        """Convert an absolute path to a relative path if it's within the project root"""
+        """Convert an absolute path to a relative path if it's within the project root or output dir"""
         if not path:
             return path
             
         # Normalize slashes
         path = path.replace('\\', '/')
         
+        # 1. Check PROJECT_ROOT (Standard case)
         project_root = getattr(config, 'PROJECT_ROOT', None)
-        if not project_root:
-            return path
+        if project_root:
+            project_root_norm = project_root.replace('\\', '/')
+            if path.lower().startswith(project_root_norm.lower()):
+                try:
+                    rel_path = os.path.relpath(path, project_root).replace('\\', '/')
+                    return rel_path
+                except Exception:
+                    pass # Fall through to next check
             
-        project_root_norm = project_root.replace('\\', '/')
+        # 2. Check OUTPUT_DIR (Handle different drives)
+        output_dir = getattr(config, 'OUTPUT_DIR', None)
+        if output_dir and os.path.isabs(output_dir):
+            output_parent = os.path.dirname(output_dir)
+            output_parent_norm = output_parent.replace('\\', '/')
+            if path.lower().startswith(output_parent_norm.lower()):
+                try:
+                    # Relativize to the parent of OUTPUT_DIR so it starts with "output/"
+                    rel_path = os.path.relpath(path, output_parent).replace('\\', '/')
+                    return rel_path
+                except Exception:
+                    pass
         
-        # Case-insensitive check for Windows
-        if path.lower().startswith(project_root_norm.lower()):
-            try:
-                # Use os.path.relpath but ensure we handle the slashes correctly
-                rel_path = os.path.relpath(path, project_root).replace('\\', '/')
-                return rel_path
-            except Exception:
-                # Handle cases where paths are on different drives or other errors
-                return path
         return path
 
     def mark_image_generated(self, session_id, shot_index, image_path):

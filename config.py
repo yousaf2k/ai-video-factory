@@ -110,12 +110,26 @@ OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
 # Sessions directory (where project data is stored)
 SESSIONS_DIR = os.path.join(OUTPUT_DIR, "sessions")
 
-# Helper to resolve relative paths to project root
+# Helper to resolve relative paths to project root or output dir
 def resolve_path(relative_path):
     if not relative_path:
         return relative_path
     if os.path.isabs(relative_path):
         return relative_path
+        
+    # Standardize to forward slashes for prefix checking
+    norm_rel = relative_path.replace('\\', '/')
+    
+    # If the path starts with "output/", try to resolve it relative to where OUTPUT_DIR is
+    # This handles cases where OUTPUT_DIR is on a different drive than PROJECT_ROOT
+    if norm_rel.startswith('output/'):
+        if os.path.isabs(OUTPUT_DIR):
+            # Resolve relative to the parent of OUTPUT_DIR
+            # e.g., if OUTPUT_DIR is E:/output, parent is E:/
+            # joining E:/ with output/sessions/xxx/shot.png correctly resolves it
+            output_parent = os.path.dirname(OUTPUT_DIR)
+            return os.path.join(output_parent, relative_path)
+            
     return os.path.join(PROJECT_ROOT, relative_path)
 
 # Absolute versions of directories
