@@ -1,13 +1,41 @@
 /**
  * ShotCard component - Individual shot with editing and regeneration
  */
-import { useState } from 'react';
-import { Edit3, RotateCw, RefreshCw, Image, Layers, Video, Check, X, Loader2, Clock, Plus, Trash2 } from 'lucide-react';
-import { Shot } from '@/types';
-import { useUpdateShot, useRegenerateImage, useRegenerateVideo, useSelectImage } from '@/hooks/useShots';
-import { useQueryClient } from '@tanstack/react-query';
-import { api } from '@/services/api';
-import { cn, getMediaUrl } from '@/lib/utils';
+import { useState } from "react";
+import {
+  Edit3,
+  RotateCw,
+  RefreshCw,
+  Image,
+  Layers,
+  Video,
+  Check,
+  X,
+  Loader2,
+  Clock,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { Shot } from "@/types";
+import {
+  useUpdateShot,
+  useRegenerateImage,
+  useRegenerateVideo,
+  useSelectImage,
+} from "@/hooks/useShots";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/services/api";
+import { cn, getMediaUrl } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ShotCardProps {
   shot: Shot;
@@ -38,22 +66,26 @@ export function ShotCard({
   onCancel,
   onInsertBefore,
   onInsertAfter,
-  onDelete
+  onDelete,
 }: ShotCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);
-  const [viewMode, setViewMode] = useState<'image' | 'video'>(
-    shot.video_rendered && shot.video_path ? 'video' : 'image'
+  const [viewMode, setViewMode] = useState<"image" | "video">(
+    shot.video_rendered && shot.video_path ? "video" : "image",
   );
 
   // Regeneration modal state
-  const [showRegenModal, setShowRegenModal] = useState<'image' | 'video' | null>(null);
+  const [showRegenModal, setShowRegenModal] = useState<
+    "image" | "video" | null
+  >(null);
   const [showFullscreenImage, setShowFullscreenImage] = useState(false);
   const [regenForce, setRegenForce] = useState(true);
-  const [regenImageMode, setRegenImageMode] = useState('comfyui');
-  const [regenImageWorkflow, setRegenImageWorkflow] = useState('flux2');
-  const [regenVideoWorkflow, setRegenVideoWorkflow] = useState('workflow/video/wan22_workflow.json');
-  const [regenSeed, setRegenSeed] = useState<number | ''>('');
+  const [regenImageMode, setRegenImageMode] = useState("comfyui");
+  const [regenImageWorkflow, setRegenImageWorkflow] = useState("flux2");
+  const [regenVideoWorkflow, setRegenVideoWorkflow] = useState(
+    "workflow/video/wan22_workflow.json",
+  );
+  const [regenSeed, setRegenSeed] = useState<number | "">("");
 
   // ... rest of the hook setup ...
   const queryClient = useQueryClient();
@@ -69,8 +101,8 @@ export function ShotCard({
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-    await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    await queryClient.invalidateQueries({ queryKey: ["shots", sessionId] });
+    await queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
     setCacheBuster(Date.now());
     setTimeout(() => setIsRefreshing(false), 600);
   };
@@ -85,8 +117,8 @@ export function ShotCard({
       });
       setIsEditing(false);
     } catch (error) {
-      console.error('Failed to update shot:', error);
-      alert('Failed to update shot. Please try again.');
+      console.error("Failed to update shot:", error);
+      alert("Failed to update shot. Please try again.");
     }
   };
 
@@ -96,11 +128,11 @@ export function ShotCard({
   };
 
   const handleRegenerateImage = async () => {
-    setShowRegenModal('image');
+    setShowRegenModal("image");
   };
 
   const handleRegenerateVideo = async () => {
-    setShowRegenModal('video');
+    setShowRegenModal("video");
   };
 
   const handleRegenSubmit = async () => {
@@ -109,21 +141,21 @@ export function ShotCard({
       // Close modal immediately
       setShowRegenModal(null);
 
-      if (type === 'image') {
+      if (type === "image") {
         regenerateImage.mutate({
           shotIndex: shot.index,
           force: regenForce,
           imageMode: regenImageMode,
           imageWorkflow: regenImageWorkflow,
-          seed: regenSeed === '' ? undefined : regenSeed
+          seed: regenSeed === "" ? undefined : regenSeed,
         });
-      } else if (type === 'video') {
+      } else if (type === "video") {
         regenerateVideo.mutate({
           shotIndex: shot.index,
           force: regenForce,
-          videoWorkflow: regenVideoWorkflow
+          videoWorkflow: regenVideoWorkflow,
         });
-        setViewMode('video');
+        setViewMode("video");
       }
       setCacheBuster(Date.now());
     } catch (error) {
@@ -135,13 +167,19 @@ export function ShotCard({
   const videoUrl = getMediaUrl(shot.video_path);
 
   // Append cache-busting param so browser fetches the latest file from disk
-  const bustCache = (url: string) => url ? `${url}${url.includes('?') ? '&' : '?'}t=${cacheBuster}` : '';
+  const bustCache = (url: string) =>
+    url ? `${url}${url.includes("?") ? "&" : "?"}t=${cacheBuster}` : "";
   const cachedImageUrl = bustCache(imageUrl);
   const cachedVideoUrl = bustCache(videoUrl);
 
   if (isEditing) {
     return (
-      <div className={cn("border rounded-lg p-4 bg-background", selected && "border-primary ring-1 ring-primary")}>
+      <div
+        className={cn(
+          "border rounded-lg p-4 bg-background",
+          selected && "border-primary ring-1 ring-primary",
+        )}
+      >
         {/* ... editing UI ... */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-muted-foreground">
@@ -168,41 +206,53 @@ export function ShotCard({
 
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground">Image Prompt</label>
-            <textarea
+            <label className="text-xs text-muted-foreground">
+              Image Prompt
+            </label>
+            <Textarea
               value={editedShot.image_prompt}
-              onChange={(e) => setEditedShot({ ...editedShot, image_prompt: e.target.value })}
-              className="w-full px-2 py-1 border rounded text-sm mt-1 min-h-[120px]"
+              onChange={(e) =>
+                setEditedShot({ ...editedShot, image_prompt: e.target.value })
+              }
+              className="mt-1 min-h-[120px]"
             />
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground">Motion Prompt</label>
-            <textarea
+            <label className="text-xs text-muted-foreground">
+              Motion Prompt
+            </label>
+            <Textarea
               value={editedShot.motion_prompt}
-              onChange={(e) => setEditedShot({ ...editedShot, motion_prompt: e.target.value })}
-              className="w-full px-2 py-1 border rounded text-sm mt-1 min-h-[120px]"
+              onChange={(e) =>
+                setEditedShot({ ...editedShot, motion_prompt: e.target.value })
+              }
+              className="mt-1 min-h-[120px]"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Camera</label>
-              <input
+              <Input
                 type="text"
                 value={editedShot.camera}
-                onChange={(e) => setEditedShot({ ...editedShot, camera: e.target.value })}
-                className="w-full px-2 py-1 border rounded text-sm mt-1"
+                onChange={(e) =>
+                  setEditedShot({ ...editedShot, camera: e.target.value })
+                }
+                className="mt-1"
               />
             </div>
 
             <div>
               <label className="text-xs text-muted-foreground">Narration</label>
-              <input
+              <Input
                 type="text"
                 value={editedShot.narration}
-                onChange={(e) => setEditedShot({ ...editedShot, narration: e.target.value })}
-                className="w-full px-2 py-1 border rounded text-sm mt-1"
+                onChange={(e) =>
+                  setEditedShot({ ...editedShot, narration: e.target.value })
+                }
+                className="mt-1"
               />
             </div>
           </div>
@@ -212,7 +262,12 @@ export function ShotCard({
   }
 
   return (
-    <div className={cn("border rounded-lg p-4 bg-background hover:shadow-md transition-shadow relative", selected && "border-primary ring-1 ring-primary")}>
+    <div
+      className={cn(
+        "border rounded-lg p-4 bg-background hover:shadow-md transition-shadow relative",
+        selected && "border-primary ring-1 ring-primary",
+      )}
+    >
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -246,7 +301,9 @@ export function ShotCard({
             className="p-1 hover:bg-green-50 text-green-600 rounded disabled:opacity-50"
             title="Refresh image from disk"
           >
-            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+            <RefreshCw
+              className={cn("w-4 h-4", isRefreshing && "animate-spin")}
+            />
           </button>
           <button
             onClick={() => setIsEditing(true)}
@@ -309,17 +366,21 @@ export function ShotCard({
 
       {/* Status */}
       <div className="flex gap-3 text-xs mb-3">
-        <span className={cn(
-          "flex items-center gap-1",
-          shot.image_generated ? "text-green-600" : "text-gray-400"
-        )}>
+        <span
+          className={cn(
+            "flex items-center gap-1",
+            shot.image_generated ? "text-green-600" : "text-gray-400",
+          )}
+        >
           <Image className="w-3 h-3" />
           Image: {shot.image_generated ? "✓" : "○"}
         </span>
-        <span className={cn(
-          "flex items-center gap-1",
-          shot.video_rendered ? "text-green-600" : "text-gray-400"
-        )}>
+        <span
+          className={cn(
+            "flex items-center gap-1",
+            shot.video_rendered ? "text-green-600" : "text-gray-400",
+          )}
+        >
           <Video className="w-3 h-3" />
           Video: {shot.video_rendered ? "✓" : "○"}
         </span>
@@ -332,11 +393,18 @@ export function ShotCard({
             <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg z-10">
               <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
               <span className="text-white font-medium">
-                {progress === 0 ? 'Initializing Generation...' : progress !== undefined ? `Generating... ${progress}%` : 'Generating...'}
+                {progress === 0
+                  ? "Initializing Generation..."
+                  : progress !== undefined
+                    ? `Generating... ${progress}%`
+                    : "Generating..."}
               </span>
               {onCancel && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); onCancel(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancel();
+                  }}
                   className="mt-2 px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
                 >
                   Cancel
@@ -351,7 +419,10 @@ export function ShotCard({
               </span>
               {onCancel && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); onCancel(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancel();
+                  }}
                   className="mt-2 px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
                 >
                   Cancel
@@ -359,7 +430,7 @@ export function ShotCard({
               )}
             </div>
           ) : null}
-          {viewMode === 'video' && cachedVideoUrl ? (
+          {viewMode === "video" && cachedVideoUrl ? (
             <video
               src={cachedVideoUrl}
               poster={cachedImageUrl}
@@ -379,7 +450,9 @@ export function ShotCard({
               title="Click to view full screen"
             />
           ) : (
-            <span className="text-muted-foreground text-xs">No media available</span>
+            <span className="text-muted-foreground text-xs">
+              No media available
+            </span>
           )}
         </div>
 
@@ -387,20 +460,24 @@ export function ShotCard({
         {shot.image_path && shot.video_path && (
           <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 backdrop-blur-sm p-1 rounded-md">
             <button
-              onClick={() => setViewMode('image')}
+              onClick={() => setViewMode("image")}
               className={cn(
                 "p-1.5 rounded transition-colors",
-                viewMode === 'image' ? "bg-white text-black" : "text-white hover:bg-white/20"
+                viewMode === "image"
+                  ? "bg-white text-black"
+                  : "text-white hover:bg-white/20",
               )}
               title="View Image"
             >
               <Image className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => setViewMode('video')}
+              onClick={() => setViewMode("video")}
               className={cn(
                 "p-1.5 rounded transition-colors",
-                viewMode === 'video' ? "bg-white text-black" : "text-white hover:bg-white/20"
+                viewMode === "video"
+                  ? "bg-white text-black"
+                  : "text-white hover:bg-white/20",
               )}
               title="View Video"
             >
@@ -417,7 +494,9 @@ export function ShotCard({
           <div className="line-clamp-2">{shot.image_prompt}</div>
         </div>
         <div className="p-2 bg-muted rounded">
-          <div className="text-xs text-muted-foreground mb-1">Motion Prompt</div>
+          <div className="text-xs text-muted-foreground mb-1">
+            Motion Prompt
+          </div>
           <div className="line-clamp-2">{shot.motion_prompt}</div>
         </div>
       </div>
@@ -441,65 +520,91 @@ export function ShotCard({
             </button>
 
             <h2 className="text-lg font-semibold mb-4">
-              Regenerate {showRegenModal === 'image' ? 'Image' : 'Video'}
+              Regenerate {showRegenModal === "image" ? "Image" : "Video"}
             </h2>
 
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <input
+                <Input
                   type="checkbox"
                   id="regen-force"
                   checked={regenForce}
                   onChange={(e) => setRegenForce(e.target.checked)}
-                  className="rounded border-gray-300 text-primary focus:ring-primary"
+                  className="w-4 h-4 mr-2"
                 />
                 <label htmlFor="regen-force" className="text-sm">
                   Force regeneration (ignore cache)
                 </label>
               </div>
 
-              {showRegenModal === 'image' && (
+              {showRegenModal === "image" && (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Generation Mode</label>
-                    <select
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Generation Mode
+                    </label>
+                    <Select
                       value={regenImageMode}
-                      onChange={(e) => setRegenImageMode(e.target.value)}
-                      className="w-full border rounded-md p-2 text-sm"
+                      onValueChange={(val) => setRegenImageMode(val)}
                     >
-                      <option value="comfyui">ComfyUI (Local)</option>
-                      <option value="gemini">Gemini (Cloud)</option>
-                      <option value="geminiweb">GeminiWeb - Gemini Web (Browser)</option>
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
+                        <SelectItem value="gemini">Gemini (Cloud)</SelectItem>
+                        <SelectItem value="geminiweb">
+                          GeminiWeb - Gemini Web (Browser)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  {regenImageMode === 'comfyui' && (
+                  {regenImageMode === "comfyui" && (
                     <>
                       <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">Workflow</label>
-                        <select
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          Workflow
+                        </label>
+                        <Select
                           value={regenImageWorkflow}
-                          onChange={(e) => setRegenImageWorkflow(e.target.value)}
-                          className="w-full border rounded-md p-2 text-sm"
+                          onValueChange={(val) => setRegenImageWorkflow(val)}
                         >
-                          <option value="flux2">Flux 2 (High Quality)</option>
-                          <option value="flux">Flux (Standard)</option>
-                          <option value="sdxl">SDXL</option>
-                          <option value="default">Default</option>
-                        </select>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Workflow" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="flux2">
+                              Flux 2 (High Quality)
+                            </SelectItem>
+                            <SelectItem value="flux">
+                              Flux (Standard)
+                            </SelectItem>
+                            <SelectItem value="sdxl">SDXL</SelectItem>
+                            <SelectItem value="default">Default</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">Noise Seed (Optional)</label>
-                        <input
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          Noise Seed (Optional)
+                        </label>
+                        <Input
                           type="number"
                           value={regenSeed}
-                          onChange={(e) => setRegenSeed(e.target.value === '' ? '' : parseInt(e.target.value))}
+                          onChange={(e) =>
+                            setRegenSeed(
+                              e.target.value === ""
+                                ? ""
+                                : parseInt(e.target.value),
+                            )
+                          }
                           placeholder="Random"
-                          className="w-full border rounded-md p-2 text-sm"
                         />
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          Leave blank for automatic seed (1 for 1st version, random otherwise).
+                          Leave blank for automatic seed (1 for 1st version,
+                          random otherwise).
                         </p>
                       </div>
                     </>
@@ -507,30 +612,30 @@ export function ShotCard({
                 </>
               )}
 
-              {showRegenModal === 'video' && (
+              {showRegenModal === "video" && (
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Video Workflow</label>
-                  <input
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    Video Workflow
+                  </label>
+                  <Input
                     type="text"
                     value={regenVideoWorkflow}
                     onChange={(e) => setRegenVideoWorkflow(e.target.value)}
-                    className="w-full border rounded-md p-2 text-sm"
                   />
                 </div>
               )}
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowRegenModal(null)}
-                className="px-3 py-1.5 border rounded-md hover:bg-muted text-sm"
-              >
+              <Button variant="outline" onClick={() => setShowRegenModal(null)}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleRegenSubmit}
-                disabled={regenerateImage.isPending || regenerateVideo.isPending}
-                className="px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
+                disabled={
+                  regenerateImage.isPending || regenerateVideo.isPending
+                }
+                className="flex items-center gap-2"
               >
                 {regenerateImage.isPending || regenerateVideo.isPending ? (
                   <>
@@ -538,9 +643,9 @@ export function ShotCard({
                     Processing...
                   </>
                 ) : (
-                  'Start'
+                  "Start"
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -574,7 +679,9 @@ export function ShotCard({
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
           <div className="bg-background rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col relative">
             <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Shot {shot.index} — Image Variations ({shot.image_paths.length})</h2>
+              <h2 className="text-lg font-semibold">
+                Shot {shot.index} — Image Variations ({shot.image_paths.length})
+              </h2>
               <button
                 onClick={() => setShowGalleryModal(false)}
                 className="text-muted-foreground hover:text-foreground p-1"
@@ -593,7 +700,9 @@ export function ShotCard({
                       key={idx}
                       className={cn(
                         "relative group rounded-lg overflow-hidden border-2 transition-all",
-                        isActive ? "border-primary ring-2 ring-primary/30" : "border-transparent hover:border-muted-foreground/30"
+                        isActive
+                          ? "border-primary ring-2 ring-primary/30"
+                          : "border-transparent hover:border-muted-foreground/30",
                       )}
                     >
                       <div className="aspect-video bg-muted">
@@ -606,7 +715,7 @@ export function ShotCard({
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-end justify-center">
                         <div className="p-2 w-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between">
                           <span className="text-white text-xs font-medium drop-shadow">
-                            {imgPath.split('/').pop()?.split('\\').pop()}
+                            {imgPath.split("/").pop()?.split("\\").pop()}
                           </span>
                           {isActive ? (
                             <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
@@ -616,12 +725,20 @@ export function ShotCard({
                             <button
                               onClick={async () => {
                                 try {
-                                  await selectImage.mutateAsync({ shotIndex: shot.index, imagePath: imgPath });
+                                  await selectImage.mutateAsync({
+                                    shotIndex: shot.index,
+                                    imagePath: imgPath,
+                                  });
                                   setCacheBuster(Date.now());
                                   setShowGalleryModal(false);
                                 } catch (error) {
-                                  console.error('Failed to select image:', error);
-                                  alert('Failed to select image. Please try again.');
+                                  console.error(
+                                    "Failed to select image:",
+                                    error,
+                                  );
+                                  alert(
+                                    "Failed to select image. Please try again.",
+                                  );
                                 }
                               }}
                               disabled={selectImage.isPending}

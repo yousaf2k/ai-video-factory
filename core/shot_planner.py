@@ -25,7 +25,7 @@ def is_local_provider():
     return LLM_PROVIDER.lower() in local_providers
 
 
-def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, image_agent, video_agent):
+def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_agent):
     """Plan shots for a batch of scenes"""
     # Create scene graph for this batch
     batch_graph = json.dumps(scenes_batch, ensure_ascii=False)
@@ -41,7 +41,7 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
     # Try to use agent prompts
     try:
         user_input = f"{batch_graph}{batch_instruction}"
-        image_prompt = load_agent_prompt("image", user_input, image_agent)
+        image_prompt = load_agent_prompt("shots", user_input, shots_agent)
 
         provider = get_provider()
         response = provider.ask(image_prompt, response_format="application/json")
@@ -52,7 +52,7 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
 
     except (FileNotFoundError, ValueError):
         # Fall back to legacy prompt
-        print(f"[WARN] Image agent '{image_agent}' not found, using legacy prompt for batch {batch_num}")
+        print(f"[WARN] Shots agent '{shots_agent}' not found, using legacy prompt for batch {batch_num}")
         prompt = f"""
 Create cinematic shots for WAN 2.2.{batch_instruction}
 
@@ -283,17 +283,15 @@ def extract_complete_objects(json_str):
 
 
 @log_agent_call
-def plan_shots(scene_graph, max_shots=None, image_agent="default", video_agent="default", shots_per_scene=None):
+def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_scene=None):
     """
     Plan cinematic shots for WAN 2.2 video generation.
 
     Args:
         scene_graph: The scene graph JSON
         max_shots: Maximum number of shots to create (optional)
-        image_agent: Name of image prompt agent to use (default: "default")
+        shots_agent: Name of shots prompt agent to use (default: "default")
                     Available: default, artistic
-        video_agent: Name of video motion agent to use (default: "default")
-                    Available: default, cinematic
         shots_per_scene: Target number of shots per scene (optional)
 
     Returns:
@@ -444,8 +442,7 @@ CRITICAL SHOT REQUIREMENTS:
                 'batch_num': batch_num + 1,
                 'total_batches': total_batches,
                 'max_shots_instruction': batch_instruction,
-                'image_agent': image_agent,
-                'video_agent': video_agent,
+                'shots_agent': shots_agent,
                 'start_idx': start_idx,
                 'end_idx': end_idx
             })
@@ -469,8 +466,7 @@ CRITICAL SHOT REQUIREMENTS:
                     batch_num=batch_data['batch_num'],
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
-                    image_agent=batch_data['image_agent'],
-                    video_agent=batch_data['video_agent']
+                    shots_agent=batch_data['shots_agent']
                 )
 
                 # Add batch number
@@ -527,8 +523,7 @@ CRITICAL SHOT REQUIREMENTS:
                     batch_num=batch_data['batch_num'],
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
-                    image_agent=batch_data['image_agent'],
-                    video_agent=batch_data['video_agent']
+                    shots_agent=batch_data['shots_agent']
                 )
 
                 # Add batch number
@@ -565,8 +560,8 @@ CRITICAL SHOT REQUIREMENTS:
 
     # Try to use agent prompts
     try:
-        # Load image agent prompt
-        image_prompt = load_agent_prompt("image", user_input, image_agent)
+        # Load shots agent prompt
+        image_prompt = load_agent_prompt("shots", user_input, shots_agent)
 
         # Get the response
         provider = get_provider()
@@ -608,7 +603,7 @@ CRITICAL SHOT REQUIREMENTS:
 
     except (FileNotFoundError, ValueError):
         # Fall back to legacy prompt if agent not found
-        print(f"[WARN] Image agent '{image_agent}' not found, using legacy prompt")
+        print(f"[WARN] Shots agent '{shots_agent}' not found, using legacy prompt")
         prompt = f"""
 Create cinematic shots for WAN 2.2.{max_shots_instruction}
 

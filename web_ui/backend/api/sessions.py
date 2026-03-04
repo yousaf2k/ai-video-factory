@@ -11,6 +11,12 @@ from web_ui.backend.models.session import (
     SessionListItem, SessionDetail, CreateSessionRequest,
     UpdateSessionRequest, DuplicateSessionRequest
 )
+from pydantic import BaseModel
+
+class GenerateThumbnailRequest(BaseModel):
+    aspect_ratio: str = "16:9"
+    force: bool = False
+
 from web_ui.backend.services.session_service import SessionService
 
 logger = logging.getLogger(__name__)
@@ -170,5 +176,28 @@ async def get_session_video(session_id: str, filename: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to serve video: {str(e)}"
+        )
+
+
+@router.post("/{session_id}/thumbnail")
+async def generate_thumbnail(session_id: str, request: GenerateThumbnailRequest):
+    """Generate a thumbnail for the session"""
+    try:
+        from web_ui.backend.services.generation_service import GenerationService
+        gen_service = GenerationService()
+        
+        image_path = await gen_service.generate_thumbnail(
+            session_id, aspect_ratio=request.aspect_ratio, force=request.force
+        )
+        
+        filename = os.path.basename(image_path)
+        thumbnail_url = f"/api/sessions/{session_id}/images/{filename}"
+        
+        return {"status": "success", "thumbnail_url": thumbnail_url}
+    except Exception as e:
+        logger.error(f"Error generating thumbnail: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate thumbnail: {str(e)}"
         )
 

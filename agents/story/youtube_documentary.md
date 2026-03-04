@@ -25,6 +25,10 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ```json
 {
   "title": "Documentary title here",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "YouTube viral documentary",
   "seo_keywords": ["keyword1", "keyword2", "keyword3"],
   "title_options": [
@@ -37,8 +41,16 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
     "Description of visual hook for thumbnail 2 (action or reveal moment)"
   ],
   "chapters": [
-    {"time": "0:00", "title": "Opening Hook"},
-    {"time": "2:30", "title": "The Discovery"}
+    {"time": "0:00", "title": "Opening Hook"
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",},
+    {"time": "2:30", "title": "The Discovery"
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",}
   ],
   "description_preview": "First 150 characters of video description for SEO",
   "scenes": [

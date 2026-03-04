@@ -389,8 +389,7 @@ async def replan_shots(session_id: str, request: ReplanShotsRequest):
         shots = await generation_service.replan_shots(
             session_id,
             max_shots=request.max_shots,
-            image_agent=request.image_agent,
-            video_agent=request.video_agent
+            shots_agent=request.shots_agent
         )
         return {"status": "success", "shots": shots}
     except Exception as e:

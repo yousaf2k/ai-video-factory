@@ -79,8 +79,7 @@ class BatchRegenerateRequest(BaseModel):
 class ReplanShotsRequest(BaseModel):
     """Request to re-plan shots from story"""
     max_shots: Optional[int] = Field(default=None, description="Maximum shots to generate")
-    image_agent: str = Field(default="default", description="Image agent to use")
-    video_agent: str = Field(default="default", description="Video agent to use")
+    shots_agent: str = Field(default="default", description="Shots agent to use")
 
 
 class SelectImageRequest(BaseModel):

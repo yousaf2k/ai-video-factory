@@ -108,7 +108,7 @@ export function useReplanShots(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { max_shots?: number; image_agent: string; video_agent: string }) =>
+    mutationFn: (data: { max_shots?: number; shots_agent: string; }) =>
       api.replanShots(sessionId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });

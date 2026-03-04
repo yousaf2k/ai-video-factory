@@ -31,10 +31,12 @@ Step 6: Narration (optional)
 **File:** `input/story.txt` or command line argument
 
 The idea is the starting point for your video. It can be:
+
 - A brief concept: "A beautiful sunset over the ocean"
 - A detailed description: "An elderly woman named Anna tends her garden at sunset, remembering her late husband through the flowers they planted together"
 
 **How to provide idea:**
+
 ```bash
 # Command line
 python main.py --idea "Your video idea here"
@@ -52,6 +54,7 @@ python main.py
 **Agent:** `agents/story/{STORY_AGENT}.txt`
 
 The story is expanded into a full narrative including:
+
 - **Title**: Video title
 - **Logline**: One-sentence summary
 - **Characters**: Character descriptions with physical details
@@ -69,6 +72,7 @@ The story is expanded into a full narrative including:
 **Agent:** `agents/scene_graph/default.txt`
 
 The scene graph organizes the story into visual scenes:
+
 - **Scene Number**: Sequential scene identifier
 - **Location**: Where the scene takes place
 - **Characters Present**: Who appears in the scene
@@ -83,9 +87,10 @@ The scene graph organizes the story into visual scenes:
 **Input:** Story + Scene Graph
 **Output:** Detailed shot list with camera movements and prompts
 **Module:** `core/shot_planner.py`
-**Agent:** `agents/shots/{VIDEO_AGENT}.txt`
+**Agent:** `agents/shots/{SHOTS_AGENT}.txt`
 
 Shots are planned with complete specifications:
+
 - **Shot Number**: Sequential shot identifier
 - **Scene**: Which scene this shot belongs to
 - **Image Prompt**: Detailed description for image generation
@@ -105,6 +110,7 @@ Shots are planned with complete specifications:
 **Modes:** Gemini API or ComfyUI (Flux/SDXL)
 
 Images are generated from the image prompts:
+
 - **Multiple variations**: Generate multiple images per shot with different seeds
 - **Consistent style**: All images use same model and settings
 - **Organized output**: Named as `shot_001_001.png`, `shot_001_002.png`, etc.
@@ -112,6 +118,7 @@ Images are generated from the image prompts:
 **Output directory:** `output/sessions/{session}/images/`
 
 **Configuration:**
+
 ```python
 # In config.py
 IMAGE_GENERATION_MODE = "gemini"  # or "comfyui"
@@ -128,6 +135,7 @@ IMAGE_RESOLUTION = "1280"
 **Workflow:** ComfyUI Wan 2.2 workflow
 
 Videos are rendered by:
+
 1. Loading each image into ComfyUI
 2. Injecting motion prompt (enhanced with camera trigger keywords)
 3. Loading camera-specific LoRAs
@@ -137,6 +145,7 @@ Videos are rendered by:
 **Output directory:** `output/sessions/{session}/videos/`
 
 **Configuration:**
+
 ```python
 # In config.py
 DEFAULT_SHOT_LENGTH = 6.0      # Seconds per shot
@@ -145,6 +154,7 @@ VIDEO_RENDER_TIMEOUT = 1800    # Max wait time (30 min)
 ```
 
 **Multi-Camera LoRA System:**
+
 - Each shot can have multiple cameras: `"drone, orbit"` or `["dolly", "zoom"]`
 - Cameras are assigned sequentially to LORA_NODES pairs
 - Trigger keywords are appended to motion prompts
@@ -159,6 +169,7 @@ VIDEO_RENDER_TIMEOUT = 1800    # Max wait time (30 min)
 **TTS:** Local (Edge TTS), ComfyUI, or ElevenLabs
 
 Narration is generated from the story:
+
 - **Narration script**: Text narration based on story and scenes
 - **Voice synthesis**: Convert script to audio using TTS
 - **Timing**: Sync narration with video timing
@@ -166,6 +177,7 @@ Narration is generated from the story:
 **Output directory:** `output/sessions/{session}/narration/`
 
 **Configuration:**
+
 ```python
 # In config.py
 GENERATE_NARRATION = False
@@ -237,6 +249,7 @@ AUTO_STEP_MODE = False
 ```
 
 Resume from specific step:
+
 ```bash
 python main.py --session session_20260210_174844 --step 4
 ```
@@ -314,7 +327,7 @@ python main.py --session session_20260210_174844
 python main.py --session session_20260210_174844 --step 4
 
 # Use custom agents
-python main.py --story-agent dramatic --image-agent artistic
+python main.py --story-agent dramatic --shots-agent artistic
 
 # Enable narration
 python main.py --generate-narration --tts-voice en-GB-SoniaNeural
@@ -351,6 +364,7 @@ python regenerate.py --session session_20260210_174844 --videos --failed-only
 ### Parallel Processing
 
 Images are generated sequentially, but you can adjust:
+
 - `IMAGES_PER_SHOT`: More variations = longer generation time
 - `DEFAULT_MAX_SHOTS`: Limit shots for faster testing
 
@@ -363,6 +377,7 @@ Images are generated sequentially, but you can adjust:
 ### API Rate Limits
 
 Gemini API has rate limits. If you hit them:
+
 - Reduce `IMAGES_PER_SHOT`
 - Reduce `DEFAULT_MAX_SHOTS`
 - Add delays between requests
@@ -372,6 +387,7 @@ Gemini API has rate limits. If you hit them:
 ### Step Fails
 
 Check the error message and:
+
 1. Verify API keys are set correctly
 2. Ensure ComfyUI is running (for video rendering)
 3. Check file permissions in `output/`
@@ -380,6 +396,7 @@ Check the error message and:
 ### Video Rendering Hangs
 
 If video rendering exceeds timeout:
+
 ```python
 # Increase timeout in config.py
 VIDEO_RENDER_TIMEOUT = 3600  # 60 minutes

@@ -280,7 +280,7 @@ IMAGE_RESOLUTION = "2048"
 # IMAGE WORKFLOW CONFIGURATION
 # ==========================================
 # Active image workflow to use (must exist in IMAGE_WORKFLOWS)
-IMAGE_WORKFLOW = "flux2"
+IMAGE_WORKFLOW = "flux"
 
 # Image workflow definitions
 # Each workflow has its own node IDs and workflow file path
@@ -591,14 +591,8 @@ AUTO_STEP_MODE = True  # True = auto, False = manual
 # Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary, prehistoric_dinosaur, prehistoric_pov)
 STORY_AGENT = "default"
 
-# Image prompt agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
-IMAGE_AGENT = "default"
-
-# Video motion agent (default, cinematic)
-VIDEO_AGENT = "default"
-
-# Narration agent (default, documentary, professional, storytelling)
-NARRATION_AGENT = "default"
+# Shots agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
+SHOTS_AGENT = "default"
 
 
 # ==========================================

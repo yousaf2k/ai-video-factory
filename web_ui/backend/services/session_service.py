@@ -89,8 +89,7 @@ class SessionService:
             idea=request.idea,
             session_id=request.session_id,
             story_agent=request.story_agent,
-            image_agent=request.image_agent,
-            video_agent=request.video_agent,
+            shots_agent=request.shots_agent,
             total_duration=request.total_duration
         )
 
@@ -171,11 +170,8 @@ class SessionService:
         if request.story_agent is not None:
             meta['story_agent'] = request.story_agent
 
-        if request.image_agent is not None:
-            meta['image_agent'] = request.image_agent
-
-        if request.video_agent is not None:
-            meta['video_agent'] = request.video_agent
+        if request.shots_agent is not None:
+            meta['shots_agent'] = request.shots_agent
 
         if request.completed is not None:
             meta['completed'] = request.completed

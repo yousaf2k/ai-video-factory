@@ -5,6 +5,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Trash2, Copy, ImageIcon, RefreshCw, PlaySquare } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useSessions,
   useCreateSession,
@@ -12,11 +14,22 @@ import {
   useDuplicateSession,
 } from "@/hooks/useSessions";
 import { useAgents } from "@/hooks/useAgents";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { api } from "@/services/api";
 import type { CreateSessionRequest } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 
 export default function SessionsPage() {
+  const queryClient = useQueryClient();
   const { data: sessions, isLoading, error } = useSessions();
   const { data: agents } = useAgents();
   const createSessionMutation = useCreateSession();
@@ -29,10 +42,24 @@ export default function SessionsPage() {
 
   // Agent selection state
   const [selectedStoryAgent, setSelectedStoryAgent] = useState("default");
-  const [selectedImageAgent, setSelectedImageAgent] = useState("default");
-  const [selectedVideoAgent, setSelectedVideoAgent] = useState("default");
+  const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
   const [totalDuration, setTotalDuration] = useState(600);
   const [promptsFile, setPromptsFile] = useState("");
+  const [generatingThumbnails, setGeneratingThumbnails] = useState<
+    Record<string, boolean>
+  >({});
+
+  const handleGenerateThumbnail = async (sessionId: string) => {
+    try {
+      setGeneratingThumbnails((prev) => ({ ...prev, [sessionId]: true }));
+      await api.generateThumbnail(sessionId, "16:9", true);
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    } catch (error) {
+      console.error("Failed to generate thumbnail:", error);
+    } finally {
+      setGeneratingThumbnails((prev) => ({ ...prev, [sessionId]: false }));
+    }
+  };
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,8 +68,7 @@ export default function SessionsPage() {
     const request: CreateSessionRequest = {
       idea: newIdea,
       story_agent: selectedStoryAgent,
-      image_agent: selectedImageAgent,
-      video_agent: selectedVideoAgent,
+      shots_agent: selectedShotsAgent,
       total_duration: totalDuration,
       prompts_file: promptsFile.trim() || undefined,
     };
@@ -128,96 +154,132 @@ export default function SessionsPage() {
             Generate cinematic videos from text ideas
           </p>
         </div>
-        <button
-          onClick={() => setShowNewDialog(true)}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-        >
-          New Session
-        </button>
+        <Button onClick={() => setShowNewDialog(true)}>New Session</Button>
       </div>
 
       {/* Sessions Grid */}
       {sessions && sessions.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-10 gap-x-4">
           {sessions.map((session) => (
             <div
               key={session.session_id}
-              className="border rounded-lg p-6 hover:shadow-lg transition-shadow"
+              className="group relative flex flex-col gap-3 transition-colors rounded-xl hover:bg-muted/30 p-2 -m-2"
             >
-              {/* Status Badge */}
-              <div className="flex items-center justify-between mb-4">
-                <span
-                  className={`px-2 py-1 text-xs rounded-full ${
-                    session.completed
-                      ? "bg-green-100 text-green-800"
-                      : "bg-yellow-100 text-yellow-800"
-                  }`}
-                >
-                  {session.completed ? "Completed" : "In Progress"}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {session.started_at
-                    ? (() => {
-                        try {
-                          return formatDistanceToNow(
-                            new Date(session.started_at),
-                            { addSuffix: true },
-                          );
-                        } catch (e) {
-                          return "Unknown date";
-                        }
-                      })()
-                    : "Unknown date"}
-                </span>
-              </div>
-
-              {/* Title */}
-              <h3 className="text-lg font-semibold mb-2 line-clamp-2">
-                {session.idea}
-              </h3>
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 mb-4 text-sm">
-                <div>
-                  <div className="text-muted-foreground">Shots</div>
-                  <div className="font-medium">{session.total_shots}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Images</div>
-                  <div className="font-medium">
-                    {session.images_generated}/{session.total_shots}
+              {/* Thumbnail Container */}
+              <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted outline outline-1 outline-transparent group-hover:outline-border transition-all">
+                {session.thumbnail_url ? (
+                  <img
+                    src={session.thumbnail_url}
+                    alt={session.idea}
+                    className="object-cover w-full h-full"
+                  />
+                ) : (
+                  <div className="flex w-full h-full flex-col items-center justify-center bg-card text-muted-foreground relative">
+                    <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
+                    <span className="text-sm font-medium">Coming Soon</span>
                   </div>
+                )}
+
+                {/* Generate Button Overlay */}
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="gap-2 shadow-lg"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleGenerateThumbnail(session.session_id);
+                    }}
+                    disabled={generatingThumbnails[session.session_id]}
+                  >
+                    {generatingThumbnails[session.session_id] ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="w-4 h-4" />
+                    )}
+                    {generatingThumbnails[session.session_id]
+                      ? "Generating..."
+                      : "Generate Thumbnail"}
+                  </Button>
                 </div>
-                <div>
-                  <div className="text-muted-foreground">Videos</div>
-                  <div className="font-medium">
-                    {session.videos_rendered}/{session.total_shots}
-                  </div>
+
+                {/* Duration / Status Badges on Thumbnail */}
+                <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium text-white bg-black/80 rounded z-10">
+                  {session.completed ? "Done" : "In Progress"}
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-2">
-                <Link
-                  href={`/sessions/${session.session_id}`}
-                  className="flex-1 px-3 py-2 text-center bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-sm"
-                >
-                  View
-                </Link>
-                <button
-                  onClick={() => handleDuplicateSession(session.session_id)}
-                  className="px-3 py-2 border rounded-md hover:bg-muted transition-colors text-sm"
+              {/* Details */}
+              <div className="flex gap-3 px-1">
+                <div className="flex-none mt-0.5 text-primary">
+                  <PlaySquare
+                    className="w-9 h-9 opacity-80"
+                    strokeWidth={1.5}
+                  />
+                </div>
+                <div className="flex flex-col overflow-hidden">
+                  <h3
+                    className="text-sm font-semibold line-clamp-2 leading-tight text-foreground"
+                    title={session.idea}
+                  >
+                    {session.story?.title || session.idea}
+                  </h3>
+                  <div className="text-xs text-muted-foreground mt-1 flex flex-col gap-0.5">
+                    <span className="truncate">
+                      {session.started_at
+                        ? (() => {
+                            try {
+                              return formatDistanceToNow(
+                                new Date(session.started_at),
+                                { addSuffix: true },
+                              );
+                            } catch (e) {
+                              return "Unknown date";
+                            }
+                          })()
+                        : "Unknown date"}
+                    </span>
+                    <span className="truncate">
+                      {session.videos_rendered} videos • {session.total_shots}{" "}
+                      shots
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <Link
+                href={`/sessions/${session.session_id}`}
+                className="absolute inset-0 z-10"
+              >
+                <span className="sr-only">View Session</span>
+              </Link>
+
+              {/* Action Menu overlay in corner */}
+              <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="w-8 h-8 rounded-full shadow-md bg-background/80 hover:bg-background"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleDuplicateSession(session.session_id);
+                  }}
                   title="Duplicate session"
                 >
-                  Duplicate
-                </button>
-                <button
-                  onClick={() => handleDeleteSession(session.session_id)}
-                  className="px-3 py-2 border border-red-200 text-red-600 rounded-md hover:bg-red-50 transition-colors text-sm"
+                  <Copy className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  className="w-8 h-8 rounded-full shadow-md"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleDeleteSession(session.session_id);
+                  }}
                   title="Delete session"
                 >
-                  Delete
-                </button>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               </div>
             </div>
           ))}
@@ -227,12 +289,7 @@ export default function SessionsPage() {
           <p className="text-muted-foreground mb-4">
             No sessions yet. Create your first session!
           </p>
-          <button
-            onClick={() => setShowNewDialog(true)}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Create Session
-          </button>
+          <Button onClick={() => setShowNewDialog(true)}>Create Session</Button>
         </div>
       )}
 
@@ -249,11 +306,11 @@ export default function SessionsPage() {
                 >
                   Video Idea
                 </label>
-                <textarea
+                <Textarea
                   id="idea"
                   value={newIdea}
                   onChange={(e) => setNewIdea(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px] mb-4"
+                  className="min-h-[100px] mb-4"
                   placeholder="Describe your video idea..."
                   required
                 />
@@ -266,12 +323,11 @@ export default function SessionsPage() {
                 >
                   Prompts File Path (optional)
                 </label>
-                <input
+                <Input
                   id="promptsFile"
                   type="text"
                   value={promptsFile}
                   onChange={(e) => setPromptsFile(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                   placeholder="e.g., input/my_prompts.txt"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">
@@ -285,58 +341,47 @@ export default function SessionsPage() {
                   <label className="block text-sm font-medium mb-1">
                     Story Agent
                   </label>
-                  <select
+                  <Select
                     value={selectedStoryAgent}
-                    onChange={(e) => setSelectedStoryAgent(e.target.value)}
-                    className="w-full border rounded-md p-2 text-sm"
+                    onValueChange={(val) => setSelectedStoryAgent(val)}
                   >
-                    {!agents?.story.length && (
-                      <option value="default">Default</option>
-                    )}
-                    {agents?.story.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Story Agent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!agents?.story.length && (
+                        <SelectItem value="default">Default</SelectItem>
+                      )}
+                      {agents?.story.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Image Agent
+                    Shots Agent
                   </label>
-                  <select
-                    value={selectedImageAgent}
-                    onChange={(e) => setSelectedImageAgent(e.target.value)}
-                    className="w-full border rounded-md p-2 text-sm"
+                  <Select
+                    value={selectedShotsAgent}
+                    onValueChange={(val) => setSelectedShotsAgent(val)}
                   >
-                    {!agents?.image.length && (
-                      <option value="default">Default</option>
-                    )}
-                    {agents?.image.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Video Agent
-                  </label>
-                  <select
-                    value={selectedVideoAgent}
-                    onChange={(e) => setSelectedVideoAgent(e.target.value)}
-                    className="w-full border rounded-md p-2 text-sm"
-                  >
-                    {!agents?.video.length && (
-                      <option value="default">Default</option>
-                    )}
-                    {agents?.video.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Shots Agent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!agents?.shots?.length && (
+                        <SelectItem value="default">Default</SelectItem>
+                      )}
+                      {agents?.shots?.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -348,14 +393,13 @@ export default function SessionsPage() {
                   Target Duration (seconds)
                 </label>
                 <div className="flex items-center gap-3">
-                  <input
+                  <Input
                     id="duration"
                     type="number"
                     value={totalDuration}
                     onChange={(e) =>
                       setTotalDuration(parseInt(e.target.value) || 0)
                     }
-                    className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                     min="10"
                     step="10"
                   />
@@ -370,26 +414,25 @@ export default function SessionsPage() {
               </div>
 
               <div className="flex gap-2 justify-end">
-                <button
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={() => setShowNewDialog(false)}
-                  className="px-4 py-2 border rounded-md hover:bg-muted transition-colors"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
                   disabled={
                     createSessionMutation.isPending || isGeneratingStory
                   }
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
                   {isGeneratingStory
                     ? "Generating Story..."
                     : createSessionMutation.isPending
                       ? "Creating..."
                       : "Create"}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

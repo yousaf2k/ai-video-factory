@@ -1,29 +1,45 @@
 /**
  * Agents Management Page
  */
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useAgents, useAgentContent, useUpdateAgentContent } from '@/hooks/useAgents';
-import { Save, RefreshCw, FileText, ChevronRight, Eye, Code } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { useState, useEffect } from "react";
+import {
+  useAgents,
+  useAgentContent,
+  useUpdateAgentContent,
+} from "@/hooks/useAgents";
+import {
+  Save,
+  RefreshCw,
+  FileText,
+  ChevronRight,
+  Eye,
+  Code,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function AgentsPage() {
   const { data: agents, isLoading: isLoadingAgents } = useAgents();
-  const [selectedAgent, setSelectedAgent] = useState<{ type: string, id: string } | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<{
+    type: string;
+    id: string;
+  } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  
+
   const { data: content, isLoading: isLoadingContent } = useAgentContent(
-    selectedAgent?.type || null, 
-    selectedAgent?.id || null
+    selectedAgent?.type || null,
+    selectedAgent?.id || null,
   );
-  
-  const [editContent, setEditContent] = useState('');
+
+  const [editContent, setEditContent] = useState("");
   const updateAgentMutation = useUpdateAgentContent(
-    selectedAgent?.type || '', 
-    selectedAgent?.id || ''
+    selectedAgent?.type || "",
+    selectedAgent?.id || "",
   );
 
   useEffect(() => {
@@ -41,10 +57,10 @@ export default function AgentsPage() {
     if (!selectedAgent) return;
     try {
       await updateAgentMutation.mutateAsync(editContent);
-      alert('Agent prompt updated successfully!');
+      alert("Agent prompt updated successfully!");
     } catch (error) {
-      console.error('Failed to update agent:', error);
-      alert('Failed to update agent.');
+      console.error("Failed to update agent:", error);
+      alert("Failed to update agent.");
     }
   };
 
@@ -52,7 +68,7 @@ export default function AgentsPage() {
     return <div className="container mx-auto px-4 py-8">Loading agents...</div>;
   }
 
-  const agentTypes = ['story', 'image', 'video', 'narration'];
+  const agentTypes = ["story", "image", "video", "narration"];
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -66,7 +82,9 @@ export default function AgentsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Sidebar - Agent List */}
         <div className="lg:col-span-1 border rounded-lg overflow-hidden flex flex-col h-[calc(100vh-250px)]">
-          <div className="bg-muted p-3 font-semibold border-b">Available Agents</div>
+          <div className="bg-muted p-3 font-semibold border-b">
+            Available Agents
+          </div>
           <div className="overflow-y-auto flex-1">
             {agentTypes.map((type) => (
               <div key={type} className="mb-2">
@@ -80,9 +98,10 @@ export default function AgentsPage() {
                       onClick={() => setSelectedAgent({ type, id: agent.id })}
                       className={cn(
                         "w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between transition-colors",
-                        selectedAgent?.id === agent.id && selectedAgent?.type === type
+                        selectedAgent?.id === agent.id &&
+                          selectedAgent?.type === type
                           ? "bg-primary text-primary-foreground"
-                          : "hover:bg-muted"
+                          : "hover:bg-muted",
                       )}
                     >
                       <span className="truncate">{agent.name}</span>
@@ -112,7 +131,9 @@ export default function AgentsPage() {
                       onClick={() => setShowPreview(false)}
                       className={cn(
                         "px-3 py-1 text-xs rounded-sm flex items-center gap-1.5 transition-colors",
-                        !showPreview ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50"
+                        !showPreview
+                          ? "bg-muted text-foreground"
+                          : "text-muted-foreground hover:bg-muted/50",
                       )}
                     >
                       <Code className="w-3.5 h-3.5" />
@@ -122,17 +143,19 @@ export default function AgentsPage() {
                       onClick={() => setShowPreview(true)}
                       className={cn(
                         "px-3 py-1 text-xs rounded-sm flex items-center gap-1.5 transition-colors",
-                        showPreview ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50"
+                        showPreview
+                          ? "bg-muted text-foreground"
+                          : "text-muted-foreground hover:bg-muted/50",
                       )}
                     >
                       <Eye className="w-3.5 h-3.5" />
                       Preview
                     </button>
                   </div>
-                  <button
+                  <Button
                     onClick={handleSave}
                     disabled={updateAgentMutation.isPending || isLoadingContent}
-                    className="px-4 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2 text-sm disabled:opacity-50"
+                    className="flex items-center gap-2"
                   >
                     {updateAgentMutation.isPending ? (
                       <>
@@ -145,10 +168,10 @@ export default function AgentsPage() {
                         Save Changes
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </div>
-              
+
               <div className="flex-1 relative overflow-hidden flex flex-col">
                 {isLoadingContent ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
@@ -163,19 +186,22 @@ export default function AgentsPage() {
                     </div>
                   </div>
                 ) : (
-                  <textarea
+                  <Textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    className="flex-1 w-full p-6 font-mono text-sm resize-none focus:outline-none bg-card"
+                    className="flex-1 w-full p-6 font-mono text-sm resize-none focus:outline-none bg-card rounded-none border-0 focus-visible:ring-0"
                     placeholder="Paste your agent prompt here..."
                     spellCheck={false}
                   />
                 )}
               </div>
-              
+
               <div className="bg-muted/50 p-3 text-xs text-muted-foreground flex justify-between border-t">
-                <span>Tip: Use {"{USER_INPUT}"} as a placeholder for the user's request.</span>
-                <span>{showPreview ? 'Preview mode' : 'Markdown editor'}</span>
+                <span>
+                  Tip: Use {"{USER_INPUT}"} as a placeholder for the user's
+                  request.
+                </span>
+                <span>{showPreview ? "Preview mode" : "Markdown editor"}</span>
               </div>
             </>
           ) : (
@@ -183,7 +209,8 @@ export default function AgentsPage() {
               <FileText className="w-12 h-12 mb-4 opacity-20" />
               <h3 className="text-lg font-medium mb-2">Select an Agent</h3>
               <p className="max-w-xs">
-                Choose an agent from the sidebar to view or edit its system prompt.
+                Choose an agent from the sidebar to view or edit its system
+                prompt.
               </p>
             </div>
           )}

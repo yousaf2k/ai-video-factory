@@ -27,6 +27,10 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 ```json
 {
   "title": "Documentary title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "First-person POV survival documentary",
   "scenes": [
     {
@@ -313,6 +317,10 @@ Return your story plan as a JSON object with the following structure:
 ```json
 {
   "title": "Documentary title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "First-person POV survival documentary",
   "scenes": [
     {
@@ -337,6 +345,10 @@ Return your story plan as a JSON object with the following structure:
 ```json
 {
   "title": "Survival in the Cretaceous",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "First-person POV survival documentary with hands-visible cinematography",
   "scenes": [
     {

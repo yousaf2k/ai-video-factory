@@ -96,170 +96,158 @@ export default function SessionDetailPage() {
         </div>
       </div>
 
-      {/* Session Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Idea */}
-        <div className="border rounded-lg p-6">
-          <h2 className="text-lg font-semibold mb-3">Video Idea</h2>
-          <p className="text-muted-foreground whitespace-pre-wrap">
-            {session.idea}
-          </p>
-        </div>
-
-        {/* Progress */}
-        <div className="border rounded-lg p-6">
-          <h2 className="text-lg font-semibold mb-4">Progress</h2>
-
-          <div className="space-y-4">
-            {/* Story */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>Story</span>
-                <span>{session.steps.story ? "✓" : "○"}</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all ${
-                    session.steps.story ? "bg-green-500" : "bg-gray-300"
-                  }`}
-                  style={{ width: session.steps.story ? "100%" : "0%" }}
-                />
-              </div>
+      {/* Main Workspace Layout */}
+      <div className="flex flex-col lg:flex-row gap-6 mb-8">
+        {/* Left Sidebar (LumeFlow Style "Model/Prompt" area) */}
+        <div className="w-full lg:w-1/3 space-y-6">
+          <div className="bg-card border border-border rounded-xl p-5 shadow-lg">
+            <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <span className="w-4 h-4 rounded-full bg-primary flex items-center justify-center text-[10px] text-primary-foreground">
+                💡
+              </span>
+              Video Prompt
+            </h2>
+            <div className="bg-input/50 border border-border/50 rounded-lg p-3 min-h-[120px]">
+              <p className="text-sm text-foreground/90 whitespace-pre-wrap">
+                {session.idea}
+              </p>
             </div>
 
-            {/* Shots */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>Shots</span>
-                <span>{session.steps.shots ? "✓" : "○"}</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all ${
-                    session.steps.shots ? "bg-green-500" : "bg-gray-300"
-                  }`}
-                  style={{ width: session.steps.shots ? "100%" : "0%" }}
-                />
-              </div>
-            </div>
-
-            {/* Images */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>
-                  Images ({session.stats.images_generated}/
-                  {session.stats.total_shots})
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center text-[10px]">
+                  ⚙️
                 </span>
-                <span>{Math.round(imageProgress)}%</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all"
-                  style={{ width: `${imageProgress}%` }}
-                />
-              </div>
-            </div>
+                Generation Progress
+              </h2>
 
-            {/* Videos */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>
-                  Videos ({session.stats.videos_rendered}/
-                  {session.stats.total_shots})
-                </span>
-                <span>{Math.round(videoProgress)}%</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className="bg-purple-500 h-2 rounded-full transition-all"
-                  style={{ width: `${videoProgress}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Narration */}
-            <div>
-              <div className="flex justify-between text-sm mb-1">
-                <span>Narration</span>
-                <span>{session.steps.narration ? "✓" : "○"}</span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all ${
-                    session.steps.narration ? "bg-green-500" : "bg-gray-300"
-                  }`}
-                  style={{ width: session.steps.narration ? "100%" : "0%" }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Story Section */}
-      {session.story && (
-        <div className="border rounded-lg p-6 mb-8">
-          <h2 className="text-lg font-semibold mb-4">Story</h2>
-          <div className="mb-4">
-            <h3 className="text-xl font-bold">{session.story.title}</h3>
-            <p className="text-muted-foreground mb-4">
-              Style: {session.story.style}
-            </p>
-            {session.story.master_script && (
-              <div className="bg-muted p-4 rounded-md mb-6">
-                <h4 className="font-semibold mb-2">Master Script</h4>
-                <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-                  {session.story.master_script}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {session.story.scenes && session.story.scenes.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="font-semibold">
-                Scenes ({session.story.scenes.length})
-              </h3>
-              {session.story.scenes.map((scene, idx) => (
-                <div key={idx} className="border-l-4 border-primary pl-4">
-                  <div className="text-sm text-muted-foreground mb-1">
-                    Scene {idx + 1}
+              {/* Progress Bars styled heavily */}
+              <div className="space-y-4 bg-background/50 rounded-lg p-4 border border-border/30">
+                {/* Story */}
+                <div>
+                  <div className="flex justify-between text-xs mb-2">
+                    <span className="text-muted-foreground">
+                      Story Generation
+                    </span>
+                    <span className="text-foreground">
+                      {session.steps.story ? "Complete" : "Pending"}
+                    </span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="font-medium">Location:</span>{" "}
-                      {scene.location}
-                    </div>
-                    <div>
-                      <span className="font-medium">Characters:</span>{" "}
-                      {scene.characters}
-                    </div>
-                    <div>
-                      <span className="font-medium">Action:</span>{" "}
-                      {scene.action}
-                    </div>
-                    <div>
-                      <span className="font-medium">Emotion:</span>{" "}
-                      {scene.emotion}
-                    </div>
-                    {scene.scene_duration && (
-                      <div>
-                        <span className="font-medium">Duration:</span>{" "}
-                        {scene.scene_duration}s
-                      </div>
-                    )}
+                  <div className="w-full bg-input rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className={`h-full transition-all ${session.steps.story ? "bg-primary" : "bg-transparent"}`}
+                      style={{ width: session.steps.story ? "100%" : "0%" }}
+                    />
                   </div>
-                  {scene.narration && (
-                    <div className="mt-2 text-sm italic text-muted-foreground">
-                      "{scene.narration}"
-                    </div>
-                  )}
                 </div>
-              ))}
+
+                {/* Images */}
+                <div>
+                  <div className="flex justify-between text-xs mb-2">
+                    <span className="text-muted-foreground">
+                      Images ({session.stats.images_generated}/
+                      {session.stats.total_shots || "-"})
+                    </span>
+                    <span className="text-foreground">
+                      {Math.round(imageProgress)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-input rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-blue-500 h-full transition-all shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                      style={{ width: `${imageProgress}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Videos */}
+                <div>
+                  <div className="flex justify-between text-xs mb-2">
+                    <span className="text-muted-foreground">
+                      Videos ({session.stats.videos_rendered}/
+                      {session.stats.total_shots || "-"})
+                    </span>
+                    <span className="text-foreground">
+                      {Math.round(videoProgress)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-input rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-purple-500 h-full transition-all shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+                      style={{ width: `${videoProgress}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Main Canvas (LumeFlow Style "Output" area) */}
+        <div className="w-full lg:w-2/3 space-y-6">
+          {session.story && (
+            <div className="bg-card border border-border rounded-xl p-6 shadow-lg">
+              <div className="mb-6 pb-4 border-b border-border/50">
+                <h3 className="text-xl font-bold text-foreground mb-1">
+                  {session.story.title}
+                </h3>
+                <span className="inline-block px-2.5 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground">
+                  {session.story.style}
+                </span>
+              </div>
+
+              {session.story.master_script && (
+                <div className="bg-background/80 p-5 rounded-lg border border-border/50 mb-6">
+                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+                    Master Script
+                  </h4>
+                  <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                    {session.story.master_script}
+                  </p>
+                </div>
+              )}
+
+              {session.story.scenes && session.story.scenes.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-foreground mb-4">
+                    Scene Breakdown
+                  </h3>
+                  <div className="grid grid-cols-1 gap-3">
+                    {session.story.scenes.map((scene, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-input/30 border border-border/50 rounded-lg p-4 hover:border-primary/50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded">
+                            Scene {idx + 1}
+                          </span>
+                          {scene.scene_duration && (
+                            <span className="text-xs text-muted-foreground">
+                              {scene.scene_duration}s
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium text-foreground mb-1">
+                          {scene.action}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {scene.location} • {scene.characters}
+                        </p>
+                        {scene.narration && (
+                          <div className="mt-3 p-3 bg-background/50 rounded border-l-2 border-secondary/50 text-sm italic text-foreground/80">
+                            "{scene.narration}"
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
-      )}
+      </div>
 
       {/* Shots Section */}
       {session.shots && session.shots.length > 0 && (

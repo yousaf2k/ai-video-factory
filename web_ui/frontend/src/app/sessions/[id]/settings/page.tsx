@@ -1,38 +1,45 @@
 /**
  * Session Settings Page
  */
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { useSession, useUpdateSession } from '@/hooks/useSessions';
-import { useAgents } from '@/hooks/useAgents';
-import { Save, RefreshCw, ChevronLeft } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useSession, useUpdateSession } from "@/hooks/useSessions";
+import { useAgents } from "@/hooks/useAgents";
+import { Save, RefreshCw, ChevronLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function SessionSettingsPage() {
   const params = useParams();
   const sessionId = params.id as string;
   const router = useRouter();
-  
+
   const { data: session, isLoading, error } = useSession(sessionId);
   const { data: agents } = useAgents();
   const updateSessionMutation = useUpdateSession(sessionId);
 
   const [formData, setFormData] = useState({
-    idea: '',
-    story_agent: 'default',
-    image_agent: 'default',
-    video_agent: 'default',
+    idea: "",
+    story_agent: "default",
+    shots_agent: "default",
   });
 
   useEffect(() => {
     if (session) {
       setFormData({
-        idea: session.idea || '',
-        story_agent: session.story_agent || 'default',
-        image_agent: session.image_agent || 'default',
-        video_agent: session.video_agent || 'default',
+        idea: session.idea || "",
+        story_agent: session.story_agent || "default",
+        shots_agent: session.shots_agent || "default",
       });
     }
   }, [session]);
@@ -41,20 +48,28 @@ export default function SessionSettingsPage() {
     e.preventDefault();
     try {
       await updateSessionMutation.mutateAsync(formData);
-      alert('Session settings updated successfully!');
+      alert("Session settings updated successfully!");
       router.push(`/sessions/${sessionId}`);
     } catch (error) {
-      console.error('Failed to update session settings:', error);
-      alert('Failed to update session settings.');
+      console.error("Failed to update session settings:", error);
+      alert("Failed to update session settings.");
     }
   };
 
   if (isLoading) {
-    return <div className="container mx-auto px-4 py-8">Loading session settings...</div>;
+    return (
+      <div className="container mx-auto px-4 py-8">
+        Loading session settings...
+      </div>
+    );
   }
 
   if (error || !session) {
-    return <div className="container mx-auto px-4 py-8 text-red-500">Error loading session settings.</div>;
+    return (
+      <div className="container mx-auto px-4 py-8 text-red-500">
+        Error loading session settings.
+      </div>
+    );
   }
 
   return (
@@ -69,7 +84,8 @@ export default function SessionSettingsPage() {
         </Link>
         <h1 className="text-3xl font-bold">Session Settings</h1>
         <p className="text-muted-foreground">
-          Configuration for session: <span className="font-mono text-foreground">{sessionId}</span>
+          Configuration for session:{" "}
+          <span className="font-mono text-foreground">{sessionId}</span>
         </p>
       </div>
 
@@ -77,13 +93,15 @@ export default function SessionSettingsPage() {
         {/* Core Settings */}
         <section className="space-y-4">
           <h2 className="text-xl font-semibold border-b pb-2">Core Metadata</h2>
-          
+
           <div>
             <label className="block text-sm font-medium mb-1">Video Idea</label>
-            <textarea 
+            <Textarea
               value={formData.idea}
-              onChange={(e) => setFormData({...formData, idea: e.target.value})}
-              className="w-full border rounded-md p-2 text-sm min-h-[100px]"
+              onChange={(e) =>
+                setFormData({ ...formData, idea: e.target.value })
+              }
+              className="min-h-[100px]"
               placeholder="Describe your video idea..."
             />
             <p className="text-xs text-muted-foreground mt-1">
@@ -94,52 +112,64 @@ export default function SessionSettingsPage() {
 
         {/* Agent Settings */}
         <section className="space-y-4">
-          <h2 className="text-xl font-semibold border-b pb-2">Agent Configuration</h2>
+          <h2 className="text-xl font-semibold border-b pb-2">
+            Agent Configuration
+          </h2>
           <p className="text-sm text-muted-foreground">
             Default agents to use for regeneration steps in this session.
           </p>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium mb-1">Story Agent</label>
-              <select 
+              <label className="block text-sm font-medium mb-1">
+                Story Agent
+              </label>
+              <Select
                 value={formData.story_agent}
-                onChange={(e) => setFormData({...formData, story_agent: e.target.value})}
-                className="w-full border rounded-md p-2 text-sm"
+                onValueChange={(val) =>
+                  setFormData({ ...formData, story_agent: val })
+                }
               >
-                {!agents?.story.length && <option value="default">Default</option>}
-                {agents?.story.map(agent => (
-                  <option key={agent.id} value={agent.id}>{agent.name}</option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {!agents?.story.length && (
+                    <SelectItem value="default">Default</SelectItem>
+                  )}
+                  {agents?.story.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Image Agent</label>
-              <select 
-                value={formData.image_agent}
-                onChange={(e) => setFormData({...formData, image_agent: e.target.value})}
-                className="w-full border rounded-md p-2 text-sm"
+              <label className="block text-sm font-medium mb-1">
+                Shots Agent
+              </label>
+              <Select
+                value={formData.shots_agent}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, shots_agent: val })
+                }
               >
-                {!agents?.image.length && <option value="default">Default</option>}
-                {agents?.image.map(agent => (
-                  <option key={agent.id} value={agent.id}>{agent.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Video Agent</label>
-              <select 
-                value={formData.video_agent}
-                onChange={(e) => setFormData({...formData, video_agent: e.target.value})}
-                className="w-full border rounded-md p-2 text-sm"
-              >
-                {!agents?.video.length && <option value="default">Default</option>}
-                {agents?.video.map(agent => (
-                  <option key={agent.id} value={agent.id}>{agent.name}</option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {!agents?.shots?.length && (
+                    <SelectItem value="default">Default</SelectItem>
+                  )}
+                  {agents?.shots?.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </section>
@@ -151,10 +181,10 @@ export default function SessionSettingsPage() {
           >
             Cancel
           </Link>
-          <button
+          <Button
             type="submit"
             disabled={updateSessionMutation.isPending}
-            className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+            className="flex items-center gap-2"
           >
             {updateSessionMutation.isPending ? (
               <>
@@ -167,7 +197,7 @@ export default function SessionSettingsPage() {
                 Save Settings
               </>
             )}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

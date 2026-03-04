@@ -26,6 +26,7 @@ GEMINI_IMAGE_MODEL = "gemini-3-pro-image-preview"
 ```
 
 **Settings:**
+
 - `GEMINI_API_KEY`: Your Google Gemini API key
 - `GEMINI_TEXT_MODEL`: Model for text generation (story, scene graph, shots)
 - `GEMINI_IMAGE_MODEL`: Model for image generation
@@ -46,6 +47,7 @@ WAN_VIDEO_NODE_ID = "98"
 ```
 
 **Important:** These node IDs must match your actual ComfyUI workflow. To find node IDs:
+
 1. Open your workflow in ComfyUI
 2. Right-click on a node → "Node ID for Save"
 3. Update the corresponding ID in config.py
@@ -103,6 +105,7 @@ IMAGE_WORKFLOWS = {
 ```
 
 **Workflow Parameters:**
+
 - `workflow_path`: Path to the ComfyUI workflow JSON file
 - `text_node_id`: Node ID for positive prompt (CLIPTextEncode)
 - `neg_text_node_id`: Node ID for negative prompt (or None if not used)
@@ -112,22 +115,26 @@ IMAGE_WORKFLOWS = {
 - `description`: Human-readable description of the workflow
 
 **To switch workflows:**
+
 ```python
 # In config.py
 IMAGE_WORKFLOW = "flux"  # or "sdxl", "flux2", etc.
 ```
 
 **Adding a new workflow:**
+
 1. Create your ComfyUI workflow and save it to `workflow/image/`
 2. Find the node IDs (right-click node → "Node ID for Save")
 3. Add entry to `IMAGE_WORKFLOWS` in config.py
 4. Set `IMAGE_WORKFLOW` to your new workflow name
 
 **Modes:**
+
 - `gemini`: Use Gemini API for image generation
 - `comfyui`: Use ComfyUI with Flux/SDXL models
 
 **Aspect Ratios:**
+
 - `16:9`: Widescreen landscape (1920x1080, 1280x720, etc.)
 - `9:16`: Portrait vertical (1080x1920, 720x1280, etc.)
 - `1:1`: Square (1024x1024, 512x512, etc.)
@@ -155,6 +162,7 @@ VIDEO_RENDER_TIMEOUT = 1800  # 30 minutes
 ```
 
 **Settings:**
+
 - `DEFAULT_SHOT_LENGTH`: Length of each video clip in seconds
 - `DEFAULT_MAX_SHOTS`: Limit shots for testing (0 = unlimited)
 - `VIDEO_FPS`: Frames per second (16 recommended for Wan 2.2)
@@ -190,11 +198,8 @@ CAMERA_LORA_MAPPING = {
 # Story generation agent
 STORY_AGENT = "default"
 
-# Image prompt agent
-IMAGE_AGENT = "default"
-
-# Video motion agent
-VIDEO_AGENT = "default"
+# Shots agent (for image and motion prompts)
+SHOTS_AGENT = "default"
 
 # Narration agent
 NARRATION_AGENT = "default"
@@ -215,6 +220,7 @@ TTS_METHOD = "local"
 ```
 
 **TTS Methods:**
+
 - `local`: Edge TTS (free, no API key needed)
 - `comfyui`: ComfyUI TTS workflow
 - `elevenlabs`: ElevenLabs API (requires API key)
@@ -261,6 +267,7 @@ def calculate_image_dimensions(aspect_ratio=IMAGE_ASPECT_RATIO, resolution=IMAGE
 ```
 
 **Example:**
+
 ```python
 width, height = calculate_image_dimensions("16:9", "1280")
 # Returns: (1280, 720)
@@ -335,6 +342,7 @@ The system automatically validates dimensions and prints settings:
 ### Invalid Dimensions
 
 If you see dimension errors, ensure:
+
 1. Aspect ratio uses format "W:H" (e.g., "16:9")
 2. Resolution is a string number (e.g., "1280")
 3. Calculated dimensions are multiples of 8
@@ -346,6 +354,7 @@ If you see dimension errors, ensure:
 ```
 
 **Solution:** Set environment variable or update in config.py:
+
 ```bash
 export GEMINI_API_KEY="your_key"
 ```
@@ -357,6 +366,7 @@ export GEMINI_API_KEY="your_key"
 ```
 
 **Solution:** Ensure ComfyUI is running:
+
 ```bash
 # Check if ComfyUI is accessible
 curl http://127.0.0.1:8188/system_stats

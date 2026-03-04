@@ -16,6 +16,15 @@ import { Scene, Story, Shot } from "@/types";
 import { api } from "@/services/api";
 import { Save, RefreshCw, X } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function SessionEditPage() {
   const params = useParams();
@@ -39,8 +48,7 @@ export default function SessionEditPage() {
 
   // Selection states
   const [selectedStoryAgent, setSelectedStoryAgent] = useState("default");
-  const [selectedImageAgent, setSelectedImageAgent] = useState("default");
-  const [selectedVideoAgent, setSelectedVideoAgent] = useState("default");
+  const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
   const [maxShots, setMaxShots] = useState(0);
 
   // Initialize story when session loads
@@ -141,8 +149,7 @@ export default function SessionEditPage() {
     try {
       await replanShotsMutation.mutateAsync({
         max_shots: maxShots,
-        image_agent: selectedImageAgent,
-        video_agent: selectedVideoAgent,
+        shots_agent: selectedShotsAgent,
       });
       setShowReplanShotsModal(false);
       alert("Shot re-planning started.");
@@ -218,14 +225,14 @@ export default function SessionEditPage() {
               >
                 Settings
               </Link>
-              <button
+              <Button
                 onClick={handleSaveStory}
                 disabled={!hasChanges || updateStoryMutation.isPending}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+                className="flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
                 {updateStoryMutation.isPending ? "Saving..." : "Save Changes"}
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -356,34 +363,38 @@ export default function SessionEditPage() {
                 <label className="block text-sm font-medium mb-1">
                   Story Agent
                 </label>
-                <select
+                <Select
                   value={selectedStoryAgent}
-                  onChange={(e) => setSelectedStoryAgent(e.target.value)}
-                  className="w-full border rounded-md p-2 text-sm"
+                  onValueChange={(val) => setSelectedStoryAgent(val)}
                 >
-                  {!agents?.story.length && (
-                    <option value="default">Default Agent</option>
-                  )}
-                  {agents?.story.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Agent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!agents?.story.length && (
+                      <SelectItem value="default">Default Agent</SelectItem>
+                    )}
+                    {agents?.story.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div className="mt-8 flex justify-end gap-3">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setShowRegenStoryModal(false)}
-                className="px-4 py-2 border rounded-md hover:bg-muted text-sm"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleRegenStory}
                 disabled={regenerateStoryMutation.isPending}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
+                className="flex items-center gap-2"
               >
                 {regenerateStoryMutation.isPending ? (
                   <>
@@ -393,7 +404,7 @@ export default function SessionEditPage() {
                 ) : (
                   "Start Regeneration"
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -417,44 +428,29 @@ export default function SessionEditPage() {
             </p>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Image Agent
+                    Shots Agent
                   </label>
-                  <select
-                    value={selectedImageAgent}
-                    onChange={(e) => setSelectedImageAgent(e.target.value)}
-                    className="w-full border rounded-md p-2 text-sm"
+                  <Select
+                    value={selectedShotsAgent}
+                    onValueChange={(val) => setSelectedShotsAgent(val)}
                   >
-                    {!agents?.image.length && (
-                      <option value="default">Default</option>
-                    )}
-                    {agents?.image.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Video Agent
-                  </label>
-                  <select
-                    value={selectedVideoAgent}
-                    onChange={(e) => setSelectedVideoAgent(e.target.value)}
-                    className="w-full border rounded-md p-2 text-sm"
-                  >
-                    {!agents?.video.length && (
-                      <option value="default">Default</option>
-                    )}
-                    {agents?.video.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Agent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!agents?.shots?.length && (
+                        <SelectItem value="default">Default</SelectItem>
+                      )}
+                      {agents?.shots?.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -462,11 +458,10 @@ export default function SessionEditPage() {
                 <label className="block text-sm font-medium mb-1">
                   Max Shots (0 = Auto)
                 </label>
-                <input
+                <Input
                   type="number"
                   value={maxShots}
                   onChange={(e) => setMaxShots(parseInt(e.target.value) || 0)}
-                  className="w-full border rounded-md p-2 text-sm"
                   min="0"
                   max="100"
                 />
@@ -474,16 +469,16 @@ export default function SessionEditPage() {
             </div>
 
             <div className="mt-8 flex justify-end gap-3">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => setShowReplanShotsModal(false)}
-                className="px-4 py-2 border rounded-md hover:bg-muted text-sm"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleReplanShots}
                 disabled={replanShotsMutation.isPending}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
+                className="flex items-center gap-2"
               >
                 {replanShotsMutation.isPending ? (
                   <>
@@ -493,7 +488,7 @@ export default function SessionEditPage() {
                 ) : (
                   "Start Re-planning"
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

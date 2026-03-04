@@ -7,11 +7,13 @@ The Selfie Vlogger agents create authentic, first-person vlog-style content with
 ## Agents
 
 ### Story Agent: `selfie_vlogger`
+
 - **Location**: `agents/story/selfie_vlogger.md`
 - **Purpose**: Generates conversational, first-person vlog narratives
 - **Style**: Spontaneous, enthusiastic, authentic vlogger personality
 
 ### Image Agent: `selfie_vlogger`
+
 - **Location**: `agents/image/selfie_vlogger.md`
 - **Purpose**: Creates GoPro selfie shot descriptions with ultra wide-angle aesthetics
 - **Style**: Action camera, handheld POV, fisheye distortion
@@ -21,23 +23,26 @@ The Selfie Vlogger agents create authentic, first-person vlog-style content with
 ### Option 1: Set as Default in config.py
 
 Edit `config.py`:
+
 ```python
 # Line ~531
 STORY_AGENT = "selfie_vlogger"
 
 # Line ~534
-IMAGE_AGENT = "selfie_vlogger"
+SHOTS_AGENT = "selfie_vlogger"
 ```
 
 ### Option 2: Use On-Demand
 
 When prompted for agent selection, specify:
+
 - Story agent: `selfie_vlogger`
 - Image agent: `selfie_vlogger`
 
 ## Camera Type
 
 The new `selfie` camera type has been added to `CAMERA_LORA_MAPPING`:
+
 - Uses handheld motion LoRA for authentic vlog movement
 - Trigger keyword: "handheld POV movement"
 - Compatible with existing video generation pipeline
@@ -69,6 +74,7 @@ Try these ideas with the selfie vlogger:
 ## Output Characteristics
 
 ### Story Output
+
 - First-person POV ("I", "me", "my")
 - Conversational, spontaneous narration
 - Direct audience engagement ("you guys", "check this out")
@@ -76,6 +82,7 @@ Try these ideas with the selfie vlogger:
 - Authentic, enthusiastic tone
 
 ### Image Output
+
 - GoPro ultra wide-angle shots (16mm equivalent)
 - Fisheye lens distortion
 - Handheld POV camera movement
@@ -97,6 +104,7 @@ Each scene includes varied shot types:
 ## Technical Specs
 
 All image prompts include:
+
 - "Shot on GoPro HERO11/12/13 Black"
 - "Ultra wide-angle 16mm equivalent"
 - "Slight fisheye distortion"
@@ -107,6 +115,7 @@ All image prompts include:
 ## Customization
 
 You can modify the agent behavior by editing:
+
 - `agents/story/selfie_vlogger.md` - Adjust vlogger personality and narration style
 - `agents/image/selfie_vlogger.md` - Modify shot types and camera specifications
 - `config.py` - Change camera LoRA settings for selfie movement
@@ -139,15 +148,19 @@ python render_videos.py
 ## Troubleshooting
 
 **Issue**: Generated shots don't look like selfies
-- **Solution**: Verify `IMAGE_AGENT = "selfie_vlogger"` is set in config.py
+
+- **Solution**: Verify `SHOTS_AGENT = "selfie_vlogger"` is set in config.py
 
 **Issue**: Camera movement too static
+
 - **Solution**: Ensure camera type is set to "selfie" in shots.json or use fpv/walk camera types
 
 **Issue**: Narration sounds too formal
+
 - **Solution**: Check that `STORY_AGENT = "selfie_vlogger"` is configured correctly
 
 **Issue**: No fisheye distortion in images
+
 - **Solution**: The selfie vlogger image agent automatically includes fisheye specs - check prompts are being used correctly
 
 ## Next Steps

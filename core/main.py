@@ -158,9 +158,7 @@ def print_configuration_summary():
     # Agents
     print("\n[Agents]")
     print(f"  Story Agent: {config.STORY_AGENT}")
-    print(f"  Image Agent: {config.IMAGE_AGENT}")
-    print(f"  Video Agent: {config.VIDEO_AGENT}")
-    print(f"  Narration Agent: {config.NARRATION_AGENT}")
+    print(f"  Shots Agent: {config.SHOTS_AGENT}")
 
     print("\n" + "="*70)
 
@@ -1048,9 +1046,7 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
     # Get agent config from session
     agent_config = session_meta.get('agent_config', {})
     story_agent = agent_config.get('story', config.STORY_AGENT)
-    image_agent = agent_config.get('image', config.IMAGE_AGENT)
-    video_agent = agent_config.get('video', config.VIDEO_AGENT)
-    narration_agent = agent_config.get('narration', config.NARRATION_AGENT)
+    shots_agent = agent_config.get('shots', config.SHOTS_AGENT)
 
     # Get narration config
     narration_config = session_meta.get('narration_config', {})
@@ -1063,9 +1059,7 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
     config.IMAGE_GENERATION_MODE = image_mode
     config.IMAGES_PER_SHOT = images_per_shot
     config.STORY_AGENT = story_agent
-    config.IMAGE_AGENT = image_agent
-    config.VIDEO_AGENT = video_agent
-    config.NARRATION_AGENT = narration_agent
+    config.SHOTS_AGENT = shots_agent
     config.GENERATE_NARRATION = generate_narration
     config.TTS_METHOD = tts_method
     config.TTS_VOICE = tts_voice
@@ -1074,19 +1068,19 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
     print_configuration_summary()
 
     print(f"[INFO] Image generation: {image_mode}")
-    print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
+    print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
 
     # Execute workflow based on mode
     if auto_mode:
         _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
-                      story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
-                      narration_agent=narration_agent, generate_narration=generate_narration,
+                      story_agent=story_agent, shots_agent=shots_agent,
+                      generate_narration=generate_narration,
                       tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                       images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
     else:
         _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
-                        story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
-                        narration_agent=narration_agent, generate_narration=generate_narration,
+                        story_agent=story_agent, shots_agent=shots_agent,
+                        generate_narration=generate_narration,
                         tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                         images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
 
@@ -1245,9 +1239,7 @@ def run_new_session(session_mgr, args=None):
 
     # Get agent selection from args or config
     story_agent = getattr(args, 'story_agent', None) or config.STORY_AGENT
-    image_agent = getattr(args, 'image_agent', None) or config.IMAGE_AGENT
-    video_agent = getattr(args, 'video_agent', None) or config.VIDEO_AGENT
-    narration_agent = getattr(args, 'narration_agent', None) or config.NARRATION_AGENT
+    shots_agent = getattr(args, 'shots_agent', None) or config.SHOTS_AGENT
 
     # Get narration settings
     generate_narration = not getattr(args, 'no_narration', False) and config.GENERATE_NARRATION
@@ -1258,9 +1250,7 @@ def run_new_session(session_mgr, args=None):
     # Store agent config in session
     session_meta['agent_config'] = {
         'story': story_agent,
-        'image': image_agent,
-        'video': video_agent,
-        'narration': narration_agent
+        'shots': shots_agent
     }
 
     # Store narration config in session
@@ -1274,7 +1264,7 @@ def run_new_session(session_mgr, args=None):
     session_mgr._save_meta(session_id, session_meta)
 
     print(f"[INFO] Created session: {session_id}")
-    print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
+    print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
     print(f"[INFO] Image generation: {images_per_shot} image(s) per shot")
     if generate_narration:
         print(f"[INFO] Narration enabled - TTS: {tts_method}, Voice: {tts_voice}")
@@ -1291,22 +1281,22 @@ def run_new_session(session_mgr, args=None):
     if auto_mode:
         # Original auto mode - execute all remaining steps
         _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
-                      story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
-                      narration_agent=narration_agent, generate_narration=generate_narration,
+                      story_agent=story_agent, shots_agent=shots_agent,
+                      generate_narration=generate_narration,
                       tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                       images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
     else:
         # New manual mode - step by step with prompts
         _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
-                        story_agent=story_agent, image_agent=image_agent, video_agent=video_agent,
-                        narration_agent=narration_agent, generate_narration=generate_narration,
+                        story_agent=story_agent, shots_agent=shots_agent,
+                        generate_narration=generate_narration,
                         tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                         images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
 
 
 def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
-                   story_agent=None, image_agent=None, video_agent=None,
-                   narration_agent=None, generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
+                   story_agent=None, shots_agent=None,
+                   generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
                    images_per_shot=1, shots_per_scene=None):
     """Execute all remaining steps automatically"""
     logger.info(f"Running auto mode for session: {session_id}")
@@ -1316,9 +1306,7 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
     # Get agent names from session metadata or args
     agent_config = session_meta.get('agent_config', {})
     story_agent = story_agent or agent_config.get('story', config.STORY_AGENT)
-    image_agent = image_agent or agent_config.get('image', config.IMAGE_AGENT)
-    video_agent = video_agent or agent_config.get('video', config.VIDEO_AGENT)
-    narration_agent = narration_agent or agent_config.get('narration', config.NARRATION_AGENT)
+    shots_agent = shots_agent or agent_config.get('shots', config.SHOTS_AGENT)
 
     # Get narration config
     narration_config = session_meta.get('narration_config', {})
@@ -1331,7 +1319,7 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
     image_config = session_meta.get('image_config', {})
     images_per_shot = images_per_shot or image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
 
-    print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
+    print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
     print(f"[INFO] Generating {images_per_shot} image(s) per shot")
 
     story_json = None
@@ -1381,7 +1369,7 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
     if not steps.get('shots', False):
         logger.info("STEP 4: Shot Planning")
         print("\nSTEP 4: Shot Planning")
-        shots = plan_shots(graph, max_shots=max_shots, image_agent=image_agent, video_agent=video_agent, shots_per_scene=shots_per_scene)
+        shots = plan_shots(graph, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
         # Enhance motion prompts with trigger keywords for LoRA activation
         shots = enhance_motion_prompts_with_triggers(shots)
         session_mgr.save_shots(session_id, shots)
@@ -1544,7 +1532,6 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
                 session_id=session_id,
                 story_json=story_json,
                 total_duration=total_duration,
-                agent_name=narration_agent,
                 tts_method=tts_method,
                 tts_workflow_path=tts_workflow,
                 voice=tts_voice
@@ -1567,8 +1554,8 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
 
 
 def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
-                     story_agent=None, image_agent=None, video_agent=None,
-                     narration_agent=None, generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
+                     story_agent=None, shots_agent=None,
+                     generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
                      images_per_shot=1, shots_per_scene=None):
     """Execute workflow step by step with user prompts"""
     shots = None
@@ -1578,9 +1565,7 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
     # Get agent names from session metadata or args
     agent_config = session_meta.get('agent_config', {})
     story_agent = story_agent or agent_config.get('story', config.STORY_AGENT)
-    image_agent = image_agent or agent_config.get('image', config.IMAGE_AGENT)
-    video_agent = video_agent or agent_config.get('video', config.VIDEO_AGENT)
-    narration_agent = narration_agent or agent_config.get('narration', config.NARRATION_AGENT)
+    shots_agent = shots_agent or agent_config.get('shots', config.SHOTS_AGENT)
 
     # Get narration config
     narration_config = session_meta.get('narration_config', {})
@@ -1593,7 +1578,7 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
     image_config = session_meta.get('image_config', {})
     images_per_shot = images_per_shot or image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
 
-    print(f"[INFO] Using agents - Story: {story_agent}, Image: {image_agent}, Video: {video_agent}, Narration: {narration_agent}")
+    print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
     print(f"[INFO] Generating {images_per_shot} image(s) per shot")
 
     # Calculate target video length for story generation
@@ -1642,7 +1627,7 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
         elif current_step == 4:  # Shot Planning
             if not session_meta.get('steps', {}).get('shots', False):
                 print("\nSTEP 4: Shot Planning")
-                shots = plan_shots(graph, max_shots=max_shots, image_agent=image_agent, video_agent=video_agent, shots_per_scene=shots_per_scene)
+                shots = plan_shots(graph, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
                 # Enhance motion prompts with trigger keywords for LoRA activation
                 shots = enhance_motion_prompts_with_triggers(shots)
                 session_mgr.save_shots(session_id, shots)
@@ -1700,7 +1685,6 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
                         session_id=session_id,
                         story_json=story_json,
                         total_duration=total_duration,
-                        agent_name=narration_agent,
                         use_comfyui=(tts_method == 'comfyui'),
                         tts_workflow_path=tts_workflow,
                         voice=tts_voice
@@ -2154,19 +2138,19 @@ Examples:
   python core/main.py --idea "Test" --max-shots 2 --images-per-shot 4 --no-narration
 
   # Use specific agents for different steps
-  python core/main.py --idea "Dramatic space epic" --story-agent dramatic --image-agent artistic --video-agent cinematic
+  python core/main.py --idea "Dramatic space epic" --story-agent dramatic --shots-agent artistic
 
   # Generate video with narration using ElevenLabs
-  python core/main.py --idea "Nature documentary" --story-agent documentary --narration-agent professional --tts-method elevenlabs --tts-voice "Rachel"
+  python core/main.py --idea "Nature documentary" --story-agent documentary --tts-method elevenlabs --tts-voice "Rachel"
 
   # List available ElevenLabs voices
   python core/main.py --list-voices
 
   # Generate narration with edge-tts (free)
-  python core/main.py --idea "Tutorial video" --narration-agent default --tts-method local --tts-voice "en-US-AriaNeural"
+  python core/main.py --idea "Tutorial video" --tts-method local --tts-voice "en-US-AriaNeural"
 
   # Use ComfyUI TTS workflow for narration
-  python core/main.py --idea "Explainer video" --narration-agent professional --tts-method comfyui --tts-workflow workflow/tts_workflow.json
+  python core/main.py --idea "Explainer video" --tts-method comfyui --tts-workflow workflow/tts_workflow.json
 
   # List all available agents
   python core/main.py --list-agents
@@ -2226,9 +2210,7 @@ Workflow Steps:
 
 Available Agents:
   Story: default, dramatic, documentary
-  Image: default, artistic
-  Video: default, cinematic
-  Narration: default, documentary, professional, storytelling
+  Shots: default, artistic
 
 TTS Methods:
   - local: edge-tts (free, requires: pip install edge-tts)
@@ -2380,24 +2362,10 @@ Testing Options:
     )
 
     parser.add_argument(
-        '--image-agent',
+        '--shots-agent',
         type=str,
         default=None,
-        help='Image prompt agent to use (default: artistic, etc.)'
-    )
-
-    parser.add_argument(
-        '--video-agent',
-        type=str,
-        default=None,
-        help='Video motion agent to use (default: cinematic, etc.)'
-    )
-
-    parser.add_argument(
-        '--narration-agent',
-        type=str,
-        default=None,
-        help='Narration agent to use (default: professional, storytelling, documentary, etc.)'
+        help='Shots prompt agent to use (default: default, artistic, etc.)'
     )
 
     parser.add_argument(
@@ -2644,9 +2612,7 @@ async def run_auto_mode(session_id: str, idea: str, resume_from: str = None,
             self.total_length = None
             self.images_per_shot = None
             self.story_agent = None
-            self.image_agent = None
-            self.video_agent = None
-            self.narration_agent = None
+            self.shots_agent = None
             self.no_narration = False
             self.tts_method = None
             self.tts_workflow = None
@@ -2779,9 +2745,7 @@ async def run_auto_mode(session_id: str, idea: str, resume_from: str = None,
             max_shots=args.max_shots if args.max_shots is not None else config.calculate_max_shots_from_config(),
             shot_length=args.shot_length or config.DEFAULT_SHOT_LENGTH,
             story_agent=args.story_agent,
-            image_agent=args.image_agent,
-            video_agent=args.video_agent,
-            narration_agent=args.narration_agent,
+            shots_agent=args.shots_agent,
             generate_narration=not args.no_narration,
             tts_method=args.tts_method,
             tts_workflow=args.tts_workflow,

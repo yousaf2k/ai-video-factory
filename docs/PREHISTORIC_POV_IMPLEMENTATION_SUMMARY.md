@@ -7,11 +7,13 @@ All components of the Prehistoric POV Dinosaur Agents have been successfully imp
 ## Files Created
 
 ### 1. Story Agent
+
 **File**: `agents/story/prehistoric_pov.md` (~301 lines, 17.9 KB)
 
 **Purpose**: Generates first-person POV narratives with hands-visible storytelling
 
 **Key Features**:
+
 - First-person immersion guidelines
 - Hands-visible storytelling requirements
 - Diegetic camera work (character filming)
@@ -22,11 +24,13 @@ All components of the Prehistoric POV Dinosaur Agents have been successfully imp
 - Accurate time periods (Triassic, Jurassic, Cretaceous)
 
 ### 2. Image Agent
+
 **File**: `agents/image/prehistoric_pov.md` (~276 lines, 25.1 KB)
 
 **Purpose**: Generates POV image prompts with hands visible in every shot
 
 **Key Features**:
+
 - 8 POV-specific shot types:
   1. POV Establishing Shots
   2. Through-the-Hands Shots
@@ -41,11 +45,13 @@ All components of the Prehistoric POV Dinosaur Agents have been successfully imp
 - Example prompts with templates
 
 ### 3. User Guide
+
 **File**: `docs/PREHISTORIC_POV_GUIDE.md` (~617 lines, 22.0 KB)
 
 **Purpose**: Comprehensive documentation for using POV agents
 
 **Sections**:
+
 - Overview and key features
 - POV vs. Traditional comparison
 - When to use each agent type
@@ -61,11 +67,13 @@ All components of the Prehistoric POV Dinosaur Agents have been successfully imp
 - Troubleshooting
 
 ### 4. Quick Start Guide
+
 **File**: `docs/PREHISTORIC_POV_QUICKSTART.md` (~120 lines)
 
 **Purpose**: Fast reference for getting started with POV agents
 
 **Contents**:
+
 - What are POV agents
 - Quick start commands
 - Key features overview
@@ -79,41 +87,45 @@ All components of the Prehistoric POV Dinosaur Agents have been successfully imp
 **File**: `config.py` (lines 575-579)
 
 **Changes**:
+
 ```python
 # Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary, prehistoric_dinosaur, prehistoric_pov)
 STORY_AGENT = "prehistoric_dinosaur"
 
 # Image prompt agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
-IMAGE_AGENT = "prehistoric_dinosaur"
+SHOTS_AGENT = "prehistoric_dinosaur"
 ```
 
 ## Key Differences: POV vs. Traditional
 
-| Aspect | Traditional (`prehistoric_dinosaur`) | POV (`prehistoric_pov`) |
-|--------|-------------------------------------|-------------------------|
-| **Perspective** | Third-person observer | First-person participant |
-| **Camera** | Cinematic, invisible | Diegetic, character-held |
-| **Hands** | Never visible | Always visible in frame |
-| **Tone** | Scientific wonder | Personal survival + wonder |
-| **Narration** | "These creatures..." | "I see...", "My hands..." |
-| **Stakes** | Educational | Life-threatening |
-| **Emotion** | Awe, majesty | Terror, awe, fear, wonder |
-| **Equipment** | Not mentioned | Camera gear visible |
-| **Camera Shake** | Cinematic stability | Handheld natural movement |
+| Aspect           | Traditional (`prehistoric_dinosaur`) | POV (`prehistoric_pov`)    |
+| ---------------- | ------------------------------------ | -------------------------- |
+| **Perspective**  | Third-person observer                | First-person participant   |
+| **Camera**       | Cinematic, invisible                 | Diegetic, character-held   |
+| **Hands**        | Never visible                        | Always visible in frame    |
+| **Tone**         | Scientific wonder                    | Personal survival + wonder |
+| **Narration**    | "These creatures..."                 | "I see...", "My hands..."  |
+| **Stakes**       | Educational                          | Life-threatening           |
+| **Emotion**      | Awe, majesty                         | Terror, awe, fear, wonder  |
+| **Equipment**    | Not mentioned                        | Camera gear visible        |
+| **Camera Shake** | Cinematic stability                  | Handheld natural movement  |
 
 ## Usage Examples
 
 ### Generate POV Story
+
 ```bash
 python core/main.py --story-agent prehistoric_pov --idea "Time traveler encounters T-Rex in Cretaceous forest"
 ```
 
 ### Generate POV Images
+
 ```bash
 python core/main.py --image-agent prehistoric_pov --resume [session_id]
 ```
 
 ### Generate Full POV Video
+
 ```bash
 python core/main.py \
   --story-agent prehistoric_pov \
@@ -168,24 +180,28 @@ Despite POV format, cinematic quality is preserved:
 ## Testing Recommended
 
 ### Test 1: Story Generation
+
 ```bash
 python core/main.py --story-agent prehistoric_pov --idea "T-Rex encounter"
 # Check: First-person narration, hands mentioned, POV perspective
 ```
 
 ### Test 2: Image Generation
+
 ```bash
 python core/main.py --image-agent prehistoric_pov --resume [session_id]
 # Check: "hands visible" in prompts, "First person POV", Sony Venice 2
 ```
 
 ### Test 3: Compare POV vs Traditional
+
 ```bash
 # Generate same idea with both agents
 # Compare output: POV should have hands, first-person language
 ```
 
 ### Test 4: Full Video
+
 ```bash
 python core/main.py \
   --story-agent prehistoric_pov \
@@ -197,13 +213,13 @@ python core/main.py \
 
 ## File Sizes
 
-| File | Lines | Size |
-|------|-------|------|
-| `agents/story/prehistoric_pov.md` | 301 | 17.9 KB |
-| `agents/image/prehistoric_pov.md` | 276 | 25.1 KB |
-| `docs/PREHISTORIC_POV_GUIDE.md` | 617 | 22.0 KB |
-| `docs/PREHISTORIC_POV_QUICKSTART.md` | ~120 | ~4 KB |
-| **Total** | **~1,314** | **~69 KB** |
+| File                                 | Lines      | Size       |
+| ------------------------------------ | ---------- | ---------- |
+| `agents/story/prehistoric_pov.md`    | 301        | 17.9 KB    |
+| `agents/image/prehistoric_pov.md`    | 276        | 25.1 KB    |
+| `docs/PREHISTORIC_POV_GUIDE.md`      | 617        | 22.0 KB    |
+| `docs/PREHISTORIC_POV_QUICKSTART.md` | ~120       | ~4 KB      |
+| **Total**                            | **~1,314** | **~69 KB** |
 
 ## Next Steps
 
@@ -218,12 +234,14 @@ The implementation is complete and ready to use. Recommended workflow:
 ## Platform Optimization
 
 **YouTube**: POV content performs exceptionally well due to:
+
 - High engagement (immersive "you are there")
 - Shareability (emotional connection)
 - Watch time (personal narratives retain viewers)
 - Algorithm promotion (high-retention immersive content)
 
 **Netflix**: Quality standards maintained:
+
 - Sony Venice 2 cinematography
 - Arri Signature Prime lenses
 - 8K resolution, 4K streaming
@@ -241,6 +259,6 @@ The Prehistoric POV Dinosaur Agents are fully implemented and ready for use. The
 **Status**: ✅ COMPLETE
 
 **Generated with AIVideoFactory**
-*Sony Venice 2 + Arri Signature Prime + 8K + Netflix Quality*
-*Hands Visible. Diegetic Camera. Immersive POV.*
-*Welcome to the past. Try not to become a fossil.* 🦖
+_Sony Venice 2 + Arri Signature Prime + 8K + Netflix Quality_
+_Hands Visible. Diegetic Camera. Immersive POV._
+_Welcome to the past. Try not to become a fossil._ 🦖

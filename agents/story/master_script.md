@@ -19,6 +19,10 @@ You must output a single JSON object containing the title, an overall style/them
 ```json
 {
   "title": "Video title here",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "ultra cinematic documentary",
   "master_script": "This is the full master script. It contains the exact wording that will be read as voice-over throughout the entire video. It tells a complete, compelling story from beginning to end. It must be roughly {MASTER_WORD_COUNT} words long."
 }

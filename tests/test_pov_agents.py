@@ -17,7 +17,7 @@ def check_agent_files():
 
     agents = {
         'Story Agent': 'agents/story/prehistoric_pov.md',
-        'Image Agent': 'agents/image/prehistoric_pov.md'
+        'Shots Agent': 'agents/shots/prehistoric_pov.md'
     }
 
     all_passed = True
@@ -101,7 +101,7 @@ def check_config():
 
     checks = {
         'prehistoric_pov in STORY_AGENT comment': 'prehistoric_pov' in config_content and 'STORY_AGENT' in config_content,
-        'prehistoric_pov in IMAGE_AGENT comment': 'prehistoric_pov' in config_content and 'IMAGE_AGENT' in config_content,
+        'prehistoric_pov in SHOTS_AGENT comment': 'prehistoric_pov' in config_content and 'SHOTS_AGENT' in config_content,
     }
 
     all_passed = True
@@ -127,10 +127,10 @@ def print_usage_examples():
          "python core/main.py --story-agent prehistoric_pov --idea \"Time traveler encounters T-Rex\""),
 
         ("Generate POV Images",
-         "python core/main.py --image-agent prehistoric_pov --resume [session_id]"),
+         "python core/main.py --shots-agent prehistoric_pov --resume [session_id]"),
 
         ("Generate Full POV Video",
-         "python core/main.py --story-agent prehistoric_pov --image-agent prehistoric_pov --idea \"Triceratops herd encounter\""),
+         "python core/main.py --story-agent prehistoric_pov --shots-agent prehistoric_pov --idea \"Triceratops herd encounter\""),
     ]
 
     for title, command in examples:
@@ -153,7 +153,7 @@ def print_expected_output():
             "Diegetic camera work (REC button, battery, viewfinder)",
             "Personal survival stakes (danger, terror + wonder)",
         ]),
-        ("Image Agent", [
+        ("Shots Agent", [
             "First person POV in every prompt",
             "Hands visible in frame (holding camera, reaching out)",
             "Sony Venice 2 camera body mentioned",
@@ -204,10 +204,10 @@ def main():
         print("     python core/main.py --story-agent prehistoric_pov --idea \"T-Rex encounter\"")
         print()
         print("  2. Test image generation:")
-        print("     python core/main.py --image-agent prehistoric_pov --resume [session_id]")
+        print("     python core/main.py --shots-agent prehistoric_pov --resume [session_id]")
         print()
         print("  3. Generate full video:")
-        print("     python core/main.py --story-agent prehistoric_pov --image-agent prehistoric_pov --idea \"Dinosaur survival\" --render")
+        print("     python core/main.py --story-agent prehistoric_pov --shots-agent prehistoric_pov --idea \"Dinosaur survival\" --render")
         print()
         return 0
     else:

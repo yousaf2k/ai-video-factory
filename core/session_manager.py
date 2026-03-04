@@ -61,15 +61,14 @@ class SessionManager:
             return latest['meta']
         return None
 
-    def create_session(self, idea, session_id=None, story_agent="default", image_agent="default", video_agent="default", total_duration=None):
+    def create_session(self, idea, session_id=None, story_agent="default", shots_agent="default", total_duration=None):
         """Create a new session
 
         Args:
             idea: The video idea/prompt
             session_id: Optional session ID. If not provided, generates timestamp-based ID
             story_agent: Story generation agent
-            image_agent: Image prompt agent
-            video_agent: Video motion agent
+            shots_agent: Shots prompt agent
             total_duration: Target video length in seconds
         """
         if session_id is None:
@@ -90,8 +89,7 @@ class SessionManager:
             'timestamp': timestamp,
             'idea': idea,
             'story_agent': story_agent,
-            'image_agent': image_agent,
-            'video_agent': video_agent,
+            'shots_agent': shots_agent,
             'total_duration': total_duration,
             'started_at': datetime.now().isoformat(),
             'completed': False,

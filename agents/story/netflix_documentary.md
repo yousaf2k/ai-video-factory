@@ -26,6 +26,10 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ```json
 {
   "title": "Documentary title here",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "Netflix dramatic documentary",
   "scenes": [
     {

@@ -72,6 +72,14 @@ class ApiClient {
     return response.data;
   }
 
+  async generateThumbnail(sessionId: string, aspectRatio: string = '16:9', force: boolean = false): Promise<string> {
+    const response = await this.client.post<{ status: string, thumbnail_url: string }>(
+      `/api/sessions/${sessionId}/thumbnail`,
+      { aspect_ratio: aspectRatio, force }
+    );
+    return response.data.thumbnail_url;
+  }
+
   // Story
   async getStory(sessionId: string): Promise<Story> {
     const session = await this.getSession(sessionId);
@@ -187,8 +195,7 @@ class ApiClient {
     sessionId: string,
     data: {
       max_shots?: number;
-      image_agent: string;
-      video_agent: string;
+      shots_agent: string;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/sessions/${sessionId}/shots/replan`, data);

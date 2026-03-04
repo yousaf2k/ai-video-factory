@@ -23,13 +23,13 @@ export interface Session {
   timestamp: string;
   idea: string;
   story_agent?: string;
-  image_agent?: string;
-  video_agent?: string;
+  shots_agent?: string;
   started_at: string;
   completed: boolean;
   completed_at?: string;
   steps: SessionStep;
   stats: SessionStats;
+  thumbnail_url?: string;
   story?: Story;
   shots?: Shot[];
 }
@@ -43,11 +43,16 @@ export interface SessionListItem {
   total_shots: number;
   images_generated: number;
   videos_rendered: number;
+  thumbnail_url?: string;
   story?: Story;
 }
 
 export interface Story {
   title: string;
+  description?: string;
+  tags?: string[];
+  thumbnail_prompt_16_9?: string;
+  thumbnail_prompt_9_16?: string;
   style: string;
   master_script?: string;
   total_duration?: number;
@@ -81,8 +86,7 @@ export interface CreateSessionRequest {
   idea: string;
   session_id?: string;
   story_agent?: string;
-  image_agent?: string;
-  video_agent?: string;
+  shots_agent?: string;
   total_duration?: number;
   prompts_file?: string;
 }
@@ -91,8 +95,7 @@ export interface UpdateSessionRequest {
   idea?: string;
   completed?: boolean;
   story_agent?: string;
-  image_agent?: string;
-  video_agent?: string;
+  shots_agent?: string;
 }
 
 export interface GlobalConfig {
@@ -100,8 +103,7 @@ export interface GlobalConfig {
   image_generation_mode: string;
   video_generation_mode: string;
   default_story_agent: string;
-  default_image_agent: string;
-  default_video_agent: string;
+  default_shots_agent: string;
   comfy_url: string;
   target_video_length?: number;
   default_max_shots?: number;
@@ -156,7 +158,6 @@ export interface Agent {
 
 export interface AgentsByType {
   story: Agent[];
-  image: Agent[];
-  video: Agent[];
+  shots: Agent[];
   narration: Agent[];
 }

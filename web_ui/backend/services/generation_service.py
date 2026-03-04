@@ -311,8 +311,7 @@ class GenerationService:
         self,
         session_id: str,
         max_shots: Optional[int] = None,
-        image_agent: str = "default",
-        video_agent: str = "default"
+        shots_agent: str = "default"
     ) -> List[Dict[str, Any]]:
         """
         Re-plan shots from story
@@ -320,8 +319,7 @@ class GenerationService:
         Args:
             session_id: Session identifier
             max_shots: Maximum shots to generate
-            image_agent: Image prompt agent to use
-            video_agent: Video motion agent to use
+            shots_agent: Shots agent to use
 
         Returns:
             List of shot dictionaries
@@ -345,8 +343,7 @@ class GenerationService:
                 plan_shots,
                 story_json,
                 max_shots=max_shots,
-                image_agent=image_agent,
-                video_agent=video_agent
+                shots_agent=shots_agent
             )
 
             # Save shots
@@ -357,6 +354,78 @@ class GenerationService:
 
         except Exception as e:
             logger.error(f"Error re-planning shots: {e}")
+            raise
+
+    async def generate_thumbnail(
+        self, session_id: str, aspect_ratio: str = "16:9", force: bool = False
+    ) -> str:
+        """Generate a thumbnail image for the session"""
+        try:
+            logger.info(f"Generating {aspect_ratio} thumbnail for session {session_id}")
+            
+            # Load session to get story and thumbnail prompt
+            session_meta = self.session_manager.get_session(session_id)
+            if not session_meta:
+                raise ValueError(f"Session {session_id} not found")
+                
+            story_path = os.path.join(self.session_manager.get_session_dir(session_id), "story.json")
+            if not os.path.exists(story_path):
+                raise ValueError(f"Story not found for session {session_id}")
+                
+            with open(story_path, 'r', encoding='utf-8') as f:
+                import json
+                story = json.load(f)
+                
+            prompt = story.get(f'thumbnail_prompt_{aspect_ratio.replace(":", "_")}')
+            if not prompt:
+                prompt = story.get('title', session_meta.get('idea', 'A cinematic thumbnail'))
+                
+            images_dir = self.session_manager.get_images_dir(session_id)
+            os.makedirs(images_dir, exist_ok=True)
+            
+            filename = f"thumbnail_{aspect_ratio.replace(':', '_')}.png"
+            image_path = os.path.join(images_dir, filename)
+            
+            if not force and os.path.exists(image_path):
+                if aspect_ratio == "16:9" and "thumbnail_url" not in session_meta:
+                    session_meta['thumbnail_url'] = f"/api/sessions/{session_id}/images/{filename}"
+                    self.session_manager._save_meta(session_id, session_meta)
+                return image_path
+                
+            # Progress callback
+            def on_step_progress(current, total):
+                progress = int((current / total) * 100) if total > 0 else 0
+                manager.broadcast_sync(session_id, {
+                    "type": "progress",
+                    "session_id": session_id,
+                    "step": "thumbnail",
+                    "progress": progress
+                })
+
+            from core.image_generator import generate_image
+            
+            result_path = await asyncio.to_thread(
+                generate_image,
+                prompt=prompt,
+                output_path=image_path,
+                aspect_ratio=aspect_ratio,
+                step_progress_callback=on_step_progress
+            )
+            
+            if aspect_ratio == "16:9":
+                session_meta['thumbnail_url'] = f"/api/sessions/{session_id}/images/{filename}"
+                self.session_manager._save_meta(session_id, session_meta)
+
+            manager.broadcast_sync(session_id, {
+                "type": "completed",
+                "session_id": session_id,
+                "step": "thumbnail"
+            })
+            
+            return result_path
+            
+        except Exception as e:
+            logger.error(f"Error generating thumbnail for session {session_id}: {e}")
             raise
 
     def _get_next_image_version(self, images_dir: str, shot_index: int) -> int:

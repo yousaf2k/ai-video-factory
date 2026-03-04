@@ -78,15 +78,15 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
 
         # If it was already in API format, we still need to inject dimensions into specific nodes
         if "nodes" not in workflow:
-            # Detect Flux v1 workflows and clamp width to 1536
+            # Detect Flux v1 workflows and clamp width to 1440
             node_classes = {nd.get("class_type", "") for nd in api_format.values()}
             is_flux_v1 = ("ModelSamplingFlux" in node_classes or "EmptySD3LatentImage" in node_classes) \
                          and "EmptyFlux2LatentImage" not in node_classes \
                          and "Flux2Scheduler" not in node_classes
-            if is_flux_v1 and width > 1536:
-                logger.info(f"Flux v1 detected: clamping width from {width} to 1536")
-                height = int(height * (1536 / width))
-                width = 1536
+            if is_flux_v1 and width > 1440:
+                logger.info(f"Flux v1 detected: clamping width from {width} to 1440")
+                height = int(height * (1440 / width))
+                width = 1440
 
             for node_id, node_data in api_format.items():
                 class_type = node_data.get("class_type", "")

@@ -94,8 +94,7 @@ class CreateSessionRequest(BaseModel):
     idea: str = Field(..., description="Video idea/prompt", min_length=1)
     session_id: Optional[str] = Field(default=None, description="Optional custom session ID")
     story_agent: str = Field(default="default", description="Story generation agent")
-    image_agent: str = Field(default="default", description="Image prompt agent")
-    video_agent: str = Field(default="default", description="Video motion agent")
+    shots_agent: str = Field(default="default", description="Shots prompt agent")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
     prompts_file: Optional[str] = Field(default=None, description="Path to a custom prompts file")
 
@@ -105,8 +104,7 @@ class UpdateSessionRequest(BaseModel):
     idea: Optional[str] = None
     completed: Optional[bool] = None
     story_agent: Optional[str] = None
-    image_agent: Optional[str] = None
-    video_agent: Optional[str] = None
+    shots_agent: Optional[str] = None
 
 
 class DuplicateSessionRequest(BaseModel):

@@ -18,6 +18,10 @@ class Scene(BaseModel):
 class Story(BaseModel):
     """Story model"""
     title: str
+    description: Optional[str] = None
+    tags: Optional[List[str]] = Field(default_factory=list)
+    thumbnail_prompt_16_9: Optional[str] = None
+    thumbnail_prompt_9_16: Optional[str] = None
     style: str
     total_duration: Optional[int] = None
     scenes: List[Scene]
