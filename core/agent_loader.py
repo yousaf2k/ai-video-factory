@@ -32,9 +32,7 @@ logger = setup_agent_logger(__name__)
 # Agent types
 AGENT_TYPES = {
     'story': 'Story generation agent',
-    'narration': 'Narration script agent',
-    'image': 'Image prompt engineering agent',
-    'video': 'Video motion/camera agent'
+    'shots': 'Shots prompt engineering agent',
 }
 
 
