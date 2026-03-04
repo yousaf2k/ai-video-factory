@@ -412,11 +412,12 @@ def _download_image_fallback(page, image_src: str, output_path: str) -> Optional
 
 
 
+
 def _remove_watermark(image_path: str):
     """
     High-precision watermark restoration using reverse alpha-blending.
-    Inverts the transparency of the Gemini logo to recover original pixels.
-    This method is mathematically accurate and avoids blurring nearby objects.
+    Updated v0.2.5: Adjusted for JPG compression noise (Logo Color=252.0)
+    and enhanced dilation of the cleanup mask to eliminate edge residues.
     """
     try:
         import cv2
@@ -427,19 +428,17 @@ def _remove_watermark(image_path: str):
             return
 
         h, w = img.shape[:2]
-        # Search in the bottom-right quadrant for better performance and precision
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         quad = gray[h//2:, w//2:]
         
-        # Load calibrated masks
         m48 = _get_mask(_MASK_48_B64)
         m96 = _get_mask(_MASK_96_B64)
         
         best_match = None
-        # Multi-scale detection to handle screenshots or zoomed images (0.4x to 1.6x)
-        # We search both 48px and 96px templates
+        # Robust multi-scale detection
         for mask in [m48, m96]:
-            for s in np.linspace(0.4, 1.6, 16):
+            # Slightly denser scale search for sub-pixel accuracy
+            for s in np.linspace(0.4, 1.6, 20):
                 mh, mw = mask.shape[:2]
                 nh, nw = int(mh * s), int(mw * s)
                 if nh < 10 or nh > quad.shape[0] or nw > quad.shape[1]:
@@ -457,43 +456,44 @@ def _remove_watermark(image_path: str):
                         'mask': resized_mask
                     }
 
-        # Detection threshold: 0.35 is safe due to NCC stability and mask calibration
         if not best_match or best_match['val'] < 0.35:
-            logger.info(f"No Gemini watermark detected in {image_path} (confidence={best_match['val'] if best_match else 0:.3f})")
+            logger.info(f"No watermark detected in {image_path} (confidence={best_match['val'] if best_match else 0:.3f})")
             return
 
-        # Coordinates
         mx, my = best_match['loc']
         mh, mw = best_match['mask'].shape[:2]
         gx, gy = mx + (w // 2), my + (h // 2)
-        
-        logger.info(f"Watermark detected at ({gx},{gy}) scale={best_match['scale']:.2f} confidence={best_match['val']:.3f}. Restoring...")
         
         # Region of Interest
         roi = img[gy:gy+mh, gx:gx+mw].astype(np.float32)
         alpha = best_match['mask'].astype(np.float32) / 255.0
         alpha_3ch = cv2.merge([alpha, alpha, alpha])
         
-        # Reverse Alpha Compositing Formula:
-        # C_bg = (C_out - Alpha * C_logo) / (1 - Alpha)
-        # Gemini logo is calibrated to assume C_logo=255 (White).
+        # REFINED: Assume logo color is 252.0 to handle JPEG compression headroom
+        LOGO_COLOR = 252.0
         denom = 1.0 - alpha_3ch
-        # Avoid division by zero, though masks are calibrated
-        denom = np.maximum(denom, 0.01)
+        denom = np.maximum(denom, 0.05) # Increased epsilon for stability
         
-        restored = (roi - (alpha_3ch * 255.0)) / denom
+        restored = (roi - (alpha_3ch * LOGO_COLOR)) / denom
         restored = np.clip(restored, 0, 255).astype(np.uint8)
         
-        # Clean up any residual aliasing with light inpainting (v0.2.3 strategy)
+        # REFINED: Dilated cleanup mask to catch aliasing halos/residues
+        # We dilate by 3 sectors
         cleanup_mask = (best_match['mask'] > 2).astype(np.uint8) * 255
-        final_roi = cv2.inpaint(restored, cleanup_mask, inpaintRadius=1, flags=cv2.INPAINT_TELEA)
+        kernel = np.ones((3, 3), np.uint8)
+        cleanup_mask = cv2.dilate(cleanup_mask, kernel, iterations=1)
+        
+        # Use a slightly larger inpaint radius (2-3) to bridge edges
+        final_roi = cv2.inpaint(restored, cleanup_mask, inpaintRadius=2, flags=cv2.INPAINT_TELEA)
         
         img[gy:gy+mh, gx:gx+mw] = final_roi
         cv2.imwrite(image_path, img)
-        logger.info(f"Watermark successfully restored in {image_path}")
+        logger.info(f"Precise restoration success: {image_path} @ ({gx},{gy}) scale={best_match['scale']:.2f} conf={best_match['val']:.3f} (JPG refined)")
 
     except Exception as e:
         logger.error(f"Error in precise watermark restoration: {e}")
+
+
 def run(prompt: str, output_path: str, aspect_ratio: str = None) -> Optional[str]:
     """Main entry point — run Playwright and generate an image."""
     from playwright.sync_api import sync_playwright
