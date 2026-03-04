@@ -50,9 +50,7 @@ async def get_agents():
         # Group by type
         agents_by_type = {
             "story": [],
-            "image": [],
-            "video": [],
-            "narration": []
+            "shots": [],
         }
 
         for agent_info in all_agents:
