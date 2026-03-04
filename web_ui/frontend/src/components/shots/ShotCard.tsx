@@ -1,7 +1,7 @@
 /**
  * ShotCard component - Individual shot with editing and regeneration
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Edit3,
   RotateCw,
@@ -18,6 +18,8 @@ import {
   Wand2,
   Upload,
   Maximize2,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Shot } from "@/types";
 import {
@@ -84,7 +86,6 @@ export function ShotCard({
   const [showRegenModal, setShowRegenModal] = useState<
     "image" | "video" | null
   >(null);
-  const [showFullscreenImage, setShowFullscreenImage] = useState(false);
   const [regenForce, setRegenForce] = useState(true);
   const [regenImageMode, setRegenImageMode] = useState("comfyui");
   const [regenImageWorkflow, setRegenImageWorkflow] = useState("flux2");
@@ -107,7 +108,38 @@ export function ShotCard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [showGalleryModal, setShowGalleryModal] = useState(false);
-  const [fullscreenVariationUrl, setFullscreenVariationUrl] = useState<string | null>(null);
+  // fullscreenVariationIndex: index into shot.image_paths; null = closed
+  const [fullscreenVariationIndex, setFullscreenVariationIndex] = useState<number | null>(null);
+
+  // Derived data for the fullscreen carousel
+  const fsImages = shot.image_paths ?? [];
+  const fsTotal = fsImages.length;
+
+  const openFullscreen = useCallback((idx: number) => {
+    setFullscreenVariationIndex(Math.max(0, Math.min(idx, fsTotal - 1)));
+  }, [fsTotal]);
+
+  const closeFullscreen = useCallback(() => setFullscreenVariationIndex(null), []);
+
+  const fsNext = useCallback(() => {
+    setFullscreenVariationIndex((i) => i === null ? null : (i + 1) % fsTotal);
+  }, [fsTotal]);
+
+  const fsPrev = useCallback(() => {
+    setFullscreenVariationIndex((i) => i === null ? null : (i - 1 + fsTotal) % fsTotal);
+  }, [fsTotal]);
+
+  // Keyboard navigation for fullscreen
+  useEffect(() => {
+    if (fullscreenVariationIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") { e.preventDefault(); fsNext(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); fsPrev(); }
+      if (e.key === "Escape") { e.preventDefault(); closeFullscreen(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [fullscreenVariationIndex, fsNext, fsPrev, closeFullscreen]);
 
   const hasMultipleImages = (shot.image_paths?.length ?? 0) > 1;
 
@@ -182,6 +214,11 @@ export function ShotCard({
   const bustCache = (url: string) =>
     url ? `${url}${url.includes("?") ? "&" : "?"}t=${cacheBuster}` : "";
   const cachedImageUrl = bustCache(imageUrl);
+
+  // Fullscreen carousel URL (computed after bustCache is available)
+  const fsUrl = fullscreenVariationIndex !== null && fsTotal > 0
+    ? bustCache(getMediaUrl(fsImages[fullscreenVariationIndex]))
+    : null;
   const cachedVideoUrl = bustCache(videoUrl);
 
   if (isEditing) {
@@ -512,7 +549,10 @@ export function ShotCard({
               src={cachedImageUrl}
               alt={`Shot ${shot.index}`}
               className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => setShowFullscreenImage(true)}
+              onClick={() => {
+                const activeIdx = fsImages.indexOf(shot.image_path ?? "");
+                openFullscreen(activeIdx >= 0 ? activeIdx : 0);
+              }}
               title="Click to view full screen"
             />
           ) : (
@@ -717,27 +757,56 @@ export function ShotCard({
         </div>
       )}
 
-      {/* Fullscreen Image Modal — main shot image OR gallery variation */}
-      {(showFullscreenImage || fullscreenVariationUrl) && (cachedImageUrl || fullscreenVariationUrl) && (
+      {/* Fullscreen Carousel Modal — navigates through all image_paths */}
+      {fullscreenVariationIndex !== null && fsUrl && (
         <div
-          className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 cursor-zoom-out"
-          onClick={() => { setShowFullscreenImage(false); setFullscreenVariationUrl(null); }}
+          className="fixed inset-0 bg-black/92 z-[70] flex items-center justify-center p-4"
+          onClick={closeFullscreen}
         >
+          {/* Image */}
           <img
-            src={fullscreenVariationUrl ?? cachedImageUrl}
-            alt={`Shot ${shot.index} Fullscreen`}
-            className="max-w-full max-h-full object-contain"
+            src={fsUrl}
+            alt={`Shot ${shot.index} — ${fullscreenVariationIndex + 1} / ${fsTotal}`}
+            className="max-w-full max-h-full object-contain select-none"
+            onClick={(e) => e.stopPropagation()}
           />
+
+          {/* Counter badge */}
+          {fsTotal > 1 && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm px-3 py-1 rounded-full backdrop-blur-sm">
+              {fullscreenVariationIndex + 1} / {fsTotal}
+            </div>
+          )}
+
+          {/* Close */}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowFullscreenImage(false);
-              setFullscreenVariationUrl(null);
-            }}
+            onClick={(e) => { e.stopPropagation(); closeFullscreen(); }}
             className="absolute top-4 right-4 text-white/70 hover:text-white p-2 transition-colors"
           >
             <X className="w-8 h-8" />
           </button>
+
+          {/* Prev */}
+          {fsTotal > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); fsPrev(); }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-3 rounded-full transition-colors"
+              title="Previous (←)"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Next */}
+          {fsTotal > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); fsNext(); }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-3 rounded-full transition-colors"
+              title="Next (→)"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
         </div>
       )}
 
@@ -784,7 +853,7 @@ export function ShotCard({
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors">
                         {/* Fullscreen button — top right */}
                         <button
-                          onClick={() => setFullscreenVariationUrl(cachedUrl)}
+                          onClick={() => openFullscreen(idx)}
                           className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
                           title="View fullscreen"
                         >
