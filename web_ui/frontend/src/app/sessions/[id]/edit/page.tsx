@@ -14,7 +14,7 @@ import { SceneList } from "@/components/scenes/SceneList";
 import { ShotGrid } from "@/components/shots/ShotGrid";
 import { Scene, Story, Shot } from "@/types";
 import { api } from "@/services/api";
-import { Save, RefreshCw, X } from "lucide-react";
+import { Save, RefreshCw, X, BookOpen, Film } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -270,8 +270,14 @@ export default function SessionEditPage() {
         className="w-full"
       >
         <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="story">Story</TabsTrigger>
-          <TabsTrigger value="shots">Shots</TabsTrigger>
+          <TabsTrigger value="story" className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4" />
+            Story
+          </TabsTrigger>
+          <TabsTrigger value="shots" className="flex items-center gap-2">
+            <Film className="w-4 h-4" />
+            Shots
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="story" className="mt-6">
