@@ -23,6 +23,8 @@ export default function ConfigPage() {
   const [formData, setFormData] = useState({
     llm_provider: "",
     image_generation_mode: "",
+    video_generation_mode: "",
+    video_workflow: "",
     comfy_url: "",
     target_video_length: 0,
     gemini_api_key: "",
@@ -35,6 +37,8 @@ export default function ConfigPage() {
       setFormData({
         llm_provider: config.llm_provider || "gemini",
         image_generation_mode: config.image_generation_mode || "comfyui",
+        video_generation_mode: config.video_generation_mode || "comfyui",
+        video_workflow: config.video_workflow || "wan22",
         comfy_url: config.comfy_url || "http://127.0.0.1:8188",
         target_video_length: config.target_video_length || 600,
         gemini_api_key: "", // Don't populate sensitive keys from GET
@@ -134,6 +138,48 @@ export default function ConfigPage() {
                   <SelectItem value="geminiweb">
                     GeminiWeb - Gemini Web (Browser)
                   </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Video Mode
+              </label>
+              <Select
+                value={formData.video_generation_mode}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, video_generation_mode: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Video Mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  {/* Later on, we can add Luma/Minimax etc. For now ComfyUI is the primary */}
+                  <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Video Workflow
+              </label>
+              <Select
+                value={formData.video_workflow}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, video_workflow: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Video Workflow" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="wan22">Wan 2.2</SelectItem>
+                  <SelectItem value="default">Default</SelectItem>
                 </SelectContent>
               </Select>
             </div>

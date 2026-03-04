@@ -238,18 +238,35 @@ COMFY_URL = "http://127.0.0.1:8188"
 #   COMFY_OUTPUT_DIR = "/home/user/ComfyUI/output"  # Manual path for Linux/Mac
 COMFY_OUTPUT_DIR = os.getenv("COMFY_OUTPUT_DIR", r"E:\ComfyUI\Output")
 
-# Path to your Wan 2.2 workflow template
+# ==========================================
+# VIDEO WORKFLOW CONFIGURATION
+# ==========================================
+# Active video workflow to use (must exist in VIDEO_WORKFLOWS)
+VIDEO_WORKFLOW = "wan22"
+
+# Video workflow definitions
+# Each workflow has its own node IDs and workflow file path
+# Add new workflows here and set VIDEO_WORKFLOW to the desired key
+VIDEO_WORKFLOWS = {
+    "wan22": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "default": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    }
+}
+
+# Legacy single workflow settings (deprecated, use VIDEO_WORKFLOWS instead)
+# Kept for backward compatibility
 WORKFLOW_PATH = resolve_path("workflow/video/wan22_workflow.json")
-
-# Node IDs in your workflow
-# IMPORTANT: Open your workflow in ComfyUI, right-click the LoadImage node → "Node ID for Save"
-# Update this value with the actual node ID from your workflow
-LOAD_IMAGE_NODE_ID = "97"  # User needs to update this
-
-# Motion prompt node ID (currently node 7 in shot_planner.py)
+LOAD_IMAGE_NODE_ID = "97"
 MOTION_PROMPT_NODE_ID = "93"
-
-# WanImageToVideo node ID (for setting video length)
 WAN_VIDEO_NODE_ID = "98"
 
 # ==========================================

@@ -102,6 +102,7 @@ export interface GlobalConfig {
   llm_provider: string;
   image_generation_mode: string;
   video_generation_mode: string;
+  video_workflow: string;
   default_story_agent: string;
   default_shots_agent: string;
   comfy_url: string;
@@ -112,6 +113,8 @@ export interface GlobalConfig {
 export interface UpdateGlobalConfigRequest {
   llm_provider?: string;
   image_generation_mode?: string;
+  video_generation_mode?: string;
+  video_workflow?: string;
   comfy_url?: string;
   target_video_length?: number;
   gemini_api_key?: string;

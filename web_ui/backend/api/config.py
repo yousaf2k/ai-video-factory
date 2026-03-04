@@ -92,6 +92,7 @@ async def get_config():
             "llm_provider": config.LLM_PROVIDER,
             "image_generation_mode": config.IMAGE_GENERATION_MODE,
             "video_generation_mode": getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui'),
+            "video_workflow": getattr(config, 'VIDEO_WORKFLOW', 'wan22'),
             "default_story_agent": getattr(config, 'DEFAULT_STORY_AGENT', 'default'),
             "default_shots_agent": getattr(config, 'DEFAULT_SHOTS_AGENT', 'default'),
             "comfy_url": getattr(config, 'COMFY_URL', 'http://127.0.0.1:8188'),
@@ -126,6 +127,8 @@ async def update_config(request: UpdateConfigRequest):
             updates["GEMINI_API_KEY"] = request.gemini_api_key
         if request.openai_api_key is not None:
             updates["OPENAI_API_KEY"] = request.openai_api_key
+        if hasattr(request, 'video_workflow') and request.video_workflow is not None:
+            updates["VIDEO_WORKFLOW"] = request.video_workflow
         if request.elevenlabs_api_key is not None:
             updates["ELEVENLABS_API_KEY"] = request.elevenlabs_api_key
 

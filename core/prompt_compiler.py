@@ -20,6 +20,16 @@ def load_workflow(path, video_length_seconds=None):
     # Get dimensions from config (use video dimensions for video workflow)
     width, height = config.calculate_video_dimensions()
 
+    # Get workflow settings for node IDs
+    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+
+    wan_video_node_id = None
+    if workflow_config:
+        wan_video_node_id = workflow_config.get('wan_video_node_id', getattr(config, 'WAN_VIDEO_NODE_ID', None))
+    else:
+        wan_video_node_id = getattr(config, 'WAN_VIDEO_NODE_ID', None)
+
     # Check if workflow is in UI format (has "nodes" array) or API format (node IDs as keys)
     if "nodes" in workflow:
         # Build a link lookup table: link_id -> [source_node_id, source_slot]
@@ -85,7 +95,7 @@ def load_workflow(path, video_length_seconds=None):
                     node_data["inputs"]["batch_size"] = widgets[3]
                     frames = widgets[2]
                     # Set video length if specified
-                    if video_length_seconds and node_id == config.WAN_VIDEO_NODE_ID:
+                    if video_length_seconds and node_id == wan_video_node_id:
                         frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
                         node_data["inputs"]["length"] = frames
                         print(f"[INFO] Set video length: {video_length_seconds}s ({frames-1}+1 frames at {config.VIDEO_FPS}fps)")
@@ -146,8 +156,8 @@ def load_workflow(path, video_length_seconds=None):
         wf = copy.deepcopy(workflow)
 
         # Set dimensions in WanImageToVideo node
-        if config.WAN_VIDEO_NODE_ID in wf:
-            wan_node = wf[config.WAN_VIDEO_NODE_ID]
+        if wan_video_node_id and wan_video_node_id in wf:
+            wan_node = wf[wan_video_node_id]
             if wan_node.get('class_type') == 'WanImageToVideo':
                 wan_node['inputs']['width'] = width
                 wan_node['inputs']['height'] = height
@@ -165,8 +175,24 @@ def compile_workflow(template, shot, video_length_seconds=None):
 
     wf = copy.deepcopy(template)
 
+    # Get workflow settings for node IDs
+    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+
+    load_image_node_id = None
+    motion_prompt_node_id = None
+    wan_video_node_id = None
+
+    if workflow_config:
+        load_image_node_id = workflow_config.get('load_image_node_id', config.LOAD_IMAGE_NODE_ID)
+        motion_prompt_node_id = workflow_config.get('motion_prompt_node_id', config.MOTION_PROMPT_NODE_ID)
+        wan_video_node_id = workflow_config.get('wan_video_node_id', getattr(config, 'WAN_VIDEO_NODE_ID', None))
+    else:
+        load_image_node_id = config.LOAD_IMAGE_NODE_ID
+        motion_prompt_node_id = config.MOTION_PROMPT_NODE_ID
+        wan_video_node_id = getattr(config, 'WAN_VIDEO_NODE_ID', None)
+
     # Inject motion prompt (will be enhanced with trigger keywords below)
-    motion_node_id = config.MOTION_PROMPT_NODE_ID
     base_motion_prompt = shot.get("motion_prompt", "")
 
     # ==========================================
@@ -314,30 +340,29 @@ def compile_workflow(template, shot, video_length_seconds=None):
                 enhanced_prompt += f", {keyword}"
 
         # Inject enhanced motion prompt
-        if motion_node_id in wf:
-            wf[motion_node_id]["inputs"]["text"] = enhanced_prompt
+        if motion_prompt_node_id and motion_prompt_node_id in wf:
+            wf[motion_prompt_node_id]["inputs"]["text"] = enhanced_prompt
 
         print(f"\n[TRIGGERS] Added: {', '.join(all_trigger_keywords)}")
 
     # Inject base motion prompt if no triggers
-    elif motion_node_id in wf and base_motion_prompt:
-        wf[motion_node_id]["inputs"]["text"] = base_motion_prompt
+    elif motion_prompt_node_id and motion_prompt_node_id in wf and base_motion_prompt:
+        wf[motion_prompt_node_id]["inputs"]["text"] = base_motion_prompt
 
     # Inject image path to LoadImage node if available
     if "image_path" in shot and shot["image_path"]:
-        load_node_id = config.LOAD_IMAGE_NODE_ID
-        if load_node_id in wf:
+        if load_image_node_id and load_image_node_id in wf:
             image_path = shot["image_path"]
             # Convert to absolute path if relative (ComfyUI requires absolute paths)
             if image_path and not os.path.isabs(image_path):
                 image_path = os.path.abspath(image_path)
             # Normalize to use forward slashes (ComfyUI handles this better)
             image_path = image_path.replace('\\', '/')
-            wf[load_node_id]["inputs"]["image"] = image_path
+            wf[load_image_node_id]["inputs"]["image"] = image_path
 
     # Set video length in WanImageToVideo node if specified
-    if video_length_seconds and config.WAN_VIDEO_NODE_ID in wf:
-        wan_node = wf[config.WAN_VIDEO_NODE_ID]
+    if video_length_seconds and wan_video_node_id and wan_video_node_id in wf:
+        wan_node = wf[wan_video_node_id]
         # Check if it's API format (inputs has direct values) or UI format (has widgets_values)
         if "length" in wan_node.get("inputs", {}):
             # API format - set length directly

@@ -879,7 +879,14 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
     # Submit videos (only those not yet rendered) with verification
     print(f"\n[INFO] Submitting videos to ComfyUI with verification...")
 
-    template = load_workflow(config.WORKFLOW_PATH, video_length_seconds=shot_length)
+    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+    
+    workflow_path = config.WORKFLOW_PATH
+    if workflow_config:
+        workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+        
+    template = load_workflow(workflow_path, video_length_seconds=shot_length)
 
     # Load shots status from shots.json
     shots_status = session_mgr.get_shots(session_id)
@@ -1029,13 +1036,21 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
     shot_length = video_config.get('shot_length', config.DEFAULT_SHOT_LENGTH)
     total_length = video_config.get('total_length')
     shots_per_scene = video_config.get('shots_per_scene', config.DEFAULT_SHOTS_PER_SCENE)
-    config.WORKFLOW_PATH = video_config.get('workflow_path', config.WORKFLOW_PATH)
+    # Apply video workflow overrides if present in config
+    if 'workflow' in video_config:
+        config.VIDEO_WORKFLOW = video_config['workflow']
+    
+    # Also support specific workflow path overrides
+    if 'workflow_path' in video_config:
+        config.WORKFLOW_PATH = video_config['workflow_path']
+        if getattr(config, 'VIDEO_WORKFLOWS', None) and getattr(config, 'VIDEO_WORKFLOW', None):
+            if config.VIDEO_WORKFLOW in config.VIDEO_WORKFLOWS:
+                config.VIDEO_WORKFLOWS[config.VIDEO_WORKFLOW]['workflow_path'] = video_config['workflow_path']
     config.VIDEO_ASPECT_RATIO = video_config.get('aspect_ratio', config.VIDEO_ASPECT_RATIO)
     config.VIDEO_RESOLUTION = video_config.get('resolution', config.VIDEO_RESOLUTION)
     config.VIDEO_WIDTH = video_config.get('width', config.VIDEO_WIDTH)
     config.VIDEO_HEIGHT = video_config.get('height', config.VIDEO_HEIGHT)
     config.APPEND_IMAGE_TO_MOTION_PROMPT = video_config.get('append_image_prompt', config.APPEND_IMAGE_TO_MOTION_PROMPT)
-    config.IMAGE_PROMPT_APPEND_POSITION = video_config.get('append_position', config.IMAGE_PROMPT_APPEND_POSITION)
 
     # Calculate max_shots from total_length if specified
     if total_length and shot_length:
@@ -1209,6 +1224,7 @@ def run_new_session(session_mgr, args=None):
         'shot_length': shot_length,
         'fps': config.VIDEO_FPS,
         'shots_per_scene': shots_per_scene,
+        'workflow': config.VIDEO_WORKFLOW, # Store the workflow name
         'workflow_path': config.WORKFLOW_PATH,
         'aspect_ratio': config.VIDEO_ASPECT_RATIO,
         'resolution': config.VIDEO_RESOLUTION,
@@ -1470,7 +1486,6 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         print(f"[VERIFY] Checking if videos actually exist...")
         videos_dir = session_mgr.get_videos_dir(session_id)
 
-        # Check if video files actually exist on disk
         # Check for any video matching the pattern shot_XXX*.mp4 (including suffixes)
         import glob
         missing_videos = False
@@ -1793,7 +1808,7 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
 
         # Mark newly generated images in session
         for shot in shots_needing_images:
-            shot_idx = shot.get('index', shots.index(shot) + 1)
+            shot_idx = shot.get('index')
             image_paths = shot.get('image_paths', [])
             for img_path in image_paths:
                 if img_path:  # Only mark if path exists (not None)
@@ -1833,7 +1848,14 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
 
 def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
     """Render videos for all shots and all image variations"""
-    template = load_workflow(config.WORKFLOW_PATH, video_length_seconds=shot_length)
+    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+    
+    workflow_path = config.WORKFLOW_PATH
+    if workflow_config:
+        workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+        
+    template = load_workflow(workflow_path, video_length_seconds=shot_length)
 
     # Load shots status from shots.json to check which videos are already rendered
     shots_status = session_mgr.get_shots(session_id)
@@ -2011,6 +2033,7 @@ def _run_with_prompts_file(session_mgr, args):
     session_meta['video_config'] = {
         'shot_length': shot_length,
         'fps': config.VIDEO_FPS,
+        'workflow': config.VIDEO_WORKFLOW, # Store the workflow name
         'workflow_path': config.WORKFLOW_PATH,
         'aspect_ratio': config.VIDEO_ASPECT_RATIO,
         'resolution': config.VIDEO_RESOLUTION,
@@ -2030,6 +2053,25 @@ def _run_with_prompts_file(session_mgr, args):
         'height': config.IMAGE_HEIGHT
     }
     
+    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+    
+    generation_config = {
+        'image': {
+            'mode': config.IMAGE_GENERATION_MODE,
+            'aspect_ratio': config.IMAGE_ASPECT_RATIO,
+            'resolution': config.IMAGE_RESOLUTION,
+            'negative_prompt': config.DEFAULT_NEGATIVE_PROMPT,
+            'workflow': config.IMAGE_WORKFLOW,
+            'images_per_shot': config.IMAGES_PER_SHOT
+        },
+        'video': {
+            'fps': getattr(config, 'VIDEO_FPS', 16),
+            'aspect_ratio': getattr(config, 'VIDEO_ASPECT_RATIO', config.IMAGE_ASPECT_RATIO),
+            'resolution': getattr(config, 'VIDEO_RESOLUTION', config.IMAGE_RESOLUTION),
+            'workflow': work_name,
+            'render_timeout': getattr(config, 'VIDEO_RENDER_TIMEOUT', 900)
+        }
+    }
     # Store workflow config in session
     session_meta['workflow_config'] = {
         'auto_step_mode': True, # Prompts file implies auto running shots mostly

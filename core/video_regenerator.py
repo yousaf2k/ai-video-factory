@@ -172,7 +172,16 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
     # Load workflow with new video length
     print(f"\n[INFO] Loading workflow...")
     try:
-        template = load_workflow(config.WORKFLOW_PATH, video_length_seconds=shot_length)
+        work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+        if video_workflow:
+            work_name = video_workflow
+            
+        workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+        workflow_path = config.WORKFLOW_PATH
+        if workflow_config:
+            workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+            
+        template = load_workflow(workflow_path, video_length_seconds=shot_length)
     except Exception as e:
         print(f"[ERROR] Failed to load workflow: {e}")
         return False
