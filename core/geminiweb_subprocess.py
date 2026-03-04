@@ -241,11 +241,44 @@ def _remove_watermark(image_path: str):
             return
             
         h, w = img.shape[:2]
-        mask = np.zeros((h, w), dtype=np.uint8)
-        # Gemini watermark is typically in the bottom right ~64x64 pixels. 
-        # We mask a slightly larger 80x80 box to ensure complete removal.
-        mask[max(0, h-80):h, max(0, w-80):w] = 255
+        crop_size = 100
+        if h < crop_size or w < crop_size:
+            return
+            
+        # 1. Isolate the bottom right corner
+        crop = img[h-crop_size:h, w-crop_size:w]
         
+        # 2. Subtract background to isolate the bright watermark
+        blurred = cv2.GaussianBlur(crop, (15, 15), 0)
+        diff = cv2.subtract(crop, blurred)
+        gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+        
+        # 3. Threshold to get the bright sparkle
+        _, thresh = cv2.threshold(gray, 10, 255, cv2.THRESH_BINARY)
+        kernel = np.ones((2,2), np.uint8)
+        opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel)
+        
+        # 4. Find the watermark contour
+        contours, _ = cv2.findContours(opening, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            logger.warning("Could not find watermark contour for precise removal.")
+            return
+            
+        c = max(contours, key=cv2.contourArea)
+        
+        # 5. Draw the contour on a black crop mask
+        mask_crop = np.zeros((crop_size, crop_size), dtype=np.uint8)
+        cv2.drawContours(mask_crop, [c], 0, 255, -1)
+        
+        # 6. Dilate slightly to cover semi-transparent edges
+        dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5,5))
+        mask_crop = cv2.dilate(mask_crop, dilate_kernel, iterations=1)
+        
+        # 7. Apply to full original image mask
+        mask = np.zeros((h, w), dtype=np.uint8)
+        mask[h-crop_size:h, w-crop_size:w] = mask_crop
+        
+        # 8. Inpaint only the precise pixels
         inpainted = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
         cv2.imwrite(image_path, inpainted)
         logger.info(f"Successfully removed watermark from {image_path}")
