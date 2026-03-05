@@ -55,6 +55,10 @@ def _create_browser_context(playwright_instance):
     os.makedirs(chrome_profile, exist_ok=True)
     logger.info(f"Using Chrome profile: {chrome_profile}")
 
+    import tempfile
+    downloads_tmp = os.path.join(tempfile.gettempdir(), "geminiweb_downloads")
+    os.makedirs(downloads_tmp, exist_ok=True)
+
     try:
         context = playwright_instance.chromium.launch_persistent_context(
             user_data_dir=chrome_profile,
@@ -72,6 +76,10 @@ def _create_browser_context(playwright_instance):
             ],
             viewport={'width': 1280, 'height': 900},
             ignore_default_args=['--enable-automation'],
+            # REQUIRED for expect_download() to work — without this, Chrome
+            # blocks all download events and the script hangs indefinitely.
+            accept_downloads=True,
+            downloads_path=downloads_tmp,
         )
         return context
     except Exception as e:
