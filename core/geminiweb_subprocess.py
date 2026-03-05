@@ -259,38 +259,17 @@ def _inject_text_into_input(page, input_element, text: str) -> bool:
     return False
 
 
-def _try_download_native(page, output_path: str, retries: int = 3) -> Optional[str]:
+def _try_download_native(page, output_path: str, retries: int = 5) -> Optional[str]:
     """
-    Download the latest generated image using Playwright's native download API.
+    Download the full-resolution image by clicking Gemini's download button.
 
-    Gemini renders generated images inside clickable image buttons. When you
-    hover over one, a toolbar with a download icon appears. This function:
-      1. Locates the last generated image element.
-      2. Hovers over it to reveal the action toolbar.
-      3. Waits explicitly for the download button to appear (not just poll).
-      4. Clicks the download button and intercepts the file via expect_download().
-      5. Retries the hover+wait cycle up to `retries` times in case the toolbar
-         is slow or the first hover doesn't land cleanly.
+    This is the ONLY path that gives the original generated image (1024×1024 etc).
+    The <img> src in the chat is always a display thumbnail, even with =s0.
 
-    This is the PREFERRED download path — it saves the original full-quality file
-    exactly as Gemini would serve it via the UI download button.
-
-    Args:
-        page: Playwright page object
-        output_path: Where to save the downloaded file
-        retries: Number of hover+wait attempts before giving up
-
-    Returns:
-        Path to the saved image, or None if download was not possible
+    Uses Playwright locator API (auto-retries) + force hover + JS mouseover
+    fallback to handle Gemini's constantly re-rendering DOM.
     """
-    # Selectors for the image wrapper buttons Gemini renders
-    image_container_selectors = [
-        'button.image-button',
-        'button.generated-image-button',
-        '[data-message-id] div[jsname] img',
-    ]
-
-    # Selectors for the download button (appears in toolbar on hover)
+    # Selectors for the download button that appears on hover
     download_button_selectors = [
         'button[aria-label="Download"]',
         'button[aria-label="Download full-sized image"]',
@@ -298,91 +277,109 @@ def _try_download_native(page, output_path: str, retries: int = 3) -> Optional[s
         'a[download]',
     ]
 
-    try:
-        # Find the last rendered image container
-        image_container = None
+    # Combined selector for any download button
+    combined_dl_selector = ', '.join(download_button_selectors)
+
+    # Selectors for the image container to hover over
+    image_container_selectors = [
+        'button.image-button',
+        'button.generated-image-button',
+        '[data-message-id] div[jsname] img',
+    ]
+
+    for attempt in range(1, retries + 1):
+        logger.info(f"Native download attempt {attempt}/{retries}")
+
+        # ── Step 1: find a fresh container reference ───────────────────────
+        container = None
+        container_sel = None
         for sel in image_container_selectors:
-            containers = page.query_selector_all(sel)
-            if containers:
-                image_container = containers[-1]
-                logger.debug(f"Found image container: {sel}")
-                break
+            try:
+                els = page.query_selector_all(sel)
+                if els:
+                    container = els[-1]
+                    container_sel = sel
+                    break
+            except Exception:
+                continue
 
-        if not image_container:
-            logger.debug("No image container found for native download")
-            return None
+        if not container:
+            logger.debug(f"No container found (attempt {attempt})")
+            time.sleep(2)
+            continue
 
-        # Scroll it into view so the hover lands properly
+        # ── Step 2: reveal the toolbar ─────────────────────────────────────
+        #   Try DOM hover first; if that fails (stale element), use JS to
+        #   dispatch mouseover/pointerover events directly which Gemini's
+        #   React event system listens on.
+        toolbar_revealed = False
         try:
-            image_container.scroll_into_view_if_needed()
-            time.sleep(0.5)
+            container.scroll_into_view_if_needed()
+            time.sleep(0.3)
         except Exception:
             pass
 
-        # Retry loop: re-query container fresh each time (Gemini re-renders
-        # the DOM when the image finishes loading, so a cached reference
-        # becomes detached — query_selector_all on every attempt instead).
-        for attempt in range(1, retries + 1):
-            logger.info(f"Native download attempt {attempt}/{retries} — re-querying container...")
+        # Method A: normal Playwright hover
+        try:
+            container.hover(timeout=3000)
+            time.sleep(1.5)
+            toolbar_revealed = True
+            logger.debug("Hover succeeded (Playwright)")
+        except Exception as e:
+            logger.debug(f"Playwright hover failed: {e}")
 
-            # Fresh query on every attempt to avoid stale element references
-            image_container = None
-            for sel in image_container_selectors:
-                containers = page.query_selector_all(sel)
-                if containers:
-                    image_container = containers[-1]
-                    break
-
-            if not image_container:
-                logger.debug(f"No container on attempt {attempt}, retrying...")
-                time.sleep(1.5)
-                continue
-
+        # Method B: JS mouseover/pointerover dispatch (works even if DOM was swapped)
+        if not toolbar_revealed:
             try:
-                image_container.scroll_into_view_if_needed()
-                image_container.hover()
-            except Exception as e:
-                logger.debug(f"Hover failed on attempt {attempt}: {e}")
-                time.sleep(1)
-                continue
-
-            # Wait for the download button to appear explicitly
-            download_btn = None
-            for btn_sel in download_button_selectors:
-                try:
-                    download_btn = page.wait_for_selector(
-                        btn_sel, timeout=5000, state='visible'
-                    )
-                    if download_btn:
-                        logger.info(f"Download button found: {btn_sel}")
-                        break
-                except Exception:
-                    continue
-
-            if not download_btn:
-                logger.debug(f"Download button not visible after hover (attempt {attempt}), retrying...")
-                time.sleep(1.5)
-                continue
-
-            # Click and intercept the download
-            try:
-                logger.info("Clicking download button to get full-quality image...")
-                with page.expect_download(timeout=30000) as dl_info:
-                    download_btn.click()
-                dl = dl_info.value
-                dl.save_as(output_path)
-                size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
-                logger.info(f"Native download saved: {output_path} ({size:,} bytes)")
-                return output_path
-            except Exception as e:
-                logger.warning(f"Download click failed on attempt {attempt}: {e}")
+                # Re-query using locator (auto-retries built in)
+                loc = page.locator(container_sel).last
+                loc.evaluate("""el => {
+                    ['pointerover', 'pointerenter', 'mouseover', 'mouseenter'].forEach(name => {
+                        el.dispatchEvent(new PointerEvent(name, {bubbles: true, composed: true}));
+                    });
+                }""")
                 time.sleep(2)
+                toolbar_revealed = True
+                logger.debug("Toolbar revealed via JS events")
+            except Exception as e:
+                logger.debug(f"JS mouseover also failed: {e}")
+
+        if not toolbar_revealed:
+            time.sleep(1)
+            continue
+
+        # ── Step 3: find the download button ───────────────────────────────
+        download_btn = None
+        for btn_sel in download_button_selectors:
+            try:
+                download_btn = page.wait_for_selector(btn_sel, timeout=4000, state='visible')
+                if download_btn:
+                    logger.info(f"Download button found: {btn_sel}")
+                    break
+            except Exception:
                 continue
 
-    except Exception as e:
-        logger.debug(f"Native download preparation failed: {e}")
+        if not download_btn:
+            logger.debug(f"Download button not visible after hover (attempt {attempt})")
+            time.sleep(1.5)
+            continue
 
-    logger.warning("Native download via download button failed after all retries")
+        # ── Step 4: click and intercept the file ───────────────────────────
+        try:
+            logger.info("Clicking download button for full-resolution image...")
+            with page.expect_download(timeout=30000) as dl_info:
+                download_btn.click()
+            dl = dl_info.value
+            dl.save_as(output_path)
+            size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+            logger.info(f"Full-res download saved: {output_path} ({size:,} bytes)")
+            return output_path
+        except Exception as e:
+            logger.warning(f"Download click failed (attempt {attempt}): {e}")
+            time.sleep(2)
+            continue
+
+    logger.warning("Native download failed after all retries")
     return None
 
 
@@ -716,45 +713,42 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None) -> Optional[str
                 return None
 
             # ── Download the image ───────────────────────────────────────────
-            # Strategy order (based on reliability testing):
-            #  1. Direct HTTP fetch via page.request (bypasses CSP, uses auth
-            #     cookies, returns original quality). Works for all
-            #     lh3.googleusercontent.com URLs — fast and reliable.
-            #  2. Hover+click the native download button (can fail if Gemini
-            #     re-renders the DOM before hover completes).
-            #  3. Fallback src-extraction (blob anchor, data: URI, screenshot).
+            # Strategy order:
+            #  1. Hover+click the native download button — this is the ONLY
+            #     path that yields the original full-resolution generated image
+            #     (e.g. 1024×1024). The <img> src is always a display thumbnail.
+            #  2. HTTP fetch via page.request as fallback (still usable quality
+            #     for some URL types).
+            #  3. blob/data/screenshot as last resort.
             logger.info("Waiting for image to fully render before download...")
-            time.sleep(3)
+            time.sleep(4)
 
             result = None
 
-            # ── Strategy 1: direct HTTP fetch (fastest, full quality) ─────────
-            if image_src and image_src.startswith('http'):
+            # ── Strategy 1: native download button (full resolution) ──────────
+            result = _try_download_native(page, output_path, retries=5)
+
+            # ── Strategy 2: HTTP fetch (may be lower res for gg-dl URLs) ──────
+            if not result and image_src and image_src.startswith('http'):
                 try:
                     fetch_url = image_src
                     if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
                         fetch_url = fetch_url.split('=')[0] + '=s0'
-                    logger.info(f"Trying direct HTTP fetch: ...{fetch_url[-60:]}")
+                    logger.info(f"Trying direct HTTP fetch (fallback): ...{fetch_url[-60:]}")
                     os.makedirs(os.path.dirname(output_path), exist_ok=True)
                     response = page.request.get(fetch_url)
                     if response.ok:
                         with open(output_path, 'wb') as f:
                             f.write(response.body())
                         size = os.path.getsize(output_path)
-                        logger.info(f"HTTP fetch succeeded: {output_path} ({size:,} bytes)")
+                        logger.warning(f"HTTP fetch fallback: {output_path} ({size:,} bytes) — may not be full resolution")
                         result = output_path
-                    else:
-                        logger.warning(f"HTTP fetch returned {response.status}, trying button download")
                 except Exception as e:
-                    logger.warning(f"HTTP fetch failed ({e}), trying button download")
+                    logger.warning(f"HTTP fetch failed: {e}")
 
-            # ── Strategy 2: hover+click native download button ─────────────────
+            # ── Strategy 3: blob/data/screenshot ──────────────────────────────
             if not result:
-                result = _try_download_native(page, output_path, retries=4)
-
-            # ── Strategy 3: blob/fallback extractor ───────────────────────────
-            if not result:
-                logger.warning("Button download failed — trying src extraction")
+                logger.warning("All primary strategies failed — trying src extraction")
                 result = _download_image_fallback(page, image_src, output_path)
 
             if result:
