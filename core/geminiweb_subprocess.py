@@ -246,7 +246,7 @@ def _inject_text_into_input(page, input_element, text: str) -> bool:
     return False
 
 
-def _try_download_native(page, output_path: str) -> Optional[str]:
+def _try_download_native(page, output_path: str, retries: int = 3) -> Optional[str]:
     """
     Download the latest generated image using Playwright's native download API.
 
@@ -254,11 +254,18 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
     hover over one, a toolbar with a download icon appears. This function:
       1. Locates the last generated image element.
       2. Hovers over it to reveal the action toolbar.
-      3. Clicks the download button and intercepts the file via expect_download().
+      3. Waits explicitly for the download button to appear (not just poll).
+      4. Clicks the download button and intercepts the file via expect_download().
+      5. Retries the hover+wait cycle up to `retries` times in case the toolbar
+         is slow or the first hover doesn't land cleanly.
+
+    This is the PREFERRED download path — it saves the original full-quality file
+    exactly as Gemini would serve it via the UI download button.
 
     Args:
         page: Playwright page object
         output_path: Where to save the downloaded file
+        retries: Number of hover+wait attempts before giving up
 
     Returns:
         Path to the saved image, or None if download was not possible
@@ -288,33 +295,68 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
                 logger.debug(f"Found image container: {sel}")
                 break
 
-        if image_container:
-            # Hover to reveal the action toolbar
-            image_container.hover()
-            time.sleep(1.5)  # give the toolbar animation time to complete
+        if not image_container:
+            logger.debug("No image container found for native download")
+            return None
 
-        # Now try to find & click the download button
-        for btn_sel in download_button_selectors:
+        # Scroll it into view so the hover lands properly
+        try:
+            image_container.scroll_into_view_if_needed()
+            time.sleep(0.5)
+        except Exception:
+            pass
+
+        # Retry loop: hover → wait for button → click
+        for attempt in range(1, retries + 1):
+            logger.info(f"Native download attempt {attempt}/{retries} — hovering over image container...")
             try:
-                btns = page.query_selector_all(btn_sel)
-                if btns:
-                    btn = btns[-1]
-                    if btn.is_visible():
-                        logger.info(f"Clicking download button: {btn_sel}")
-                        with page.expect_download(timeout=20000) as dl_info:
-                            btn.click()
-                        dl = dl_info.value
-                        dl.save_as(output_path)
-                        logger.info(f"Native download saved: {output_path}")
-                        return output_path
+                image_container.hover()
             except Exception as e:
-                logger.debug(f"Download attempt via '{btn_sel}' failed: {e}")
+                logger.debug(f"Hover failed on attempt {attempt}: {e}")
+                time.sleep(1)
+                continue
+
+            # Wait for the download button to appear explicitly
+            # Use a generous timeout; the button renders asynchronously after hover.
+            download_btn = None
+            for btn_sel in download_button_selectors:
+                try:
+                    download_btn = page.wait_for_selector(
+                        btn_sel, timeout=5000, state='visible'
+                    )
+                    if download_btn:
+                        logger.info(f"Download button found: {btn_sel}")
+                        break
+                except Exception:
+                    continue
+
+            if not download_btn:
+                # Toolbar not visible yet — re-hover and try again
+                logger.debug(f"Download button not visible after hover (attempt {attempt}), retrying...")
+                time.sleep(1.5)
+                continue
+
+            # Click and intercept the download
+            try:
+                logger.info("Clicking download button to get full-quality image...")
+                with page.expect_download(timeout=30000) as dl_info:
+                    download_btn.click()
+                dl = dl_info.value
+                dl.save_as(output_path)
+                size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+                logger.info(f"Native download saved: {output_path} ({size:,} bytes)")
+                return output_path
+            except Exception as e:
+                logger.warning(f"Download click failed on attempt {attempt}: {e}")
+                time.sleep(2)
                 continue
 
     except Exception as e:
         logger.debug(f"Native download preparation failed: {e}")
 
+    logger.warning("Native download via download button failed after all retries")
     return None
+
 
 
 def _download_image_fallback(page, image_src: str, output_path: str) -> Optional[str]:
@@ -643,10 +685,16 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None) -> Optional[str
                 return None
 
             # ── Download the image ───────────────────────────────────────────
-            # Preferred: Playwright native download (highest quality, exact file)
-            result = _try_download_native(page, output_path)
+            # Always prefer native download (highest quality, exact file as
+            # served by Gemini's own download button).  Give it extra time to
+            # allow the image to fully render before hovering.
+            logger.info("Waiting for image to fully render before download...")
+            time.sleep(3)
+
+            result = _try_download_native(page, output_path, retries=4)
             if not result:
-                # Fallback: extract from src attribute (data URI / blob URL)
+                logger.warning("Native download failed — falling back to src extraction (may be lower quality)")
+                # Fallback: extract from src attribute (data URI / blob URL / direct URL)
                 result = _download_image_fallback(page, image_src, output_path)
 
             if result:
