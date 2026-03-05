@@ -719,7 +719,8 @@ export function ShotCard({
                       </div>
                     </>
                   )}
-                  {/* Prompt override — shown for all generation modes */}
+
+                  {/* Prompt Override — visible for ALL image modes */}
                   <div>
                     <label className="block text-xs font-medium text-muted-foreground mb-1">
                       Prompt Override
