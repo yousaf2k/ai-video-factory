@@ -319,10 +319,27 @@ def _try_download_native(page, output_path: str, retries: int = 3) -> Optional[s
         except Exception:
             pass
 
-        # Retry loop: hover → wait for button → click
+        # Retry loop: re-query container fresh each time (Gemini re-renders
+        # the DOM when the image finishes loading, so a cached reference
+        # becomes detached — query_selector_all on every attempt instead).
         for attempt in range(1, retries + 1):
-            logger.info(f"Native download attempt {attempt}/{retries} — hovering over image container...")
+            logger.info(f"Native download attempt {attempt}/{retries} — re-querying container...")
+
+            # Fresh query on every attempt to avoid stale element references
+            image_container = None
+            for sel in image_container_selectors:
+                containers = page.query_selector_all(sel)
+                if containers:
+                    image_container = containers[-1]
+                    break
+
+            if not image_container:
+                logger.debug(f"No container on attempt {attempt}, retrying...")
+                time.sleep(1.5)
+                continue
+
             try:
+                image_container.scroll_into_view_if_needed()
                 image_container.hover()
             except Exception as e:
                 logger.debug(f"Hover failed on attempt {attempt}: {e}")
@@ -330,7 +347,6 @@ def _try_download_native(page, output_path: str, retries: int = 3) -> Optional[s
                 continue
 
             # Wait for the download button to appear explicitly
-            # Use a generous timeout; the button renders asynchronously after hover.
             download_btn = None
             for btn_sel in download_button_selectors:
                 try:
@@ -344,7 +360,6 @@ def _try_download_native(page, output_path: str, retries: int = 3) -> Optional[s
                     continue
 
             if not download_btn:
-                # Toolbar not visible yet — re-hover and try again
                 logger.debug(f"Download button not visible after hover (attempt {attempt}), retrying...")
                 time.sleep(1.5)
                 continue
@@ -701,16 +716,45 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None) -> Optional[str
                 return None
 
             # ── Download the image ───────────────────────────────────────────
-            # Always prefer native download (highest quality, exact file as
-            # served by Gemini's own download button).  Give it extra time to
-            # allow the image to fully render before hovering.
+            # Strategy order (based on reliability testing):
+            #  1. Direct HTTP fetch via page.request (bypasses CSP, uses auth
+            #     cookies, returns original quality). Works for all
+            #     lh3.googleusercontent.com URLs — fast and reliable.
+            #  2. Hover+click the native download button (can fail if Gemini
+            #     re-renders the DOM before hover completes).
+            #  3. Fallback src-extraction (blob anchor, data: URI, screenshot).
             logger.info("Waiting for image to fully render before download...")
             time.sleep(3)
 
-            result = _try_download_native(page, output_path, retries=4)
+            result = None
+
+            # ── Strategy 1: direct HTTP fetch (fastest, full quality) ─────────
+            if image_src and image_src.startswith('http'):
+                try:
+                    fetch_url = image_src
+                    if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
+                        fetch_url = fetch_url.split('=')[0] + '=s0'
+                    logger.info(f"Trying direct HTTP fetch: ...{fetch_url[-60:]}")
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    response = page.request.get(fetch_url)
+                    if response.ok:
+                        with open(output_path, 'wb') as f:
+                            f.write(response.body())
+                        size = os.path.getsize(output_path)
+                        logger.info(f"HTTP fetch succeeded: {output_path} ({size:,} bytes)")
+                        result = output_path
+                    else:
+                        logger.warning(f"HTTP fetch returned {response.status}, trying button download")
+                except Exception as e:
+                    logger.warning(f"HTTP fetch failed ({e}), trying button download")
+
+            # ── Strategy 2: hover+click native download button ─────────────────
             if not result:
-                logger.warning("Native download failed — falling back to src extraction (may be lower quality)")
-                # Fallback: extract from src attribute (data URI / blob URL / direct URL)
+                result = _try_download_native(page, output_path, retries=4)
+
+            # ── Strategy 3: blob/fallback extractor ───────────────────────────
+            if not result:
+                logger.warning("Button download failed — trying src extraction")
                 result = _download_image_fallback(page, image_src, output_path)
 
             if result:
