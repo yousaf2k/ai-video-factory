@@ -20,6 +20,8 @@ import {
   Maximize2,
   ChevronLeft,
   ChevronRight,
+  Copy,
+  ClipboardCheck,
 } from "lucide-react";
 import { Shot } from "@/types";
 import {
@@ -109,6 +111,7 @@ export function ShotCard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   // fullscreenVariationIndex: index into shot.image_paths; null = closed
   const [fullscreenVariationIndex, setFullscreenVariationIndex] = useState<number | null>(null);
 
@@ -600,12 +603,44 @@ export function ShotCard({
       {/* Prompts */}
       <div className="space-y-2 text-sm">
         <div className="p-2 bg-muted rounded">
-          <div className="text-xs text-muted-foreground mb-1">Image Prompt</div>
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs text-muted-foreground">Image Prompt</div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(shot.image_prompt || "");
+                setCopiedField("image");
+                setTimeout(() => setCopiedField(null), 1500);
+              }}
+              className="p-0.5 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
+              title="Copy image prompt"
+            >
+              {copiedField === "image" ? (
+                <ClipboardCheck className="w-3.5 h-3.5 text-green-500" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
           <div className="line-clamp-2">{shot.image_prompt}</div>
         </div>
         <div className="p-2 bg-muted rounded">
-          <div className="text-xs text-muted-foreground mb-1">
-            Motion Prompt
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-xs text-muted-foreground">Motion Prompt</div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(shot.motion_prompt || "");
+                setCopiedField("motion");
+                setTimeout(() => setCopiedField(null), 1500);
+              }}
+              className="p-0.5 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
+              title="Copy motion prompt"
+            >
+              {copiedField === "motion" ? (
+                <ClipboardCheck className="w-3.5 h-3.5 text-green-500" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+            </button>
           </div>
           <div className="line-clamp-2">{shot.motion_prompt}</div>
         </div>
