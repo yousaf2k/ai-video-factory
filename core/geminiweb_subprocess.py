@@ -390,18 +390,28 @@ def _try_download_native(page, output_path: str, retries: int = 5) -> Optional[s
             continue
 
         # ── Step 4: click and intercept the file ───────────────────────────
-        # Method A: Playwright's expect_download (works on most profiles)
+        # Method A: real mouse click at pixel coordinates + expect_download
+        # Playwright's element.click() is a synthesized event — some Chrome
+        # builds don't treat it as a "trusted" user gesture, so the download
+        # handler silently ignores it.  page.mouse.click() at the element's
+        # bounding-box center produces a real OS-level mouse event — identical
+        # to a human clicking the button.
         try:
-            logger.info("Clicking download button (expect_download)...")
-            with page.expect_download(timeout=10000) as dl_info:
-                download_btn.click()
+            box = download_btn.bounding_box()
+            if not box:
+                raise Exception("bounding_box returned None")
+            cx = box['x'] + box['width'] / 2
+            cy = box['y'] + box['height'] / 2
+            logger.info(f"Mouse-clicking download button at ({cx:.0f}, {cy:.0f})...")
+            with page.expect_download(timeout=15000) as dl_info:
+                page.mouse.click(cx, cy)
             dl = dl_info.value
             dl.save_as(output_path)
             size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
             logger.info(f"Full-res download saved: {output_path} ({size:,} bytes)")
             return output_path
         except Exception as e:
-            logger.warning(f"expect_download timed out ({e}), trying request interception...")
+            logger.warning(f"Mouse click + expect_download failed ({e}), trying request interception...")
 
         # Method B: intercept the URL from network requests triggered by click
         # Some Chrome profiles don't fire download events. Instead, capture the
@@ -442,8 +452,19 @@ def _try_download_native(page, output_path: str, retries: int = 5) -> Optional[s
                     continue
 
             if dl_btn2:
-                # Click with JS to bypass any interceptors
-                dl_btn2.evaluate("el => el.click()")
+                # Use real mouse click at coordinates (same reason as Method A)
+                try:
+                    box2 = dl_btn2.bounding_box()
+                    if box2:
+                        page.mouse.click(
+                            box2['x'] + box2['width'] / 2,
+                            box2['y'] + box2['height'] / 2
+                        )
+                        logger.info("Method B: mouse-clicked download button at coordinates")
+                    else:
+                        dl_btn2.evaluate("el => el.click()")
+                except Exception:
+                    dl_btn2.evaluate("el => el.click()")
                 time.sleep(3)
 
             page.remove_listener('request', _on_request)
