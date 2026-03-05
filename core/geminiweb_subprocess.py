@@ -56,8 +56,33 @@ def _create_browser_context(playwright_instance):
     logger.info(f"Using Chrome profile: {chrome_profile}")
 
     import tempfile
+    import json as _json
     downloads_tmp = os.path.join(tempfile.gettempdir(), "geminiweb_downloads")
     os.makedirs(downloads_tmp, exist_ok=True)
+
+    # ── Force-disable "Ask where to save each file" in the Chrome profile ─────
+    # Without this, expect_download() hangs on machines where this is enabled
+    # because Chrome opens a native OS file-picker dialog that Playwright can't
+    # interact with.
+    prefs_path = os.path.join(chrome_profile, "Default", "Preferences")
+    try:
+        prefs = {}
+        if os.path.exists(prefs_path):
+            with open(prefs_path, 'r', encoding='utf-8') as f:
+                prefs = _json.load(f)
+        # Set download prefs
+        if 'download' not in prefs:
+            prefs['download'] = {}
+        prefs['download']['prompt_for_download'] = False          # don't ask
+        prefs['download']['default_directory'] = downloads_tmp    # download dir
+        prefs['download']['directory_upgrade'] = True
+        # Write back
+        os.makedirs(os.path.dirname(prefs_path), exist_ok=True)
+        with open(prefs_path, 'w', encoding='utf-8') as f:
+            _json.dump(prefs, f)
+        logger.info("Chrome prefs patched: prompt_for_download=False")
+    except Exception as e:
+        logger.warning(f"Could not patch Chrome prefs (non-fatal): {e}")
 
     try:
         context = playwright_instance.chromium.launch_persistent_context(
