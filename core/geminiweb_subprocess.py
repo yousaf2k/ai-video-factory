@@ -365,9 +365,10 @@ def _try_download_native(page, output_path: str, retries: int = 5) -> Optional[s
             continue
 
         # ── Step 4: click and intercept the file ───────────────────────────
+        # Method A: Playwright's expect_download (works on most profiles)
         try:
-            logger.info("Clicking download button for full-resolution image...")
-            with page.expect_download(timeout=30000) as dl_info:
+            logger.info("Clicking download button (expect_download)...")
+            with page.expect_download(timeout=10000) as dl_info:
                 download_btn.click()
             dl = dl_info.value
             dl.save_as(output_path)
@@ -375,9 +376,117 @@ def _try_download_native(page, output_path: str, retries: int = 5) -> Optional[s
             logger.info(f"Full-res download saved: {output_path} ({size:,} bytes)")
             return output_path
         except Exception as e:
-            logger.warning(f"Download click failed (attempt {attempt}): {e}")
-            time.sleep(2)
-            continue
+            logger.warning(f"expect_download timed out ({e}), trying request interception...")
+
+        # Method B: intercept the URL from network requests triggered by click
+        # Some Chrome profiles don't fire download events. Instead, capture the
+        # URL the button's click handler requests and fetch it ourselves.
+        try:
+            captured_urls = []
+            def _on_request(request):
+                url = request.url
+                if ('googleusercontent.com' in url or 'blob:' in url or
+                    url.endswith('.png') or url.endswith('.jpg') or
+                    'download' in url.lower()):
+                    captured_urls.append(url)
+
+            page.on('request', _on_request)
+
+            # Re-hover and re-click (the toolbar might have hidden after the timeout)
+            try:
+                container_fresh = None
+                for sel in image_container_selectors:
+                    els = page.query_selector_all(sel)
+                    if els:
+                        container_fresh = els[-1]
+                        break
+                if container_fresh:
+                    container_fresh.scroll_into_view_if_needed()
+                    container_fresh.hover(timeout=3000)
+                    time.sleep(1.5)
+            except Exception:
+                pass
+
+            # Re-find download button
+            dl_btn2 = None
+            for btn_sel in download_button_selectors:
+                try:
+                    dl_btn2 = page.wait_for_selector(btn_sel, timeout=3000, state='visible')
+                    if dl_btn2: break
+                except Exception:
+                    continue
+
+            if dl_btn2:
+                # Click with JS to bypass any interceptors
+                dl_btn2.evaluate("el => el.click()")
+                time.sleep(3)
+
+            page.remove_listener('request', _on_request)
+
+            # Also check if a new tab/popup opened with the image
+            pages = page.context.pages
+            if len(pages) > 1:
+                new_page = pages[-1]
+                new_url = new_page.url
+                logger.info(f"New tab opened: {new_url}")
+                if 'googleusercontent.com' in new_url or new_url.startswith('blob:'):
+                    captured_urls.insert(0, new_url)
+                try:
+                    new_page.close()
+                except Exception:
+                    pass
+
+            # Try to fetch any captured URLs
+            for url in captured_urls:
+                try:
+                    # For googleusercontent URLs, request original size
+                    fetch_url = url
+                    if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
+                        fetch_url = fetch_url.split('=')[0] + '=s0'
+                    logger.info(f"Fetching intercepted URL: ...{fetch_url[-70:]}")
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    response = page.request.get(fetch_url)
+                    if response.ok and len(response.body()) > 5000:
+                        with open(output_path, 'wb') as f:
+                            f.write(response.body())
+                        size = os.path.getsize(output_path)
+                        logger.info(f"Full-res image via request interception: {output_path} ({size:,} bytes)")
+                        return output_path
+                except Exception as ex:
+                    logger.debug(f"Fetch of captured URL failed: {ex}")
+
+        except Exception as e:
+            logger.warning(f"Request interception fallback failed: {e}")
+
+        # Method C: extract href/data attributes from the button itself
+        try:
+            href = download_btn.get_attribute('href')
+            if not href:
+                href = download_btn.evaluate("""el => {
+                    // Check parent <a> tag
+                    const a = el.closest('a');
+                    if (a && a.href) return a.href;
+                    // Check data attributes
+                    return el.dataset.downloadUrl || el.dataset.url || '';
+                }""")
+            if href and href.startswith('http'):
+                fetch_url = href
+                if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
+                    fetch_url = fetch_url.split('=')[0] + '=s0'
+                logger.info(f"Trying button href: ...{fetch_url[-70:]}")
+                response = page.request.get(fetch_url)
+                if response.ok and len(response.body()) > 5000:
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    with open(output_path, 'wb') as f:
+                        f.write(response.body())
+                    size = os.path.getsize(output_path)
+                    logger.info(f"Full-res image via button href: {output_path} ({size:,} bytes)")
+                    return output_path
+        except Exception as e:
+            logger.debug(f"Button href extraction failed: {e}")
+
+        time.sleep(2)
+        continue
 
     logger.warning("Native download failed after all retries")
     return None
