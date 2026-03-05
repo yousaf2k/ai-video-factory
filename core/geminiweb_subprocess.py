@@ -253,8 +253,10 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
     Gemini renders generated images inside clickable image buttons. When you
     hover over one, a toolbar with a download icon appears. This function:
       1. Locates the last generated image element.
-      2. Hovers over it to reveal the action toolbar.
-      3. Clicks the download button and intercepts the file via expect_download().
+      2. Waits for Gemini to prepare the full-resolution version.
+      3. Hovers over it to reveal the action toolbar.
+      4. Clicks the download button and intercepts the file via expect_download().
+      5. If the file is suspiciously small, waits and retries for full quality.
 
     Args:
         page: Playwright page object
@@ -278,6 +280,32 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
         'a[download]',
     ]
 
+    # Minimum expected file size for a full-res Gemini image (4 MB)
+    MIN_FULL_RES_SIZE = 4 * 1024 * 1024
+
+    def _do_hover_and_download(image_container) -> Optional[str]:
+        """Hover over the image container and click the download button."""
+        image_container.hover()
+        time.sleep(1.5)  # give the toolbar animation time to complete
+
+        for btn_sel in download_button_selectors:
+            try:
+                btns = page.query_selector_all(btn_sel)
+                if btns:
+                    btn = btns[-1]
+                    if btn.is_visible():
+                        logger.info(f"Clicking download button: {btn_sel}")
+                        with page.expect_download(timeout=60000) as dl_info:
+                            btn.click()
+                        dl = dl_info.value
+                        dl.save_as(output_path)
+                        logger.info(f"Native download saved: {output_path}")
+                        return output_path
+            except Exception as e:
+                logger.debug(f"Download attempt via '{btn_sel}' failed: {e}")
+                continue
+        return None
+
     try:
         # Find the last rendered image container
         image_container = None
@@ -288,33 +316,46 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
                 logger.debug(f"Found image container: {sel}")
                 break
 
-        if image_container:
-            # Hover to reveal the action toolbar
-            image_container.hover()
-            time.sleep(1.5)  # give the toolbar animation time to complete
+        if not image_container:
+            return None
 
-        # Now try to find & click the download button
-        for btn_sel in download_button_selectors:
-            try:
-                btns = page.query_selector_all(btn_sel)
-                if btns:
-                    btn = btns[-1]
-                    if btn.is_visible():
-                        logger.info(f"Clicking download button: {btn_sel}")
-                        with page.expect_download(timeout=20000) as dl_info:
-                            btn.click()
-                        dl = dl_info.value
-                        dl.save_as(output_path)
-                        logger.info(f"Native download saved: {output_path}")
-                        return output_path
-            except Exception as e:
-                logger.debug(f"Download attempt via '{btn_sel}' failed: {e}")
-                continue
+        # ── Wait for Gemini to prepare the full-resolution image ─────────────
+        # Gemini generates images asynchronously; the thumbnail appears first
+        # and the full-res version becomes available several seconds later.
+        logger.info("Waiting 5s for Gemini to prepare full-resolution image...")
+        time.sleep(5)
+
+        # ── First download attempt ───────────────────────────────────────────
+        result = _do_hover_and_download(image_container)
+        if not result:
+            return None
+
+        # ── Check file size — retry if we got the low-res preview ────────────
+        file_size = os.path.getsize(output_path)
+        logger.info(f"Downloaded file size: {file_size:,} bytes")
+
+        if file_size < MIN_FULL_RES_SIZE:
+            logger.warning(f"File too small ({file_size:,} bytes < {MIN_FULL_RES_SIZE:,}), "
+                           f"waiting 10s for full-res to become available...")
+            time.sleep(10)
+
+            # Retry the download
+            result = _do_hover_and_download(image_container)
+            if result:
+                retry_size = os.path.getsize(output_path)
+                logger.info(f"Retry download size: {retry_size:,} bytes")
+                if retry_size > file_size:
+                    logger.info(f"Got larger file on retry ({retry_size:,} vs {file_size:,})")
+                else:
+                    logger.info(f"Retry file same/smaller size, keeping best attempt")
+
+        return output_path
 
     except Exception as e:
         logger.debug(f"Native download preparation failed: {e}")
 
     return None
+
 
 
 def _download_image_fallback(page, image_src: str, output_path: str) -> Optional[str]:
