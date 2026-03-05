@@ -55,35 +55,6 @@ def _create_browser_context(playwright_instance):
     os.makedirs(chrome_profile, exist_ok=True)
     logger.info(f"Using Chrome profile: {chrome_profile}")
 
-    import tempfile
-    import json as _json
-    downloads_tmp = os.path.join(tempfile.gettempdir(), "geminiweb_downloads")
-    os.makedirs(downloads_tmp, exist_ok=True)
-
-    # ── Force-disable "Ask where to save each file" in the Chrome profile ─────
-    # Without this, expect_download() hangs on machines where this is enabled
-    # because Chrome opens a native OS file-picker dialog that Playwright can't
-    # interact with.
-    prefs_path = os.path.join(chrome_profile, "Default", "Preferences")
-    try:
-        prefs = {}
-        if os.path.exists(prefs_path):
-            with open(prefs_path, 'r', encoding='utf-8') as f:
-                prefs = _json.load(f)
-        # Set download prefs
-        if 'download' not in prefs:
-            prefs['download'] = {}
-        prefs['download']['prompt_for_download'] = False          # don't ask
-        prefs['download']['default_directory'] = downloads_tmp    # download dir
-        prefs['download']['directory_upgrade'] = True
-        # Write back
-        os.makedirs(os.path.dirname(prefs_path), exist_ok=True)
-        with open(prefs_path, 'w', encoding='utf-8') as f:
-            _json.dump(prefs, f)
-        logger.info("Chrome prefs patched: prompt_for_download=False")
-    except Exception as e:
-        logger.warning(f"Could not patch Chrome prefs (non-fatal): {e}")
-
     try:
         context = playwright_instance.chromium.launch_persistent_context(
             user_data_dir=chrome_profile,
@@ -93,18 +64,9 @@ def _create_browser_context(playwright_instance):
                 '--disable-blink-features=AutomationControlled',
                 '--no-first-run',
                 '--no-default-browser-check',
-                # Suppress extension-related console errors ("no id or name found
-                # in config") that appear when the Chrome profile contains
-                # extensions not installed on this machine.
-                '--disable-extensions',
-                '--disable-component-extensions-with-background-pages',
             ],
             viewport={'width': 1280, 'height': 900},
             ignore_default_args=['--enable-automation'],
-            # REQUIRED for expect_download() to work — without this, Chrome
-            # blocks all download events and the script hangs indefinitely.
-            accept_downloads=True,
-            downloads_path=downloads_tmp,
         )
         return context
     except Exception as e:
@@ -284,17 +246,31 @@ def _inject_text_into_input(page, input_element, text: str) -> bool:
     return False
 
 
-def _try_download_native(page, output_path: str, retries: int = 5) -> Optional[str]:
+def _try_download_native(page, output_path: str) -> Optional[str]:
     """
-    Download the full-resolution image by clicking Gemini's download button.
+    Download the latest generated image using Playwright's native download API.
 
-    This is the ONLY path that gives the original generated image (1024×1024 etc).
-    The <img> src in the chat is always a display thumbnail, even with =s0.
+    Gemini renders generated images inside clickable image buttons. When you
+    hover over one, a toolbar with a download icon appears. This function:
+      1. Locates the last generated image element.
+      2. Hovers over it to reveal the action toolbar.
+      3. Clicks the download button and intercepts the file via expect_download().
 
-    Uses Playwright locator API (auto-retries) + force hover + JS mouseover
-    fallback to handle Gemini's constantly re-rendering DOM.
+    Args:
+        page: Playwright page object
+        output_path: Where to save the downloaded file
+
+    Returns:
+        Path to the saved image, or None if download was not possible
     """
-    # Selectors for the download button that appears on hover
+    # Selectors for the image wrapper buttons Gemini renders
+    image_container_selectors = [
+        'button.image-button',
+        'button.generated-image-button',
+        '[data-message-id] div[jsname] img',
+    ]
+
+    # Selectors for the download button (appears in toolbar on hover)
     download_button_selectors = [
         'button[aria-label="Download"]',
         'button[aria-label="Download full-sized image"]',
@@ -302,241 +278,43 @@ def _try_download_native(page, output_path: str, retries: int = 5) -> Optional[s
         'a[download]',
     ]
 
-    # Combined selector for any download button
-    combined_dl_selector = ', '.join(download_button_selectors)
-
-    # Selectors for the image container to hover over
-    image_container_selectors = [
-        'button.image-button',
-        'button.generated-image-button',
-        '[data-message-id] div[jsname] img',
-    ]
-
-    for attempt in range(1, retries + 1):
-        logger.info(f"Native download attempt {attempt}/{retries}")
-
-        # ── Step 1: find a fresh container reference ───────────────────────
-        container = None
-        container_sel = None
+    try:
+        # Find the last rendered image container
+        image_container = None
         for sel in image_container_selectors:
-            try:
-                els = page.query_selector_all(sel)
-                if els:
-                    container = els[-1]
-                    container_sel = sel
-                    break
-            except Exception:
-                continue
+            containers = page.query_selector_all(sel)
+            if containers:
+                image_container = containers[-1]
+                logger.debug(f"Found image container: {sel}")
+                break
 
-        if not container:
-            logger.debug(f"No container found (attempt {attempt})")
-            time.sleep(2)
-            continue
+        if image_container:
+            # Hover to reveal the action toolbar
+            image_container.hover()
+            time.sleep(1.5)  # give the toolbar animation time to complete
 
-        # ── Step 2: reveal the toolbar ─────────────────────────────────────
-        #   Try DOM hover first; if that fails (stale element), use JS to
-        #   dispatch mouseover/pointerover events directly which Gemini's
-        #   React event system listens on.
-        toolbar_revealed = False
-        try:
-            container.scroll_into_view_if_needed()
-            time.sleep(0.3)
-        except Exception:
-            pass
-
-        # Method A: normal Playwright hover
-        try:
-            container.hover(timeout=3000)
-            time.sleep(1.5)
-            toolbar_revealed = True
-            logger.debug("Hover succeeded (Playwright)")
-        except Exception as e:
-            logger.debug(f"Playwright hover failed: {e}")
-
-        # Method B: JS mouseover/pointerover dispatch (works even if DOM was swapped)
-        if not toolbar_revealed:
-            try:
-                # Re-query using locator (auto-retries built in)
-                loc = page.locator(container_sel).last
-                loc.evaluate("""el => {
-                    ['pointerover', 'pointerenter', 'mouseover', 'mouseenter'].forEach(name => {
-                        el.dispatchEvent(new PointerEvent(name, {bubbles: true, composed: true}));
-                    });
-                }""")
-                time.sleep(2)
-                toolbar_revealed = True
-                logger.debug("Toolbar revealed via JS events")
-            except Exception as e:
-                logger.debug(f"JS mouseover also failed: {e}")
-
-        if not toolbar_revealed:
-            time.sleep(1)
-            continue
-
-        # ── Step 3: find the download button ───────────────────────────────
-        download_btn = None
+        # Now try to find & click the download button
         for btn_sel in download_button_selectors:
             try:
-                download_btn = page.wait_for_selector(btn_sel, timeout=4000, state='visible')
-                if download_btn:
-                    logger.info(f"Download button found: {btn_sel}")
-                    break
-            except Exception:
+                btns = page.query_selector_all(btn_sel)
+                if btns:
+                    btn = btns[-1]
+                    if btn.is_visible():
+                        logger.info(f"Clicking download button: {btn_sel}")
+                        with page.expect_download(timeout=20000) as dl_info:
+                            btn.click()
+                        dl = dl_info.value
+                        dl.save_as(output_path)
+                        logger.info(f"Native download saved: {output_path}")
+                        return output_path
+            except Exception as e:
+                logger.debug(f"Download attempt via '{btn_sel}' failed: {e}")
                 continue
 
-        if not download_btn:
-            logger.debug(f"Download button not visible after hover (attempt {attempt})")
-            time.sleep(1.5)
-            continue
+    except Exception as e:
+        logger.debug(f"Native download preparation failed: {e}")
 
-        # ── Step 4: click and intercept the file ───────────────────────────
-        # Method A: real mouse click at pixel coordinates + expect_download
-        # Playwright's element.click() is a synthesized event — some Chrome
-        # builds don't treat it as a "trusted" user gesture, so the download
-        # handler silently ignores it.  page.mouse.click() at the element's
-        # bounding-box center produces a real OS-level mouse event — identical
-        # to a human clicking the button.
-        try:
-            box = download_btn.bounding_box()
-            if not box:
-                raise Exception("bounding_box returned None")
-            cx = box['x'] + box['width'] / 2
-            cy = box['y'] + box['height'] / 2
-            logger.info(f"Mouse-clicking download button at ({cx:.0f}, {cy:.0f})...")
-            with page.expect_download(timeout=15000) as dl_info:
-                page.mouse.click(cx, cy)
-            dl = dl_info.value
-            dl.save_as(output_path)
-            size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
-            logger.info(f"Full-res download saved: {output_path} ({size:,} bytes)")
-            return output_path
-        except Exception as e:
-            logger.warning(f"Mouse click + expect_download failed ({e}), trying request interception...")
-
-        # Method B: intercept the URL from network requests triggered by click
-        # Some Chrome profiles don't fire download events. Instead, capture the
-        # URL the button's click handler requests and fetch it ourselves.
-        try:
-            captured_urls = []
-            def _on_request(request):
-                url = request.url
-                if ('googleusercontent.com' in url or 'blob:' in url or
-                    url.endswith('.png') or url.endswith('.jpg') or
-                    'download' in url.lower()):
-                    captured_urls.append(url)
-
-            page.on('request', _on_request)
-
-            # Re-hover and re-click (the toolbar might have hidden after the timeout)
-            try:
-                container_fresh = None
-                for sel in image_container_selectors:
-                    els = page.query_selector_all(sel)
-                    if els:
-                        container_fresh = els[-1]
-                        break
-                if container_fresh:
-                    container_fresh.scroll_into_view_if_needed()
-                    container_fresh.hover(timeout=3000)
-                    time.sleep(1.5)
-            except Exception:
-                pass
-
-            # Re-find download button
-            dl_btn2 = None
-            for btn_sel in download_button_selectors:
-                try:
-                    dl_btn2 = page.wait_for_selector(btn_sel, timeout=3000, state='visible')
-                    if dl_btn2: break
-                except Exception:
-                    continue
-
-            if dl_btn2:
-                # Use real mouse click at coordinates (same reason as Method A)
-                try:
-                    box2 = dl_btn2.bounding_box()
-                    if box2:
-                        page.mouse.click(
-                            box2['x'] + box2['width'] / 2,
-                            box2['y'] + box2['height'] / 2
-                        )
-                        logger.info("Method B: mouse-clicked download button at coordinates")
-                    else:
-                        dl_btn2.evaluate("el => el.click()")
-                except Exception:
-                    dl_btn2.evaluate("el => el.click()")
-                time.sleep(3)
-
-            page.remove_listener('request', _on_request)
-
-            # Also check if a new tab/popup opened with the image
-            pages = page.context.pages
-            if len(pages) > 1:
-                new_page = pages[-1]
-                new_url = new_page.url
-                logger.info(f"New tab opened: {new_url}")
-                if 'googleusercontent.com' in new_url or new_url.startswith('blob:'):
-                    captured_urls.insert(0, new_url)
-                try:
-                    new_page.close()
-                except Exception:
-                    pass
-
-            # Try to fetch any captured URLs
-            for url in captured_urls:
-                try:
-                    # For googleusercontent URLs, request original size
-                    fetch_url = url
-                    if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
-                        fetch_url = fetch_url.split('=')[0] + '=s0'
-                    logger.info(f"Fetching intercepted URL: ...{fetch_url[-70:]}")
-                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                    response = page.request.get(fetch_url)
-                    if response.ok and len(response.body()) > 5000:
-                        with open(output_path, 'wb') as f:
-                            f.write(response.body())
-                        size = os.path.getsize(output_path)
-                        logger.info(f"Full-res image via request interception: {output_path} ({size:,} bytes)")
-                        return output_path
-                except Exception as ex:
-                    logger.debug(f"Fetch of captured URL failed: {ex}")
-
-        except Exception as e:
-            logger.warning(f"Request interception fallback failed: {e}")
-
-        # Method C: extract href/data attributes from the button itself
-        try:
-            href = download_btn.get_attribute('href')
-            if not href:
-                href = download_btn.evaluate("""el => {
-                    // Check parent <a> tag
-                    const a = el.closest('a');
-                    if (a && a.href) return a.href;
-                    // Check data attributes
-                    return el.dataset.downloadUrl || el.dataset.url || '';
-                }""")
-            if href and href.startswith('http'):
-                fetch_url = href
-                if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
-                    fetch_url = fetch_url.split('=')[0] + '=s0'
-                logger.info(f"Trying button href: ...{fetch_url[-70:]}")
-                response = page.request.get(fetch_url)
-                if response.ok and len(response.body()) > 5000:
-                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                    with open(output_path, 'wb') as f:
-                        f.write(response.body())
-                    size = os.path.getsize(output_path)
-                    logger.info(f"Full-res image via button href: {output_path} ({size:,} bytes)")
-                    return output_path
-        except Exception as e:
-            logger.debug(f"Button href extraction failed: {e}")
-
-        time.sleep(2)
-        continue
-
-    logger.warning("Native download failed after all retries")
     return None
-
 
 
 def _download_image_fallback(page, image_src: str, output_path: str) -> Optional[str]:
@@ -571,31 +349,28 @@ def _download_image_fallback(page, image_src: str, output_path: str) -> Optional
             logger.error(f"data: URI decode failed: {e}")
             return None
 
-    # ── blob: URL — trigger as a browser download to bypass CSP ─────────────────
-    # Using page.evaluate with fetch() is blocked by Gemini's CSP connect-src
-    # policy on some machines. Instead, create a hidden <a download> element and
-    # click it — the browser initiates the download itself so CSP is not applied.
+    # ── blob: URL — fetch inside browser context ──────────────────────────────
     if image_src.startswith('blob:'):
         try:
-            import json as _json
-            with page.expect_download(timeout=20000) as dl_info:
-                page.evaluate(f"""
-                    (() => {{
-                        const a = document.createElement('a');
-                        a.href = {_json.dumps(image_src)};
-                        a.download = 'gemini_image.png';
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                    }})();
-                """)
-            dl = dl_info.value
-            dl.save_as(output_path)
-            logger.info(f"Saved blob: image via anchor download (CSP-safe): {output_path}")
-            return output_path
+            data_url = page.evaluate("""
+                async (blobUrl) => {
+                    const resp = await fetch(blobUrl);
+                    const blob = await resp.blob();
+                    return new Promise(resolve => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.readAsDataURL(blob);
+                    });
+                }
+            """, image_src)
+            if data_url and ',' in data_url:
+                _, data = data_url.split(',', 1)
+                with open(output_path, 'wb') as f:
+                    f.write(base64.b64decode(data))
+                logger.info(f"Saved blob: image: {output_path}")
+                return output_path
         except Exception as e:
-            logger.error(f"Anchor download for blob: URL failed: {e}")
-
+            logger.error(f"blob: URL extraction failed: {e}")
 
     # ── Direct HTTP fetch (for googleusercontent, etc.) ──────────────────────
     if image_src.startswith('http'):
@@ -868,42 +643,10 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None) -> Optional[str
                 return None
 
             # ── Download the image ───────────────────────────────────────────
-            # Strategy order:
-            #  1. Hover+click the native download button — this is the ONLY
-            #     path that yields the original full-resolution generated image
-            #     (e.g. 1024×1024). The <img> src is always a display thumbnail.
-            #  2. HTTP fetch via page.request as fallback (still usable quality
-            #     for some URL types).
-            #  3. blob/data/screenshot as last resort.
-            logger.info("Waiting for image to fully render before download...")
-            time.sleep(4)
-
-            result = None
-
-            # ── Strategy 1: native download button (full resolution) ──────────
-            result = _try_download_native(page, output_path, retries=5)
-
-            # ── Strategy 2: HTTP fetch (may be lower res for gg-dl URLs) ──────
-            if not result and image_src and image_src.startswith('http'):
-                try:
-                    fetch_url = image_src
-                    if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
-                        fetch_url = fetch_url.split('=')[0] + '=s0'
-                    logger.info(f"Trying direct HTTP fetch (fallback): ...{fetch_url[-60:]}")
-                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                    response = page.request.get(fetch_url)
-                    if response.ok:
-                        with open(output_path, 'wb') as f:
-                            f.write(response.body())
-                        size = os.path.getsize(output_path)
-                        logger.warning(f"HTTP fetch fallback: {output_path} ({size:,} bytes) — may not be full resolution")
-                        result = output_path
-                except Exception as e:
-                    logger.warning(f"HTTP fetch failed: {e}")
-
-            # ── Strategy 3: blob/data/screenshot ──────────────────────────────
+            # Preferred: Playwright native download (highest quality, exact file)
+            result = _try_download_native(page, output_path)
             if not result:
-                logger.warning("All primary strategies failed — trying src extraction")
+                # Fallback: extract from src attribute (data URI / blob URL)
                 result = _download_image_fallback(page, image_src, output_path)
 
             if result:
