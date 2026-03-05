@@ -717,24 +717,24 @@ export function ShotCard({
                           random otherwise).
                         </p>
                       </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">
-                          Prompt Override
-                        </label>
-                        <Textarea
-                          value={regenPromptOverride}
-                          onChange={(e) => setRegenPromptOverride(e.target.value)}
-                          rows={4}
-                          placeholder="Leave blank to use the shot's saved image prompt…"
-                          className="text-xs resize-y"
-                        />
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          Edits here are one-time only — they won't change the saved shot prompt.
-                        </p>
-                      </div>
                     </>
                   )}
+                  {/* Prompt override — shown for all generation modes */}
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Prompt Override
+                    </label>
+                    <Textarea
+                      value={regenPromptOverride}
+                      onChange={(e) => setRegenPromptOverride(e.target.value)}
+                      rows={4}
+                      placeholder="Leave blank to use the shot's saved image prompt…"
+                      className="text-xs resize-y"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Edits here are one-time only — they won't change the saved shot prompt.
+                    </p>
+                  </div>
                 </>
               )}
 
