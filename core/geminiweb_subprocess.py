@@ -325,31 +325,39 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
         logger.info("Waiting 5s for Gemini to prepare full-resolution image...")
         time.sleep(5)
 
-        # ── First download attempt ───────────────────────────────────────────
-        result = _do_hover_and_download(image_container)
-        if not result:
-            return None
+        # ── Download with retries (handles network errors + low-res files) ───
+        best_size = 0
+        for attempt in range(3):
+            if attempt > 0:
+                wait = 10
+                logger.warning(f"Retry {attempt}/2: waiting {wait}s before re-attempting download...")
+                time.sleep(wait)
+                # Re-hover since toolbar may have disappeared
+                image_container.hover()
+                time.sleep(1)
 
-        # ── Check file size — retry if we got the low-res preview ────────────
-        file_size = os.path.getsize(output_path)
-        logger.info(f"Downloaded file size: {file_size:,} bytes")
-
-        if file_size < MIN_FULL_RES_SIZE:
-            logger.warning(f"File too small ({file_size:,} bytes < {MIN_FULL_RES_SIZE:,}), "
-                           f"waiting 10s for full-res to become available...")
-            time.sleep(10)
-
-            # Retry the download
             result = _do_hover_and_download(image_container)
-            if result:
-                retry_size = os.path.getsize(output_path)
-                logger.info(f"Retry download size: {retry_size:,} bytes")
-                if retry_size > file_size:
-                    logger.info(f"Got larger file on retry ({retry_size:,} vs {file_size:,})")
-                else:
-                    logger.info(f"Retry file same/smaller size, keeping best attempt")
+            if not result:
+                logger.warning(f"Download attempt {attempt+1} failed (no download triggered)")
+                continue
 
-        return output_path
+            file_size = os.path.getsize(output_path)
+            logger.info(f"Attempt {attempt+1} downloaded: {file_size:,} bytes")
+
+            if file_size >= MIN_FULL_RES_SIZE:
+                logger.info(f"Full-res image downloaded ({file_size:,} bytes)")
+                return output_path
+
+            # Keep track of the best (largest) file we got
+            if file_size > best_size:
+                best_size = file_size
+
+        # Return whatever we have even if it's smaller than expected
+        if best_size > 0:
+            logger.warning(f"Could not get full-res after 3 attempts, using best: {best_size:,} bytes")
+            return output_path
+
+        return None
 
     except Exception as e:
         logger.debug(f"Native download preparation failed: {e}")
