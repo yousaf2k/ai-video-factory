@@ -64,6 +64,11 @@ def _create_browser_context(playwright_instance):
                 '--disable-blink-features=AutomationControlled',
                 '--no-first-run',
                 '--no-default-browser-check',
+                # Suppress extension-related console errors ("no id or name found
+                # in config") that appear when the Chrome profile contains
+                # extensions not installed on this machine.
+                '--disable-extensions',
+                '--disable-component-extensions-with-background-pages',
             ],
             viewport={'width': 1280, 'height': 900},
             ignore_default_args=['--enable-automation'],
@@ -391,28 +396,31 @@ def _download_image_fallback(page, image_src: str, output_path: str) -> Optional
             logger.error(f"data: URI decode failed: {e}")
             return None
 
-    # ── blob: URL — fetch inside browser context ──────────────────────────────
+    # ── blob: URL — trigger as a browser download to bypass CSP ─────────────────
+    # Using page.evaluate with fetch() is blocked by Gemini's CSP connect-src
+    # policy on some machines. Instead, create a hidden <a download> element and
+    # click it — the browser initiates the download itself so CSP is not applied.
     if image_src.startswith('blob:'):
         try:
-            data_url = page.evaluate("""
-                async (blobUrl) => {
-                    const resp = await fetch(blobUrl);
-                    const blob = await resp.blob();
-                    return new Promise(resolve => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => resolve(reader.result);
-                        reader.readAsDataURL(blob);
-                    });
-                }
-            """, image_src)
-            if data_url and ',' in data_url:
-                _, data = data_url.split(',', 1)
-                with open(output_path, 'wb') as f:
-                    f.write(base64.b64decode(data))
-                logger.info(f"Saved blob: image: {output_path}")
-                return output_path
+            import json as _json
+            with page.expect_download(timeout=20000) as dl_info:
+                page.evaluate(f"""
+                    (() => {{
+                        const a = document.createElement('a');
+                        a.href = {_json.dumps(image_src)};
+                        a.download = 'gemini_image.png';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }})();
+                """)
+            dl = dl_info.value
+            dl.save_as(output_path)
+            logger.info(f"Saved blob: image via anchor download (CSP-safe): {output_path}")
+            return output_path
         except Exception as e:
-            logger.error(f"blob: URL extraction failed: {e}")
+            logger.error(f"Anchor download for blob: URL failed: {e}")
+
 
     # ── Direct HTTP fetch (for googleusercontent, etc.) ──────────────────────
     if image_src.startswith('http'):
