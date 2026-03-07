@@ -320,7 +320,7 @@ export default function SessionEditPage() {
           <div className="border rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">
-                Shots ({shots?.length || 0})
+                Shots
               </h2>
               <button
                 onClick={() => setShowReplanShotsModal(true)}
@@ -331,7 +331,11 @@ export default function SessionEditPage() {
                 Re-plan Shots
               </button>
             </div>
-            <ShotGrid shots={shots || []} sessionId={sessionId} />
+            <ShotGrid
+              shots={shots || []}
+              sessionId={sessionId}
+              scenes={session?.story?.scenes}
+            />
           </div>
 
           {/* Instructions */}

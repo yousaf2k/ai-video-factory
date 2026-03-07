@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
     RegenerateVideoRequest, BatchRegenerateRequest, ReplanShotsRequest,
-    SelectImageRequest
+    SelectImageRequest, SelectVideoRequest
 )
 from web_ui.backend.services.session_service import SessionService
 from web_ui.backend.services.generation_service import GenerationService
@@ -94,7 +94,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
     """Update shots (reorder, edit prompts)"""
     try:
         # We take the raw dicts directly because we will manually update string paths inside them later without fighting the immutable pydantic models
-        shots_dicts = [shot.dict() for shot in request.shots]
+        shots_dicts = request.shots
 
         # Ensure all incoming shots have an ID (for backwards compatibility with old sessions or newly inserted UI blank shots)
         for shot in shots_dicts:
@@ -263,6 +263,8 @@ async def update_shot(session_id: str, shot_index: int, request: UpdateShotReque
             shot['camera'] = request.camera
         if request.narration is not None:
             shot['narration'] = request.narration
+        if request.scene_index is not None:
+            shot['scene_index'] = request.scene_index
 
         # Save updated shots
         session_dir = session_service.get_session_dir(session_id)
@@ -351,7 +353,7 @@ async def regenerate_shot_video(session_id: str, shot_index: int, request: Regen
     try:
         result = await generation_service.regenerate_shot_video(
             session_id, shot_index, force=request.force,
-            video_workflow=request.video_workflow
+            video_mode=request.video_mode, video_workflow=request.video_workflow
         )
         return {"status": "success", "video_path": result}
     except Exception as e:
@@ -505,6 +507,124 @@ async def delete_shot_image_variation(session_id: str, shot_index: int, image_pa
         )
 
 
+@router.post("/{shot_index}/select-video")
+async def select_shot_video(session_id: str, shot_index: int, request: SelectVideoRequest):
+    """Select a specific video as the active one for a shot"""
+    try:
+        shots = await get_shots(session_id)
+
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        shot = shots[shot_index - 1]
+
+        # Verify the requested path exists in video_paths
+        video_paths = shot.get('video_paths', [])
+        if request.video_path not in video_paths:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Video path not found in shot's video_paths"
+            )
+
+        # Update the active video_path
+        shot['video_path'] = request.video_path
+
+        # Save updated shots
+        session_dir = session_service.get_session_dir(session_id)
+        shots_path = os.path.join(session_dir, "shots.json")
+
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+        return {"status": "success", "video_path": request.video_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error selecting video for shot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to select video: {str(e)}"
+        )
+
+
+@router.delete("/{shot_index}/videos")
+async def delete_shot_video_variation(session_id: str, shot_index: int, video_path: str):
+    """Delete a specific video variation from disk and from the shot record.
+
+    Query param: video_path — the relative path of the video to delete.
+    If the deleted video was the active one, the next available variation is promoted.
+    """
+    try:
+        shots = await get_shots(session_id)
+
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        shot = shots[shot_index - 1]
+        video_paths: list = shot.get('video_paths', [])
+
+        if video_path not in video_paths:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Video path not found in shot's video_paths"
+            )
+
+        # Remove from the list
+        video_paths.remove(video_path)
+        shot['video_paths'] = video_paths
+
+        # If it was the active video, promote the first remaining variation (if any)
+        if shot.get('video_path') == video_path:
+            shot['video_path'] = video_paths[0] if video_paths else None
+            shot['video_rendered'] = bool(video_paths)
+
+        # Attempt to delete the physical file
+        abs_path = None
+        for base in [config.PROJECT_ROOT, config.ABS_OUTPUT_DIR if hasattr(config, 'ABS_OUTPUT_DIR') else None]:
+            if base:
+                candidate = os.path.join(base, video_path.replace("/", os.sep))
+                if os.path.exists(candidate):
+                    abs_path = candidate
+                    break
+        # Fallback: treat video_path as relative to ABS_SESSIONS_DIR parent
+        if abs_path is None:
+            candidate = os.path.join(os.path.dirname(config.ABS_SESSIONS_DIR), video_path.replace("/", os.sep))
+            if os.path.exists(candidate):
+                abs_path = candidate
+
+        if abs_path and os.path.isfile(abs_path):
+            try:
+                os.remove(abs_path)
+                logger.info(f"Deleted video variation: {abs_path}")
+            except Exception as e:
+                logger.warning(f"Could not delete file {abs_path}: {e}")
+        else:
+            logger.warning(f"Video file not found on disk for deletion: {video_path}")
+
+        # Persist updated shots.json
+        session_dir = session_service.get_session_dir(session_id)
+        shots_path = os.path.join(session_dir, "shots.json")
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+        return {"status": "success", "remaining": len(video_paths), "active_video_path": shot.get('video_path')}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting video variation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete video variation: {str(e)}"
+        )
+
+
 @router.post("/{shot_index}/upload-image")
 async def upload_shot_image(session_id: str, shot_index: int, file: UploadFile = File(...)):
     """Upload a custom image from disk for a shot (bypasses AI generation)"""
@@ -585,6 +705,86 @@ async def upload_shot_image(session_id: str, shot_index: int, file: UploadFile =
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload image: {str(e)}"
+        )
+
+
+@router.post("/{shot_index}/upload-video")
+async def upload_shot_video(session_id: str, shot_index: int, file: UploadFile = File(...)):
+    """Upload a custom video from disk for a shot (bypasses AI generation)"""
+    try:
+        shots = await get_shots(session_id)
+
+        if shot_index < 1 or shot_index > len(shots):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Shot {shot_index} not found"
+            )
+
+        shot = shots[shot_index - 1]
+
+        # Determine file extension (default to .mp4 if none)
+        original_filename = file.filename or "upload.mp4"
+        ext = os.path.splitext(original_filename)[1].lower() or ".mp4"
+        # Only allow video extensions
+        allowed_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+        if ext not in allowed_exts:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type: {ext}. Allowed types: {', '.join(allowed_exts)}"
+            )
+
+        # Build target path using the same versioned naming convention as AI-generated videos:
+        # shot_001_001.mp4, shot_001_002.mp4, etc.
+        session_dir = os.path.join(config.ABS_SESSIONS_DIR, session_id)
+        videos_dir = os.path.join(session_dir, "videos")
+        os.makedirs(videos_dir, exist_ok=True)
+
+        version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.[^.]+$")
+        max_version = 0
+        if os.path.isdir(videos_dir):
+            for fname in os.listdir(videos_dir):
+                m = version_re.match(fname)
+                if m:
+                    max_version = max(max_version, int(m.group(1)))
+        next_version = max_version + 1
+
+        filename = f"shot_{shot_index:03d}_{next_version:03d}{ext}"
+
+        abs_dest = os.path.join(videos_dir, filename)
+
+        # Write uploaded bytes to disk
+        contents = await file.read()
+        with open(abs_dest, "wb") as f:
+            f.write(contents)
+
+        logger.info(f"Uploaded video for shot {shot_index} saved to {abs_dest}")
+
+        # Build the relative path
+        rel_path = session_service.session_manager._relativize_path(abs_dest)
+
+        # Update the shot record
+        shot['video_path'] = rel_path
+        shot['video_rendered'] = True
+        video_paths = shot.get('video_paths', [])
+        if rel_path not in video_paths:
+            video_paths.append(rel_path)
+        shot['video_paths'] = video_paths
+
+        # Persist to shots.json
+        session_dir2 = session_service.get_session_dir(session_id)
+        shots_path = os.path.join(session_dir2, "shots.json")
+        with open(shots_path, 'w', encoding='utf-8') as f:
+            json.dump(shots, f, indent=2, ensure_ascii=False)
+
+        return {"status": "success", "video_path": rel_path, "filename": filename}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading video for shot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload video: {str(e)}"
         )
 
 

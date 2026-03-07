@@ -105,11 +105,10 @@ export default function SessionDetailPage() {
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold">{session.session_id}</h1>
               <span
-                className={`px-3 py-1 text-sm rounded-full ${
-                  session.completed
+                className={`px-3 py-1 text-sm rounded-full ${session.completed
                     ? "bg-green-100 text-green-800"
                     : "bg-yellow-100 text-yellow-800"
-                }`}
+                  }`}
               >
                 {session.completed ? "Completed" : "In Progress"}
               </span>
@@ -118,14 +117,14 @@ export default function SessionDetailPage() {
               Started{" "}
               {session.started_at
                 ? (() => {
-                    try {
-                      return formatDistanceToNow(new Date(session.started_at), {
-                        addSuffix: true,
-                      });
-                    } catch (e) {
-                      return "Unknown date";
-                    }
-                  })()
+                  try {
+                    return formatDistanceToNow(new Date(session.started_at), {
+                      addSuffix: true,
+                    });
+                  } catch (e) {
+                    return "Unknown date";
+                  }
+                })()
                 : "Unknown date"}
             </p>
           </div>
@@ -305,130 +304,130 @@ export default function SessionDetailPage() {
               {/* Thumbnails Section */}
               {(session.story.thumbnail_prompt_16_9 ||
                 session.story.thumbnail_prompt_9_16) && (
-                <div className="bg-background/80 p-5 rounded-lg border border-border/50 mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0">
-                      Thumbnail Prompts & Assets
-                    </h4>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* 16:9 Youtube-Style Card */}
-                    <div className="flex flex-col gap-3 group">
-                      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
-                        {session.thumbnail_url ? (
-                          <img
-                            src={getMediaUrl(
-                              session.thumbnail_url,
-                              imageVersion,
-                            )}
-                            alt="16:9 Thumbnail"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
-                            <ImageIcon className="w-8 h-8 opacity-40 mb-2" />
-                            <span className="text-sm font-medium">
-                              Coming Soon
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="gap-2 shadow-lg"
-                            onClick={() => setShowRegenModal("16:9")}
-                            disabled={generatingThumbnails["16:9"]}
-                          >
-                            {generatingThumbnails["16:9"] ? (
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <ImageIcon className="w-4 h-4" />
-                            )}
-                            {session.thumbnail_url ? "Regenerate" : "Generate"}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col px-1">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span>
-                          <h3 className="text-sm font-semibold text-foreground line-clamp-1">
-                            Landscape (16:9)
-                          </h3>
-                        </div>
-                        <p
-                          className="text-xs text-muted-foreground line-clamp-3 leading-relaxed"
-                          title={session.story.thumbnail_prompt_16_9 || ""}
-                        >
-                          {session.story.thumbnail_prompt_16_9 ||
-                            "No prompt available"}
-                        </p>
-                      </div>
+                  <div className="bg-background/80 p-5 rounded-lg border border-border/50 mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0">
+                        Thumbnail Prompts & Assets
+                      </h4>
                     </div>
 
-                    {/* 9:16 Youtube-Style Card (forced into 16:9 container scale) */}
-                    <div className="flex flex-col gap-3 group">
-                      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted/80 border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex justify-center items-center">
-                        {session.thumbnail_url_9_16 ? (
-                          <img
-                            src={getMediaUrl(
-                              session.thumbnail_url_9_16,
-                              imageVersion,
-                            )}
-                            alt="9:16 Thumbnail"
-                            className="w-full h-full object-contain max-w-[56.25%] mx-auto bg-black"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
-                            <ImageIcon className="w-8 h-8 opacity-40 mb-2" />
-                            <span className="text-sm font-medium">
-                              Coming Soon
-                            </span>
-                          </div>
-                        )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* 16:9 Youtube-Style Card */}
+                      <div className="flex flex-col gap-3 group">
+                        <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
+                          {session.thumbnail_url ? (
+                            <img
+                              src={getMediaUrl(
+                                session.thumbnail_url,
+                                imageVersion,
+                              )}
+                              alt="16:9 Thumbnail"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
+                              <ImageIcon className="w-8 h-8 opacity-40 mb-2" />
+                              <span className="text-sm font-medium">
+                                Coming Soon
+                              </span>
+                            </div>
+                          )}
 
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="gap-2 shadow-lg"
-                            onClick={() => setShowRegenModal("9:16")}
-                            disabled={generatingThumbnails["9:16"]}
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="gap-2 shadow-lg"
+                              onClick={() => setShowRegenModal("16:9")}
+                              disabled={generatingThumbnails["16:9"]}
+                            >
+                              {generatingThumbnails["16:9"] ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <ImageIcon className="w-4 h-4" />
+                              )}
+                              {session.thumbnail_url ? "Regenerate" : "Generate"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col px-1">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span>
+                            <h3 className="text-sm font-semibold text-foreground line-clamp-1">
+                              Landscape (16:9)
+                            </h3>
+                          </div>
+                          <p
+                            className="text-xs text-muted-foreground line-clamp-3 leading-relaxed"
+                            title={session.story.thumbnail_prompt_16_9 || ""}
                           >
-                            {generatingThumbnails["9:16"] ? (
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <ImageIcon className="w-4 h-4" />
-                            )}
-                            {session.thumbnail_url_9_16
-                              ? "Regenerate"
-                              : "Generate"}
-                          </Button>
+                            {session.story.thumbnail_prompt_16_9 ||
+                              "No prompt available"}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="flex flex-col px-1">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0"></span>
-                          <h3 className="text-sm font-semibold text-foreground line-clamp-1">
-                            Portrait (9:16)
-                          </h3>
+                      {/* 9:16 Youtube-Style Card (forced into 16:9 container scale) */}
+                      <div className="flex flex-col gap-3 group">
+                        <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted/80 border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex justify-center items-center">
+                          {session.thumbnail_url_9_16 ? (
+                            <img
+                              src={getMediaUrl(
+                                session.thumbnail_url_9_16,
+                                imageVersion,
+                              )}
+                              alt="9:16 Thumbnail"
+                              className="w-full h-full object-contain max-w-[56.25%] mx-auto bg-black"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
+                              <ImageIcon className="w-8 h-8 opacity-40 mb-2" />
+                              <span className="text-sm font-medium">
+                                Coming Soon
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="gap-2 shadow-lg"
+                              onClick={() => setShowRegenModal("9:16")}
+                              disabled={generatingThumbnails["9:16"]}
+                            >
+                              {generatingThumbnails["9:16"] ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <ImageIcon className="w-4 h-4" />
+                              )}
+                              {session.thumbnail_url_9_16
+                                ? "Regenerate"
+                                : "Generate"}
+                            </Button>
+                          </div>
                         </div>
-                        <p
-                          className="text-xs text-muted-foreground line-clamp-3 leading-relaxed"
-                          title={session.story.thumbnail_prompt_9_16 || ""}
-                        >
-                          {session.story.thumbnail_prompt_9_16 ||
-                            "No prompt available"}
-                        </p>
+
+                        <div className="flex flex-col px-1">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="w-2 h-2 rounded-full bg-purple-500 flex-shrink-0"></span>
+                            <h3 className="text-sm font-semibold text-foreground line-clamp-1">
+                              Portrait (9:16)
+                            </h3>
+                          </div>
+                          <p
+                            className="text-xs text-muted-foreground line-clamp-3 leading-relaxed"
+                            title={session.story.thumbnail_prompt_9_16 || ""}
+                          >
+                            {session.story.thumbnail_prompt_9_16 ||
+                              "No prompt available"}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {session.story.scenes && session.story.scenes.length > 0 && (
                 <div className="space-y-4">

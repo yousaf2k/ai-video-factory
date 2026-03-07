@@ -167,7 +167,8 @@ class SessionManager:
                 'image_path': None,
                 'image_paths': [],  # For multiple image variations
                 'video_rendered': False,
-                'video_path': None
+                'video_path': None,
+                'video_paths': []
             }
             shots_with_status.append(shot_data)
 
@@ -278,6 +279,12 @@ class SessionManager:
                 normalized_path = self._relativize_path(video_path)
                 
                 shots[shot_index - 1]['video_path'] = normalized_path
+
+                # Also add to video_paths array if not already there
+                if normalized_path not in shots[shot_index - 1].get('video_paths', []):
+                    if 'video_paths' not in shots[shot_index - 1]:
+                        shots[shot_index - 1]['video_paths'] = []
+                    shots[shot_index - 1]['video_paths'].append(normalized_path)
 
             # Update stats
             videos_rendered = sum(1 for s in shots if s.get('video_rendered', False))

@@ -83,6 +83,8 @@ export interface Shot {
   image_paths: string[];
   video_rendered: boolean;
   video_path: string | null;
+  video_paths?: string[];
+  scene_index?: number;
 }
 export interface CreateSessionRequest {
   idea: string;
@@ -133,6 +135,7 @@ export interface UpdateShotRequest {
   motion_prompt?: string;
   camera?: string;
   narration?: string;
+  scene_index?: number;
 }
 
 export interface ProgressEvent {

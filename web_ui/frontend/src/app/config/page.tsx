@@ -160,6 +160,8 @@ export default function ConfigPage() {
                 <SelectContent>
                   {/* Later on, we can add Luma/Minimax etc. For now ComfyUI is the primary */}
                   <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
+                  <SelectItem value="geminiweb">GeminiWeb (Browser)</SelectItem>
+                  <SelectItem value="flowweb">FlowWeb (Browser)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

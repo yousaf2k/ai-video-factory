@@ -579,13 +579,64 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
     variation_label = f" (variation {variation_idx})" if variation_idx > 1 else ""
 
     try:
+        # Check generation mode from config
+        video_mode = getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
+        
         # If a specific image path is provided, temporarily override shot's image_path
         original_image_path = None
         if image_path:
             original_image_path = shot.get('image_path')
             shot['image_path'] = image_path
 
-        # Compile and submit workflow
+        # Handle different generation modes
+        if video_mode == 'geminiweb':
+            print(f"[PROCESS] Shot {shot_idx}{variation_label}: Generating via GeminiWeb...")
+            from core.geminiweb_video_generator import generate_video_geminiweb
+            motion_prompt = shot.get('motion_prompt', "Animate this image realistically")
+            video_res = generate_video_geminiweb(
+                image_path=shot['image_path'],
+                motion_prompt=motion_prompt,
+                output_path=video_save_path
+            )
+            
+            # Restore original image_path if we overrode it
+            if original_image_path is not None:
+                shot['image_path'] = original_image_path
+                
+            if video_res:
+                print(f"[PASS] Shot {shot_idx}{variation_label}: Generated video via GeminiWeb")
+                if variation_idx == 1:
+                    session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                return True, None, video_save_path
+            else:
+                return False, "GeminiWeb generation failed", None
+
+        elif video_mode == 'flowweb':
+            print(f"[PROCESS] Shot {shot_idx}{variation_label}: Generating via FlowWeb...")
+            from core.flowweb_video_generator import generate_video_flowweb
+            motion_prompt = shot.get('motion_prompt', "Animate this image realistically")
+            aspect_ratio = getattr(config, 'VIDEO_ASPECT_RATIO', '16:9')
+            
+            video_res = generate_video_flowweb(
+                image_path=shot['image_path'],
+                prompt=motion_prompt,
+                output_path=video_save_path,
+                aspect_ratio=aspect_ratio
+            )
+            
+            # Restore original image_path if we overrode it
+            if original_image_path is not None:
+                shot['image_path'] = original_image_path
+                
+            if video_res:
+                print(f"[PASS] Shot {shot_idx}{variation_label}: Generated video via FlowWeb")
+                if variation_idx == 1:
+                    session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                return True, None, video_save_path
+            else:
+                return False, "FlowWeb generation failed", None
+
+        # Default: ComfyUI
         wf = compile_workflow(template, shot, video_length_seconds=shot_length)
         result = submit(wf)
 
@@ -877,16 +928,23 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
         return None
 
     # Submit videos (only those not yet rendered) with verification
-    print(f"\n[INFO] Submitting videos to ComfyUI with verification...")
+    print(f"\n[INFO] Submitting videos...")
 
-    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
-    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+    video_mode = getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
+    template = None
     
-    workflow_path = config.WORKFLOW_PATH
-    if workflow_config:
-        workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+    if video_mode == 'comfyui':
+        print(f"[INFO] Loading ComfyUI workflow...")
+        work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+        workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
         
-    template = load_workflow(workflow_path, video_length_seconds=shot_length)
+        workflow_path = config.WORKFLOW_PATH
+        if workflow_config:
+            workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+            
+        template = load_workflow(workflow_path, video_length_seconds=shot_length)
+    else:
+        print(f"[INFO] Using {video_mode} backend for video generation")
 
     # Load shots status from shots.json
     shots_status = session_mgr.get_shots(session_id)
@@ -1848,14 +1906,18 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
 
 def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
     """Render videos for all shots and all image variations"""
-    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
-    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+    video_mode = getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
     
-    workflow_path = config.WORKFLOW_PATH
-    if workflow_config:
-        workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+    template = None
+    if video_mode != 'geminiweb':
+        work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+        workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
         
-    template = load_workflow(workflow_path, video_length_seconds=shot_length)
+        workflow_path = config.WORKFLOW_PATH
+        if workflow_config:
+            workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+            
+        template = load_workflow(workflow_path, video_length_seconds=shot_length)
 
     # Load shots status from shots.json to check which videos are already rendered
     shots_status = session_mgr.get_shots(session_id)
@@ -1911,10 +1973,39 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
             total_renders += 1
             variation_label = f" (variation {variation_idx}/{len(image_paths)})" if len(image_paths) > 1 else ""
 
-            success, error, video_path = submit_and_verify_video(
-                template, shot, shot_length, session_id, shot_idx, session_mgr,
-                image_path=img_path, variation_idx=variation_idx
-            )
+            if video_mode == 'geminiweb':
+                from core.geminiweb_video_generator import generate_video_geminiweb
+                videos_dir = session_mgr.get_videos_dir(session_id)
+                os.makedirs(videos_dir, exist_ok=True)
+                
+                if variation_idx > 1:
+                    video_filename = f"shot_{shot_idx:03d}_{variation_idx:03d}.mp4"
+                    video_save_path = os.path.join(videos_dir, video_filename)
+                else:
+                    video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_idx)
+
+                motion_prompt = shot.get('motion_prompt', "Animate this image realistically")
+                video_res = generate_video_geminiweb(
+                    image_path=img_path,
+                    motion_prompt=motion_prompt,
+                    output_path=video_save_path
+                )
+                
+                if video_res:
+                    if variation_idx == 1:
+                        session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    success = True
+                    error = None
+                    video_path = video_res
+                else:
+                    success = False
+                    error = "GeminiWeb generation failed"
+                    video_path = None
+            else:
+                success, error, video_path = submit_and_verify_video(
+                    template, shot, shot_length, session_id, shot_idx, session_mgr,
+                    image_path=img_path, variation_idx=variation_idx
+                )
 
             if success:
                 successful_renders += 1

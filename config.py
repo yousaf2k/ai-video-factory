@@ -385,6 +385,9 @@ IMAGE_SAVE_NODE_ID = "9"
 # ==========================================
 # VIDEO GENERATION CONFIGURATION
 # ==========================================
+# Video generation mode: "comfyui" or "geminiweb"
+VIDEO_GENERATION_MODE = os.getenv("VIDEO_GENERATION_MODE", "comfyui")
+
 # Default video length per shot (in seconds)
 DEFAULT_SHOT_LENGTH = 5
 

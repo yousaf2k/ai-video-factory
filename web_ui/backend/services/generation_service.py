@@ -127,7 +127,7 @@ class GenerationService:
                     if request.regenerate_videos:
                         await self.regenerate_shot_video(
                             session_id, shot_index, force=request.force,
-                            video_workflow=request.video_workflow
+                            video_mode=request.video_mode, video_workflow=request.video_workflow
                         )
                     
                     # Ensure websocket completes for this shot if it hasn't somehow
@@ -237,7 +237,7 @@ class GenerationService:
 
     async def regenerate_shot_video(
         self, session_id: str, shot_index: int, force: bool = False,
-        video_workflow: Optional[str] = None
+        video_mode: Optional[str] = None, video_workflow: Optional[str] = None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -246,6 +246,7 @@ class GenerationService:
             session_id: Session identifier
             shot_index: Shot number (1-based)
             force: Force regeneration even if video exists
+            video_mode: Override generation mode
             video_workflow: Override workflow
 
         Returns:
@@ -269,8 +270,18 @@ class GenerationService:
                 logger.info(f"Shot {shot_index} already has video, skipping")
                 return shot.get('video_path')
 
+            # Preserve old video_path in video_paths before regenerating
+            old_video_path = shot.get('video_path')
+            if old_video_path:
+                if 'video_paths' not in shot:
+                    shot['video_paths'] = []
+                if old_video_path not in shot['video_paths']:
+                    shot['video_paths'].append(old_video_path)
+                    # Save updated video_paths immediately
+                    self.session_manager._save_shots(session_id, shots)
+
             # Generate video for single shot
-            logger.info(f"Regenerating video for shot {shot_index}")
+            logger.info(f"Regenerating video for shot {shot_index} using mode {video_mode or 'default'}")
             
             # Broadcast initial 0% so UI resets from any stale progress
             manager.broadcast_sync(session_id, {
@@ -286,6 +297,7 @@ class GenerationService:
                 self._generate_single_video,
                 session_id,
                 shot,
+                video_mode,
                 video_workflow
             )
 
@@ -515,75 +527,116 @@ class GenerationService:
         return result_path
 
     def _generate_single_video(self, session_id: str, shot: Dict[str, Any],
+                               video_mode: Optional[str] = None,
                                workflow_path: Optional[str] = None) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
-        from core.prompt_compiler import load_workflow, compile_workflow
-        from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
-        from core.video_regenerator import generate_unique_video_filename
         import config
+        from core.video_regenerator import generate_unique_video_filename
 
         videos_dir = self.session_manager.get_videos_dir(session_id)
         os.makedirs(videos_dir, exist_ok=True)
 
         shot_index = shot['index']
+        mode = video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
 
-        # Determine workflow path
-        if not workflow_path:
-            workflow_path = config.WORKFLOW_PATH
-
-        # Load and compile workflow for this shot
-        shot_length = getattr(config, 'DEFAULT_SHOT_LENGTH', 5)
-        template = load_workflow(workflow_path, video_length_seconds=shot_length)
-        wf = compile_workflow(template, shot, video_length_seconds=shot_length)
-
-        # Submit to ComfyUI
-        result = submit(wf)
-        prompt_id = result.get('prompt_id')
-        if not prompt_id:
-            raise RuntimeError(f"No prompt_id returned for shot {shot_index}")
-
-        logger.info(f"Video submitted for shot {shot_index}: prompt_id={prompt_id}")
-
-        # Progress callback to bridge ComfyUI steps to our WebSocket
-        def on_step_progress(current, total):
-            progress = int((current / total) * 100) if total > 0 else 0
+        if mode == 'geminiweb':
+            from core.geminiweb_video_generator import generate_video_geminiweb
+            
+            video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_index)
+            motion_prompt = shot.get('motion_prompt', "Animate this image realistically")
+            rel_image_path = shot.get('image_path', '')
+            
+            # Resolve image path
+            abs_image_path = os.path.join(getattr(config, 'PROJECT_ROOT', ''), 'output', rel_image_path.replace("/", os.sep))
+            if not os.path.exists(abs_image_path):
+                 abs_image_path = os.path.join(getattr(config, 'ABS_OUTPUT_DIR', ''), rel_image_path.replace("/", os.sep))
+            
+            # Broadcast 50% for Gemini Web (linear isn't possible)
             manager.broadcast_sync(session_id, {
                 "type": "progress",
                 "session_id": session_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
-                "progress": progress
+                "progress": 50
             })
-
-        # Wait for completion with progress updates
-        wait_result = wait_for_prompt_completion_with_progress(
-            prompt_id, 
-            progress_callback=on_step_progress,
-            timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
-        )
-
-        if not wait_result.get('success'):
-            raise RuntimeError(f"Video render failed for shot {shot_index}: {wait_result.get('error')}")
-
-        # Get output files
-        outputs = wait_result.get('outputs', [])
-        video_outputs = [o for o in outputs if o['type'] == 'video']
-
-        if not video_outputs:
-            raise RuntimeError(f"No video output for shot {shot_index}")
-
-        # Copy video to session folder
-        video_info = video_outputs[0]
-        video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_index)
-
-        source_path = get_output_file_path(video_info)
-        if os.path.exists(source_path):
-            shutil.copy2(source_path, video_save_path)
-            logger.info(f"Video copied: {video_filename} ({os.path.getsize(video_save_path):,} bytes)")
-
-            # Mark as rendered
+            
+            video_res = generate_video_geminiweb(
+                image_path=abs_image_path,
+                motion_prompt=motion_prompt,
+                output_path=video_save_path
+            )
+            
+            if not video_res:
+                raise RuntimeError(f"Gemini Web video generation failed for shot {shot_index}")
+                
             self.session_manager.mark_video_rendered(session_id, shot_index, video_save_path)
             return video_save_path
         else:
-            raise RuntimeError(f"Video source file not found: {source_path}")
+            from core.prompt_compiler import load_workflow, compile_workflow
+            from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
+
+            # Determine workflow path
+            if not workflow_path:
+                workflow_path = getattr(config, 'VIDEO_WORKFLOW', 'workflow/video/wan22_workflow.json')
+                
+                # Check config.VIDEO_WORKFLOWS if it's an alias
+                workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(workflow_path, None)
+                if workflow_config:
+                    workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+
+            # Load and compile workflow for this shot
+            shot_length = getattr(config, 'DEFAULT_SHOT_LENGTH', 5)
+            template = load_workflow(workflow_path, video_length_seconds=shot_length)
+            wf = compile_workflow(template, shot, video_length_seconds=shot_length)
+
+            # Submit to ComfyUI
+            result = submit(wf)
+            prompt_id = result.get('prompt_id')
+            if not prompt_id:
+                raise RuntimeError(f"No prompt_id returned for shot {shot_index}")
+
+            logger.info(f"Video submitted for shot {shot_index}: prompt_id={prompt_id}")
+
+            # Progress callback to bridge ComfyUI steps to our WebSocket
+            def on_step_progress(current, total):
+                progress = int((current / total) * 100) if total > 0 else 0
+                manager.broadcast_sync(session_id, {
+                    "type": "progress",
+                    "session_id": session_id,
+                    "shot_index": shot_index,
+                    "shot_id": shot.get('id'),
+                    "progress": progress
+                })
+
+            # Wait for completion with progress updates
+            wait_result = wait_for_prompt_completion_with_progress(
+                prompt_id, 
+                progress_callback=on_step_progress,
+                timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
+            )
+
+            if not wait_result.get('success'):
+                raise RuntimeError(f"Video render failed for shot {shot_index}: {wait_result.get('error')}")
+
+            # Get output files
+            outputs = wait_result.get('outputs', [])
+            video_outputs = [o for o in outputs if o['type'] == 'video']
+
+            if not video_outputs:
+                raise RuntimeError(f"No video output for shot {shot_index}")
+
+            # Copy video to session folder
+            video_info = video_outputs[0]
+            video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_index)
+
+            source_path = get_output_file_path(video_info)
+            if os.path.exists(source_path):
+                shutil.copy2(source_path, video_save_path)
+                logger.info(f"Video copied: {video_filename} ({os.path.getsize(video_save_path):,} bytes)")
+
+                # Mark as rendered
+                self.session_manager.mark_video_rendered(session_id, shot_index, video_save_path)
+                return video_save_path
+            else:
+                raise RuntimeError(f"Video source file not found: {source_path}")

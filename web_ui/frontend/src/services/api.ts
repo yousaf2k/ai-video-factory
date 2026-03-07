@@ -157,10 +157,12 @@ class ApiClient {
     sessionId: string,
     shotIndex: number,
     force: boolean = false,
+    videoMode?: string,
     videoWorkflow?: string
   ): Promise<void> {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-video`, {
       force,
+      video_mode: videoMode,
       video_workflow: videoWorkflow,
     });
   }
@@ -206,6 +208,28 @@ class ApiClient {
     return response.data;
   }
 
+  async selectShotVideo(
+    sessionId: string,
+    shotIndex: number,
+    videoPath: string
+  ): Promise<void> {
+    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/select-video`, {
+      video_path: videoPath,
+    });
+  }
+
+  async deleteVariationVideo(
+    sessionId: string,
+    shotIndex: number,
+    videoPath: string
+  ): Promise<{ remaining: number; active_video_path: string | null }> {
+    const response = await this.client.delete<{ status: string; remaining: number; active_video_path: string | null }>(
+      `/api/sessions/${sessionId}/shots/${shotIndex}/videos`,
+      { params: { video_path: videoPath } }
+    );
+    return response.data;
+  }
+
   async uploadShotImage(
     sessionId: string,
     shotIndex: number,
@@ -215,6 +239,21 @@ class ApiClient {
     formData.append('file', file);
     const response = await this.client.post<{ status: string; image_path: string; filename: string }>(
       `/api/sessions/${sessionId}/shots/${shotIndex}/upload-image`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  }
+
+  async uploadShotVideo(
+    sessionId: string,
+    shotIndex: number,
+    file: File
+  ): Promise<{ video_path: string; filename: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await this.client.post<{ status: string; video_path: string; filename: string }>(
+      `/api/sessions/${sessionId}/shots/${shotIndex}/upload-video`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } }
     );

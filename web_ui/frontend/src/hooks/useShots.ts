@@ -59,8 +59,8 @@ export function useRegenerateVideo(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force, videoWorkflow }: { shotIndex: number; force?: boolean; videoWorkflow?: string }) =>
-      api.regenerateShotVideo(sessionId, shotIndex, force, videoWorkflow),
+    mutationFn: ({ shotIndex, force, videoMode, videoWorkflow }: { shotIndex: number; force?: boolean; videoMode?: string; videoWorkflow?: string }) =>
+      api.regenerateShotVideo(sessionId, shotIndex, force, videoMode, videoWorkflow),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -144,6 +144,20 @@ export function useUploadShotImage(sessionId: string) {
   });
 }
 
+// Hook to upload a custom video from disk for a shot
+export function useUploadShotVideo(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shotIndex, file }: { shotIndex: number; file: File }) =>
+      api.uploadShotVideo(sessionId, shotIndex, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
 // Hook to delete a specific image variation for a shot
 export function useDeleteVariationImage(sessionId: string) {
   const queryClient = useQueryClient();
@@ -151,6 +165,34 @@ export function useDeleteVariationImage(sessionId: string) {
   return useMutation({
     mutationFn: ({ shotIndex, imagePath }: { shotIndex: number; imagePath: string }) =>
       api.deleteVariationImage(sessionId, shotIndex, imagePath),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
+// Hook to select a specific video variation for a shot
+export function useSelectVideo(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shotIndex, videoPath }: { shotIndex: number; videoPath: string }) =>
+      api.selectShotVideo(sessionId, shotIndex, videoPath),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
+// Hook to delete a specific video variation for a shot
+export function useDeleteVariationVideo(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shotIndex, videoPath }: { shotIndex: number; videoPath: string }) =>
+      api.deleteVariationVideo(sessionId, shotIndex, videoPath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });

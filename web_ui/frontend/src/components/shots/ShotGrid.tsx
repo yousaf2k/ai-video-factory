@@ -3,7 +3,7 @@
  */
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { ShotCard } from "./ShotCard";
-import { Shot } from "@/types";
+import { Shot, Scene } from "@/types";
 import { useAgents } from "@/hooks/useAgents";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
@@ -19,6 +19,11 @@ import {
   Filter,
   XCircle,
   Plus,
+  Layers,
+  ChevronRight,
+  ChevronDown,
+  Info,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProgress } from "@/hooks/useProgress";
@@ -36,19 +41,35 @@ import {
 interface ShotGridProps {
   shots: Shot[];
   sessionId: string;
+  scenes?: Scene[];
 }
 
-export function ShotGrid({ shots, sessionId }: ShotGridProps) {
+export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<
     "image" | "video" | "both" | null
   >(null);
+  const [showSceneMoveModal, setShowSceneMoveModal] = useState(false);
+  const [targetMoveScene, setTargetMoveScene] = useState<number | null>(null);
   const [generatingIndices, setGeneratingIndices] = useState<Set<number>>(
     new Set(),
   );
   const [queuedIndices, setQueuedIndices] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
   const updateShotsMutation = useUpdateShots(sessionId);
+  const [viewModeOverride, setViewModeOverride] = useState<
+    "image" | "video" | null
+  >(null);
+  const [isGroupingEnabled, setIsGroupingEnabled] = useState(true);
+  const [activeSceneTab, setActiveSceneTab] = useState<string | "all">("all");
+  const [expandedScenes, setExpandedScenes] = useState<Record<number, boolean>>({});
+
+  const toggleSceneExpansion = (idx: number) => {
+    setExpandedScenes((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
+  };
 
   // Insert modal state
   const [insertModalConfig, setInsertModalConfig] = useState<{
@@ -119,8 +140,42 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
       });
     }
 
+    if (isGroupingEnabled && activeSceneTab !== "all") {
+      const sceneIdx = parseInt(activeSceneTab);
+      result = result.filter((s) => (s.scene_index || 0) === sceneIdx);
+    }
+
     return result;
-  }, [shots, filterNoImages, filterNoVideos, filterCamera, filterText]);
+  }, [shots, filterNoImages, filterNoVideos, filterCamera, filterText, activeSceneTab, isGroupingEnabled]);
+
+  const groupedShots = useMemo(() => {
+    if (!isGroupingEnabled) return { all: filteredShots };
+
+    const groups: Record<number | string, Shot[]> = {};
+
+    // Pre-populate groups with the relevant scenes to ensure headers show even if empty
+    if (scenes && scenes.length > 0) {
+      if (activeSceneTab === "all") {
+        scenes.forEach((_, idx) => {
+          groups[idx + 1] = [];
+        });
+      } else {
+        const sceneIdx = parseInt(activeSceneTab);
+        if (!isNaN(sceneIdx)) {
+          groups[sceneIdx] = [];
+        }
+      }
+    }
+
+    filteredShots.forEach((shot) => {
+      const sceneIdx = shot.scene_index || 0;
+      if (!groups[sceneIdx]) {
+        groups[sceneIdx] = [];
+      }
+      groups[sceneIdx].push(shot);
+    });
+    return groups;
+  }, [filteredShots, isGroupingEnabled, scenes]);
 
   const hasActiveFilters =
     filterNoImages || filterNoVideos || !!filterCamera || !!filterText.trim();
@@ -292,6 +347,28 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
     [sessionId, queryClient],
   );
 
+  const handleBatchMoveToScene = async () => {
+    if (selectedIndices.length === 0 || targetMoveScene === null) return;
+
+    try {
+      // Create a map of updates
+      const updatedShots = shots.map(shot => {
+        if (selectedIndices.includes(shot.index)) {
+          return { ...shot, scene_index: targetMoveScene };
+        }
+        return shot;
+      });
+
+      await updateShotsMutation.mutateAsync(updatedShots);
+      setShowSceneMoveModal(false);
+      setSelectedIndices([]);
+      setTargetMoveScene(null);
+    } catch (error) {
+      console.error("Failed to batch move shots to scene:", error);
+      alert("Failed to move shots. Please try again.");
+    }
+  };
+
   const handleDeleteShot = async (indexToRemove: number) => {
     if (
       !confirm(
@@ -394,22 +471,43 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
             <Square className="w-3.5 h-3.5" />
             Select None
           </button>
+
           {selectedIndices.length > 0 && (
             <span className="text-xs text-muted-foreground ml-1">
               {selectedIndices.length} of {shots.length} selected
             </span>
           )}
+
+          <div className="h-4 w-px bg-border mx-2" />
+
+          <button
+            onClick={() => setViewModeOverride("image")}
+            className="flex items-center gap-1.5 text-sm px-2.5 py-1 border rounded-md hover:bg-muted transition-colors text-blue-600"
+            title="Switch all shots to image view"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            All Images
+          </button>
+          <button
+            onClick={() => setViewModeOverride("video")}
+            className="flex items-center gap-1.5 text-sm px-2.5 py-1 border rounded-md hover:bg-muted transition-colors text-purple-600"
+            title="Switch all shots to video view"
+          >
+            <Video className="w-3.5 h-3.5" />
+            All Videos
+          </button>
         </div>
+
         {(generatingIndices.size > 0 ||
           Object.keys(shotProgress).length > 0) && (
-          <button
-            onClick={handleCancelAll}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-          >
-            <XCircle className="w-4 h-4" />
-            Cancel All Generation
-          </button>
-        )}
+            <button
+              onClick={handleCancelAll}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <XCircle className="w-4 h-4" />
+              Cancel All Generation
+            </button>
+          )}
       </div>
 
       {/* Filter Bar */}
@@ -524,6 +622,13 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
           Both (Images + Videos)
         </button>
         <button
+          onClick={() => setShowSceneMoveModal(true)}
+          className="flex items-center gap-2 text-sm px-3 py-1.5 hover:bg-muted rounded-md transition-colors"
+        >
+          <Layers className="w-4 h-4 text-orange-500" />
+          Move to Scene
+        </button>
+        <button
           onClick={() => setSelectedIndices([])}
           className="ml-2 p-1.5 hover:bg-muted rounded-full text-muted-foreground"
         >
@@ -531,41 +636,164 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
         </button>
       </div>
 
+      {/* Scene Tabs (only if grouping enabled) */}
+      {isGroupingEnabled && scenes && (
+        <div className="flex flex-wrap gap-1 mb-6 p-1 bg-muted/30 rounded-lg border">
+          <button
+            onClick={() => setActiveSceneTab("all")}
+            className={cn(
+              "px-4 py-1.5 text-sm rounded-md transition-all font-medium border",
+              activeSceneTab === "all"
+                ? "bg-white dark:bg-muted shadow-sm text-primary border-border"
+                : "text-muted-foreground hover:bg-muted/50 border-transparent"
+            )}
+          >
+            All Scenes
+          </button>
+          {scenes.map((scene, idx) => (
+            <button
+              key={idx}
+              onClick={() => setActiveSceneTab((idx + 1).toString())}
+              className={cn(
+                "px-4 py-1.5 text-sm rounded-md transition-all font-medium border",
+                activeSceneTab === (idx + 1).toString()
+                  ? "bg-white dark:bg-muted shadow-sm text-primary border-border"
+                  : "text-muted-foreground hover:bg-muted/50 border-transparent"
+              )}
+            >
+              Scene {idx + 1}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredShots.map((shot) => {
-          const progressKey = shot.id || shot.index.toString();
-          const isCurrentlyGenerating =
-            generatingIndices.has(shot.index) ||
-            shotProgress[progressKey] !== undefined;
-          const isCurrentlyQueued =
-            queuedIndices.has(shot.index) && !isCurrentlyGenerating;
+      <div className="space-y-8">
+        {Object.entries(groupedShots).map(([sceneIdx, groupShots]) => {
+          const sIdx = sceneIdx === "all" || sceneIdx === "null" ? null : parseInt(sceneIdx);
+          const scene = sIdx !== null && scenes ? scenes[sIdx - 1] : null;
+
           return (
-            <ShotCard
-              key={`${progressKey}-${shot.image_path}`}
-              shot={shot}
-              sessionId={sessionId}
-              selectable={true}
-              selected={selectedIndices.includes(shot.index)}
-              onSelectChange={(selected: boolean) =>
-                toggleSelectShot(shot.index, selected)
-              }
-              isGenerating={isCurrentlyGenerating}
-              isQueued={isCurrentlyQueued}
-              progress={shotProgress[progressKey]}
-              onCancel={
-                isCurrentlyGenerating || isCurrentlyQueued
-                  ? () => handleCancelShot(shot.index)
-                  : undefined
-              }
-              onInsertBefore={() =>
-                setInsertModalConfig({ position: shot.index - 1 })
-              }
-              onInsertAfter={() =>
-                setInsertModalConfig({ position: shot.index })
-              }
-              onDelete={() => handleDeleteShot(shot.index)}
-            />
+            <div key={sceneIdx} className="space-y-4">
+              {isGroupingEnabled && (
+                <div className="flex flex-col gap-3 pb-4 border-b">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3">
+                      <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
+                        {sIdx ? `Scene ${sIdx}` : "Unmatched Shots"}
+                      </span>
+                      {scene && (
+                        <h3 className="text-xl font-bold tracking-tight">
+                          {scene.location}
+                        </h3>
+                      )}
+                    </div>
+                    {scene && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => sIdx && toggleSceneExpansion(sIdx)}
+                        className="h-8 gap-1.5 text-muted-foreground hover:text-primary"
+                      >
+                        {expandedScenes[sIdx || 0] ? (
+                          <>
+                            <ChevronDown className="w-4 h-4" />
+                            <span className="text-xs">Less Detail</span>
+                          </>
+                        ) : (
+                          <>
+                            <ChevronRight className="w-4 h-4" />
+                            <span className="text-xs">More Detail</span>
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+
+                  {scene && (
+                    <div className="space-y-3">
+                      <p className={cn(
+                        "text-sm text-muted-foreground italic leading-relaxed",
+                        !expandedScenes[sIdx || 0] && "line-clamp-1"
+                      )}>
+                        {scene.action}
+                      </p>
+
+                      {expandedScenes[sIdx || 0] && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-muted/20 rounded-xl border border-border/50 animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
+                              <Info className="w-3 h-3" /> Characters
+                            </span>
+                            <p className="text-sm font-medium">{scene.characters || "None specified"}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
+                              <Info className="w-3 h-3" /> Emotion
+                            </span>
+                            <p className="text-sm font-medium capitalize">{scene.emotion || "Neutral"}</p>
+                          </div>
+                          <div className="col-span-full space-y-1">
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
+                              <Info className="w-3 h-3" /> Narration
+                            </span>
+                            <p className="text-sm leading-relaxed bg-background/50 p-2.5 rounded-lg border italic">
+                              "{scene.narration || "No narration for this scene."}"
+                            </p>
+                          </div>
+                          {scene.scene_duration && (
+                            <div className="col-span-full pt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>Estimated Duration: <strong>{scene.scene_duration}s</strong></span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {groupShots.map((shot) => {
+                  const progressKey = shot.id || shot.index.toString();
+                  const isCurrentlyGenerating =
+                    generatingIndices.has(shot.index) ||
+                    shotProgress[progressKey] !== undefined;
+                  const isCurrentlyQueued =
+                    queuedIndices.has(shot.index) && !isCurrentlyGenerating;
+                  return (
+                    <ShotCard
+                      key={`${progressKey}-${shot.image_path}`}
+                      shot={shot}
+                      sessionId={sessionId}
+                      selectable={true}
+                      selected={selectedIndices.includes(shot.index)}
+                      onSelectChange={(selected: boolean) =>
+                        toggleSelectShot(shot.index, selected)
+                      }
+                      isGenerating={isCurrentlyGenerating}
+                      isQueued={isCurrentlyQueued}
+                      progress={shotProgress[progressKey]}
+                      onCancel={
+                        isCurrentlyGenerating || isCurrentlyQueued
+                          ? () => handleCancelShot(shot.index)
+                          : undefined
+                      }
+                      onInsertBefore={() =>
+                        setInsertModalConfig({ position: shot.index - 1 })
+                      }
+                      onInsertAfter={() =>
+                        setInsertModalConfig({ position: shot.index })
+                      }
+                      onDelete={() => handleDeleteShot(shot.index)}
+                      viewModeOverride={viewModeOverride}
+                      scenes={scenes}
+                    />
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </div>
@@ -581,221 +809,291 @@ export function ShotGrid({ shots, sessionId }: ShotGridProps) {
       </div>
 
       {/* Insert Shot Modal Overlay */}
-      {insertModalConfig && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-background rounded-lg shadow-xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setInsertModalConfig(null)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h2 className="text-xl font-semibold mb-6">Insert New Shot</h2>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Image Prompt
-                </label>
-                <Textarea
-                  value={newShotData.image_prompt}
-                  onChange={(e) =>
-                    setNewShotData({
-                      ...newShotData,
-                      image_prompt: e.target.value,
-                    })
-                  }
-                  className="min-h-[120px]"
-                  placeholder="Describe the initial visual frame of the shot..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Motion Prompt
-                </label>
-                <Textarea
-                  value={newShotData.motion_prompt}
-                  onChange={(e) =>
-                    setNewShotData({
-                      ...newShotData,
-                      motion_prompt: e.target.value,
-                    })
-                  }
-                  className="min-h-[80px]"
-                  placeholder="Describe the motion/video prompt..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Camera Movement
-                </label>
-                <Input
-                  type="text"
-                  value={newShotData.camera}
-                  onChange={(e) =>
-                    setNewShotData({ ...newShotData, camera: e.target.value })
-                  }
-                  placeholder="e.g. static, pan right, zoom in..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Narration (Optional)
-                </label>
-                <Textarea
-                  value={newShotData.narration}
-                  onChange={(e) =>
-                    setNewShotData({
-                      ...newShotData,
-                      narration: e.target.value,
-                    })
-                  }
-                  className="min-h-[60px]"
-                  placeholder="Voiceover narration for this section..."
-                />
-              </div>
-            </div>
-
-            <div className="mt-8 flex justify-end gap-3">
-              <Button
-                variant="outline"
+      {
+        insertModalConfig && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-background rounded-lg shadow-xl max-w-2xl w-full p-6 relative max-h-[90vh] overflow-y-auto">
+              <button
                 onClick={() => setInsertModalConfig(null)}
+                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
               >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleInsertShot}
-                disabled={
-                  updateShotsMutation.isPending ||
-                  (!newShotData.image_prompt && !newShotData.motion_prompt)
-                }
-              >
-                {updateShotsMutation.isPending ? "Inserting..." : "Insert Shot"}
-              </Button>
+                <X className="w-5 h-5" />
+              </button>
+
+              <h2 className="text-xl font-semibold mb-6">Insert New Shot</h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Image Prompt
+                  </label>
+                  <Textarea
+                    value={newShotData.image_prompt}
+                    onChange={(e) =>
+                      setNewShotData({
+                        ...newShotData,
+                        image_prompt: e.target.value,
+                      })
+                    }
+                    className="min-h-[120px]"
+                    placeholder="Describe the initial visual frame of the shot..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Motion Prompt
+                  </label>
+                  <Textarea
+                    value={newShotData.motion_prompt}
+                    onChange={(e) =>
+                      setNewShotData({
+                        ...newShotData,
+                        motion_prompt: e.target.value,
+                      })
+                    }
+                    className="min-h-[80px]"
+                    placeholder="Describe the motion/video prompt..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Camera Movement
+                  </label>
+                  <Input
+                    type="text"
+                    value={newShotData.camera}
+                    onChange={(e) =>
+                      setNewShotData({ ...newShotData, camera: e.target.value })
+                    }
+                    placeholder="e.g. static, pan right, zoom in..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Narration (Optional)
+                  </label>
+                  <Textarea
+                    value={newShotData.narration}
+                    onChange={(e) =>
+                      setNewShotData({
+                        ...newShotData,
+                        narration: e.target.value,
+                      })
+                    }
+                    className="min-h-[60px]"
+                    placeholder="Voiceover narration for this section..."
+                  />
+                </div>
+              </div>
+
+              <div className="mt-8 flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setInsertModalConfig(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleInsertShot}
+                  disabled={
+                    updateShotsMutation.isPending ||
+                    (!newShotData.image_prompt && !newShotData.motion_prompt)
+                  }
+                >
+                  {updateShotsMutation.isPending ? "Inserting..." : "Insert Shot"}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Batch Modal Overlay */}
-      {showBatchModal && (
+      {
+        showBatchModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 relative">
+              <button
+                onClick={() => setShowBatchModal(null)}
+                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <h2 className="text-xl font-semibold mb-6">
+                Batch Regenerate{" "}
+                {showBatchModal === "image"
+                  ? "Images"
+                  : showBatchModal === "video"
+                    ? "Videos"
+                    : "Images + Videos"}{" "}
+                ({selectedIndices.length} shots)
+              </h2>
+
+              {(showBatchModal === "image" || showBatchModal === "both") && (
+                <div className="space-y-4">
+                  {showBatchModal === "both" && (
+                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md border text-sm">
+                      <Input
+                        type="checkbox"
+                        id="skip-existing"
+                        checked={batchSkipImages}
+                        onChange={(e) => setBatchSkipImages(e.target.checked)}
+                        className="w-4 h-4 mr-2"
+                      />
+                      <label
+                        htmlFor="skip-existing"
+                        className="font-medium cursor-pointer"
+                      >
+                        Skip generating images if they already exist
+                      </label>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Image Generation Mode
+                    </label>
+                    <Select
+                      value={imageMode}
+                      onValueChange={(val) => setImageMode(val)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
+                        <SelectItem value="gemini">Gemini (Cloud)</SelectItem>
+                        <SelectItem value="geminiweb">
+                          GeminiWeb - Gemini Web (Browser)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {imageMode === "comfyui" && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        ComfyUI Workflow
+                      </label>
+                      <Select
+                        value={imageWorkflow}
+                        onValueChange={(val) => setImageWorkflow(val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Workflow" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="flux2">
+                            Flux 2 (High Quality)
+                          </SelectItem>
+                          <SelectItem value="flux">Flux (Standard)</SelectItem>
+                          <SelectItem value="sdxl">SDXL</SelectItem>
+                          <SelectItem value="hidream">HiDream</SelectItem>
+                          <SelectItem value="qwen">Qwen</SelectItem>
+                          <SelectItem value="default">Default</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(showBatchModal === "video" || showBatchModal === "both") && (
+                <div className="space-y-4">
+                  {showBatchModal === "both" && <hr className="my-3" />}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Video Workflow
+                    </label>
+                    <Input
+                      type="text"
+                      value={videoWorkflow}
+                      onChange={(e) => setVideoWorkflow(e.target.value)}
+                      placeholder="workflow/video/wan22_workflow.json"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Path to the ComfyUI video JSON workflow.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-8 flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setShowBatchModal(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleBatchSubmit}>Start Generation</Button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Bulk Move Scene Modal Overlay */}
+      {showSceneMoveModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 relative">
             <button
-              onClick={() => setShowBatchModal(null)}
+              onClick={() => {
+                setShowSceneMoveModal(false);
+                setTargetMoveScene(null);
+              }}
               className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
             >
               <X className="w-5 h-5" />
             </button>
 
             <h2 className="text-xl font-semibold mb-6">
-              Batch Regenerate{" "}
-              {showBatchModal === "image"
-                ? "Images"
-                : showBatchModal === "video"
-                  ? "Videos"
-                  : "Images + Videos"}{" "}
-              ({selectedIndices.length} shots)
+              Move Selected to Scene
             </h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Moving {selectedIndices.length} selected shots to a new scene.
+            </p>
 
-            {(showBatchModal === "image" || showBatchModal === "both") && (
-              <div className="space-y-4">
-                {showBatchModal === "both" && (
-                  <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md border text-sm">
-                    <Input
-                      type="checkbox"
-                      id="skip-existing"
-                      checked={batchSkipImages}
-                      onChange={(e) => setBatchSkipImages(e.target.checked)}
-                      className="w-4 h-4 mr-2"
-                    />
-                    <label
-                      htmlFor="skip-existing"
-                      className="font-medium cursor-pointer"
-                    >
-                      Skip generating images if they already exist
-                    </label>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Image Generation Mode
-                  </label>
-                  <Select
-                    value={imageMode}
-                    onValueChange={(val) => setImageMode(val)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
-                      <SelectItem value="gemini">Gemini (Cloud)</SelectItem>
-                      <SelectItem value="geminiweb">
-                        GeminiWeb - Gemini Web (Browser)
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Target Scene
+                </label>
+                <Select
+                  value={targetMoveScene?.toString() || "0"}
+                  onValueChange={(val) => setTargetMoveScene(parseInt(val))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select target scene" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">None (Unassigned)</SelectItem>
+                    {scenes?.map((_, idx) => (
+                      <SelectItem key={idx} value={(idx + 1).toString()}>
+                        Scene {idx + 1}
                       </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {imageMode === "comfyui" && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      ComfyUI Workflow
-                    </label>
-                    <Select
-                      value={imageWorkflow}
-                      onValueChange={(val) => setImageWorkflow(val)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Workflow" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="flux2">
-                          Flux 2 (High Quality)
-                        </SelectItem>
-                        <SelectItem value="flux">Flux (Standard)</SelectItem>
-                        <SelectItem value="sdxl">SDXL</SelectItem>
-                        <SelectItem value="hidream">HiDream</SelectItem>
-                        <SelectItem value="qwen">Qwen</SelectItem>
-                        <SelectItem value="default">Default</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-
-            {(showBatchModal === "video" || showBatchModal === "both") && (
-              <div className="space-y-4">
-                {showBatchModal === "both" && <hr className="my-3" />}
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Video Workflow
-                  </label>
-                  <Input
-                    type="text"
-                    value={videoWorkflow}
-                    onChange={(e) => setVideoWorkflow(e.target.value)}
-                    placeholder="workflow/video/wan22_workflow.json"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Path to the ComfyUI video JSON workflow.
-                  </p>
-                </div>
-              </div>
-            )}
+            </div>
 
             <div className="mt-8 flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setShowBatchModal(null)}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowSceneMoveModal(false);
+                  setTargetMoveScene(null);
+                }}
+              >
                 Cancel
               </Button>
-              <Button onClick={handleBatchSubmit}>Start Generation</Button>
+              <Button
+                onClick={handleBatchMoveToScene}
+                disabled={targetMoveScene === null || updateShotsMutation.isPending}
+              >
+                {updateShotsMutation.isPending ? "Moving..." : "Move Selected"}
+              </Button>
             </div>
           </div>
         </div>

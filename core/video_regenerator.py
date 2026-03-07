@@ -167,21 +167,27 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
         return False
 
     # Load workflow with new video length
-    print(f"\n[INFO] Loading workflow...")
-    try:
-        work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
-        if video_workflow:
-            work_name = video_workflow
-            
-        workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
-        workflow_path = config.WORKFLOW_PATH
-        if workflow_config:
-            workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
-            
-        template = load_workflow(workflow_path, video_length_seconds=shot_length)
-    except Exception as e:
-        print(f"[ERROR] Failed to load workflow: {e}")
-        return False
+    video_mode = getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
+    template = None
+    
+    if video_mode != 'geminiweb':
+        print(f"\n[INFO] Loading workflow...")
+        try:
+            work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+            # Handle potential missing video_workflow variable (it was undefined in original code)
+            video_workflow = getattr(config, 'VIDEO_WORKFLOW', 'default')
+            if video_workflow:
+                work_name = video_workflow
+                
+            workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+            workflow_path = config.WORKFLOW_PATH
+            if workflow_config:
+                workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+                
+            template = load_workflow(workflow_path, video_length_seconds=shot_length)
+        except Exception as e:
+            print(f"[ERROR] Failed to load workflow: {e}")
+            return False
 
     # Submit videos with verification
     print(f"\n[INFO] Submitting to ComfyUI with verification...")
@@ -201,78 +207,126 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
         print(f"[SUBMIT] Shot {shot_idx} ({shot_length}s)")
 
         try:
-            wf = compile_workflow(template, shot, video_length_seconds=shot_length)
-            result = submit(wf)
-
-            prompt_id = result.get('prompt_id')
-            if not prompt_id:
-                print(f"[ERROR] Shot {shot_idx}: No prompt_id returned")
-                failed_renders += 1
-                errors.append(f"Shot {shot_idx}: No prompt_id returned")
-                continue
-
-            print(f"[QUEUE] Shot {shot_idx}: Prompt {prompt_id[:8]}... submitted")
-
-            # Wait for completion and verify
-            print(f"[WAIT] Shot {shot_idx}: Waiting for render...")
-            wait_result = wait_for_prompt_completion(prompt_id, timeout=config.VIDEO_RENDER_TIMEOUT)
-
-            if not wait_result['success']:
-                error_msg = wait_result.get('error', 'Unknown error')
-                print(f"[FAIL] Shot {shot_idx}: {error_msg}")
-                failed_renders += 1
-                errors.append(f"Shot {shot_idx}: {error_msg}")
-                continue
-
-            # Check outputs
-            outputs = wait_result.get('outputs', [])
-            if not outputs:
-                print(f"[FAIL] Shot {shot_idx}: No output files generated")
-                failed_renders += 1
-                errors.append(f"Shot {shot_idx}: No output files generated")
-                continue
-
-            # Log outputs and copy to session folder
-            video_outputs = [o for o in outputs if o['type'] == 'video']
-            image_outputs = [o for o in outputs if o['type'] == 'image']
-
-            if video_outputs:
-                print(f"[PASS] Shot {shot_idx}: Generated {len(video_outputs)} video(s)")
-
-                # Create session videos directory
+            if video_mode == 'geminiweb':
+                from core.geminiweb_video_generator import generate_video_geminiweb
                 videos_dir = session_mgr.get_videos_dir(session_id)
                 os.makedirs(videos_dir, exist_ok=True)
-
-                # Generate unique filename to avoid overwriting existing videos
-                video_info = video_outputs[0]
+                
                 video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_idx)
-
-                source_path = get_output_file_path(video_info)
-                if os.path.exists(source_path):
-                    shutil.copy2(source_path, video_save_path)
-                    file_size = os.path.getsize(video_save_path)
-                    print(f"[COPY] Shot {shot_idx}: {video_filename} -> session/videos/")
-                    print(f"       Size: {file_size:,} bytes")
-
-                    # Mark as rendered with video path
+                
+                motion_prompt = shot.get('motion_prompt', "Animate this image realistically")
+                video_res = generate_video_geminiweb(
+                    image_path=image_path,
+                    motion_prompt=motion_prompt,
+                    output_path=video_save_path
+                )
+                
+                if video_res:
                     session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    print(f"[PASS] Shot {shot_idx}: Generated video via GeminiWeb")
+                    successful_renders += 1
                 else:
-                    print(f"[WARN] Source video not found: {source_path}")
-                    # Mark as rendered anyway
+                    print(f"[ERROR] Shot {shot_idx}: GeminiWeb generation failed")
+                    failed_renders += 1
+                    errors.append(f"Shot {shot_idx}: GeminiWeb generation failed")
+            elif video_mode == 'flowweb':
+                from core.flowweb_video_generator import generate_video_flowweb
+                videos_dir = session_mgr.get_videos_dir(session_id)
+                os.makedirs(videos_dir, exist_ok=True)
+                
+                video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_idx)
+                
+                motion_prompt = shot.get('motion_prompt', "Animate this image realistically")
+                aspect_ratio = getattr(config, 'VIDEO_ASPECT_RATIO', '16:9')
+                
+                video_res = generate_video_flowweb(
+                    image_path=image_path,
+                    prompt=motion_prompt,
+                    output_path=video_save_path,
+                    aspect_ratio=aspect_ratio
+                )
+                
+                if video_res:
+                    session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    print(f"[PASS] Shot {shot_idx}: Generated video via FlowWeb")
+                    successful_renders += 1
+                else:
+                    print(f"[ERROR] Shot {shot_idx}: FlowWeb generation failed")
+                    failed_renders += 1
+                    errors.append(f"Shot {shot_idx}: FlowWeb generation failed")
+            else:
+                wf = compile_workflow(template, shot, video_length_seconds=shot_length)
+                result = submit(wf)
+
+                prompt_id = result.get('prompt_id')
+                if not prompt_id:
+                    print(f"[ERROR] Shot {shot_idx}: No prompt_id returned")
+                    failed_renders += 1
+                    errors.append(f"Shot {shot_idx}: No prompt_id returned")
+                    continue
+
+                print(f"[QUEUE] Shot {shot_idx}: Prompt {prompt_id[:8]}... submitted")
+
+                # Wait for completion and verify
+                print(f"[WAIT] Shot {shot_idx}: Waiting for render...")
+                wait_result = wait_for_prompt_completion(prompt_id, timeout=config.VIDEO_RENDER_TIMEOUT)
+
+                if not wait_result['success']:
+                    error_msg = wait_result.get('error', 'Unknown error')
+                    print(f"[FAIL] Shot {shot_idx}: {error_msg}")
+                    failed_renders += 1
+                    errors.append(f"Shot {shot_idx}: {error_msg}")
+                    continue
+
+                # Check outputs
+                outputs = wait_result.get('outputs', [])
+                if not outputs:
+                    print(f"[FAIL] Shot {shot_idx}: No output files generated")
+                    failed_renders += 1
+                    errors.append(f"Shot {shot_idx}: No output files generated")
+                    continue
+
+                # Log outputs and copy to session folder
+                video_outputs = [o for o in outputs if o['type'] == 'video']
+                image_outputs = [o for o in outputs if o['type'] == 'image']
+
+                if video_outputs:
+                    print(f"[PASS] Shot {shot_idx}: Generated {len(video_outputs)} video(s)")
+
+                    # Create session videos directory
+                    videos_dir = session_mgr.get_videos_dir(session_id)
+                    os.makedirs(videos_dir, exist_ok=True)
+
+                    # Generate unique filename to avoid overwriting existing videos
+                    video_info = video_outputs[0]
+                    video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_idx)
+
+                    source_path = get_output_file_path(video_info)
+                    if os.path.exists(source_path):
+                        shutil.copy2(source_path, video_save_path)
+                        file_size = os.path.getsize(video_save_path)
+                        print(f"[COPY] Shot {shot_idx}: {video_filename} -> session/videos/")
+                        print(f"       Size: {file_size:,} bytes")
+
+                        # Mark as rendered with video path
+                        session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    else:
+                        print(f"[WARN] Source video not found: {source_path}")
+                        # Mark as rendered anyway
+                        session_mgr.mark_video_rendered(session_id, shot_idx)
+
+                    successful_renders += 1
+
+                elif image_outputs:
+                    print(f"[PASS] Shot {shot_idx}: Generated {len(image_outputs)} frame(s)")
+                    for i in image_outputs[:3]:
+                        print(f"       - {i['filename']}")
+                    if len(image_outputs) > 3:
+                        print(f"       ... and {len(image_outputs) - 3} more")
+
+                    # Mark as rendered (no video file, just frames)
                     session_mgr.mark_video_rendered(session_id, shot_idx)
-
-                successful_renders += 1
-
-            elif image_outputs:
-                print(f"[PASS] Shot {shot_idx}: Generated {len(image_outputs)} frame(s)")
-                for i in image_outputs[:3]:
-                    print(f"       - {i['filename']}")
-                if len(image_outputs) > 3:
-                    print(f"       ... and {len(image_outputs) - 3} more")
-
-                # Mark as rendered (no video file, just frames)
-                session_mgr.mark_video_rendered(session_id, shot_idx)
-                successful_renders += 1
+                    successful_renders += 1
 
         except Exception as e:
             error_msg = f"Exception: {str(e)}"

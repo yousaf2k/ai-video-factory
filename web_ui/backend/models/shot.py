@@ -19,6 +19,8 @@ class Shot(BaseModel):
     image_paths: List[str] = Field(default_factory=list, description="All image paths (for variations)")
     video_rendered: bool = Field(default=False, description="Whether video has been rendered")
     video_path: Optional[str] = Field(default=None, description="Path to rendered video")
+    video_paths: List[str] = Field(default_factory=list, description="All video paths (for variations)")
+    scene_index: Optional[int] = Field(default=None, description="Index of the scene this shot belongs to")
 
     class Config:
         json_schema_extra = {
@@ -49,6 +51,7 @@ class UpdateShotRequest(BaseModel):
     motion_prompt: Optional[str] = None
     camera: Optional[str] = None
     narration: Optional[str] = None
+    scene_index: Optional[int] = None
 
 
 class RegenerateImageRequest(BaseModel):
@@ -64,6 +67,7 @@ class RegenerateImageRequest(BaseModel):
 class RegenerateVideoRequest(BaseModel):
     """Request to regenerate single shot video"""
     force: bool = Field(default=False, description="Force regeneration even if video exists")
+    video_mode: Optional[str] = Field(default=None, description="Override video generation mode (geminiweb/comfyui)")
     video_workflow: Optional[str] = Field(default=None, description="Override video workflow")
 
 
@@ -87,4 +91,9 @@ class ReplanShotsRequest(BaseModel):
 class SelectImageRequest(BaseModel):
     """Request to select a specific image as the active one for a shot"""
     image_path: str = Field(..., description="Path of the image to set as active")
+
+
+class SelectVideoRequest(BaseModel):
+    """Request to select a specific video as the active one for a shot"""
+    video_path: str = Field(..., description="Path of the video to set as active")
 
