@@ -161,6 +161,7 @@ Return a JSON list where each item contains:
 ```json
 [
   {
+    "scene_index": 0,
     "image_prompt": "Full detailed image generation prompt with GoPro specs, ultra wide-angle, fisheye distortion, handheld POV, available light, action camera aesthetic",
     "motion_prompt": "[Scene context] + [Vlogger movement] + [Environmental motion] + [Handheld camera movement]. NO photography terms (8K, lens, f-stop). Use natural vlog motion terms.",
     "camera": "static | walk | fpv | pan | tracking | zoom"

@@ -7,6 +7,12 @@ core/__pycache__/
 
 output/sessions/
 output/
+input/
+workflow/image/
+workflow/video/
+workflow/audio/
+workflow/text/
+/*test*.py
 
 # Log files
 *.log

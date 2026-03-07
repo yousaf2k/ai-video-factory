@@ -252,6 +252,7 @@ Return each shot as a JSON object with:
 **Example Output**:
 ```json
 {
+  "scene_index": 0,
   "image_prompt": "First person POV shot with hands visible in frame, massive Triceratops herd grazing in sunlit Cretaceous clearing, human hands with fingers spread visible at bottom of frame reaching toward the scene, three-horned dinosaurs peacefully feeding on ferns. Shot on Sony Venice 2 with Arri Signature Prime 21mm wide lens, 8K resolution, 16:9 widescreen format. Warm golden hour sunlight filtering through ancient forest canopy, dust particles dancing in light beams, rich greens and browns. Photorealistic, hands visible, POV immersion, hyper-realistic dinosaur detail, cinematic establishing shot, IMAX scale.",
   "motion_prompt": "Hands reaching forward slightly as Triceratops herd grazes peacefully in clearing, subtle breathing movement, dust motes floating in golden light beams, ferns swaying gently in background air, immersive first-person presence with gentle sway, calm observational moment",
   "camera": "handheld"

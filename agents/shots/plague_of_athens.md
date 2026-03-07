@@ -295,7 +295,8 @@ The `motion_prompt` must NOT just be camera directions. It must describe a livin
 
 When writing the `motion_prompt`, follow these strict rules:
 
-1. **Summarize the Scene:** Briefly state what is in the shot (e.g., "A street scene in plague-stricken Athens...", "A view of the burial grounds...").
+1. **scene_index:** MUST be the 0-based index of the scene this shot belongs to (from the input).
+2. **Summarize the Scene:** Briefly state what is in the shot (e.g., "A street scene in plague-stricken Athens...", "A view of the burial grounds...").
 2. **Subject Motion (Verbs):** Describe exactly how the people are moving. Use dynamic verbs (e.g., "Survivors walk slowly through the streets," "A woman tends to a sick man," "People carry bodies on stretchers").
 3. **Environmental Motion:** Describe how the elements react (e.g., "Smoke rises from funeral pyres," "Dust swirls in the wind," "Flames flicker," "Fabric drapes naturally").
 4. **Camera Movement:** End with the camera instruction (e.g., "The camera slowly pans left," "Static camera capturing the somber atmosphere").
@@ -311,6 +312,7 @@ When writing the `motion_prompt`, follow these strict rules:
 ```json
 [
   {
+    "scene_index": 0,
     "image_prompt": "Full photorealistic Plague of Athens image prompt with historical accuracy based on Thucydides' account. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "static | slow pan | walk | tracking | drone | orbit | zoom"

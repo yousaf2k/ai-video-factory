@@ -59,6 +59,7 @@ Create cinematic shots for WAN 2.2.{batch_instruction}
 Return JSON list (each shot):
 [
   {{
+   "scene_index": 0,
    "image_prompt":"",
    "motion_prompt":"",
    "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
@@ -324,6 +325,11 @@ def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_sce
     else:
         scenes = parsed_graph
         
+    # Inject 0-based index into each scene so LLM knows which index to return
+    for i, scene in enumerate(scenes):
+        scene['scene_index'] = i
+        
+    scene_graph_with_indices = json.dumps(scenes, ensure_ascii=False, indent=2)
     scene_count = len(scenes)
 
     # Determine shots per scene target
@@ -526,7 +532,7 @@ CRITICAL SHOT REQUIREMENTS:
                     shots_agent=batch_data['shots_agent']
                 )
 
-                # Add batch number
+                # Add batch number and ensure scene_index is present
                 for shot in batch_shots:
                     shot['batch_number'] = batch_data['batch_num']
 
@@ -556,7 +562,7 @@ CRITICAL SHOT REQUIREMENTS:
         return all_shots
 
     # Single batch processing (original logic)
-    user_input = f"{scene_graph}{max_shots_instruction}"
+    user_input = f"{scene_graph_with_indices}{max_shots_instruction}"
 
     # Try to use agent prompts
     try:
@@ -598,6 +604,8 @@ CRITICAL SHOT REQUIREMENTS:
         for i, shot in enumerate(shots):
             shot['id'] = uuid.uuid4().hex[:8]
             shot['index'] = i + 1
+            # scene_index should already be there from LLM, but we can't trust it fully for all cases
+            # If missing, we'll leave it as None or try to guess? Better to leave for now as model allows Optional
 
         return shots
 
@@ -610,6 +618,7 @@ Create cinematic shots for WAN 2.2.{max_shots_instruction}
 Return JSON list (each shot):
 [
   {{
+   "scene_index": 0,
    "image_prompt":"",
    "motion_prompt":"",
    "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
@@ -617,7 +626,7 @@ Return JSON list (each shot):
 ]
 
 SCENES:
-{scene_graph}
+{scene_graph_with_indices}
 """
         provider = get_provider()
         response = provider.ask(prompt, response_format="application/json")
