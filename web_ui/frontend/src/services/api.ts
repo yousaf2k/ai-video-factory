@@ -267,8 +267,11 @@ class ApiClient {
       regenerate_images: boolean;
       regenerate_videos: boolean;
       force?: boolean;
+      force_images?: boolean;
+      force_videos?: boolean;
       image_mode?: string;
       image_workflow?: string;
+      video_mode?: string;
       video_workflow?: string;
     }
   ): Promise<any> {

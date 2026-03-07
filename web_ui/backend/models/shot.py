@@ -76,9 +76,12 @@ class BatchRegenerateRequest(BaseModel):
     shot_indices: List[int] = Field(..., description="List of shot indices to regenerate")
     regenerate_images: bool = Field(default=True, description="Regenerate images")
     regenerate_videos: bool = Field(default=True, description="Regenerate videos")
-    force: bool = Field(default=False, description="Force regeneration")
+    force: bool = Field(default=False, description="Force regeneration (legacy, use granular flags)")
+    force_images: Optional[bool] = Field(default=None, description="Force image regeneration")
+    force_videos: Optional[bool] = Field(default=None, description="Force video regeneration")
     image_mode: Optional[str] = Field(default=None, description="Override image generation mode")
     image_workflow: Optional[str] = Field(default=None, description="Override image workflow")
+    video_mode: Optional[str] = Field(default=None, description="Override video generation mode")
     video_workflow: Optional[str] = Field(default=None, description="Override video workflow")
 
 

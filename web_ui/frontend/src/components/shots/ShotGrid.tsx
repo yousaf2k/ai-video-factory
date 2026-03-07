@@ -106,6 +106,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   const [videoWorkflow, setVideoWorkflow] = useState<string>(
     "workflow/video/wan22_workflow.json",
   );
+  const [videoMode, setVideoMode] = useState<string>("comfyui");
   const [batchSkipImages, setBatchSkipImages] = useState<boolean>(true);
 
   const { data: agents } = useAgents();
@@ -219,9 +220,14 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: true,
-          force: !batchSkipImages,
+          // When doing both: 
+          // 1. Image force depends on the "Skip" checkbox
+          // 2. Video force is ALWAYS true if they clicked regenerate videos
+          force_images: !batchSkipImages,
+          force_videos: true,
           image_mode: imageMode,
           image_workflow: imageWorkflow,
+          video_mode: videoMode,
           video_workflow: videoWorkflow,
         });
       } catch (error) {
@@ -233,7 +239,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: false,
-          force: true,
+          force_images: true,
           image_mode: imageMode,
           image_workflow: imageWorkflow,
         });
@@ -246,7 +252,8 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
           shot_indices: indicesToProcess,
           regenerate_images: false,
           regenerate_videos: true,
-          force: true,
+          force_videos: true,
+          video_mode: videoMode,
           video_workflow: videoWorkflow,
         });
       } catch (error) {
@@ -1005,6 +1012,27 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
               {(showBatchModal === "video" || showBatchModal === "both") && (
                 <div className="space-y-4">
                   {showBatchModal === "both" && <hr className="my-3" />}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Video Generation Mode
+                    </label>
+                    <Select
+                      value={videoMode}
+                      onValueChange={(val) => setVideoMode(val)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Video Mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
+                        <SelectItem value="geminiweb">
+                          GeminiWeb - Gemini Web (Browser)
+                        </SelectItem>
+                        <SelectItem value="flowweb">FlowWeb (Experimental)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium mb-1">
                       Video Workflow

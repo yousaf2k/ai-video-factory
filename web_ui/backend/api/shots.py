@@ -202,6 +202,30 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         rename_operations.append((src, tmp, dst))
                         shot['video_path'] = os.path.join(session_id, "videos", new_basename).replace('\\', '/')
 
+            # Check alternative video_paths
+            current_video_paths = shot.get('video_paths', [])
+            new_video_paths = []
+            for vid_path in current_video_paths:
+                basename = os.path.basename(vid_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+                        
+                        src = os.path.join(videos_dir, basename)
+                        tmp = os.path.join(videos_dir, tmp_basename)
+                        dst = os.path.join(videos_dir, new_basename)
+                        
+                        rename_operations.append((src, tmp, dst))
+                        new_video_paths.append(os.path.join(session_id, "videos", new_basename).replace('\\', '/'))
+                    else:
+                        new_video_paths.append(vid_path) # unchanged
+                else:
+                    new_video_paths.append(vid_path)
+            shot['video_paths'] = new_video_paths
+
         # Execute Pass 1: Move to temporary files (prevents filename collisions during shifting)
         for src, tmp, dst in rename_operations:
             if os.path.exists(src):

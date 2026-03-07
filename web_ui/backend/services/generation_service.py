@@ -102,10 +102,19 @@ class GenerationService:
                     if session_id in self.queued_shots and shot_index in self.queued_shots[session_id]:
                         self.queued_shots[session_id].remove(shot_index)
 
+                    # Determine granular force flags (with fallback to legacy 'force')
+                    f_images = getattr(request, 'force_images', None)
+                    if f_images is None:
+                        f_images = request.force
+                        
+                    f_videos = getattr(request, 'force_videos', None)
+                    if f_videos is None:
+                        f_videos = request.force
+
                     # Load current shot state in case we need to skip existing images
                     # (only load if we're actually generating images to save disk IO)
                     shot_wants_skip = False
-                    if request.regenerate_images and not request.force:
+                    if request.regenerate_images and not f_images:
                         try:
                             session = self.session_manager.get_session(session_id)
                             if session and session.shots:
@@ -119,15 +128,17 @@ class GenerationService:
                     # 1. Regenerate Image
                     if request.regenerate_images and not shot_wants_skip:
                         await self.regenerate_shot_image(
-                            session_id, shot_index, force=request.force,
+                            session_id, shot_index, force=f_images,
                             image_mode=request.image_mode, image_workflow=request.image_workflow
                         )
 
                     # 2. Regenerate Video
                     if request.regenerate_videos:
+                        # For videos, we use f_videos
+                        v_mode = getattr(request, 'video_mode', None)
                         await self.regenerate_shot_video(
-                            session_id, shot_index, force=request.force,
-                            video_mode=request.video_mode, video_workflow=request.video_workflow
+                            session_id, shot_index, force=f_videos,
+                            video_mode=v_mode, video_workflow=request.video_workflow
                         )
                     
                     # Ensure websocket completes for this shot if it hasn't somehow
@@ -462,6 +473,27 @@ class GenerationService:
         
         max_version = 0
         version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.png$")
+        
+        for filepath in existing_files:
+            filename = os.path.basename(filepath)
+            match = version_re.match(filename)
+            if match:
+                version = int(match.group(1))
+                max_version = max(max_version, version)
+        
+        return max_version + 1
+
+    def _get_next_video_version(self, videos_dir: str, shot_index: int) -> int:
+        """Find the next available version number for a shot video.
+        
+        Scans for existing files like shot_001_001.mp4, shot_001_002.mp4, etc.
+        Returns the next version number (starting from 1).
+        """
+        pattern = os.path.join(videos_dir, f"shot_{shot_index:03d}_*.mp4")
+        existing_files = glob.glob(pattern)
+        
+        max_version = 0
+        version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.mp4$")
         
         for filepath in existing_files:
             filename = os.path.basename(filepath)

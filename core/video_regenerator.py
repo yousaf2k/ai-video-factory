@@ -19,13 +19,8 @@ import config
 def generate_unique_video_filename(videos_dir, shot_idx):
     """
     Generate a unique video filename based on shot index.
-    If the base filename exists, appends letter suffixes (a, b, c, etc.)
-
-    Examples:
-        - shot_001.mp4 (if doesn't exist)
-        - shot_001a.mp4 (if shot_001.mp4 exists)
-        - shot_001b.mp4 (if shot_001a.mp4 exists)
-        - shot_001c.mp4 (if shot_001b.mp4 exists)
+    Uses numbered versions (shot_001_001.mp4, shot_001_002.mp4, etc.)
+    to match the image generation logic.
 
     Args:
         videos_dir: Directory where videos are stored
@@ -34,20 +29,28 @@ def generate_unique_video_filename(videos_dir, shot_idx):
     Returns:
         tuple: (video_filename, video_save_path)
     """
-    # Suffix letters to try: empty (no suffix), 'a', 'b', 'c', ..., 'z'
-    suffixes = [''] + [chr(ord('a') + i) for i in range(26)]
+    import glob
+    import re
 
-    for suffix in suffixes:
-        if suffix:
-            video_filename = f"shot_{shot_idx:03d}{suffix}.mp4"
-        else:
-            video_filename = f"shot_{shot_idx:03d}.mp4"
-
-        video_save_path = os.path.join(videos_dir, video_filename)
-
-        # Check if file exists
-        if not os.path.exists(video_save_path):
-            return video_filename, video_save_path
+    # Scans for existing files like shot_001_001.mp4, shot_001_002.mp4, etc.
+    pattern = os.path.join(videos_dir, f"shot_{shot_idx:03d}_*.mp4")
+    existing_files = glob.glob(pattern)
+    
+    max_version = 0
+    version_re = re.compile(rf"shot_{shot_idx:03d}_(\d+)\.mp4$")
+    
+    for filepath in existing_files:
+        filename = os.path.basename(filepath)
+        match = version_re.match(filename)
+        if match:
+            version = int(match.group(1))
+            max_version = max(max_version, version)
+    
+    next_version = max_version + 1
+    video_filename = f"shot_{shot_idx:03d}_{next_version:03d}.mp4"
+    video_save_path = os.path.join(videos_dir, video_filename)
+    
+    return video_filename, video_save_path
 
     # Fallback (should never reach here with 26+ suffixes)
     # Use timestamp as last resort
