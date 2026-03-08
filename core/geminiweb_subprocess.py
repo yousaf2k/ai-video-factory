@@ -48,10 +48,6 @@ def _get_mask(b64_str: str):
 def _create_browser_context(playwright_instance):
     """Create a persistent browser context with the configured browser."""
     chrome_profile = getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
-    if not chrome_profile:
-        chrome_profile = os.path.join(
-            getattr(config, 'OUTPUT_DIR', 'output'), 'chrome_profile'
-        )
     os.makedirs(chrome_profile, exist_ok=True)
     
     browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()

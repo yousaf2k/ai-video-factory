@@ -720,27 +720,40 @@ CONTINUE_ON_PARTIAL_IMAGE_FAILURE = True
 # ==========================================
 # GEMINIWEB (BROWSER-BASED) IMAGE GENERATION
 # ==========================================
-# Chrome user data directory for persistent Google login
-GEMINIWEB_CHROME_PROFILE = resolve_path(os.path.join(OUTPUT_DIR, "chrome_profile"))
+# Playwright browser configuration
+# Options: "chromium", "firefox", "webkit"
+PLAYWRIGHT_BROWSER = os.getenv("PLAYWRIGHT_BROWSER", "chromium").lower()
+
+# Browser channel (only for chromium/webkit)
+# Options: "chrome", "msedge", "chrome-beta", etc.
+PLAYWRIGHT_CHANNEL = os.getenv("PLAYWRIGHT_CHANNEL", "chrome").lower()
+
+# Browser profile directory for persistent Google login
+# We use separate folders for different browsers to avoid compatibility issues
+def _get_profile_folder_name():
+    if PLAYWRIGHT_BROWSER == "firefox":
+        return "firefox_profile"
+    if PLAYWRIGHT_BROWSER == "webkit":
+        return "webkit_profile"
+    
+    # Handle chromium-based browsers
+    if "msedge" in PLAYWRIGHT_CHANNEL:
+        return "edge_profile"
+    if "chrome" in PLAYWRIGHT_CHANNEL:
+        return "chrome_profile"
+    
+    return "chromium_profile"
+
+_default_profile_name = _get_profile_folder_name()
+GEMINIWEB_CHROME_PROFILE = os.getenv("GEMINIWEB_CHROME_PROFILE", resolve_path(os.path.join(OUTPUT_DIR, _default_profile_name)))
+if not os.path.isabs(GEMINIWEB_CHROME_PROFILE):
+    GEMINIWEB_CHROME_PROFILE = resolve_path(GEMINIWEB_CHROME_PROFILE)
 
 # Timeout for waiting for image generation (seconds)
 GEMINIWEB_TIMEOUT = 120
 
 # Gemini web URL
 GEMINIWEB_URL = "https://gemini.google.com/app"
-
-# Playwright browser configuration
-# Options: "chromium", "firefox", "webkit"
-PLAYWRIGHT_BROWSER = os.getenv("PLAYWRIGHT_BROWSER", "chromium")
-
-# Browser channel (only for chromium/webkit)
-# Options: "chrome", "msedge", "chrome-beta", etc.
-# Leave as None or "" to use the default browser engine without a specific channel
-PLAYWRIGHT_CHANNEL = os.getenv("PLAYWRIGHT_CHANNEL", "chrome")
-
-
-# ==========================================
-# WEB UI CONFIGURATION
 # ==========================================
 # Enable/disable Web UI server
 WEB_UI_ENABLED = os.getenv("WEB_UI_ENABLED", "true").lower() == "true"

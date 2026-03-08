@@ -244,8 +244,8 @@ async def launch_browser():
                     except (ImportError, AttributeError):
                         pass
                         
-                    # Use profile path from config to share session with image generation
-                    profile_path = getattr(config, 'GEMINIWEB_CHROME_PROFILE', os.path.abspath(os.path.join("output", "chrome_profile")))
+                    # Use profile path from config
+                    profile_path = getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
                     os.makedirs(profile_path, exist_ok=True)
                         
                     logger.info(f"Launching browser with profile: {profile_path}")
@@ -291,21 +291,15 @@ async def launch_browser():
                         no_viewport=False
                     )
                     
-                    # Apply stealth to context - handle different versions of playwright-stealth
+                    # Apply stealth to context
                     try:
-                        # Version 2.0.x (class-based)
-                        from playwright_stealth import Stealth
-                        Stealth().apply_stealth_sync(browser_context)
-                    except (ImportError, AttributeError):
-                        # Version 1.x.x (function-based)
-                        try:
-                            from playwright_stealth import stealth_sync
-                            stealth_sync(browser_context)
-                        except (ImportError, AttributeError):
-                            pass
+                        from playwright_stealth import stealth_sync
+                        stealth_sync(browser_context)
+                    except Exception as e:
+                        logger.warning(f"Failed to apply stealth: {e}")
                     
-                    page = browser_context.pages[0]
-                    page.goto("https://accounts.google.com")
+                    page = browser_context.new_page()
+                    page.goto("https://accounts.google.com/signin/v2/identifier?service=lso&passive=1209600&continue=https%3A%2F%2Fgemini.google.com%2Fapp&followup=https%3A%2F%2Fgemini.google.com%2Fapp&ec=asw-gemini-v1")
                     
                     # Keep the browser open until the user closes it manually
                     # This is tricky in a backend process, but launch_persistent_context 

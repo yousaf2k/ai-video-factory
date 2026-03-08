@@ -12,6 +12,11 @@ import logging
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 import config
+
+# Set WindowsProactorEventLoopPolicy for Windows to avoid NotImplementedError with Playwright subprocesses
+if sys.platform == 'win32':
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from web_ui.backend.api import sessions, stories, shots, config as config_api
 from web_ui.backend.websocket.manager import manager
 

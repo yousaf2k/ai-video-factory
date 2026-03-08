@@ -26,31 +26,50 @@ logger = get_logger(__name__)
 
 
 def _create_browser_context(playwright_instance):
-    """Create a persistent browser context with Chrome profile."""
+    """Create a persistent browser context with the configured browser."""
     chrome_profile = getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
-    if not chrome_profile:
-        chrome_profile = os.path.join(
-            getattr(config, 'OUTPUT_DIR', 'output'), 'chrome_profile'
-        )
     os.makedirs(chrome_profile, exist_ok=True)
-    logger.info(f"Using Chrome profile: {chrome_profile}")
+    
+    browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
+    channel = getattr(config, 'PLAYWRIGHT_CHANNEL', 'chrome')
+    
+    # Map browser type name to playwright browser type object
+    if browser_type_name == "firefox":
+        browser_type = playwright_instance.firefox
+        channel = None # Firefox doesn't use channels in Playwright
+    elif browser_type_name == "webkit":
+        browser_type = playwright_instance.webkit
+        channel = None # Webkit doesn't use channels in Playwright
+    else:
+        browser_type = playwright_instance.chromium
+        # Only allow recognized channels for chromium to avoid "browserType.launch: channel 'xxx' is not supported"
+        valid_chromium_channels = ["chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", "msedge-canary"]
+        if channel not in valid_chromium_channels:
+            channel = None
+
+    logger.info(f"Using browser: {browser_type_name}, channel: {channel}, profile: {chrome_profile}")
 
     try:
-        context = playwright_instance.chromium.launch_persistent_context(
-            user_data_dir=chrome_profile,
-            headless=False,
-            channel="chrome",
-            args=[
+        if browser_type_name == "chromium":
+            launch_args = [
                 '--disable-blink-features=AutomationControlled',
                 '--no-first-run',
                 '--no-default-browser-check',
-            ],
+            ]
+        else:
+            launch_args = []
+            
+        context = browser_type.launch_persistent_context(
+            user_data_dir=chrome_profile,
+            headless=False,
+            channel=channel,
+            args=launch_args,
             viewport={'width': 1280, 'height': 900},
             ignore_default_args=['--enable-automation'],
         )
         return context
     except Exception as e:
-        logger.error(f"Failed to launch browser: {e}")
+        logger.error(f"Failed to launch browser {browser_type_name}: {e}")
         raise
 
 

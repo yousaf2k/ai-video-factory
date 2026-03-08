@@ -19,16 +19,47 @@ def run_flow_generation(image_path, prompt, output_path, aspect_ratio="16:9"):
     print(f"Prompt: {prompt}")
     print(f"Output: {output_path}")
 
-    # Use authenticated profile
-    profile_path = 'e:/output/chrome_profile'
+    # Use configured profile
+    chrome_profile = getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
+    if not chrome_profile:
+        chrome_profile = os.path.join(
+            getattr(config, 'OUTPUT_DIR', 'output'), 'chrome_profile'
+        )
+    os.makedirs(chrome_profile, exist_ok=True)
+    
+    browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
+    channel = getattr(config, 'PLAYWRIGHT_CHANNEL', 'chrome')
     
     with sync_playwright() as p:
         try:
-            browser = p.chromium.launch_persistent_context(
-                profile_path,
-                headless=False, # Keep headful to bypass some bot detection and for visibility if needed
-                channel='chrome',
-                args=['--disable-blink-features=AutomationControlled']
+            # Map browser type name to playwright browser type object
+            if browser_type_name == "firefox":
+                browser_type = p.firefox
+                channel = None
+            elif browser_type_name == "webkit":
+                browser_type = p.webkit
+                channel = None
+            else:
+                browser_type = p.chromium
+                # Only allow recognized channels for chromium
+                valid_chromium_channels = ["chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", "msedge-canary"]
+                if channel not in valid_chromium_channels:
+                    channel = None
+
+            if browser_type_name == "chromium":
+                launch_args = ['--disable-blink-features=AutomationControlled']
+            else:
+                launch_args = []
+
+            print(f"Using browser: {browser_type_name}, channel: {channel}, profile: {chrome_profile}")
+
+            browser = browser_type.launch_persistent_context(
+                chrome_profile,
+                headless=False,
+                channel=channel,
+                args=launch_args,
+                viewport={'width': 1280, 'height': 900},
+                ignore_default_args=['--enable-automation'],
             )
             page = browser.new_page()
             
