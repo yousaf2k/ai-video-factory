@@ -57,26 +57,33 @@ def _create_browser_context(playwright_instance):
     browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
     channel = getattr(config, 'PLAYWRIGHT_CHANNEL', 'chrome')
     
+    # Map browser type name to playwright browser type object
+    if browser_type_name == "firefox":
+        browser_type = playwright_instance.firefox
+        channel = None # Firefox doesn't use channels in Playwright
+    elif browser_type_name == "webkit":
+        browser_type = playwright_instance.webkit
+        channel = None # Webkit doesn't use channels in Playwright
+    else:
+        browser_type = playwright_instance.chromium
+        # Only allow recognized channels for chromium to avoid "browserType.launch: channel 'xxx' is not supported"
+        valid_chromium_channels = ["chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", "msedge-canary"]
+        if channel and channel not in valid_chromium_channels:
+            logger.warning(f"Invalid chromium channel '{channel}', defaulting to None")
+            channel = None
+
     logger.info(f"Using browser: {browser_type_name}, channel: {channel}, profile: {chrome_profile}")
 
     try:
-        # Map browser type name to playwright browser type object
-        if browser_type_name == "firefox":
-            browser_type = playwright_instance.firefox
-            channel = None # Firefox doesn't use channels in Playwright
-        elif browser_type_name == "webkit":
-            browser_type = playwright_instance.webkit
-        else:
-            browser_type = playwright_instance.chromium
 
-        launch_args = [
-            '--disable-blink-features=AutomationControlled',
-            '--no-first-run',
-            '--no-default-browser-check',
-        ]
-        
-        # Ignored for firefox/webkit if they don't support these specific flags, 
-        # but mostly harmless or handled by playwright.
+        if browser_type_name == "chromium":
+            launch_args = [
+                '--disable-blink-features=AutomationControlled',
+                '--no-first-run',
+                '--no-default-browser-check',
+            ]
+        else:
+            launch_args = []
         
         context = browser_type.launch_persistent_context(
             user_data_dir=chrome_profile,
