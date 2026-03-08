@@ -638,7 +638,19 @@ GENERATE_NARRATION = False  # Set to True to enable narration by default
 # TTS method: "comfyui", "local" (edge-tts), or "elevenlabs"
 TTS_METHOD = "local"  # Options: "comfyui", "local", "elevenlabs"
 
-# ComfyUI TTS workflow path
+# ComfyUI TTS workflows
+# Each workflow defines its own node IDs and path
+TTS_WORKFLOW = "default"
+TTS_WORKFLOWS = {
+    "default": {
+        "workflow_path": resolve_path("workflow/voice/tts_workflow.json"),
+        "text_node_id": "text_input_node",  # Node ID for text input
+        "save_node_id": "save_audio_node",   # Node ID for audio output/save
+        "description": "Default ComfyUI TTS workflow"
+    }
+}
+
+# Legacy single workflow setting (deprecated)
 TTS_WORKFLOW_PATH = resolve_path("workflow/voice/tts_workflow.json")
 
 # ==========================================
@@ -716,6 +728,15 @@ GEMINIWEB_TIMEOUT = 120
 
 # Gemini web URL
 GEMINIWEB_URL = "https://gemini.google.com/app"
+
+# Playwright browser configuration
+# Options: "chromium", "firefox", "webkit"
+PLAYWRIGHT_BROWSER = os.getenv("PLAYWRIGHT_BROWSER", "chromium")
+
+# Browser channel (only for chromium/webkit)
+# Options: "chrome", "msedge", "chrome-beta", etc.
+# Leave as None or "" to use the default browser engine without a specific channel
+PLAYWRIGHT_CHANNEL = os.getenv("PLAYWRIGHT_CHANNEL", "chrome")
 
 
 # ==========================================

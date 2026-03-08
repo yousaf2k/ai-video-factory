@@ -77,7 +77,7 @@ def generate_narration_from_story(story_json):
     return "\n".join(script_parts)
 
 
-def generate_narration_audio(script, output_path, tts_method="local", comfyui_workflow=None, voice="default"):
+def generate_narration_audio(script, output_path, tts_method="local", tts_workflow="default", voice="default"):
     """
     Generate narration audio from script using TTS.
 
@@ -85,7 +85,7 @@ def generate_narration_audio(script, output_path, tts_method="local", comfyui_wo
         script: Narration script text
         output_path: Where to save the audio file
         tts_method: TTS method to use ("local", "comfyui", "elevenlabs")
-        comfyui_workflow: Path to ComfyUI TTS workflow JSON
+        tts_workflow: Key in config.TTS_WORKFLOWS (if tts_method="comfyui")
         voice: Voice selection (model-dependent)
 
     Returns:
@@ -97,8 +97,8 @@ def generate_narration_audio(script, output_path, tts_method="local", comfyui_wo
     logger.debug(f"  Script length: {len(script)} characters")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    if tts_method == "comfyui" and comfyui_workflow:
-        return _generate_with_comfyui(script, output_path, comfyui_workflow, voice)
+    if tts_method == "comfyui":
+        return _generate_with_comfyui(script, output_path, tts_workflow, voice)
     elif tts_method == "elevenlabs":
         return _generate_with_elevenlabs(script, output_path, voice)
     else:
@@ -307,38 +307,60 @@ def list_elevenlabs_voices():
         return None
 
 
-def _generate_with_comfyui(script, output_path, workflow_path, voice):
+def _generate_with_comfyui(script, output_path, workflow_name, voice):
     """
     Generate audio using ComfyUI TTS workflow.
 
     Args:
         script: Text to synthesize
         output_path: Output audio file path
-        workflow_path: Path to TTS workflow JSON
+        workflow_name: Key in config.TTS_WORKFLOWS
         voice: Voice model name
 
     Returns:
         Path to generated audio or None
     """
     try:
+        # Resolve workflow config
+        workflow_config = config.TTS_WORKFLOWS.get(workflow_name)
+        if not workflow_config:
+            logger.error(f"TTS workflow '{workflow_name}' not found in config.TTS_WORKFLOWS")
+            return None
+
+        workflow_path = workflow_config.get("workflow_path")
+        if not workflow_path or not os.path.exists(workflow_path):
+            logger.error(f"TTS workflow path not found: {workflow_path}")
+            return None
+
         # Load workflow template
         with open(workflow_path, 'r', encoding='utf-8') as f:
             workflow = json.load(f)
 
-        # Find text input node (usually a KSampler or String Literal node)
-        # Common node IDs for text input in TTS workflows
-        text_node_patterns = ['text', 'prompt', 'tts_text', 'input_text']
+        # Get node IDs from config
+        text_node_id = workflow_config.get("text_node_id")
+        save_node_id = workflow_config.get("save_node_id")
 
-        for node_id, node_data in workflow.items():
-            if 'inputs' in node_data:
-                # Check for text input widgets
-                for key, value in node_data['inputs'].items():
-                    if any(pattern in str(key).lower() for pattern in text_node_patterns):
-                        if isinstance(value, str) and len(value) < 100:  # Likely a placeholder
-                            workflow[node_id]['inputs'][key] = script
-                            print(f"[INFO] Injected script into node {node_id}.{key}")
+        # Inject script
+        if text_node_id and text_node_id in workflow:
+            # Find the text input key (usually 'text', 'string', or 'value')
+            node_inputs = workflow[text_node_id].get('inputs', {})
+            for key in ['text', 'string', 'value', 'text_input']:
+                if key in node_inputs:
+                    workflow[text_node_id]['inputs'][key] = script
+                    logger.info(f"Injected script into node {text_node_id}.{key}")
+                    break
+        else:
+            # Fallback: search for text input nodes
+            text_node_patterns = ['text', 'prompt', 'tts_text', 'input_text']
+            for node_id, node_data in workflow.items():
+                if 'inputs' in node_data:
+                    for key, value in node_data['inputs'].items():
+                        if any(pattern in str(key).lower() for pattern in text_node_patterns):
+                            if isinstance(value, str):
+                                workflow[node_id]['inputs'][key] = script
+                                logger.info(f"Fallback: Injected script into node {node_id}.{key}")
 
-        # Find voice/model selection node
+        # Inject voice
         voice_node_patterns = ['voice', 'model', 'speaker', 'tts_model']
         for node_id, node_data in workflow.items():
             if 'inputs' in node_data:
@@ -346,7 +368,7 @@ def _generate_with_comfyui(script, output_path, workflow_path, voice):
                     if any(pattern in str(key).lower() for pattern in voice_node_patterns):
                         if isinstance(node_data['inputs'].get(key), str):
                             workflow[node_id]['inputs'][key] = voice
-                            print(f"[INFO] Set voice to '{voice}' in node {node_id}.{key}")
+                            logger.info(f"Set voice to '{voice}' in node {node_id}.{key}")
 
         # Submit to ComfyUI
         result = submit(workflow)
@@ -448,62 +470,118 @@ def _generate_with_local_tts(script, output_path, voice):
         return None
 
 
-def generate_narration_for_session(session_id, story_json, total_duration, agent_name="default",
-                                   tts_method="local", tts_workflow_path=None, voice="default",
-                                   use_comfyui=False):
+def generate_scene_narration(session_id, scene_index, text, tts_method=None, tts_workflow=None, voice=None):
     """
-    Complete narration TTS workflow for a session.
-
-    NOTE: Narration text should already be in shots (from story generation).
-    This function only handles TTS conversion.
-
+    Generate narration for a single scene with versioning.
+    
     Args:
         session_id: Session identifier
-        story_json: Story data (for title/header/scenes)
-        total_duration: Total video duration (not used, kept for compatibility)
-        agent_name: Narration agent (not used, kept for compatibility)
-        tts_method: TTS method ("local", "comfyui", "elevenlabs")
-        tts_workflow_path: Path to TTS workflow JSON (for comfyui)
-        voice: Voice selection
-        use_comfyui: Legacy parameter (use tts_method="comfyui" instead)
-
+        scene_index: 0-based scene index
+        text: Narration text
+        tts_method: Optional override for TTS method
+        tts_workflow: Optional override for TTS workflow
+        voice: Optional override for voice
+        
     Returns:
-        Tuple of (script_path, audio_path) or (None, None) if failed
+        Dictionary with status and paths
+    """
+    from core.session_manager import SessionManager
+    session_mgr = SessionManager()
+    
+    # Defaults from config
+    tts_method = tts_method or config.TTS_METHOD
+    tts_workflow = tts_workflow or config.TTS_WORKFLOW
+    voice = voice or config.TTS_VOICE
+    narration_dir = os.path.join(session_mgr.get_session_dir(session_id), "narration")
+    os.makedirs(narration_dir, exist_ok=True)
+    
+    # 1-based index for filename
+    display_index = scene_index + 1
+    
+    # Version discovery
+    import glob
+    pattern = os.path.join(narration_dir, f"scene_{display_index:03d}_*.wav")
+    existing_files = glob.glob(pattern)
+    
+    version = 1
+    if existing_files:
+        versions = []
+        for f in existing_files:
+            try:
+                v_part = os.path.basename(f).split('_')[-1].split('.')[0]
+                versions.append(int(v_part))
+            except (ValueError, IndexError):
+                continue
+        if versions:
+            version = max(versions) + 1
+            
+    filename = f"scene_{display_index:03d}_{version:03d}.wav"
+    output_path = os.path.join(narration_dir, filename)
+    
+    print(f"\n[NARRATION] Generating Scene {display_index} version {version}...")
+    
+    generated_path = generate_narration_audio(
+        text, 
+        str(output_path), 
+        tts_method=tts_method, 
+        tts_workflow=tts_workflow, 
+        voice=voice
+    )
+    
+    if generated_path:
+        # Relativize for storage
+        rel_path = f"narration/{filename}"
+        return {
+            "status": "success",
+            "full_path": str(generated_path),
+            "rel_path": rel_path,
+            "version": version
+        }
+    else:
+        return {
+            "status": "error",
+            "message": "Generation failed"
+        }
+
+
+def generate_narration_for_session(session_id, story_json, total_duration, agent_name="default",
+                                   tts_method="local", tts_workflow="default", voice="default",
+                                   use_comfyui=False):
+    """
+    Complete narration TTS workflow for a session (Legacy/Batch).
     """
     from core.session_manager import SessionManager
 
     session_mgr = SessionManager()
-    narration_dir = session_mgr.get_session_dir(session_id) / "narration"
+    narration_dir = os.path.join(session_mgr.get_session_dir(session_id), "narration")
     os.makedirs(narration_dir, exist_ok=True)
 
     # Step 1: Extract narration from scenes
     print("\n[NARRATION] Step 1: Extracting narration from story scenes...")
-    script = generate_narration_from_story(story_json)
+    story_data = json.loads(story_json) if isinstance(story_json, str) else story_json
+    scenes = story_data.get('scenes', [])
 
-    if not script.strip():
-        print("[WARN] No narration found in shots. Skipping narration generation.")
+    if not scenes:
+        print("[WARN] No scenes found. Skipping narration generation.")
         return None, None
 
-    # Save script
-    script_path = narration_dir / "narration_script.txt"
-    with open(script_path, 'w', encoding='utf-8') as f:
-        f.write(script)
-    print(f"[PASS] Script saved: {script_path}")
+    # Step 2: Generate for each scene sequentially
+    audio_paths = []
+    for i, scene in enumerate(scenes):
+        narration_text = scene.get('narration', '')
+        if narration_text:
+            result = generate_scene_narration(session_id, i, narration_text, tts_method, tts_workflow, voice)
+            if result["status"] == "success":
+                audio_paths.append(result["full_path"])
+        else:
+            print(f"[INFO] Scene {i+1} has no narration text.")
 
-    # Step 2: Generate audio
-    print("\n[NARRATION] Step 2: Generating audio...")
-    audio_path = narration_dir / "narration.wav"
-
-    generated_audio = generate_narration_audio(script, audio_path, tts_method=tts_method,
-                                               comfyui_workflow=tts_workflow_path, voice=voice)
-
-    if generated_audio:
-        # Mark narration as complete
+    if audio_paths:
         session_mgr.mark_step_complete(session_id, 'narration')
-        return str(script_path), str(audio_path)
+        return None, audio_paths[0] if audio_paths else None
     else:
-        print("[FAIL] Narration audio generation failed")
-        return str(script_path), None
+        print("[FAIL] Narration generation failed for all scenes")
+        return None, None
 
 
 if __name__ == "__main__":

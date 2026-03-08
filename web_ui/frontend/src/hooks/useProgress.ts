@@ -3,14 +3,17 @@ import { useState, useEffect, useCallback } from 'react';
 interface ProgressMessage {
     type: string;
     session_id: string;
-    shot_index: number;
+    shot_index?: number;
     shot_id?: string;
-    progress: number;
+    scene_index?: number;
+    step?: string;
+    progress?: number;
 }
 
-export const useProgress = (sessionId: string | undefined, onCompleted?: (shotId: string) => void) => {
+export const useProgress = (sessionId: string | undefined, onCompleted?: (id: string | number, type: 'shot' | 'scene') => void) => {
     // We now map progress by stable UUID strings rather than index integers, to survive insertion/deletion reindexes
     const [shotProgress, setShotProgress] = useState<Record<string, number>>({});
+    const [sceneProgress, setSceneProgress] = useState<Record<number, number>>({});
 
     useEffect(() => {
         if (!sessionId) return;
@@ -38,34 +41,61 @@ export const useProgress = (sessionId: string | undefined, onCompleted?: (shotId
             socket.onmessage = (event) => {
                 try {
                     const data: ProgressMessage = JSON.parse(event.data);
-                    // Use shot_id if provided by new backend, fallback to shot_index string for backwards compatibility
-                    const targetKey = data.shot_id || (data.shot_index !== undefined ? data.shot_index.toString() : null);
 
-                    if (!targetKey && data.type !== 'cancelled' && data.type !== 'completed') return;
+                    // Handle Shot Progress
+                    const shotKey = data.shot_id || (data.shot_index !== undefined ? data.shot_index.toString() : null);
 
-                    if (data.type === 'progress' && targetKey) {
-                        setShotProgress((prev) => ({
-                            ...prev,
-                            [targetKey]: data.progress,
-                        }));
-                    } else if (data.type === 'completed' && targetKey) {
-                        setShotProgress((prev) => {
-                            const next = { ...prev };
-                            delete next[targetKey];
-                            return next;
-                        });
-                        if (onCompleted) {
-                            onCompleted(targetKey);
+                    // Handle Scene Progress
+                    const sceneKey = data.scene_index !== undefined ? data.scene_index : null;
+
+                    if (data.type === 'progress') {
+                        if (shotKey && data.progress !== undefined) {
+                            setShotProgress((prev) => ({
+                                ...prev,
+                                [shotKey]: data.progress!,
+                            }));
+                        } else if (sceneKey !== null && data.progress !== undefined) {
+                            setSceneProgress((prev) => ({
+                                ...prev,
+                                [sceneKey]: data.progress!,
+                            }));
                         }
-                    } else if (data.type === 'cancelled') {
-                        if (targetKey) {
+                    } else if (data.type === 'completed') {
+                        if (shotKey) {
                             setShotProgress((prev) => {
                                 const next = { ...prev };
-                                delete next[targetKey];
+                                delete next[shotKey];
+                                return next;
+                            });
+                            if (onCompleted) {
+                                onCompleted(shotKey, 'shot');
+                            }
+                        } else if (sceneKey !== null) {
+                            setSceneProgress((prev) => {
+                                const next = { ...prev };
+                                delete next[sceneKey];
+                                return next;
+                            });
+                            if (onCompleted) {
+                                onCompleted(sceneKey, 'scene');
+                            }
+                        }
+                    } else if (data.type === 'cancelled') {
+                        if (shotKey) {
+                            setShotProgress((prev) => {
+                                const next = { ...prev };
+                                delete next[shotKey];
+                                return next;
+                            });
+                        } else if (sceneKey !== null) {
+                            setSceneProgress((prev) => {
+                                const next = { ...prev };
+                                delete next[sceneKey];
                                 return next;
                             });
                         } else {
-                            setShotProgress({}); // Cancel all
+                            setShotProgress({});
+                            setSceneProgress({});
                         }
                     }
                 } catch (err) {
@@ -112,5 +142,5 @@ export const useProgress = (sessionId: string | undefined, onCompleted?: (shotId
         });
     }, []);
 
-    return { shotProgress, clearProgress };
+    return { shotProgress, sceneProgress, clearProgress };
 };

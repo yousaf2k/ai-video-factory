@@ -199,3 +199,55 @@ export function useDeleteVariationVideo(sessionId: string) {
     },
   });
 }
+
+// Narration Hooks
+export function useGenerateSceneNarration(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sceneIndex, config }: { sceneIndex: number; config: { tts_method?: string, tts_workflow?: string, voice?: string } }) =>
+      api.generateSceneNarration(sessionId, sceneIndex, config),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
+export function useCancelSceneNarration(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sceneIndex: number) => api.cancelSceneNarration(sessionId, sceneIndex),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
+export function useBatchGenerateNarration(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sceneIndices, config }: { sceneIndices: number[]; config?: { tts_method?: string, tts_workflow?: string, voice?: string } }) =>
+      api.batchGenerateNarration(sessionId, sceneIndices, config),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}
+
+export function useSelectSceneNarration(sessionId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sceneIndex, narrationPath }: { sceneIndex: number; narrationPath: string }) =>
+      api.selectSceneNarration(sessionId, sceneIndex, narrationPath),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    },
+  });
+}

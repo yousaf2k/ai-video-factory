@@ -230,6 +230,40 @@ class ApiClient {
     return response.data;
   }
 
+  // Narration API
+  async generateSceneNarration(
+    sessionId: string,
+    sceneIndex: number,
+    request: { tts_method?: string, tts_workflow?: string, voice?: string }
+  ): Promise<void> {
+    await this.client.post(`/api/sessions/${sessionId}/story/scenes/${sceneIndex}/generate-narration`, request);
+  }
+
+  async cancelSceneNarration(sessionId: string, sceneIndex: number): Promise<void> {
+    await this.client.post(`/api/sessions/${sessionId}/story/scenes/${sceneIndex}/cancel-narration`);
+  }
+
+  async batchGenerateNarration(
+    sessionId: string,
+    sceneIndices: number[],
+    config?: { tts_method?: string, tts_workflow?: string, voice?: string }
+  ): Promise<void> {
+    await this.client.post(`/api/sessions/${sessionId}/story/batch-generate-narration`, {
+      scene_indices: sceneIndices,
+      ...config
+    });
+  }
+
+  async selectSceneNarration(
+    sessionId: string,
+    sceneIndex: number,
+    narrationPath: string
+  ): Promise<void> {
+    await this.client.post(`/api/sessions/${sessionId}/story/scenes/${sceneIndex}/select-narration`, {
+      narration_path: narrationPath
+    });
+  }
+
   async uploadShotImage(
     sessionId: string,
     shotIndex: number,

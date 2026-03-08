@@ -6,12 +6,18 @@ import sys
 import os
 import json
 import logging
+import asyncio
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 
-from web_ui.backend.models.story import UpdateStoryRequest, RegenerateStoryRequest
+from web_ui.backend.models.story import (
+    UpdateStoryRequest, RegenerateStoryRequest, 
+    GenerateSceneNarrationRequest, BatchGenerateNarrationRequest,
+    SelectSceneNarrationRequest
+)
 from web_ui.backend.services.session_service import SessionService
+from web_ui.backend.services.generation_service import GenerationService
 from core.story_engine import build_story
 from core.session_manager import SessionManager
 
@@ -21,6 +27,102 @@ router = APIRouter(prefix="/api/sessions/{session_id}/story", tags=["stories"])
 # Initialize services
 session_service = SessionService()
 session_manager = SessionManager()
+generation_service = GenerationService()
+
+
+@router.post("/scenes/{scene_index}/generate-narration")
+async def generate_scene_narration(session_id: str, scene_index: int, request: GenerateSceneNarrationRequest):
+    """Generate narration for a single scene"""
+    try:
+        # Start background task
+        asyncio.create_task(generation_service.regenerate_scene_narration(
+            session_id, scene_index,
+            tts_method=request.tts_method,
+            tts_workflow=request.tts_workflow,
+            voice=request.voice
+        ))
+        return {"status": "queued", "message": f"Narration generation for scene {scene_index} started"}
+    except Exception as e:
+        logger.error(f"Error starting narration generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start narration generation: {str(e)}"
+        )
+
+
+@router.post("/batch-generate-narration")
+async def batch_generate_narration(session_id: str, request: BatchGenerateNarrationRequest):
+    """Batch generate narration for multiple scenes"""
+    try:
+        # Start background task
+        asyncio.create_task(generation_service.run_batch_narration_generation(
+            session_id, request
+        ))
+        return {"status": "queued", "message": f"Batch narration generation for {len(request.scene_indices)} scenes started"}
+    except Exception as e:
+        logger.error(f"Error starting batch narration generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start batch narration generation: {str(e)}"
+        )
+
+
+@router.post("/scenes/{scene_index}/cancel-narration")
+async def cancel_scene_narration(session_id: str, scene_index: int):
+    """Cancel narration generation for a scene"""
+    try:
+        generation_service.cancel_scene_narration(session_id, scene_index)
+        return {"status": "success", "message": f"Cancelled narration for scene {scene_index}"}
+    except Exception as e:
+        logger.error(f"Error cancelling narration: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel narration: {str(e)}"
+        )
+
+
+@router.post("/scenes/{scene_index}/select-narration")
+async def select_scene_narration(session_id: str, scene_index: int, request: SelectSceneNarrationRequest):
+    """Select the active narration variation for a scene"""
+    try:
+        # Load story
+        session_dir = session_manager.get_session_dir(session_id)
+        story_path = os.path.join(session_dir, "story.json")
+        with open(story_path, 'r', encoding='utf-8') as f:
+            story_data = json.load(f)
+        
+        scenes = story_data.get('scenes', [])
+        if scene_index < 0 or scene_index >= len(scenes):
+            raise ValueError(f"Scene index {scene_index} out of range")
+        
+        scene = scenes[scene_index]
+        
+        # Verify the path exists in narration_paths
+        if 'narration_paths' not in scene or request.narration_path not in scene['narration_paths']:
+            raise ValueError("Narration path not found in variations")
+        
+        # Update active path
+        scene['narration_path'] = request.narration_path
+        
+        # Save story
+        with open(story_path, 'w', encoding='utf-8') as f:
+            json.dump(story_data, f, indent=4)
+        
+        # Broadcast the change
+        from web_ui.backend.websocket.manager import manager
+        manager.broadcast_sync(session_id, {
+            "type": "narration_selected",
+            "session_id": session_id,
+            "scene_index": scene_index,
+            "narration_path": request.narration_path
+        })
+        
+        return {"status": "success", "narration_path": request.narration_path}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error selecting narration: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get("")

@@ -13,6 +13,8 @@ class Scene(BaseModel):
     emotion: str = Field(..., description="Emotional tone")
     narration: str = Field(..., description="Narration text")
     scene_duration: Optional[int] = Field(default=None, description="Scene duration in seconds")
+    narration_path: Optional[str] = Field(default=None, description="Active narration audio path")
+    narration_paths: List[str] = Field(default_factory=list, description="All narration audio variations")
 
 
 class Story(BaseModel):
@@ -53,3 +55,23 @@ class UpdateStoryRequest(BaseModel):
 class RegenerateStoryRequest(BaseModel):
     """Request to regenerate story"""
     agent: str = Field(default="default", description="New agent to use")
+
+
+class GenerateSceneNarrationRequest(BaseModel):
+    """Request to generate narration for a scene"""
+    tts_method: Optional[str] = Field(default=None, description="TTS method override")
+    tts_workflow: Optional[str] = Field(default=None, description="TTS workflow key")
+    voice: Optional[str] = Field(default=None, description="Voice override")
+
+
+class BatchGenerateNarrationRequest(BaseModel):
+    """Request to batch generate narration for multiple scenes"""
+    scene_indices: List[int] = Field(..., description="List of 0-based scene indices")
+    tts_method: Optional[str] = None
+    tts_workflow: Optional[str] = None
+    voice: Optional[str] = None
+
+
+class SelectSceneNarrationRequest(BaseModel):
+    """Request to select active narration for a scene"""
+    narration_path: str = Field(..., description="Relative path of the narration variation to set as active")

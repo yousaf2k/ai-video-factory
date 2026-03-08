@@ -24,6 +24,8 @@ import {
   ChevronDown,
   Info,
   Clock,
+  Mic,
+  Music,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProgress } from "@/hooks/useProgress";
@@ -47,7 +49,7 @@ interface ShotGridProps {
 export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<
-    "image" | "video" | "both" | null
+    "image" | "video" | "both" | "narration" | null
   >(null);
   const [showSceneMoveModal, setShowSceneMoveModal] = useState(false);
   const [targetMoveScene, setTargetMoveScene] = useState<number | null>(null);
@@ -55,6 +57,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
     new Set(),
   );
   const [queuedIndices, setQueuedIndices] = useState<Set<number>>(new Set());
+  const [generatingScenes, setGeneratingScenes] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
   const updateShotsMutation = useUpdateShots(sessionId);
   const [viewModeOverride, setViewModeOverride] = useState<
@@ -82,10 +85,10 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
     narration: "",
   });
 
-  const { shotProgress } = useProgress(
+  const { shotProgress, sceneProgress } = useProgress(
     sessionId,
     useCallback(
-      (shotId: string) => {
+      (id: string | number, type: 'shot' | 'scene') => {
         // Whenever a WebSocket progress message broadcasts 'completed', refresh this session's UI!
         queryClient.invalidateQueries({ queryKey: ["shots", sessionId] });
         queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
@@ -97,6 +100,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   // Filter state
   const [filterNoImages, setFilterNoImages] = useState(false);
   const [filterNoVideos, setFilterNoVideos] = useState(false);
+  const [filterNoNarration, setFilterNoNarration] = useState(false);
   const [filterCamera, setFilterCamera] = useState<string>("");
   const [filterText, setFilterText] = useState<string>("");
 
@@ -108,6 +112,9 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   );
   const [videoMode, setVideoMode] = useState<string>("comfyui");
   const [batchSkipImages, setBatchSkipImages] = useState<boolean>(true);
+
+  const [ttsMethod, setTtsMethod] = useState("local");
+  const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
 
   const { data: agents } = useAgents();
 
@@ -258,6 +265,25 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
         });
       } catch (error) {
         console.error("Failed to start batch video generation:", error);
+      }
+    } else if (type === "narration") {
+      try {
+        // Collect unique scene indices from selected shots
+        const sceneIndices = Array.from(new Set(
+          shots
+            .filter(s => indicesToProcess.includes(s.index))
+            .map(s => s.scene_index || 0)
+        ));
+
+        await api.batchGenerateNarration(sessionId, sceneIndices, {
+          tts_method: ttsMethod,
+          voice: ttsVoice,
+        });
+
+        // Mark scenes as generating
+        setGeneratingScenes(new Set(sceneIndices));
+      } catch (error) {
+        console.error("Failed to start batch narration generation:", error);
       }
     }
 
@@ -636,6 +662,13 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
           Move to Scene
         </button>
         <button
+          onClick={() => setShowBatchModal("narration")}
+          className="flex items-center gap-2 text-sm px-3 py-1.5 hover:bg-muted rounded-md transition-colors"
+        >
+          <Mic className="w-4 h-4 text-pink-500" />
+          Regenerate Narration
+        </button>
+        <button
           onClick={() => setSelectedIndices([])}
           className="ml-2 p-1.5 hover:bg-muted rounded-full text-muted-foreground"
         >
@@ -690,9 +723,24 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                         {sIdx ? `Scene ${sIdx}` : "Unmatched Shots"}
                       </span>
                       {scene && (
-                        <h3 className="text-xl font-bold tracking-tight">
-                          {scene.location}
-                        </h3>
+                        <div className="flex flex-col gap-1">
+                          <h3 className="text-xl font-bold tracking-tight">
+                            {scene.location}
+                          </h3>
+                          {sceneProgress[sIdx || 0] !== undefined && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="w-24 h-1 bg-pink-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-pink-500 transition-all"
+                                  style={{ width: `${sceneProgress[sIdx || 0]}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] text-pink-600 font-medium">
+                                Narration: {Math.round(sceneProgress[sIdx || 0])}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                     {scene && (
@@ -1046,6 +1094,64 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                     <p className="text-xs text-muted-foreground mt-1">
                       Path to the ComfyUI video JSON workflow.
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {showBatchModal === "narration" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      TTS Method
+                    </label>
+                    <Select
+                      value={ttsMethod}
+                      onValueChange={(val) => setTtsMethod(val)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select TTS Method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="local">Local (Edge-TTS)</SelectItem>
+                        <SelectItem value="elevenlabs">ElevenLabs (High Quality)</SelectItem>
+                        <SelectItem value="comfyui">ComfyUI TTS</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Voice
+                    </label>
+                    <Select
+                      value={ttsVoice}
+                      onValueChange={(val) => setTtsVoice(val)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Voice" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ttsMethod === "local" ? (
+                          <>
+                            <SelectItem value="en-US-AriaNeural">Aria (Female)</SelectItem>
+                            <SelectItem value="en-US-GuyNeural">Guy (Male)</SelectItem>
+                            <SelectItem value="en-GB-SoniaNeural">Sonia (UK Female)</SelectItem>
+                            <SelectItem value="en-GB-RyanNeural">Ryan (UK Male)</SelectItem>
+                          </>
+                        ) : ttsMethod === "elevenlabs" ? (
+                          <>
+                            <SelectItem value="premade/adam">Adam (Deep Engine)</SelectItem>
+                            <SelectItem value="premade/antoni">Antoni (Soothing)</SelectItem>
+                            <SelectItem value="premade/bella">Bella (Soft)</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="default_female.wav">Default Female</SelectItem>
+                            <SelectItem value="default_male.wav">Default Male</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               )}

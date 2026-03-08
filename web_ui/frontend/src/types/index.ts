@@ -68,6 +68,8 @@ export interface Scene {
   emotion: string;
   narration: string;
   scene_duration?: number;
+  narration_path?: string;
+  narration_paths?: string[];
 }
 
 export interface Shot {

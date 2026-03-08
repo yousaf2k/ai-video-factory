@@ -39,7 +39,9 @@ class GenerationService:
         self.session_manager = SessionManager(sessions_dir)
         self.cancelled_sessions = set()
         self.cancelled_shots: dict[str, set[int]] = {}
+        self.cancelled_scenes: dict[str, set[int]] = {}
         self.queued_shots: dict[str, set[int]] = {}
+        self.queued_scenes: dict[str, set[int]] = {}
 
     def cancel_session(self, session_id: str):
         """Mark a session as cancelled to halt background queue processing."""
@@ -56,6 +58,15 @@ class GenerationService:
         if session_id in self.queued_shots and shot_index in self.queued_shots[session_id]:
             self.queued_shots[session_id].remove(shot_index)
         logger.info(f"Marked shot {shot_index} in session {session_id} as cancelled.")
+
+    def cancel_scene_narration(self, session_id: str, scene_index: int):
+        """Mark a scene narration as cancelled."""
+        if session_id not in self.cancelled_scenes:
+            self.cancelled_scenes[session_id] = set()
+        self.cancelled_scenes[session_id].add(scene_index)
+        if session_id in self.queued_scenes and scene_index in self.queued_scenes[session_id]:
+            self.queued_scenes[session_id].remove(scene_index)
+        logger.info(f"Marked scene {scene_index} narration in session {session_id} as cancelled.")
 
     async def run_batch_generation(self, session_id: str, request: Any):
         """
@@ -162,6 +173,65 @@ class GenerationService:
         tasks = [process_shot(idx) for idx in request.shot_indices]
         await asyncio.gather(*tasks, return_exceptions=True)
         logger.info(f"Completed server-side batch generation for session {session_id}")
+
+    async def run_batch_narration_generation(self, session_id: str, request: Any):
+        """
+        Background task to process a batch of scene narrations with a concurrency limit.
+        """
+        from web_ui.backend.websocket.manager import manager
+        import config
+        
+        # Clear any old cancellation flags
+        if session_id in self.cancelled_sessions:
+            self.cancelled_sessions.remove(session_id)
+        if session_id in self.cancelled_scenes:
+            self.cancelled_scenes.pop(session_id)
+            
+        limit = getattr(config, 'CONCURRENT_GENERATION_LIMIT', 2)
+        logger.info(f"Using concurrency limit of {limit} for batch narration")
+        semaphore = asyncio.Semaphore(limit)
+        
+        # Tracking for UI
+        self.queued_scenes[session_id] = set(request.scene_indices)
+        
+        async def process_scene(scene_index: int):
+            if session_id in self.cancelled_sessions:
+                logger.info(f"Session {session_id} cancelled. Skipping scene {scene_index} narration.")
+                return
+            if session_id in self.cancelled_scenes and scene_index in self.cancelled_scenes[session_id]:
+                logger.info(f"Scene {scene_index} narration cancelled. Skipping.")
+                return
+                
+            async with semaphore:
+                try:
+                    if session_id in self.cancelled_sessions:
+                        return
+                    if session_id in self.cancelled_scenes and scene_index in self.cancelled_scenes[session_id]:
+                        return
+
+                    if session_id in self.queued_scenes and scene_index in self.queued_scenes[session_id]:
+                        self.queued_scenes[session_id].remove(scene_index)
+
+                    await self.regenerate_scene_narration(
+                        session_id, scene_index,
+                        tts_method=request.tts_method,
+                        tts_workflow=request.tts_workflow,
+                        voice=request.voice
+                    )
+                except Exception as e:
+                    logger.error(f"Batch narration error on scene {scene_index}: {str(e)}")
+                    manager.broadcast_sync(session_id, {
+                        "type": "error",
+                        "session_id": session_id,
+                        "scene_index": scene_index,
+                        "step": "narration",
+                        "message": str(e)
+                    })
+
+        logger.info(f"Starting batch narration generation for {len(request.scene_indices)} scenes")
+        tasks = [process_scene(idx) for idx in request.scene_indices]
+        await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info(f"Completed batch narration generation for session {session_id}")
 
     async def regenerate_shot_image(
         self, session_id: str, shot_index: int, force: bool = False,
@@ -328,6 +398,95 @@ class GenerationService:
 
         except Exception as e:
             logger.error(f"Error regenerating shot {shot_index} video: {e}")
+            raise
+
+    async def regenerate_scene_narration(
+        self, session_id: str, scene_index: int, 
+        tts_method: Optional[str] = None, 
+        tts_workflow: Optional[str] = None,
+        voice: Optional[str] = None
+    ) -> str:
+        """
+        Regenerate narration for a single scene
+        """
+        from core.narration_generator import generate_scene_narration
+        import json
+
+        try:
+            # Clear cancellation for this scene
+            if session_id in self.cancelled_scenes and scene_index in self.cancelled_scenes[session_id]:
+                self.cancelled_scenes[session_id].remove(scene_index)
+
+            # Load story to get narration text
+            session_dir = self.session_manager.get_session_dir(session_id)
+            story_path = os.path.join(session_dir, "story.json")
+            with open(story_path, 'r', encoding='utf-8') as f:
+                story_data = json.load(f)
+            
+            scenes = story_data.get('scenes', [])
+            if scene_index < 0 or scene_index >= len(scenes):
+                raise ValueError(f"Scene index {scene_index} out of range")
+            
+            scene = scenes[scene_index]
+            text = scene.get('narration', '')
+            if not text:
+                raise ValueError(f"Scene {scene_index} has no narration text")
+
+            # Broadcast 0%
+            manager.broadcast_sync(session_id, {
+                "type": "progress",
+                "session_id": session_id,
+                "scene_index": scene_index,
+                "step": "narration",
+                "progress": 0
+            })
+
+            # Run generation
+            # Note: generate_scene_narration is currently synchronous in the core
+            # We'll wrap it in to_thread, but it doesn't support fine-grained progress yet
+            # except for ComfyUI which could be extended. 
+            # For now, we'll do 50% and 100% logic.
+            
+            result = await asyncio.to_thread(
+                generate_scene_narration,
+                session_id, scene_index, text, 
+                tts_method, tts_workflow, voice
+            )
+            
+            if result["status"] == "success":
+                # Update story.json with the new path
+                rel_path = result["rel_path"]
+                scene['narration_path'] = rel_path
+                if 'narration_paths' not in scene:
+                    scene['narration_paths'] = []
+                if rel_path not in scene['narration_paths']:
+                    scene['narration_paths'].append(rel_path)
+                
+                with open(story_path, 'w', encoding='utf-8') as f:
+                    json.dump(story_data, f, indent=4)
+                
+                # Broadcast completion
+                manager.broadcast_sync(session_id, {
+                    "type": "completed",
+                    "session_id": session_id,
+                    "scene_index": scene_index,
+                    "step": "narration",
+                    "narration_path": rel_path
+                })
+                
+                return rel_path
+            else:
+                raise RuntimeError(result.get("message", "Narration generation failed"))
+
+        except Exception as e:
+            logger.error(f"Error generating narration for scene {scene_index}: {e}")
+            manager.broadcast_sync(session_id, {
+                "type": "error",
+                "session_id": session_id,
+                "scene_index": scene_index,
+                "step": "narration",
+                "message": str(e)
+            })
             raise
 
 

@@ -46,31 +46,49 @@ def _get_mask(b64_str: str):
 
 
 def _create_browser_context(playwright_instance):
-    """Create a persistent browser context with Chrome profile."""
+    """Create a persistent browser context with the configured browser."""
     chrome_profile = getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
     if not chrome_profile:
         chrome_profile = os.path.join(
             getattr(config, 'OUTPUT_DIR', 'output'), 'chrome_profile'
         )
     os.makedirs(chrome_profile, exist_ok=True)
-    logger.info(f"Using Chrome profile: {chrome_profile}")
+    
+    browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
+    channel = getattr(config, 'PLAYWRIGHT_CHANNEL', 'chrome')
+    
+    logger.info(f"Using browser: {browser_type_name}, channel: {channel}, profile: {chrome_profile}")
 
     try:
-        context = playwright_instance.chromium.launch_persistent_context(
+        # Map browser type name to playwright browser type object
+        if browser_type_name == "firefox":
+            browser_type = playwright_instance.firefox
+            channel = None # Firefox doesn't use channels in Playwright
+        elif browser_type_name == "webkit":
+            browser_type = playwright_instance.webkit
+        else:
+            browser_type = playwright_instance.chromium
+
+        launch_args = [
+            '--disable-blink-features=AutomationControlled',
+            '--no-first-run',
+            '--no-default-browser-check',
+        ]
+        
+        # Ignored for firefox/webkit if they don't support these specific flags, 
+        # but mostly harmless or handled by playwright.
+        
+        context = browser_type.launch_persistent_context(
             user_data_dir=chrome_profile,
             headless=False,
-            channel="chrome",
-            args=[
-                '--disable-blink-features=AutomationControlled',
-                '--no-first-run',
-                '--no-default-browser-check',
-            ],
+            channel=channel if channel else None,
+            args=launch_args,
             viewport={'width': 1280, 'height': 900},
             ignore_default_args=['--enable-automation'],
         )
         return context
     except Exception as e:
-        logger.error(f"Failed to launch browser: {e}")
+        logger.error(f"Failed to launch browser {browser_type_name}: {e}")
         raise
 
 
