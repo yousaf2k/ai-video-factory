@@ -237,6 +237,13 @@ async def launch_browser():
                 import config
                 
                 with sync_playwright() as p:
+                    # Apply global hook if using version 2.0.x
+                    try:
+                        from playwright_stealth import Stealth
+                        Stealth().hook_playwright_context(p)
+                    except (ImportError, AttributeError):
+                        pass
+                        
                     # Use profile path from config to share session with image generation
                     profile_path = getattr(config, 'GEMINIWEB_CHROME_PROFILE', os.path.abspath(os.path.join("output", "chrome_profile")))
                     os.makedirs(profile_path, exist_ok=True)
@@ -244,40 +251,60 @@ async def launch_browser():
                     logger.info(f"Launching browser with profile: {profile_path}")
                     
                     # Launch persistent context with same settings as image generation
-                    browser_type = getattr(p, getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium'), p.chromium)
-                    channel = getattr(config, 'PLAYWRIGHT_CHANNEL', 'chrome')
+                    browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
+                    browser_type = getattr(p, browser_type_name, p.chromium)
                     
-                    # Map to avoid "channel 'xxx' is not supported"
-                    valid_chromium_channels = ["chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", "msedge-canary"]
-                    if channel not in valid_chromium_channels:
-                        channel = None
+                    # Channel and args depend on browser type
+                    channel = None
+                    launch_args = []
+                    
+                    if browser_type_name == "chromium":
+                        channel = getattr(config, 'PLAYWRIGHT_CHANNEL', 'chrome')
+                        # Map to avoid "channel 'xxx' is not supported"
+                        valid_chromium_channels = ["chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", "msedge-canary"]
+                        if channel not in valid_chromium_channels:
+                            channel = None
+                            
+                        launch_args = [
+                            "--start-maximized", 
+                            "--disable-blink-features=AutomationControlled",
+                            "--no-first-run",
+                            "--no-default-browser-check",
+                        ]
+                        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                    elif browser_type_name == "firefox":
+                        launch_args = ["-start-maximized"]
+                        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
+                    else:
+                        user_agent = None # Let Playwright decide
 
                     browser_context = browser_type.launch_persistent_context(
                         user_data_dir=profile_path,
                         headless=False,
                         channel=channel,
-                        args=["--start-maximized", "--disable-blink-features=AutomationControlled"],
-                        no_viewport=True,
-                        ignore_default_args=['--enable-automation']
+                        args=launch_args,
+                        viewport={'width': 1280, 'height': 900},
+                        user_agent=user_agent,
+                        locale='en-US',
+                        timezone_id='America/New_York',
+                        ignore_default_args=['--enable-automation'],
+                        no_viewport=False
                     )
                     
-                    page = browser_context.pages[0]
-                    
-                    # Apply stealth - handle different versions of playwright-stealth
+                    # Apply stealth to context - handle different versions of playwright-stealth
                     try:
                         # Version 2.0.x (class-based)
                         from playwright_stealth import Stealth
-                        Stealth().apply_stealth_sync(page)
+                        Stealth().apply_stealth_sync(browser_context)
                     except (ImportError, AttributeError):
                         # Version 1.x.x (function-based)
                         try:
                             from playwright_stealth import stealth_sync
-                            stealth_sync(page)
+                            stealth_sync(browser_context)
                         except (ImportError, AttributeError):
-                            # Fallback if only 'stealth' is imported and it's callable
-                            if callable(stealth):
-                                stealth(page)
+                            pass
                     
+                    page = browser_context.pages[0]
                     page.goto("https://accounts.google.com")
                     
                     # Keep the browser open until the user closes it manually
