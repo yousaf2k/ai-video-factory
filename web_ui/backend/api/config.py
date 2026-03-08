@@ -14,6 +14,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 from core.agent_loader import list_agents, get_agent_loader
 from core.workflow_loader import get_workflow_loader
 from core.config_utils import update_env_config
+import asyncio
+import threading
+import subprocess
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/config", tags=["config"])
@@ -221,4 +224,83 @@ async def update_workflow_content(category: str, filename: str, request: UpdateW
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error updating workflow content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+@router.post("/launch-browser")
+async def launch_browser():
+    """Launch a Playwright browser with persistent context and stealth"""
+    try:
+        def run_playwright():
+            try:
+                # Use a separate thread to run Playwright since it's interactive
+                from playwright.sync_api import sync_playwright
+                from playwright_stealth import stealth
+                import config
+                
+                with sync_playwright() as p:
+                    # Use profile path from config to share session with image generation
+                    profile_path = getattr(config, 'GEMINIWEB_CHROME_PROFILE', os.path.abspath(os.path.join("output", "chrome_profile")))
+                    os.makedirs(profile_path, exist_ok=True)
+                        
+                    logger.info(f"Launching browser with profile: {profile_path}")
+                    
+                    # Launch persistent context with same settings as image generation
+                    browser_type = getattr(p, getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium'), p.chromium)
+                    channel = getattr(config, 'PLAYWRIGHT_CHANNEL', 'chrome')
+                    
+                    # Map to avoid "channel 'xxx' is not supported"
+                    valid_chromium_channels = ["chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", "msedge-canary"]
+                    if channel not in valid_chromium_channels:
+                        channel = None
+
+                    browser_context = browser_type.launch_persistent_context(
+                        user_data_dir=profile_path,
+                        headless=False,
+                        channel=channel,
+                        args=["--start-maximized", "--disable-blink-features=AutomationControlled"],
+                        no_viewport=True,
+                        ignore_default_args=['--enable-automation']
+                    )
+                    
+                    page = browser_context.pages[0]
+                    
+                    # Apply stealth - handle different versions of playwright-stealth
+                    try:
+                        # Version 2.0.x (class-based)
+                        from playwright_stealth import Stealth
+                        Stealth().apply_stealth_sync(page)
+                    except (ImportError, AttributeError):
+                        # Version 1.x.x (function-based)
+                        try:
+                            from playwright_stealth import stealth_sync
+                            stealth_sync(page)
+                        except (ImportError, AttributeError):
+                            # Fallback if only 'stealth' is imported and it's callable
+                            if callable(stealth):
+                                stealth(page)
+                    
+                    page.goto("https://accounts.google.com")
+                    
+                    # Keep the browser open until the user closes it manually
+                    # This is tricky in a backend process, but launch_persistent_context 
+                    # will wait if we don't close it immediately. 
+                    # However, to avoid blocking the whole thread forever, 
+                    # we just let it run. In sync mode, it might block the thread.
+                    
+                    # We can use a simple loop or just page.pause() if we want it to stay
+                    # but since it's a separate thread, blocking is fine.
+                    # A better way is to wait for the page to be closed.
+                    page.wait_for_event("close", timeout=0)
+                    browser_context.close()
+            except Exception as e:
+                logger.error(f"Error in playwright thread: {e}")
+
+        # Start browser in a background thread to not block the API response
+        thread = threading.Thread(target=run_playwright, daemon=True)
+        thread.start()
+        
+        return {"status": "success", "message": "Browser launched. Please check your desktop."}
+    except ImportError:
+        raise HTTPException(status_code=500, detail="playwright or playwright-stealth not installed. Please run pip install.")
+    except Exception as e:
+        logger.error(f"Error launching browser: {e}")
         raise HTTPException(status_code=500, detail=str(e))

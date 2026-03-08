@@ -384,6 +384,11 @@ class ApiClient {
     const response = await this.client.post(`/api/config/workflows/${category}/${filename}`, { content });
     return response.data;
   }
+
+  async launchBrowser(): Promise<{ status: string, message: string }> {
+    const response = await this.client.post<{ status: string, message: string }>('/api/config/launch-browser');
+    return response.data;
+  }
 }
 
 // Export singleton instance

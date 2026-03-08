@@ -8,7 +8,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession, useUpdateSession } from "@/hooks/useSessions";
 import { useAgents } from "@/hooks/useAgents";
-import { Save, RefreshCw, ChevronLeft } from "lucide-react";
+import { api } from "@/services/api";
+import { Save, RefreshCw, ChevronLeft, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -33,6 +34,7 @@ export default function SessionSettingsPage() {
     story_agent: "default",
     shots_agent: "default",
   });
+  const [isLaunchingBrowser, setIsLaunchingBrowser] = useState(false);
 
   useEffect(() => {
     if (session) {
@@ -53,6 +55,21 @@ export default function SessionSettingsPage() {
     } catch (error) {
       console.error("Failed to update session settings:", error);
       alert("Failed to update session settings.");
+    }
+  };
+
+  const handleLaunchBrowser = async () => {
+    console.log("Launching browser...");
+    setIsLaunchingBrowser(true);
+    try {
+      const data = await api.launchBrowser();
+      alert(data.message || "Browser launched successfully!");
+    } catch (error: any) {
+      console.error("Error launching browser:", error);
+      const detail = error.response?.data?.detail || error.message;
+      alert(`Error launching browser: ${detail}`);
+    } finally {
+      setIsLaunchingBrowser(false);
     }
   };
 
@@ -172,6 +189,36 @@ export default function SessionSettingsPage() {
               </Select>
             </div>
           </div>
+        </section>
+
+        {/* Browser Setup */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">Browser Setup</h2>
+          <p className="text-sm text-muted-foreground">
+            If you are having trouble with Google login being blocked, use this
+            button to launch a browser with persistent context and stealth
+            settings. Once you log in there, Google will recognize your session
+            in future automated runs.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleLaunchBrowser}
+            disabled={isLaunchingBrowser}
+            className="flex items-center gap-2"
+          >
+            {isLaunchingBrowser ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Launching...
+              </>
+            ) : (
+              <>
+                <Globe className="w-4 h-4" />
+                Launch Browser for Login
+              </>
+            )}
+          </Button>
         </section>
 
         <div className="flex justify-end pt-4 gap-3">
