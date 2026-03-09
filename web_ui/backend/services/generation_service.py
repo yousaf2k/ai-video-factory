@@ -42,6 +42,8 @@ class GenerationService:
         self.cancelled_scenes: dict[str, set[int]] = {}
         self.queued_shots: dict[str, set[int]] = {}
         self.queued_scenes: dict[str, set[int]] = {}
+        self.active_shots: dict[str, int] = {}
+        self.active_scenes: dict[str, int] = {}
 
     def cancel_session(self, session_id: str):
         """Mark a session as cancelled to halt background queue processing."""
@@ -57,6 +59,13 @@ class GenerationService:
         self.cancelled_shots[session_id].add(shot_index)
         if session_id in self.queued_shots and shot_index in self.queued_shots[session_id]:
             self.queued_shots[session_id].remove(shot_index)
+            
+        # If this is the currently actively generating shot, tell ComfyUI to stop
+        if self.active_shots.get(session_id) == shot_index:
+            from core.comfy_client import interrupt_generation
+            logger.info(f"Shot {shot_index} is currently active. Sending interrupt to ComfyUI.")
+            interrupt_generation()
+            
         logger.info(f"Marked shot {shot_index} in session {session_id} as cancelled.")
 
     def cancel_scene_narration(self, session_id: str, scene_id: int):
@@ -66,6 +75,13 @@ class GenerationService:
         self.cancelled_scenes[session_id].add(scene_id)
         if session_id in self.queued_scenes and scene_id in self.queued_scenes[session_id]:
             self.queued_scenes[session_id].remove(scene_id)
+            
+        # If this is the currently actively generating scene, tell ComfyUI to stop
+        if self.active_scenes.get(session_id) == scene_id:
+            from core.comfy_client import interrupt_generation
+            logger.info(f"Scene {scene_id} is currently active. Sending interrupt to ComfyUI.")
+            interrupt_generation()
+            
         logger.info(f"Marked scene {scene_id} narration in session {session_id} as cancelled.")
 
     async def run_batch_generation(self, session_id: str, request: Any):
@@ -138,19 +154,31 @@ class GenerationService:
 
                     # 1. Regenerate Image
                     if request.regenerate_images and not shot_wants_skip:
-                        await self.regenerate_shot_image(
-                            session_id, shot_index, force=f_images,
-                            image_mode=request.image_mode, image_workflow=request.image_workflow
-                        )
+                        self.active_shots[session_id] = shot_index
+                        try:
+                            await self.regenerate_shot_image(
+                                session_id, shot_index, force=f_images,
+                                image_mode=request.image_mode, image_workflow=request.image_workflow
+                            )
+                        finally:
+                            self.active_shots.pop(session_id, None)
 
                     # 2. Regenerate Video
                     if request.regenerate_videos:
-                        # For videos, we use f_videos
-                        v_mode = getattr(request, 'video_mode', None)
-                        await self.regenerate_shot_video(
-                            session_id, shot_index, force=f_videos,
-                            video_mode=v_mode, video_workflow=request.video_workflow
-                        )
+                        # Check cancellation again before video
+                        if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
+                            logger.info(f"Shot {shot_index} cancelled before video phase.")
+                        else:
+                            self.active_shots[session_id] = shot_index
+                            try:
+                                # For videos, we use f_videos
+                                v_mode = getattr(request, 'video_mode', None)
+                                await self.regenerate_shot_video(
+                                    session_id, shot_index, force=f_videos,
+                                    video_mode=v_mode, video_workflow=request.video_workflow
+                                )
+                            finally:
+                                self.active_shots.pop(session_id, None)
                     
                     # Ensure websocket completes for this shot if it hasn't somehow
                     manager.broadcast_sync(session_id, {
@@ -212,12 +240,16 @@ class GenerationService:
                     if session_id in self.queued_scenes and scene_index in self.queued_scenes[session_id]:
                         self.queued_scenes[session_id].remove(scene_index)
 
-                    await self.regenerate_scene_narration(
-                        session_id, scene_index,
-                        tts_method=request.tts_method,
-                        tts_workflow=request.tts_workflow,
-                        voice=request.voice
-                    )
+                    self.active_scenes[session_id] = scene_index
+                    try:
+                        await self.regenerate_scene_narration(
+                            session_id, scene_index,
+                            tts_method=request.tts_method,
+                            tts_workflow=request.tts_workflow,
+                            voice=request.voice
+                        )
+                    finally:
+                        self.active_scenes.pop(session_id, None)
                 except Exception as e:
                     logger.error(f"Batch narration error on scene {scene_index}: {str(e)}")
                     manager.broadcast_sync(session_id, {
@@ -692,6 +724,12 @@ class GenerationService:
 
         # Progress callback to bridge ComfyUI steps to our WebSocket
         def on_step_progress(current, total):
+            # Check for cancellation
+            if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
+                raise InterruptedError(f"Shot {shot_index} was cancelled")
+            if session_id in self.cancelled_sessions:
+                raise InterruptedError(f"Session {session_id} was cancelled")
+
             progress = int((current / total) * 100) if total > 0 else 0
             manager.broadcast_sync(session_id, {
                 "type": "progress",
@@ -791,6 +829,12 @@ class GenerationService:
 
             # Progress callback to bridge ComfyUI steps to our WebSocket
             def on_step_progress(current, total):
+                # Check for cancellation
+                if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
+                    raise InterruptedError(f"Shot {shot_index} was cancelled")
+                if session_id in self.cancelled_sessions:
+                    raise InterruptedError(f"Session {session_id} was cancelled")
+
                 progress = int((current / total) * 100) if total > 0 else 0
                 manager.broadcast_sync(session_id, {
                     "type": "progress",
