@@ -20,7 +20,7 @@ class Shot(BaseModel):
     video_rendered: bool = Field(default=False, description="Whether video has been rendered")
     video_path: Optional[str] = Field(default=None, description="Path to rendered video")
     video_paths: List[str] = Field(default_factory=list, description="All video paths (for variations)")
-    scene_index: Optional[int] = Field(default=None, description="Index of the scene this shot belongs to")
+    scene_id: Optional[int] = Field(default=None, description="ID of the scene this shot belongs to")
 
     class Config:
         json_schema_extra = {
@@ -51,7 +51,7 @@ class UpdateShotRequest(BaseModel):
     motion_prompt: Optional[str] = None
     camera: Optional[str] = None
     narration: Optional[str] = None
-    scene_index: Optional[int] = None
+    scene_id: Optional[int] = None
 
 
 class RegenerateImageRequest(BaseModel):

@@ -149,8 +149,9 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
     }
 
     if (isGroupingEnabled && activeSceneTab !== "all") {
-      const sceneIdx = parseInt(activeSceneTab);
-      result = result.filter((s) => (s.scene_index || 0) === sceneIdx);
+      const sceneDisplayIdx = parseInt(activeSceneTab);
+      const targetSceneId = sceneDisplayIdx - 1;
+      result = result.filter((s) => (s.scene_id ?? -1) === targetSceneId);
     }
 
     return result;
@@ -165,18 +166,18 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
     if (scenes && scenes.length > 0) {
       if (activeSceneTab === "all") {
         scenes.forEach((_, idx) => {
-          groups[idx + 1] = [];
+          groups[idx] = [];
         });
       } else {
-        const sceneIdx = parseInt(activeSceneTab);
-        if (!isNaN(sceneIdx)) {
-          groups[sceneIdx] = [];
+        const sceneDisplayIdx = parseInt(activeSceneTab);
+        if (!isNaN(sceneDisplayIdx)) {
+          groups[sceneDisplayIdx - 1] = [];
         }
       }
     }
 
     filteredShots.forEach((shot) => {
-      const sceneIdx = shot.scene_index || 0;
+      const sceneIdx = shot.scene_id ?? "unassigned";
       if (!groups[sceneIdx]) {
         groups[sceneIdx] = [];
       }
@@ -272,7 +273,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
         const sceneIndices = Array.from(new Set(
           shots
             .filter(s => indicesToProcess.includes(s.index))
-            .map(s => s.scene_index || 0)
+            .map(s => s.scene_id || 0)
         ));
 
         await api.batchGenerateNarration(sessionId, sceneIndices, {
@@ -387,7 +388,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
       // Create a map of updates
       const updatedShots = shots.map(shot => {
         if (selectedIndices.includes(shot.index)) {
-          return { ...shot, scene_index: targetMoveScene };
+          return { ...shot, scene_id: targetMoveScene };
         }
         return shot;
       });
@@ -709,34 +710,35 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
 
       {/* Grid */}
       <div className="space-y-8">
-        {Object.entries(groupedShots).map(([sceneIdx, groupShots]) => {
-          const sIdx = sceneIdx === "all" || sceneIdx === "null" ? null : parseInt(sceneIdx);
-          const scene = sIdx !== null && scenes ? scenes[sIdx - 1] : null;
+        {Object.entries(groupedShots).map(([sceneIdxStr, groupShots]) => {
+          const isUnassigned = sceneIdxStr === "unassigned" || sceneIdxStr === "all" || sceneIdxStr === "null";
+          const sIdx = isUnassigned ? null : parseInt(sceneIdxStr);
+          const scene = sIdx !== null && scenes ? scenes[sIdx] : null;
 
           return (
-            <div key={sceneIdx} className="space-y-4">
+            <div key={sceneIdxStr} className="space-y-4">
               {isGroupingEnabled && (
                 <div className="flex flex-col gap-3 pb-4 border-b">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">
                       <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
-                        {sIdx ? `Scene ${sIdx}` : "Unmatched Shots"}
+                        {sIdx !== null ? `Scene ${sIdx + 1}` : "Unmatched Shots"}
                       </span>
                       {scene && (
                         <div className="flex flex-col gap-1">
                           <h3 className="text-xl font-bold tracking-tight">
                             {scene.location}
                           </h3>
-                          {sceneProgress[sIdx || 0] !== undefined && (
+                          {sIdx !== null && sceneProgress[sIdx] !== undefined && (
                             <div className="flex items-center gap-2 mt-1">
                               <div className="w-24 h-1 bg-pink-100 rounded-full overflow-hidden">
                                 <div
                                   className="h-full bg-pink-500 transition-all"
-                                  style={{ width: `${sceneProgress[sIdx || 0]}%` }}
+                                  style={{ width: `${sceneProgress[sIdx]}%` }}
                                 />
                               </div>
                               <span className="text-[10px] text-pink-600 font-medium">
-                                Narration: {Math.round(sceneProgress[sIdx || 0])}%
+                                Narration: {Math.round(sceneProgress[sIdx])}%
                               </span>
                             </div>
                           )}
@@ -747,10 +749,10 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => sIdx && toggleSceneExpansion(sIdx)}
+                        onClick={() => sIdx !== null && toggleSceneExpansion(sIdx)}
                         className="h-8 gap-1.5 text-muted-foreground hover:text-primary"
                       >
-                        {expandedScenes[sIdx || 0] ? (
+                        {sIdx !== null && expandedScenes[sIdx] ? (
                           <>
                             <ChevronDown className="w-4 h-4" />
                             <span className="text-xs">Less Detail</span>
@@ -774,7 +776,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                         {scene.action}
                       </p>
 
-                      {expandedScenes[sIdx || 0] && (
+                      {sIdx !== null && expandedScenes[sIdx] && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-muted/20 rounded-xl border border-border/50 animate-in fade-in slide-in-from-top-2 duration-300">
                           <div className="space-y-1">
                             <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
@@ -1194,16 +1196,16 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                   Target Scene
                 </label>
                 <Select
-                  value={targetMoveScene?.toString() || "0"}
-                  onValueChange={(val) => setTargetMoveScene(parseInt(val))}
+                  value={targetMoveScene !== null ? targetMoveScene.toString() : "null"}
+                  onValueChange={(val) => setTargetMoveScene(val === "null" ? null : parseInt(val))}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select target scene" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">None (Unassigned)</SelectItem>
+                    <SelectItem value="null">None (Unassigned)</SelectItem>
                     {scenes?.map((_, idx) => (
-                      <SelectItem key={idx} value={(idx + 1).toString()}>
+                      <SelectItem key={idx} value={idx.toString()}>
                         Scene {idx + 1}
                       </SelectItem>
                     ))}

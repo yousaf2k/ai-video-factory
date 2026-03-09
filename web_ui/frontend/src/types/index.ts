@@ -62,6 +62,7 @@ export interface Story {
 }
 
 export interface Scene {
+  scene_id: number;
   location: string;
   characters: string;
   action: string;
@@ -86,7 +87,7 @@ export interface Shot {
   video_rendered: boolean;
   video_path: string | null;
   video_paths?: string[];
-  scene_index?: number;
+  scene_id?: number | null;
 }
 export interface CreateSessionRequest {
   idea: string;
@@ -137,7 +138,7 @@ export interface UpdateShotRequest {
   motion_prompt?: string;
   camera?: string;
   narration?: string;
-  scene_index?: number;
+  scene_id?: number | null;
 }
 
 export interface ProgressEvent {

@@ -186,7 +186,7 @@ export function ShotCard({
         motion_prompt: editedShot.motion_prompt,
         camera: editedShot.camera,
         narration: editedShot.narration,
-        scene_index: editedShot.scene_index,
+        scene_id: editedShot.scene_id,
       });
       setIsEditing(false);
     } catch (error) {
@@ -343,16 +343,16 @@ export function ShotCard({
             <div>
               <label className="text-xs text-muted-foreground">Scene</label>
               <Select
-                value={(editedShot.scene_index && editedShot.scene_index > 0) ? editedShot.scene_index.toString() : "0"}
-                onValueChange={(val) => setEditedShot({ ...editedShot, scene_index: parseInt(val) })}
+                value={(editedShot.scene_id !== undefined && editedShot.scene_id !== null) ? editedShot.scene_id.toString() : "null"}
+                onValueChange={(val) => setEditedShot({ ...editedShot, scene_id: val === "null" ? null : parseInt(val) })}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Select Scene" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">None (Unassigned)</SelectItem>
+                  <SelectItem value="null">None (Unassigned)</SelectItem>
                   {scenes.map((_, idx) => (
-                    <SelectItem key={idx} value={(idx + 1).toString()}>
+                    <SelectItem key={idx} value={idx.toString()}>
                       Scene {idx + 1}
                     </SelectItem>
                   ))}
@@ -360,6 +360,7 @@ export function ShotCard({
               </Select>
             </div>
           )}
+
         </div>
       </div>
     );

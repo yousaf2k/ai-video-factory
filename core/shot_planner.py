@@ -59,7 +59,7 @@ Create cinematic shots for WAN 2.2.{batch_instruction}
 Return JSON list (each shot):
 [
   {{
-   "scene_index": 0,
+   "scene_id": 0,
    "image_prompt":"",
    "motion_prompt":"",
    "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
@@ -327,7 +327,7 @@ def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_sce
         
     # Inject 0-based index into each scene so LLM knows which index to return
     for i, scene in enumerate(scenes):
-        scene['scene_index'] = i
+        scene['scene_id'] = i
         
     scene_graph_with_indices = json.dumps(scenes, ensure_ascii=False, indent=2)
     scene_count = len(scenes)
@@ -604,7 +604,7 @@ CRITICAL SHOT REQUIREMENTS:
         for i, shot in enumerate(shots):
             shot['id'] = uuid.uuid4().hex[:8]
             shot['index'] = i + 1
-            # scene_index should already be there from LLM, but we can't trust it fully for all cases
+            # scene_id should already be there from LLM, but we can't trust it fully for all cases
             # If missing, we'll leave it as None or try to guess? Better to leave for now as model allows Optional
 
         return shots

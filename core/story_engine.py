@@ -58,10 +58,14 @@ def validate_and_adjust_scene_durations(story, target_length, tolerance=0.15):
     # Calculate adjustment factor
     adjustment_factor = target_length / actual_total if actual_total > 0 else 1.0
 
-    # Adjust each scene's duration proportionally
+    # Adjust each scene's duration proportionally and ensure scene_id
     adjusted_scenes = []
-    for scene in scenes:
+    for i, scene in enumerate(scenes):
         adjusted_scene = scene.copy()
+        # Ensure scene_id exists
+        if 'scene_id' not in adjusted_scene:
+            adjusted_scene['scene_id'] = i
+            
         if 'scene_duration' in scene:
             original_duration = scene['scene_duration']
             adjusted_duration = max(config.MIN_SCENE_LENGTH, int(original_duration * adjustment_factor))
@@ -192,6 +196,13 @@ Return JSON:
             story['title'] = master_data.get('title', story.get('title', 'Video'))
             story['style'] = master_data.get('style', story.get('style', 'cinematic'))
             story['master_script'] = master_script
+            
+            # Ensure scene_id in all scenes
+            if 'scenes' in story:
+                for i, scene in enumerate(story['scenes']):
+                    if 'scene_id' not in scene:
+                        scene['scene_id'] = i
+            
             story_json_str = json.dumps(story, ensure_ascii=False, indent=2)
         except json.JSONDecodeError:
             logger.warning("Failed to parse story JSON for formatting")

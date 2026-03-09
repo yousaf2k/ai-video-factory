@@ -383,7 +383,7 @@ The `motion_prompt` must NOT just be camera directions. It must describe a livin
 
 When writing the `motion_prompt`, follow these strict rules:
 
-1. **scene_index**: MUST be the 0-based index of the scene this shot belongs to (from the input).
+1. **scene_id**: MUST be the 0-based index of the scene this shot belongs to (from the input).
 2. **Summarize the Scene:** Briefly state what is in the shot (e.g., "A wide shot of the Great Bath...", "Aerial view of Mohenjo-Daro streets...").
 2. **Subject Motion (Verbs):** Describe exactly how the people/animals are moving. Use dynamic verbs (e.g., "Priests slowly descend the steps," "Traders gesture with their hands," "A woman draws water," "Children chase each other").
 3. **Environmental Motion:** Describe how the elements react (e.g., "Water ripples gently," "Cotton garments flutter in the warm breeze," "Dust swirls softly in the sunlight," "Smoke rises from cooking fires," "Flames flicker in the furnace").
@@ -407,7 +407,7 @@ When writing the `motion_prompt`, follow these strict rules:
 ```json
 [
   {
-    "scene_index": 0,
+    "scene_id": 0,
     "image_prompt": "Full photorealistic Indus Valley Civilization image prompt with historical accuracy, camera settings, and pristine urban details. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like water/wind/dust] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "static | slow pan | drone | tracking | orbit | zoom"

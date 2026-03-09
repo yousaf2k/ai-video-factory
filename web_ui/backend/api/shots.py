@@ -287,8 +287,8 @@ async def update_shot(session_id: str, shot_index: int, request: UpdateShotReque
             shot['camera'] = request.camera
         if request.narration is not None:
             shot['narration'] = request.narration
-        if request.scene_index is not None:
-            shot['scene_index'] = request.scene_index
+        if request.scene_id is not None:
+            shot['scene_id'] = request.scene_id
 
         # Save updated shots
         session_dir = session_service.get_session_dir(session_id)

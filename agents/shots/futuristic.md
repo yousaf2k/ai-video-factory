@@ -123,7 +123,7 @@ The `motion_prompt` must NOT just be camera directions. It must describe a livin
 
 When writing the `motion_prompt`, follow these strict rules:
 
-1. **scene_index:** MUST be the 0-based index of the scene this shot belongs to (from the input).
+1. **scene_id:** MUST be the 0-based index of the scene this shot belongs to (from the input).
 2. **Summarize the Scene:** Briefly state what is in the shot (e.g., "A cyberpunk cityscape...", "Inside a spaceship...").
 2. **Subject Motion (Verbs):** Describe exactly how the people/robots/vehicles are moving. Use dynamic verbs (e.g., "Flying cars zoom through the air," "Robots work on assembly line," "Holographic displays flicker").
 3. **Environmental Motion:** Describe how the elements react (e.g., "Neon lights pulse and glow," "Steam rises from vents," "Rain falls on chrome surfaces").
@@ -135,7 +135,7 @@ When writing the `motion_prompt`, follow these strict rules:
 ```json
 [
   {
-    "scene_index": 0,
+    "scene_id": 0,
     "image_prompt": "Full futuristic image prompt with all visual details, lighting, and style. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/technology movement with dynamic verbs] + [Environmental movement like lights/steam] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "fpv | drone | dolly | orbit | pan | static | zoom"

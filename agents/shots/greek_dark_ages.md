@@ -280,7 +280,7 @@ The `motion_prompt` must NOT just be camera directions. It must describe a livin
 
 When writing the `motion_prompt`, follow these strict rules:
 
-1. **scene_index:** MUST be the 0-based index of the scene this shot belongs to (from the input).
+1. **scene_id:** MUST be the 0-based index of the scene this shot belongs to (from the input).
 2. **Summarize the Scene:** Briefly state what is in the shot (e.g., "A village scene in post-collapse Greece...", "Warriors gathering at a refuge settlement...").
 2. **Subject Motion (Verbs):** Describe exactly how the people/animals are moving. Use dynamic verbs (e.g., "Warriors walk slowly through the ruins," "Women weave at ground-level looms," "Potter shapes clay on wheel").
 3. **Environmental Motion:** Describe how the elements react (e.g., "Smoke rises from cooking fires," "Wind rustles through thatched roofs," "Dust swirls in abandoned spaces").
@@ -297,7 +297,7 @@ When writing the `motion_prompt`, follow these strict rules:
 ```json
 [
   {
-    "scene_index": 0,
+    "scene_id": 0,
     "image_prompt": "Full photorealistic Greek Dark Ages image prompt with historical accuracy and post-collapse atmosphere. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "static | slow pan | walk | tracking | drone | orbit | zoom"

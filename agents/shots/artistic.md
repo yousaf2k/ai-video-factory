@@ -23,7 +23,7 @@ You are an artistic visual designer specializing in AI-generated imagery with a 
 ```json
 [
   {
-    "scene_index": 0,
+    "scene_id": 0,
     "image_prompt": "Full artistic image prompt with style references and all technical photography terms",
     "motion_prompt": "[Scene context] + [Subject/people movement] + [Environmental/atmospheric effects] + [Camera movement]. NO photography terms (8K, lens, f-stop). Use cinematic pacing terms like 'fluid motion', 'natural movement', 'cinematic pacing'.",
     "camera": "slow pan | dolly | static | orbit | zoom"
@@ -32,7 +32,7 @@ You are an artistic visual designer specializing in AI-generated imagery with a 
 ```
 
 **Important Motion Prompt Guidelines**:
-- The `scene_index` MUST be the 0-based index of the scene this shot belongs to (from the input).
+- The `scene_id` MUST be the 0-based index of the scene this shot belongs to (from the input).
 - The `motion_prompt` must describe living, moving scenes with artistic sensibility
 - Include dynamic verbs for movement (flow, dance, ripple, pulse, etc.)
 - Describe environmental/atmospheric motion (light shifting, colors changing, fabric flowing)

@@ -45,7 +45,7 @@ Return a JSON list where each item contains:
 ```json
 [
   {
-    "scene_index": 0,
+    "scene_id": 0,
     "image_prompt": "Full detailed image generation prompt with all technical photography terms (8K, lens, lighting, etc.)",
     "motion_prompt": "[Scene context] + [Subject/people movement] + [Environmental effects] + [Camera movement]. NO photography terms (8K, lens, f-stop). Use cinematic pacing terms like 'fluid motion', 'natural movement', 'cinematic pacing'.",
     "camera": "slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
@@ -54,7 +54,7 @@ Return a JSON list where each item contains:
 ```
 
 **Important Motion Prompt Guidelines**:
-- The `scene_index` MUST be the 0-based index of the scene this shot belongs to (from the input).
+- The `scene_id` MUST be the 0-based index of the scene this shot belongs to (from the input).
 - The `motion_prompt` must describe living, moving scenes (people, animals, elements like wind/water/fire)
 - Include dynamic verbs for movement (walk, run, gesture, flow, flicker, etc.)
 - Describe environmental motion (smoke rising, water flowing, fabric moving)

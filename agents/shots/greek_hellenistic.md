@@ -309,7 +309,7 @@ The `motion_prompt` must NOT just be camera directions. It must describe a livin
 
 When writing the `motion_prompt`, follow these strict rules:
 
-1. **scene_index:** MUST be the 0-based index of the scene this shot belongs to (from the input).
+1. **scene_id:** MUST be the 0-based index of the scene this shot belongs to (from the input).
 2. **Summarize the Scene:** Briefly state what is in the shot (e.g., "The great library of Alexandria...", "A multicultural harbor scene...").
 2. **Subject Motion (Verbs):** Describe exactly how the people/animals are moving. Use dynamic verbs (e.g., "Scholars study scrolls," "Merchants from many lands trade goods," "Ships sail into harbor").
 3. **Environmental Motion:** Describe how the elements react (e.g., "Sea breeze moves fabrics," "Water laps against docks," "Desert wind carries sand").
@@ -321,7 +321,7 @@ When writing the `motion_prompt`, follow these strict rules:
 ```json
 [
   {
-    "scene_index": 0,
+    "scene_id": 0,
     "image_prompt": "Full photorealistic Hellenistic Greek image prompt with historical accuracy and multicultural character. Include all technical photography terms (8K, lens details, etc.) ONLY in this field.",
     "motion_prompt": "[Scene context] + [Specific subject/people movement with dynamic verbs] + [Environmental movement like smoke/wind] + [Camera movement]. STRICTLY NO static photography terms (no 8K, no lenses, no f-stops). Use cinematic pacing and fluid motion terms.",
     "camera": "static | slow pan | walk | tracking | drone | orbit | zoom"

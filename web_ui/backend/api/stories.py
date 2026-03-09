@@ -30,18 +30,18 @@ session_manager = SessionManager()
 generation_service = GenerationService()
 
 
-@router.post("/scenes/{scene_index}/generate-narration")
-async def generate_scene_narration(session_id: str, scene_index: int, request: GenerateSceneNarrationRequest):
+@router.post("/scenes/{scene_id}/generate-narration")
+async def generate_scene_narration(session_id: str, scene_id: int, request: GenerateSceneNarrationRequest):
     """Generate narration for a single scene"""
     try:
         # Start background task
         asyncio.create_task(generation_service.regenerate_scene_narration(
-            session_id, scene_index,
+            session_id, scene_id,
             tts_method=request.tts_method,
             tts_workflow=request.tts_workflow,
             voice=request.voice
         ))
-        return {"status": "queued", "message": f"Narration generation for scene {scene_index} started"}
+        return {"status": "queued", "message": f"Narration generation for scene {scene_id} started"}
     except Exception as e:
         logger.error(f"Error starting narration generation: {e}")
         raise HTTPException(
@@ -67,12 +67,12 @@ async def batch_generate_narration(session_id: str, request: BatchGenerateNarrat
         )
 
 
-@router.post("/scenes/{scene_index}/cancel-narration")
-async def cancel_scene_narration(session_id: str, scene_index: int):
+@router.post("/scenes/{scene_id}/cancel-narration")
+async def cancel_scene_narration(session_id: str, scene_id: int):
     """Cancel narration generation for a scene"""
     try:
-        generation_service.cancel_scene_narration(session_id, scene_index)
-        return {"status": "success", "message": f"Cancelled narration for scene {scene_index}"}
+        generation_service.cancel_scene_narration(session_id, scene_id)
+        return {"status": "success", "message": f"Cancelled narration for scene {scene_id}"}
     except Exception as e:
         logger.error(f"Error cancelling narration: {e}")
         raise HTTPException(
@@ -81,8 +81,8 @@ async def cancel_scene_narration(session_id: str, scene_index: int):
         )
 
 
-@router.post("/scenes/{scene_index}/select-narration")
-async def select_scene_narration(session_id: str, scene_index: int, request: SelectSceneNarrationRequest):
+@router.post("/scenes/{scene_id}/select-narration")
+async def select_scene_narration(session_id: str, scene_id: int, request: SelectSceneNarrationRequest):
     """Select the active narration variation for a scene"""
     try:
         # Load story
@@ -92,10 +92,10 @@ async def select_scene_narration(session_id: str, scene_index: int, request: Sel
             story_data = json.load(f)
         
         scenes = story_data.get('scenes', [])
-        if scene_index < 0 or scene_index >= len(scenes):
-            raise ValueError(f"Scene index {scene_index} out of range")
+        if scene_id < 0 or scene_id >= len(scenes):
+            raise ValueError(f"Scene index {scene_id} out of range")
         
-        scene = scenes[scene_index]
+        scene = scenes[scene_id]
         
         # Verify the path exists in narration_paths
         if 'narration_paths' not in scene or request.narration_path not in scene['narration_paths']:
@@ -113,7 +113,7 @@ async def select_scene_narration(session_id: str, scene_index: int, request: Sel
         manager.broadcast_sync(session_id, {
             "type": "narration_selected",
             "session_id": session_id,
-            "scene_index": scene_index,
+            "scene_id": scene_id,
             "narration_path": request.narration_path
         })
         

@@ -470,13 +470,13 @@ def _generate_with_local_tts(script, output_path, voice):
         return None
 
 
-def generate_scene_narration(session_id, scene_index, text, tts_method=None, tts_workflow=None, voice=None):
+def generate_scene_narration(session_id, scene_id, text, tts_method=None, tts_workflow=None, voice=None):
     """
     Generate narration for a single scene with versioning.
     
     Args:
         session_id: Session identifier
-        scene_index: 0-based scene index
+        scene_id: 0-based scene ID
         text: Narration text
         tts_method: Optional override for TTS method
         tts_workflow: Optional override for TTS workflow
@@ -496,7 +496,7 @@ def generate_scene_narration(session_id, scene_index, text, tts_method=None, tts
     os.makedirs(narration_dir, exist_ok=True)
     
     # 1-based index for filename
-    display_index = scene_index + 1
+    display_index = scene_id + 1
     
     # Version discovery
     import glob

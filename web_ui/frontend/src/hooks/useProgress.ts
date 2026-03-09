@@ -5,7 +5,7 @@ interface ProgressMessage {
     session_id: string;
     shot_index?: number;
     shot_id?: string;
-    scene_index?: number;
+    scene_id?: number;
     step?: string;
     progress?: number;
 }
@@ -46,7 +46,7 @@ export const useProgress = (sessionId: string | undefined, onCompleted?: (id: st
                     const shotKey = data.shot_id || (data.shot_index !== undefined ? data.shot_index.toString() : null);
 
                     // Handle Scene Progress
-                    const sceneKey = data.scene_index !== undefined ? data.scene_index : null;
+                    const sceneKey = data.scene_id !== undefined ? data.scene_id : null;
 
                     if (data.type === 'progress') {
                         if (shotKey && data.progress !== undefined) {

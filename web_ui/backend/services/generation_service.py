@@ -59,14 +59,14 @@ class GenerationService:
             self.queued_shots[session_id].remove(shot_index)
         logger.info(f"Marked shot {shot_index} in session {session_id} as cancelled.")
 
-    def cancel_scene_narration(self, session_id: str, scene_index: int):
+    def cancel_scene_narration(self, session_id: str, scene_id: int):
         """Mark a scene narration as cancelled."""
         if session_id not in self.cancelled_scenes:
             self.cancelled_scenes[session_id] = set()
-        self.cancelled_scenes[session_id].add(scene_index)
-        if session_id in self.queued_scenes and scene_index in self.queued_scenes[session_id]:
-            self.queued_scenes[session_id].remove(scene_index)
-        logger.info(f"Marked scene {scene_index} narration in session {session_id} as cancelled.")
+        self.cancelled_scenes[session_id].add(scene_id)
+        if session_id in self.queued_scenes and scene_id in self.queued_scenes[session_id]:
+            self.queued_scenes[session_id].remove(scene_id)
+        logger.info(f"Marked scene {scene_id} narration in session {session_id} as cancelled.")
 
     async def run_batch_generation(self, session_id: str, request: Any):
         """
@@ -401,7 +401,7 @@ class GenerationService:
             raise
 
     async def regenerate_scene_narration(
-        self, session_id: str, scene_index: int, 
+        self, session_id: str, scene_id: int, 
         tts_method: Optional[str] = None, 
         tts_workflow: Optional[str] = None,
         voice: Optional[str] = None
@@ -414,8 +414,8 @@ class GenerationService:
 
         try:
             # Clear cancellation for this scene
-            if session_id in self.cancelled_scenes and scene_index in self.cancelled_scenes[session_id]:
-                self.cancelled_scenes[session_id].remove(scene_index)
+            if session_id in self.cancelled_scenes and scene_id in self.cancelled_scenes[session_id]:
+                self.cancelled_scenes[session_id].remove(scene_id)
 
             # Load story to get narration text
             session_dir = self.session_manager.get_session_dir(session_id)
@@ -424,19 +424,19 @@ class GenerationService:
                 story_data = json.load(f)
             
             scenes = story_data.get('scenes', [])
-            if scene_index < 0 or scene_index >= len(scenes):
-                raise ValueError(f"Scene index {scene_index} out of range")
+            if scene_id < 0 or scene_id >= len(scenes):
+                raise ValueError(f"Scene index {scene_id} out of range")
             
-            scene = scenes[scene_index]
+            scene = scenes[scene_id]
             text = scene.get('narration', '')
             if not text:
-                raise ValueError(f"Scene {scene_index} has no narration text")
+                raise ValueError(f"Scene {scene_id} has no narration text")
 
             # Broadcast 0%
             manager.broadcast_sync(session_id, {
                 "type": "progress",
                 "session_id": session_id,
-                "scene_index": scene_index,
+                "scene_id": scene_id,
                 "step": "narration",
                 "progress": 0
             })
@@ -449,7 +449,7 @@ class GenerationService:
             
             result = await asyncio.to_thread(
                 generate_scene_narration,
-                session_id, scene_index, text, 
+                session_id, scene_id, text, 
                 tts_method, tts_workflow, voice
             )
             
@@ -469,7 +469,7 @@ class GenerationService:
                 manager.broadcast_sync(session_id, {
                     "type": "completed",
                     "session_id": session_id,
-                    "scene_index": scene_index,
+                    "scene_id": scene_id,
                     "step": "narration",
                     "narration_path": rel_path
                 })
@@ -479,11 +479,11 @@ class GenerationService:
                 raise RuntimeError(result.get("message", "Narration generation failed"))
 
         except Exception as e:
-            logger.error(f"Error generating narration for scene {scene_index}: {e}")
+            logger.error(f"Error generating narration for scene {scene_id}: {e}")
             manager.broadcast_sync(session_id, {
                 "type": "error",
                 "session_id": session_id,
-                "scene_index": scene_index,
+                "scene_id": scene_id,
                 "step": "narration",
                 "message": str(e)
             })

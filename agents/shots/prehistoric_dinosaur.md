@@ -215,7 +215,7 @@ Return a JSON list where each item contains:
 ```json
 [
   {
-    "scene_index": 0,
+    "scene_id": 0,
     "image_prompt": "Full detailed image prompt with Sony Venice 2, Arri Signature Prime lens spec, 8K, 16:9, prehistoric environment, IMAX scale",
     "motion_prompt": "[Dinosaur movement] + [Environmental/atmospheric effects] + [Camera movement]. NO photography terms (8K, lens, f-stop). Use epic cinematic motion terms.",
     "camera": "slow pan | dolly | drone | orbit | tracking | static"
