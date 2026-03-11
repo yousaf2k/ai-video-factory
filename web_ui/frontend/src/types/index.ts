@@ -115,6 +115,7 @@ export interface GlobalConfig {
   comfy_url: string;
   target_video_length?: number;
   default_max_shots?: number;
+  available_video_workflows?: string[];
 }
 
 export interface UpdateGlobalConfigRequest {

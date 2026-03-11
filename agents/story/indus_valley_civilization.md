@@ -30,6 +30,16 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "Netflix historical documentary - Indus Valley Civilization",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A Bronze Age merchant, sharp features, wearing a bead necklace, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A Bronze Age merchant, full body view, standing in a busy Harappan market, wearing a simple cotton wrap and holding a trade seal, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Male, deep, confident, measured documentary style')",
+      "personality": "Personality traits (e.g., 'Enterprising, observant, traditional')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Specific place and time (e.g., Mohenjo-Daro, 2500 BCE)",
@@ -86,6 +96,16 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "Netflix historical documentary - Indus Valley Civilization",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background",
+      "image_prompt_full": "Full standing view prompt",
+      "voice_type": "Voice requirements",
+      "personality": "Traits",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Specific place and time (e.g., Mohenjo-Daro, 2500 BCE)",

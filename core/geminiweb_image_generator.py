@@ -397,7 +397,8 @@ def generate_image_geminiweb(
     output_path: str,
     aspect_ratio: str = None,
     resolution: str = None,
-    seed: int = None
+    seed: int = None,
+    session_title: str = None
 ) -> Optional[str]:
     """
     Generate a single image using Gemini web UI via browser automation.
@@ -412,6 +413,7 @@ def generate_image_geminiweb(
         aspect_ratio: Optional aspect ratio override (e.g., "16:9")
         resolution: Not used for GeminiWeb mode (kept for API consistency)
         seed: Not used for GeminiWeb mode (kept for API consistency)
+        session_title: Optional title for Gemini Web chat persistence
 
     Returns:
         Path to the generated image file, or None if failed
@@ -438,6 +440,8 @@ def generate_image_geminiweb(
     ]
     if aspect_ratio:
         cmd.extend(['--aspect-ratio', aspect_ratio])
+    if session_title:
+        cmd.extend(['--session-title', session_title])
 
     try:
         with _generation_lock:

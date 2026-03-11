@@ -24,6 +24,16 @@ You must output a single JSON object containing the title, an overall style/them
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "ultra cinematic documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background",
+      "image_prompt_full": "Full standing view prompt in appropriate attire",
+      "voice_type": "Voice requirements",
+      "personality": "Key personality traits",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "master_script": "This is the full master script. It contains the exact wording that will be read as voice-over throughout the entire video. It tells a complete, compelling story from beginning to end. It must be roughly {MASTER_WORD_COUNT} words long."
 }
 ```

@@ -102,6 +102,49 @@ def _compose_prompt(image_prompt: str, aspect_ratio: str = None) -> str:
     return f"Generate an image: {image_prompt}.{ar_instruction}"
 
 
+def _ensure_session_chat(page, session_title: str):
+    """
+    Ensure we are in a chat named after the session_title.
+    1. Look for existing chat in sidebar.
+    2. If found, click it.
+    3. If not, stay in new chat (or click 'New chat') and we'll rename it later.
+    """
+    if not session_title:
+        return
+
+    logger.info(f"Ensuring Gemini chat for session: '{session_title}'")
+    
+    try:
+        # 1. Look for existing chat in sidebar
+        # Sidebar items are usually <a> tags with 'aria-label' or title containing the chat name
+        sidebar_selectors = [
+            f'a[aria-label*="{session_title}"]',
+            f'div[role="button"]:has-text("{session_title}")',
+            f'a:has-text("{session_title}")',
+        ]
+        
+        for sel in sidebar_selectors:
+            try:
+                chat_link = page.query_selector(sel)
+                if chat_link:
+                    logger.info(f"Found existing chat: '{session_title}'. Clicking...")
+                    chat_link.click()
+                    time.sleep(3)
+                    return
+            except Exception:
+                continue
+                
+        logger.info(f"No existing chat found for '{session_title}'. Using current/new chat.")
+        # If we are not in a new chat, click 'New chat'
+        new_chat_btn = page.query_selector('a[href="/app"], button:has-text("New chat")')
+        if new_chat_btn and not page.url.endswith('/app'):
+            new_chat_btn.click()
+            time.sleep(2)
+
+    except Exception as e:
+        logger.warning(f"Error while managing session chat: {e}")
+
+
 def _wait_for_response_complete(page, timeout: int = 180):
     """Wait for Gemini to finish processing the response."""
     logger.info("Waiting for Gemini to finish responding...")
@@ -584,7 +627,7 @@ def _remove_watermark(image_path: str):
         logger.error(f"Error in precise watermark restoration: {e}")
 
 
-def run(prompt: str, output_path: str, aspect_ratio: str = None) -> Optional[str]:
+def run(prompt: str, output_path: str, aspect_ratio: str = None, session_title: str = None) -> Optional[str]:
     """Main entry point — run Playwright and generate an image."""
     from playwright.sync_api import sync_playwright
 
@@ -603,6 +646,10 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None) -> Optional[str
             logger.info(f"Navigating to {gemini_url}")
             page.goto(gemini_url, wait_until='domcontentloaded', timeout=60000)
             time.sleep(5)
+
+            # ── Ensure correct chat ──────────────────────────────────────────
+            if session_title:
+                _ensure_session_chat(page, session_title)
 
             # Dismiss any dialogs
             try:
@@ -745,9 +792,10 @@ if __name__ == "__main__":
     parser.add_argument("prompt")
     parser.add_argument("output_path")
     parser.add_argument("--aspect-ratio", default=None)
+    parser.add_argument("--session-title", default=None)
     args = parser.parse_args()
 
-    result = run(args.prompt, args.output_path, args.aspect_ratio)
+    result = run(args.prompt, args.output_path, args.aspect_ratio, args.session_title)
     if result:
         print(f"SUCCESS:{result}")
         sys.exit(0)

@@ -112,7 +112,7 @@ def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = Non
         return None
 
 
-def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None, workflow_name: str = None, step_progress_callback=None) -> str:
+def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None, workflow_name: str = None, step_progress_callback=None, session_title: str = None) -> str:
     """
     Generate a single image using the configured mode (Gemini or ComfyUI).
 
@@ -124,6 +124,8 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         mode: Force a specific mode ("gemini" or "comfyui"), None to use config default
         seed: Optional random seed for reproducibility
         workflow_name: Optional ComfyUI workflow name from IMAGE_WORKFLOWS (only for comfyui mode)
+        step_progress_callback: Optional callback for progress updates
+        session_title: Optional title for Gemini Web chat persistence
 
     Returns:
         Path to the generated image file, or None if failed
@@ -137,7 +139,7 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         return generate_image_comfyui(prompt, output_path, seed=seed, workflow_name=workflow_name, progress_callback=step_progress_callback)
     elif mode == "geminiweb":
         from core.geminiweb_image_generator import generate_image_geminiweb
-        return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio)
+        return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio, session_title=session_title)
     else:
         return generate_image_gemini(prompt, output_path, aspect_ratio, resolution, seed)
 

@@ -99,6 +99,7 @@ async def get_config():
             "comfy_url": getattr(config, 'COMFY_URL', 'http://127.0.0.1:8188'),
             "target_video_length": getattr(config, 'TARGET_VIDEO_LENGTH', None),
             "default_max_shots": getattr(config, 'DEFAULT_MAX_SHOTS', 0),
+            "available_video_workflows": list(getattr(config, 'VIDEO_WORKFLOWS', {}).keys()),
         }
 
         return safe_config

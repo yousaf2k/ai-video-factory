@@ -32,6 +32,16 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "First-person POV survival documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "POV description including hands and perspective (e.g., 'My hands reaching out, T-Rex emerging from jungle')",
@@ -347,6 +357,16 @@ Return your story plan as a JSON object with the following structure:
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "First-person POV survival documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "POV description including hands and perspective (e.g., 'My hands reaching out, T-Rex emerging from jungle')",
@@ -375,6 +395,16 @@ Return your story plan as a JSON object with the following structure:
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "First-person POV survival documentary with hands-visible cinematography",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "Forest clearing, my hands resting on the rough bark of a tree, taking in the scene",

@@ -152,13 +152,18 @@ class GenerationService:
                         except Exception as e:
                             logger.warning(f"Failed to check shot state before batch: {e}")
 
+                    # Load session meta for title
+                    session_meta = self.session_manager.get_session(session_id)
+                    session_title = session_meta.get('title', session_id) if session_meta else session_id
+
                     # 1. Regenerate Image
                     if request.regenerate_images and not shot_wants_skip:
                         self.active_shots[session_id] = shot_index
                         try:
                             await self.regenerate_shot_image(
                                 session_id, shot_index, force=f_images,
-                                image_mode=request.image_mode, image_workflow=request.image_workflow
+                                image_mode=request.image_mode, image_workflow=request.image_workflow,
+                                session_title=session_title
                             )
                         finally:
                             self.active_shots.pop(session_id, None)
@@ -175,7 +180,8 @@ class GenerationService:
                                 v_mode = getattr(request, 'video_mode', None)
                                 await self.regenerate_shot_video(
                                     session_id, shot_index, force=f_videos,
-                                    video_mode=v_mode, video_workflow=request.video_workflow
+                                    video_mode=v_mode, video_workflow=request.video_workflow,
+                                    session_title=session_title
                                 )
                             finally:
                                 self.active_shots.pop(session_id, None)
@@ -268,7 +274,8 @@ class GenerationService:
     async def regenerate_shot_image(
         self, session_id: str, shot_index: int, force: bool = False,
         image_mode: Optional[str] = None, image_workflow: Optional[str] = None,
-        seed: Optional[int] = None, prompt_override: Optional[str] = None
+        seed: Optional[int] = None, prompt_override: Optional[str] = None,
+        session_title: Optional[str] = None
     ) -> str:
         """
         Regenerate image for a single shot
@@ -279,6 +286,7 @@ class GenerationService:
             force: Force regeneration even if image exists
             image_mode: Override generation mode
             image_workflow: Override ComfyUI workflow
+            session_title: Optional title for Gemini Web chat persistence
 
         Returns:
             Path to generated image
@@ -327,7 +335,8 @@ class GenerationService:
                 image_mode,
                 image_workflow,
                 seed,
-                prompt_override
+                prompt_override,
+                session_title
             )
 
             # Mark as generated
@@ -350,7 +359,8 @@ class GenerationService:
 
     async def regenerate_shot_video(
         self, session_id: str, shot_index: int, force: bool = False,
-        video_mode: Optional[str] = None, video_workflow: Optional[str] = None
+        video_mode: Optional[str] = None, video_workflow: Optional[str] = None,
+        session_title: Optional[str] = None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -361,6 +371,7 @@ class GenerationService:
             force: Force regeneration even if video exists
             video_mode: Override generation mode
             video_workflow: Override workflow
+            session_title: Optional title for Gemini Web chat persistence
 
         Returns:
             Path to generated video
@@ -411,7 +422,8 @@ class GenerationService:
                 session_id,
                 shot,
                 video_mode,
-                video_workflow
+                video_workflow,
+                session_title
             )
 
             # Mark as rendered
@@ -699,7 +711,8 @@ class GenerationService:
                                mode: Optional[str] = None, 
                                workflow_name: Optional[str] = None,
                                seed: Optional[int] = None,
-                               prompt_override: Optional[str] = None) -> str:
+                               prompt_override: Optional[str] = None,
+                               session_title: Optional[str] = None) -> str:
         """Generate image for a single shot (synchronous)"""
         from core.image_generator import generate_image
         import config
@@ -747,7 +760,8 @@ class GenerationService:
             mode=mode, # If None, uses config.IMAGE_GENERATION_MODE
             seed=seed,
             workflow_name=workflow_name, # If None, uses config.IMAGE_WORKFLOW
-            step_progress_callback=on_step_progress
+            step_progress_callback=on_step_progress,
+            session_title=session_title
         )
 
         if not result_path or not os.path.exists(result_path):
@@ -757,7 +771,8 @@ class GenerationService:
 
     def _generate_single_video(self, session_id: str, shot: Dict[str, Any],
                                video_mode: Optional[str] = None,
-                               workflow_path: Optional[str] = None) -> str:
+                               workflow_path: Optional[str] = None,
+                               session_title: Optional[str] = None) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
@@ -793,7 +808,8 @@ class GenerationService:
             video_res = generate_video_geminiweb(
                 image_path=abs_image_path,
                 motion_prompt=motion_prompt,
-                output_path=video_save_path
+                output_path=video_save_path,
+                session_title=session_title
             )
             
             if not video_res:
@@ -805,14 +821,14 @@ class GenerationService:
             from core.prompt_compiler import load_workflow, compile_workflow
             from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
 
-            # Determine workflow path
+            # Determine workflow path and resolve alias if needed
             if not workflow_path:
-                workflow_path = getattr(config, 'VIDEO_WORKFLOW', 'workflow/video/wan22_workflow.json')
+                workflow_path = getattr(config, 'VIDEO_WORKFLOW', 'wan22')
                 
-                # Check config.VIDEO_WORKFLOWS if it's an alias
-                workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(workflow_path, None)
-                if workflow_config:
-                    workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
+            # If workflow_path is an alias in VIDEO_WORKFLOWS, resolve it to the actual file path
+            video_workflows = getattr(config, 'VIDEO_WORKFLOWS', {})
+            if workflow_path in video_workflows:
+                workflow_path = video_workflows[workflow_path].get('workflow_path', workflow_path)
 
             # Load and compile workflow for this shot
             shot_length = getattr(config, 'DEFAULT_SHOT_LENGTH', 5)

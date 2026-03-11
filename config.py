@@ -268,6 +268,12 @@ VIDEO_WORKFLOWS = {
         "motion_prompt_node_id": "93",
         "wan_video_node_id": "98"
     },
+    "wan22_fix_slowmotion": {
+        "workflow_path": resolve_path("workflow/video/Wan22_FixSlowMotion.json"),
+        "load_image_node_id": "128",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
     "default": {
         "workflow_path": resolve_path("workflow/video/wan22_workflow.json"),
         "load_image_node_id": "97",

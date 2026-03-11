@@ -28,6 +28,16 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "dramatic cinematic",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A 30-year-old woman, tear-streaked face, determined expression, messy dark hair, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A 30-year-old woman, full body view, standing in the rain, wearing a tattered trench coat and boots, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Emotional female voice, trembling but strong, mid-range')",
+      "personality": "Personality traits (e.g., 'Resilient, haunted by the past, fiercely independent')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Describe the setting",
@@ -72,6 +82,16 @@ You must respond with valid JSON only:
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "dramatic cinematic",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background",
+      "image_prompt_full": "Full standing view prompt",
+      "voice_type": "Voice requirements",
+      "personality": "Personality traits",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Describe the setting",

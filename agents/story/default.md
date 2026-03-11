@@ -28,6 +28,16 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "ultra cinematic documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A 45-year-old explorer, weathered skin, intense blue eyes, wearing a leather pilot cap, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A 45-year-old explorer, full body view, standing heroically, wearing a brown distressed leather jacket and khaki cargo pants, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Deep male voice, authoritative, gravelly')",
+      "personality": "Personality traits (e.g., 'Adventurous, cynical, but loyal')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Describe the setting/environment",
@@ -72,6 +82,16 @@ You must respond with valid JSON only. No markdown, no explanations, just the JS
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "ultra cinematic documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A 45-year-old explorer, weathered skin, intense blue eyes, wearing a leather pilot cap, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A 45-year-old explorer, full body view, standing heroically, wearing a brown distressed leather jacket and khaki cargo pants, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Deep male voice, authoritative, gravelly')",
+      "personality": "Personality traits (e.g., 'Adventurous, cynical, but loyal')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Describe the setting/environment",

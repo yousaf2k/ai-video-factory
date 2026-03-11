@@ -30,6 +30,16 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative - Greek Hellenistic Period",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A scholar from the Library of Alexandria, intelligent eyes, holding a papyrus scroll, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A scholar from the Library of Alexandria, full body view, standing in a grand colonnade, wearing a fine linen chiton, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Eloquent male voice, slightly fast-paced, enthusiastic')",
+      "personality": "Personality traits (e.g., 'Intellectually curious, cosmopolitan, slightly arrogant')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time (323-31 BCE or specific year)",
@@ -88,6 +98,16 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative - Greek Hellenistic Period",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background",
+      "image_prompt_full": "Full standing view prompt",
+      "voice_type": "Voice requirements",
+      "personality": "Traits",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time (323-31 BCE or specific year)",

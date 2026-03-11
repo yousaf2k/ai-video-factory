@@ -30,6 +30,16 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative - Greek Dark Ages",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A Dark Age warrior, battle-scarred, intense gaze, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A Dark Age warrior, full body view, standing among palace ruins, wearing a simple wool chiton and carrying an iron sword, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Gravelly male voice, slow, weary')",
+      "personality": "Personality traits (e.g., 'Stoic, protective, vigilant')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time (1100-800 BCE or specific year)",
@@ -89,6 +99,16 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative - Greek Dark Ages",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background",
+      "image_prompt_full": "Full standing view prompt",
+      "voice_type": "Voice requirements",
+      "personality": "Traits",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time (1100-800 BCE or specific year)",

@@ -30,6 +30,16 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "YouTube viral documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "seo_keywords": ["keyword1", "keyword2", "keyword3"],
   "title_options": [
     "Clickable title 1 (40-60 chars)",

@@ -4,7 +4,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { ShotCard } from "./ShotCard";
 import { Shot, Scene } from "@/types";
-import { useAgents } from "@/hooks/useAgents";
+import { useAgents, useConfig } from "@/hooks/useAgents";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import { useUpdateShots } from "@/hooks/useShots";
@@ -107,9 +107,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   // Overrides state
   const [imageMode, setImageMode] = useState<string>("comfyui");
   const [imageWorkflow, setImageWorkflow] = useState<string>("flux2");
-  const [videoWorkflow, setVideoWorkflow] = useState<string>(
-    "workflow/video/wan22_workflow.json",
-  );
+  const [videoWorkflow, setVideoWorkflow] = useState<string>("wan22");
   const [videoMode, setVideoMode] = useState<string>("comfyui");
   const [batchSkipImages, setBatchSkipImages] = useState<boolean>(true);
 
@@ -117,6 +115,14 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
 
   const { data: agents } = useAgents();
+  const { data: globalConfig } = useConfig();
+
+  // Update default workflow when config loads
+  useEffect(() => {
+    if (globalConfig?.video_workflow) {
+      setVideoWorkflow(globalConfig.video_workflow);
+    }
+  }, [globalConfig]);
 
   // Extract unique camera values for the dropdown
   const cameraOptions = useMemo(() => {
@@ -1087,14 +1093,25 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                     <label className="block text-sm font-medium mb-1">
                       Video Workflow
                     </label>
-                    <Input
-                      type="text"
+                    <Select
                       value={videoWorkflow}
-                      onChange={(e) => setVideoWorkflow(e.target.value)}
-                      placeholder="workflow/video/wan22_workflow.json"
-                    />
+                      onValueChange={(val) => setVideoWorkflow(val)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Video Workflow" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {globalConfig?.available_video_workflows?.map((wf) => (
+                          <SelectItem key={wf} value={wf}>
+                            {wf}
+                          </SelectItem>
+                        )) || (
+                            <SelectItem value="wan22">Wan 2.2</SelectItem>
+                          )}
+                      </SelectContent>
+                    </Select>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Path to the ComfyUI video JSON workflow.
+                      Pre-configured ComfyUI video workflow.
                     </p>
                   </div>
                 </div>

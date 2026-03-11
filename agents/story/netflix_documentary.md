@@ -31,6 +31,16 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "Netflix dramatic documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A retired detective, sharp eyes, graying temples, intense expression, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A retired detective, full body view, standing in a dimly lit office, wearing a rumpled suit and fedora, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Husky male voice, measured, mysterious')",
+      "personality": "Personality traits (e.g., 'Obsessive, observant, scarred by experience')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Describe setting/environment with cinematic detail",

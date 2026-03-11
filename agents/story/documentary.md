@@ -28,6 +28,16 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "educational documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A 60-year-old marine biologist, tan skin, kind eyes, wearing a sun hat, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A 60-year-old marine biologist, full body view, standing on a research vessel, wearing a blue waterproof jacket and deck boots, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Calm female voice, wise, educational')",
+      "personality": "Personality traits (e.g., 'Passionate about conservation, patient, knowledgeable')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Real-world setting or environment",
@@ -40,6 +50,11 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
   ]
 }
 ```
+
+## Output Format
+
+You must respond with valid JSON only. No markdown, no explanations, just the JSON.
+
 
 ### Example Allocation
 

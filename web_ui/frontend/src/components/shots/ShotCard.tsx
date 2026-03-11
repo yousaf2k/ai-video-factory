@@ -37,6 +37,7 @@ import {
   useDeleteVariationVideo,
   useUploadShotVideo,
 } from "@/hooks/useShots";
+import { useAgents, useConfig } from "@/hooks/useAgents";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import { cn, getMediaUrl } from "@/lib/utils";
@@ -97,9 +98,7 @@ export function ShotCard({
   const [regenForce, setRegenForce] = useState(true);
   const [regenImageMode, setRegenImageMode] = useState("comfyui");
   const [regenImageWorkflow, setRegenImageWorkflow] = useState("flux2");
-  const [regenVideoWorkflow, setRegenVideoWorkflow] = useState(
-    "workflow/video/wan22_workflow.json",
-  );
+  const [regenVideoWorkflow, setRegenVideoWorkflow] = useState("wan22");
   const [regenVideoMode, setRegenVideoMode] = useState("geminiweb");
   const [regenSeed, setRegenSeed] = useState<number | "">("");
   const [regenPromptOverride, setRegenPromptOverride] = useState<string>("");
@@ -129,6 +128,15 @@ export function ShotCard({
 
   const selectVideo = useSelectVideo(sessionId);
   const deleteVariationVideo = useDeleteVariationVideo(sessionId);
+
+  const { data: globalConfig } = useConfig();
+
+  // Update default workflow when config loads
+  useEffect(() => {
+    if (globalConfig?.video_workflow) {
+      setRegenVideoWorkflow(globalConfig.video_workflow);
+    }
+  }, [globalConfig]);
 
   // Derived data for the fullscreen carousel
   const fsImages = viewMode === "video" ? (shot.video_paths ?? []) : (shot.image_paths ?? []);
@@ -914,11 +922,23 @@ export function ShotCard({
                       <label className="block text-xs font-medium text-muted-foreground mb-1">
                         Video Workflow
                       </label>
-                      <Input
-                        type="text"
+                      <Select
                         value={regenVideoWorkflow}
-                        onChange={(e) => setRegenVideoWorkflow(e.target.value)}
-                      />
+                        onValueChange={(val) => setRegenVideoWorkflow(val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Video Workflow" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {globalConfig?.available_video_workflows?.map((wf) => (
+                            <SelectItem key={wf} value={wf}>
+                              {wf}
+                            </SelectItem>
+                          )) || (
+                              <SelectItem value="wan22">Wan 2.2</SelectItem>
+                            )}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
                 </>

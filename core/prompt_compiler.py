@@ -351,13 +351,25 @@ def compile_workflow(template, shot, video_length_seconds=None):
 
     # Inject image path to LoadImage node if available
     if "image_path" in shot and shot["image_path"]:
+        image_path = shot["image_path"]
+        # Convert to absolute path if relative (ComfyUI requires absolute paths)
+        image_path = config.resolve_path(image_path)
+        # Normalize to use forward slashes (ComfyUI handles this better)
+        image_path = image_path.replace('\\', '/')
+
         if load_image_node_id and load_image_node_id in wf:
-            image_path = shot["image_path"]
-            # Convert to absolute path if relative (ComfyUI requires absolute paths)
-            image_path = config.resolve_path(image_path)
-            # Normalize to use forward slashes (ComfyUI handles this better)
-            image_path = image_path.replace('\\', '/')
             wf[load_image_node_id]["inputs"]["image"] = image_path
+        else:
+            # Fallback: find node by class_type
+            found = False
+            for node_id, node in wf.items():
+                if node.get("class_type") == "LoadImage":
+                    node["inputs"]["image"] = image_path
+                    logger.info(f"Auto-discovered LoadImage node at ID: {node_id}")
+                    found = True
+                    break
+            if not found:
+                logger.error("Could not find LoadImage node in workflow!")
 
     # Set video length in WanImageToVideo node if specified
     if video_length_seconds and wan_video_node_id and wan_video_node_id in wf:
