@@ -274,6 +274,63 @@ VIDEO_WORKFLOWS = {
         "motion_prompt_node_id": "93",
         "wan_video_node_id": "98"
     },
+    "wan22_flfi2v_fast": {
+        "workflow_path": resolve_path("workflow/video/wan22_flf2v_fast_api.json"),
+        "load_image_first_node_id": "128",
+        "load_image_last_node_id": "151",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "150",
+        "seed_node_id": "142",
+        "description": "Wan 2.2 FLFI2V - First/Last frame to video"
+    },
+    "wan22_flfi2v": {
+        "workflow_path": resolve_path("workflow/video/wan22_flf2v_api.json"),
+        "load_image_first_node_id": "128",
+        "load_image_last_node_id": "151",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "150",
+        "seed_node_id": "142",
+        "description": "Wan 2.2 FLFI2V - First/Last frame to video"
+    },
+    "wan22_flfi2v_fix_slowmotion": {
+        "workflow_path": resolve_path("workflow/video/Wan22_FLFI2V_FixSlowMotion_API.json"),
+        "load_image_first_node_id": "128",
+        "load_image_last_node_id": "151",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "150",
+        "seed_node_id": "142",
+        "description": "Wan 2.2 FLFI2V - First/Last frame to video"
+    },
+    "wan22_walk": {
+        "workflow_path": resolve_path("workflow/video/Wan22_Walk.json"),
+        "load_image_node_id": "128",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_walk_full": {
+        "workflow_path": resolve_path("workflow/video/Wan22_Walk_Full.json"),
+        "load_image_node_id": "128",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_lora": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow_lora.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_park": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow_park.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_pusa": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow_pusa.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
     "default": {
         "workflow_path": resolve_path("workflow/video/wan22_workflow.json"),
         "load_image_node_id": "97",
@@ -281,6 +338,9 @@ VIDEO_WORKFLOWS = {
         "wan_video_node_id": "98"
     }
 }
+
+# Helper constant for ThenVsNow agents
+THEN_VS_NOW_AGENTS = ["then_vs_now"]
 
 # Legacy single workflow settings (deprecated, use VIDEO_WORKFLOWS instead)
 # Kept for backward compatibility
@@ -332,7 +392,47 @@ IMAGE_WORKFLOWS = {
         "save_node_id": "9",           # SaveImage node
         "description": "Flux model for high-quality image generation"
     },
+    "flux_ipadapter_then": {
+        "workflow_path": resolve_path("workflow/image/flux_ipadapter_then.json"),
+        "load_reference_node_id": "1",  # LoadImage node for THEN reference
+        "ipadapter_node_id": "5",       # IP-Adapter node
+        "text_node_id": "6",            # CLIPTextEncode for prompt
+        "neg_text_node_id": None,       # Flux doesn't use negative prompts
+        "ksampler_node_id": "13",       # SamplerCustomAdvanced node
+        "vae_node_id": "8",             # VAEDecode node
+        "save_node_id": "9",            # SaveImage node
+        "description": "Flux with IP-Adapter for THEN character images (young version)"
+    },
+    "flux_ipadapter_now": {
+        "workflow_path": resolve_path("workflow/image/flux_ipadapter_now.json"),
+        "load_reference_node_id": "1",  # LoadImage node for NOW reference
+        "ipadapter_node_id": "5",       # IP-Adapter node
+        "text_node_id": "6",            # CLIPTextEncode for prompt
+        "neg_text_node_id": None,       # Flux doesn't use negative prompts
+        "ksampler_node_id": "13",       # SamplerCustomAdvanced node
+        "vae_node_id": "8",             # VAEDecode node
+        "save_node_id": "9",            # SaveImage node
+        "description": "Flux with IP-Adapter for NOW character images (current version)"
+    },
+    "flux_background": {
+        "workflow_path": resolve_path("workflow/image/flux_background.json"),
+        "text_node_id": "6",            # CLIPTextEncode for prompt
+        "neg_text_node_id": None,       # Flux doesn't use negative prompts
+        "ksampler_node_id": "13",       # SamplerCustomAdvanced node
+        "vae_node_id": "8",             # VAEDecode node
+        "save_node_id": "9",            # SaveImage node
+        "description": "Flux for scene background generation (standard text-to-image)"
+    },
     "flux2": {
+        "workflow_path": resolve_path("workflow/image/flux2.json"),
+        "text_node_id": "6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "13",
+        "vae_node_id": "8",
+        "save_node_id": "9",
+        "description": "Flux2 Dev"
+    },
+    "flux2_4g_2k": {
         "workflow_path": resolve_path("workflow/image/flux2_4g_2k.json"),
         "text_node_id": "98:6",
         "neg_text_node_id": None,
@@ -340,6 +440,42 @@ IMAGE_WORKFLOWS = {
         "vae_node_id": "98:10",
         "save_node_id": "9",
         "description": "Flux2.Dev for high quality images workflow"
+    },
+    "flux2_api": {
+        "workflow_path": resolve_path("workflow/image/image_flux2_text_to_image_api.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:13",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2 API version"
+    },
+    "hidream_dev": {
+        "workflow_path": resolve_path("workflow/image/hidream_i1_dev.json"),
+        "text_node_id": "16",
+        "neg_text_node_id": "40",
+        "ksampler_node_id": "3",
+        "vae_node_id": "55",
+        "save_node_id": "9",
+        "description": "HiDream I1 Dev"
+    },
+    "hidream_full": {
+        "workflow_path": resolve_path("workflow/image/hidream_i1_full.json"),
+        "text_node_id": "91",
+        "neg_text_node_id": "85",
+        "ksampler_node_id": "93",
+        "vae_node_id": "81",
+        "save_node_id": "9",
+        "description": "HiDream I1 Full"
+    },
+    "turbo": {
+        "workflow_path": resolve_path("workflow/image/z_image_turbo_api.json"),
+        "text_node_id": "6",
+        "neg_text_node_id": "7",
+        "ksampler_node_id": "3",
+        "vae_node_id": "17",
+        "save_node_id": "9",
+        "description": "Z Image Turbo"
     },
     "sdxl": {
         "workflow_path": resolve_path("workflow/image/sdxl.json"),
@@ -349,24 +485,6 @@ IMAGE_WORKFLOWS = {
         "vae_node_id": "8",            # VAEDecode node
         "save_node_id": "9",           # SaveImage node
         "description": "SDXL model for image generation"
-    },
-    "hidream": {
-        "workflow_path": resolve_path("workflow/image/hidream.json"),
-        "text_node_id": "6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "13",
-        "vae_node_id": "8",
-        "save_node_id": "9",
-        "description": "HiDream model for image generation"
-    },
-    "qwen": {
-        "workflow_path": resolve_path("workflow/image/qwen.json"),
-        "text_node_id": "6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "13",
-        "vae_node_id": "8",
-        "save_node_id": "9",
-        "description": "Qwen model for image generation"
     },
     "default": {
         "workflow_path": resolve_path("workflow/image/image_generation_workflow.json"),

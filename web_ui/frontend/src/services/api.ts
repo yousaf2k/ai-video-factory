@@ -142,7 +142,8 @@ class ApiClient {
     imageMode?: string,
     imageWorkflow?: string,
     seed?: number,
-    promptOverride?: string
+    promptOverride?: string,
+    imageVariant?: string
   ): Promise<void> {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-image`, {
       force,
@@ -150,6 +151,7 @@ class ApiClient {
       image_workflow: imageWorkflow,
       seed,
       prompt_override: promptOverride || undefined,
+      image_variant: imageVariant || undefined,
     });
   }
 
@@ -158,12 +160,14 @@ class ApiClient {
     shotIndex: number,
     force: boolean = false,
     videoMode?: string,
-    videoWorkflow?: string
+    videoWorkflow?: string,
+    videoVariant?: string
   ): Promise<void> {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-video`, {
       force,
       video_mode: videoMode,
       video_workflow: videoWorkflow,
+      video_variant: videoVariant || undefined,
     });
   }
 
@@ -177,8 +181,10 @@ class ApiClient {
     await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/cancel-generation`);
   }
 
-  async removeWatermark(sessionId: string, shotIndex: number): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/remove-watermark`);
+  async removeWatermark(sessionId: string, shotIndex: number, variant?: string): Promise<void> {
+    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/remove-watermark`, {
+      variant: variant || null,
+    });
   }
 
   async getQueueStatus(sessionId: string): Promise<{ queued_indices: number[] }> {
@@ -267,14 +273,18 @@ class ApiClient {
   async uploadShotImage(
     sessionId: string,
     shotIndex: number,
-    file: File
+    file: File,
+    variant?: string
   ): Promise<{ image_path: string; filename: string }> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await this.client.post<{ status: string; image_path: string; filename: string }>(
       `/api/sessions/${sessionId}/shots/${shotIndex}/upload-image`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      { 
+        params: { variant },
+        headers: { 'Content-Type': 'multipart/form-data' } 
+      }
     );
     return response.data;
   }
@@ -282,14 +292,18 @@ class ApiClient {
   async uploadShotVideo(
     sessionId: string,
     shotIndex: number,
-    file: File
+    file: File,
+    variant?: string
   ): Promise<{ video_path: string; filename: string }> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await this.client.post<{ status: string; video_path: string; filename: string }>(
       `/api/sessions/${sessionId}/shots/${shotIndex}/upload-video`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      { 
+        params: { variant },
+        headers: { 'Content-Type': 'multipart/form-data' } 
+      }
     );
     return response.data;
   }

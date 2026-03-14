@@ -46,6 +46,7 @@ export default function SessionsPage() {
   const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
   const [totalDuration, setTotalDuration] = useState(600);
   const [promptsFile, setPromptsFile] = useState("");
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<"16:9" | "9:16">("16:9");
   const [generatingThumbnails, setGeneratingThumbnails] = useState<
     Record<string, boolean>
   >({});
@@ -72,6 +73,7 @@ export default function SessionsPage() {
       shots_agent: selectedShotsAgent,
       total_duration: totalDuration,
       prompts_file: promptsFile.trim() || undefined,
+      aspect_ratio: selectedAspectRatio,
     };
 
     try {
@@ -335,6 +337,29 @@ export default function SessionsPage() {
                 <p className="text-[10px] text-muted-foreground mt-1">
                   Skip story generation and import shots directly from this
                   file.
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">
+                  Aspect Ratio
+                </label>
+                <Select
+                  value={selectedAspectRatio}
+                  onValueChange={(val) => setSelectedAspectRatio(val as "16:9" | "9:16")}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Aspect Ratio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="16:9">16:9 Landscape</SelectItem>
+                    <SelectItem value="9:16">9:16 Portrait</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {selectedAspectRatio === "16:9"
+                    ? "Horizontal format, best for YouTube and desktop viewing"
+                    : "Vertical format, best for TikTok, Reels, and Shorts"}
                 </p>
               </div>
 

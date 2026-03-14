@@ -200,24 +200,28 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
 
     # First, check if it's already in history (fast execution)
     from core.comfy_client import wait_for_prompt_completion
-    try:
-        check_response = http_session.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
-        if check_response.status_code == 200:
-            history = check_response.json()
-            if prompt_id in history:
-                logger.debug(f"Prompt {prompt_id} already in history, skipping WS progress.")
-                if progress_callback:
-                    progress_callback(100, 100)
-                return wait_for_prompt_completion(prompt_id, timeout=10)
-    except Exception as e:
-        logger.debug(f"Initial history check failed: {e}")
+    for attempt in range(2): # Try twice with a tiny delay
+        try:
+            check_response = http_session.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
+            if check_response.status_code == 200:
+                history = check_response.json()
+                if prompt_id in history:
+                    logger.debug(f"Prompt {prompt_id} already in history, skipping WS progress.")
+                    if progress_callback:
+                        progress_callback(100, 100)
+                    return wait_for_prompt_completion(prompt_id, timeout=10)
+        except Exception as e:
+            logger.debug(f"Initial history check attempt {attempt+1} failed: {e}")
+        
+        if attempt == 0:
+            time.sleep(0.1) # Tiny sleep before second attempt
 
     async def _listen():
         logger.info(f"Connecting to ComfyUI WebSocket: {ws_url}")
         try:
             async with websockets.connect(ws_url) as websocket:
                 start_time = time.time()
-                last_history_check = time.time()
+                last_history_check = 0 # Force immediate first check
                 our_prompt_is_executing = False  # Only true when OUR prompt is actively running
                 another_prompt_is_executing = False  # True when we've confirmed another prompt is running
                 execution_start_time = None  # Track when our prompt actually starts
@@ -238,7 +242,7 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                             return {'success': False, 'error': f'Queue timeout after {int(current_time - start_time)}s', 'outputs': []}
 
                     # Occasionally check history manually as fallback
-                    if current_time - last_history_check > 5.0:
+                    if current_time - last_history_check > 1.0:
                         last_history_check = current_time
                         try:
                             hist_result = await asyncio.to_thread(http_session.get, f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)

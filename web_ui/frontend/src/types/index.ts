@@ -2,6 +2,36 @@
  * Type definitions for AI Video Factory Web UI
  */
 
+export enum ProjectType {
+  Documentary = 1,
+  ThenVsNow = 2
+}
+
+export interface MovieMetadata {
+  year?: number;
+  cast: string[];
+  director?: string;
+  genre?: string;
+}
+
+export interface YouTubeMetadata {
+  title_options: string[];
+  seo_keywords: string[];
+  chapters: Array<{ timestamp: string; title: string }>;
+  description_preview?: string;
+}
+
+export interface Character {
+  name: string;
+  scene_id?: number;
+  then_prompt?: string;
+  now_prompt?: string;
+  meeting_prompt?: string;
+  departure_prompt?: string;
+  then_reference_image_path?: string;
+  now_reference_image_path?: string;
+}
+
 export interface SessionStep {
   story: boolean;
   scene_graph: boolean;
@@ -31,6 +61,7 @@ export interface Session {
   stats: SessionStats;
   thumbnail_url?: string;
   thumbnail_url_9_16?: string;
+  aspect_ratio?: string;
   story?: Story;
   shots?: Shot[];
 }
@@ -46,6 +77,7 @@ export interface SessionListItem {
   videos_rendered: number;
   thumbnail_url?: string;
   thumbnail_url_9_16?: string;
+  aspect_ratio?: string;
   story?: Story;
 }
 
@@ -59,10 +91,15 @@ export interface Story {
   master_script?: string;
   total_duration?: number;
   scenes: Scene[];
+  project_type: ProjectType;
+  characters?: Character[];
+  youtube_metadata?: YouTubeMetadata;
+  movie_metadata?: MovieMetadata;
 }
 
 export interface Scene {
-  scene_id: number;
+  scene_id?: number;
+  scene_name?: string;
   location: string;
   characters: string;
   action: string;
@@ -71,6 +108,11 @@ export interface Scene {
   scene_duration?: number;
   narration_path?: string;
   narration_paths?: string[];
+  set_prompt?: string;
+  scene_image_path?: string;
+  background_image_path?: string;
+  background_generated?: boolean;
+  background_is_generated?: boolean;
 }
 
 export interface Shot {
@@ -88,6 +130,24 @@ export interface Shot {
   video_path: string | null;
   video_paths?: string[];
   scene_id?: number | null;
+  character_name?: string;
+  scene_name?: string;
+  order_in_scene?: number;
+  // FLFI2V mode fields
+  is_flfi2v?: boolean;
+  character_id?: string;
+  then_image_prompt?: string;
+  then_image_path?: string;
+  then_image_generated?: boolean;
+  now_image_prompt?: string;
+  now_image_path?: string;
+  now_image_generated?: boolean;
+  meeting_video_prompt?: string;
+  meeting_video_path?: string;
+  meeting_video_rendered?: boolean;
+  departure_video_prompt?: string;
+  departure_video_path?: string;
+  departure_video_rendered?: boolean;
 }
 export interface CreateSessionRequest {
   idea: string;
@@ -96,6 +156,7 @@ export interface CreateSessionRequest {
   shots_agent?: string;
   total_duration?: number;
   prompts_file?: string;
+  aspect_ratio?: "16:9" | "9:16";
 }
 
 export interface UpdateSessionRequest {
@@ -103,6 +164,7 @@ export interface UpdateSessionRequest {
   completed?: boolean;
   story_agent?: string;
   shots_agent?: string;
+  aspect_ratio?: "16:9" | "9:16";
 }
 
 export interface GlobalConfig {
@@ -115,7 +177,9 @@ export interface GlobalConfig {
   comfy_url: string;
   target_video_length?: number;
   default_max_shots?: number;
+  image_workflow?: string;
   available_video_workflows?: string[];
+  available_image_workflows?: string[];
 }
 
 export interface UpdateGlobalConfigRequest {
@@ -123,6 +187,7 @@ export interface UpdateGlobalConfigRequest {
   image_generation_mode?: string;
   video_generation_mode?: string;
   video_workflow?: string;
+  image_workflow?: string;
   comfy_url?: string;
   target_video_length?: number;
   gemini_api_key?: string;
@@ -140,6 +205,11 @@ export interface UpdateShotRequest {
   camera?: string;
   narration?: string;
   scene_id?: number | null;
+  // FLFI2V fields
+  then_image_prompt?: string;
+  now_image_prompt?: string;
+  meeting_video_prompt?: string;
+  departure_video_prompt?: string;
 }
 
 export interface ProgressEvent {

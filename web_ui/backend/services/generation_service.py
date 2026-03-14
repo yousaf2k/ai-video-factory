@@ -199,7 +199,8 @@ class GenerationService:
                     manager.broadcast_sync(session_id, {
                         "type": "cancelled",
                         "session_id": session_id,
-                        "shot_index": shot_index
+                        "shot_index": shot_index,
+                        "shot_id": shot_data.get('id') if shot_data else None
                     })
 
         # Launch all tasks bounded by the semaphore
@@ -275,7 +276,7 @@ class GenerationService:
         self, session_id: str, shot_index: int, force: bool = False,
         image_mode: Optional[str] = None, image_workflow: Optional[str] = None,
         seed: Optional[int] = None, prompt_override: Optional[str] = None,
-        session_title: Optional[str] = None
+        session_title: Optional[str] = None, image_variant: str = None
     ) -> str:
         """
         Regenerate image for a single shot
@@ -287,19 +288,33 @@ class GenerationService:
             image_mode: Override generation mode
             image_workflow: Override ComfyUI workflow
             session_title: Optional title for Gemini Web chat persistence
+            image_variant: For FLFI2V shots, which variant to generate ("then", "now", or "both")
 
         Returns:
-            Path to generated image
+            Path to generated image (or dict with "then"/"now" keys for FLFI2V)
         """
         try:
-            # Load shots
+            # Load shots and story
             shots = self.session_manager.get_shots(session_id)
+            story = self.session_manager.get_story(session_id)
 
             if shot_index < 1 or shot_index > len(shots):
                 raise ValueError(f"Shot {shot_index} not found")
 
             shot = shots[shot_index - 1]
+            project_type = story.get('project_type', 1) if story else 1
 
+            # Handle FLFI2V shots
+            if shot.get('is_flfi2v') and project_type == 2:
+                results = await self._regenerate_flfi2v_images(
+                    session_id, shot_index, shot, story, force,
+                    image_mode, image_workflow, seed, session_title, image_variant
+                )
+                # Return the NOW image path for backward compatibility
+                # (UI will use then_image_path/now_image_path for FLFI2V shots)
+                return results.get('now') if isinstance(results, dict) else results
+
+            # Standard documentary mode (existing code)
             # Check if already exists and not forcing
             if not force and shot.get('image_generated', False):
                 logger.info(f"Shot {shot_index} already has image, skipping")
@@ -336,7 +351,8 @@ class GenerationService:
                 image_workflow,
                 seed,
                 prompt_override,
-                session_title
+                session_title,
+                None  # No variant for standard shots
             )
 
             # Mark as generated
@@ -355,12 +371,195 @@ class GenerationService:
 
         except Exception as e:
             logger.error(f"Error regenerating shot {shot_index} image: {e}")
+            # Broadcast cancelled event to clear loading state in UI
+            manager.broadcast_sync(session_id, {
+                "type": "cancelled",
+                "session_id": session_id,
+                "shot_index": shot_index,
+                "shot_id": shot.get('id')
+            })
             raise
+
+    async def _regenerate_flfi2v_images(
+        self, session_id: str, shot_index: int, shot: dict, story: dict,
+        force: bool, image_mode: Optional[str], image_workflow: Optional[str],
+        seed: Optional[int], session_title: Optional[str], image_variant: str
+    ) -> dict:
+        """Regenerate THEN and/or NOW images for FLFI2V shot"""
+        from web_ui.backend.models.story import ProjectType
+
+        images_dir = self.session_manager.get_images_dir(session_id)
+        os.makedirs(images_dir, exist_ok=True)
+
+        scene_id = shot.get('scene_id', 0)
+        scene = story['scenes'][scene_id] if scene_id < len(story.get('scenes', [])) else None
+        set_prompt = scene.get('set_prompt', '') if scene else ''
+
+        results = {}
+        shots = self.session_manager.get_shots(session_id)
+
+        # Get character reference images if available
+        character_id = shot.get('character_id')
+        then_reference = None
+        now_reference = None
+
+        if character_id and story.get('characters'):
+            # Find character by matching character_id or index
+            character = None
+            for char in story['characters']:
+                if str(char.get('scene_id', 0)) == str(character_id):
+                    character = char
+                    break
+
+            if character:
+                then_reference = character.get('then_reference_image_path')
+                now_reference = character.get('now_reference_image_path')
+                logger.info(f"Found reference images for character {character_id}: THEN={then_reference}, NOW={now_reference}")
+
+        # Default to both if not specified
+        if not image_variant:
+            image_variant = "both"
+
+        # Generate THEN image
+        if image_variant in ["then", "both"]:
+            if not shots[shot_index - 1].get('then_image_generated') or force:
+                then_prompt = shot.get('then_image_prompt', '')
+                if set_prompt:
+                    then_prompt = f"{then_prompt}. Background: {set_prompt}"
+
+                next_version = self._get_next_image_version(images_dir, shot_index, "then")
+                image_filename = f"shot_{shot_index:03d}_then_{next_version:03d}.png"
+                image_path = os.path.join(images_dir, image_filename)
+
+                # Use seed=1 for first THEN image, otherwise use provided seed or None
+                then_seed = 1 if next_version == 1 else seed
+                if next_version == 1:
+                    logger.info(f"FLFI2V shot {shot_index} THEN image using fixed seed: 1")
+
+                # Broadcast progress
+                manager.broadcast_sync(session_id, {
+                    "type": "progress",
+                    "session_id": session_id,
+                    "shot_index": shot_index,
+                    "shot_id": shot.get('id'),
+                    "progress": 0
+                })
+
+                # Determine workflow and reference for THEN
+                then_workflow = image_workflow
+                if then_reference:
+                    # Auto-switch to IP-Adapter workflow when reference available
+                    if not then_workflow or then_workflow == "flux":
+                        then_workflow = "flux_ipadapter_then"
+                        logger.info(f"Using IP-Adapter workflow for THEN with reference: {then_reference}")
+
+                # Generate
+                result_path = await asyncio.to_thread(
+                    self._generate_single_image,
+                    session_id,
+                    {**shot, 'image_prompt': then_prompt},
+                    image_mode,
+                    then_workflow,
+                    then_seed,
+                    None,  # No prompt override for FLFI2V
+                    session_title,
+                    "then",
+                    then_reference  # Pass THEN reference image
+                )
+
+                shots[shot_index - 1]['then_image_generated'] = True
+                shots[shot_index - 1]['then_image_path'] = self._get_relative_path(result_path)
+                results['then'] = shots[shot_index - 1]['then_image_path']
+
+        # Generate NOW image
+        if image_variant in ["now", "both"]:
+            if not shots[shot_index - 1].get('now_image_generated') or force:
+                now_prompt = shot.get('now_image_prompt', '')
+                if set_prompt:
+                    now_prompt = f"{now_prompt}. Background: {set_prompt}"
+
+                next_version = self._get_next_image_version(images_dir, shot_index, "now")
+                image_filename = f"shot_{shot_index:03d}_now_{next_version:03d}.png"
+                image_path = os.path.join(images_dir, image_filename)
+
+                # Use seed=1 for first NOW image, otherwise use provided seed or None
+                now_seed = 1 if next_version == 1 else seed
+                if next_version == 1:
+                    logger.info(f"FLFI2V shot {shot_index} NOW image using fixed seed: 1")
+
+                # Broadcast progress
+                manager.broadcast_sync(session_id, {
+                    "type": "progress",
+                    "session_id": session_id,
+                    "shot_index": shot_index,
+                    "shot_id": shot.get('id'),
+                    "progress": 50 if image_variant == "both" else 0
+                })
+
+                # Determine workflow and reference for NOW
+                now_workflow = image_workflow
+                if now_reference:
+                    # Auto-switch to IP-Adapter workflow when reference available
+                    if not now_workflow or now_workflow == "flux":
+                        now_workflow = "flux_ipadapter_now"
+                        logger.info(f"Using IP-Adapter workflow for NOW with reference: {now_reference}")
+
+                # Generate
+                result_path = await asyncio.to_thread(
+                    self._generate_single_image,
+                    session_id,
+                    {**shot, 'image_prompt': now_prompt},
+                    image_mode,
+                    now_workflow,
+                    now_seed,
+                    None,  # No prompt override for FLFI2V
+                    session_title,
+                    "now",
+                    now_reference  # Pass NOW reference image
+                )
+
+                shots[shot_index - 1]['now_image_generated'] = True
+                shots[shot_index - 1]['now_image_path'] = self._get_relative_path(result_path)
+                results['now'] = shots[shot_index - 1]['now_image_path']
+
+        # Update standard image_path to NOW (for backward compatibility)
+        if shots[shot_index - 1].get('now_image_path'):
+            shots[shot_index - 1]['image_path'] = shots[shot_index - 1]['now_image_path']
+            shots[shot_index - 1]['image_generated'] = True
+
+        # Save shots
+        self.session_manager._save_shots(session_id, shots)
+
+        # Broadcast completion
+        manager.broadcast_sync(session_id, {
+            "type": "completed",
+            "session_id": session_id,
+            "shot_index": shot_index,
+            "shot_id": shot.get('id')
+        })
+
+        logger.info(f"FLFI2V shot {shot_index} images regenerated: {results}")
+        return results
+
+    def _get_relative_path(self, absolute_path: str) -> str:
+        """Convert absolute path to relative path from output directory"""
+        import config
+        abs_output = getattr(config, 'ABS_OUTPUT_DIR', '')
+        if abs_output and absolute_path.startswith(abs_output):
+            # Get the path after ABS_OUTPUT_DIR
+            rel_path = absolute_path[len(abs_output):].lstrip(os.sep).replace(os.sep, '/')
+            # Ensure it starts with 'output/' for getMediaUrl compatibility
+            # Remove any leading slashes to avoid double slashes
+            rel_path = rel_path.lstrip('/')
+            if not rel_path.startswith('output/'):
+                rel_path = f'output/{rel_path}'
+            return rel_path
+        return absolute_path
 
     async def regenerate_shot_video(
         self, session_id: str, shot_index: int, force: bool = False,
         video_mode: Optional[str] = None, video_workflow: Optional[str] = None,
-        session_title: Optional[str] = None
+        session_title: Optional[str] = None, video_variant: str = None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -372,19 +571,33 @@ class GenerationService:
             video_mode: Override generation mode
             video_workflow: Override workflow
             session_title: Optional title for Gemini Web chat persistence
+            video_variant: For FLFI2V shots, which variant to generate ("meeting", "departure", or "both")
 
         Returns:
-            Path to generated video
+            Path to generated video (or dict with "meeting"/"departure" keys for FLFI2V)
         """
         try:
-            # Load shots
+            # Load shots and story
             shots = self.session_manager.get_shots(session_id)
+            story = self.session_manager.get_story(session_id)
 
             if shot_index < 1 or shot_index > len(shots):
                 raise ValueError(f"Shot {shot_index} not found")
 
             shot = shots[shot_index - 1]
+            project_type = story.get('project_type', 1) if story else 1
 
+            # Handle FLFI2V shots
+            if shot.get('is_flfi2v') and project_type == 2:
+                results = await self._regenerate_flfi2v_videos(
+                    session_id, shot_index, shot, force,
+                    video_mode, video_workflow, session_title, video_variant
+                )
+                # Return the meeting video path for backward compatibility
+                # (UI will use meeting_video_path/departure_video_path for FLFI2V shots)
+                return results.get('meeting') if isinstance(results, dict) else results
+
+            # Standard documentary mode (existing code)
             # Check if image exists
             if not shot.get('image_generated', False) or not shot.get('image_path'):
                 raise ValueError(f"Shot {shot_index} has no image, cannot generate video")
@@ -406,7 +619,7 @@ class GenerationService:
 
             # Generate video for single shot
             logger.info(f"Regenerating video for shot {shot_index} using mode {video_mode or 'default'}")
-            
+
             # Broadcast initial 0% so UI resets from any stale progress
             manager.broadcast_sync(session_id, {
                 "type": "progress",
@@ -428,7 +641,7 @@ class GenerationService:
 
             # Mark as rendered
             self.session_manager.mark_video_rendered(session_id, shot_index, video_path)
-            
+
             # Broadcast completion to clear progress on frontend
             manager.broadcast_sync(session_id, {
                 "type": "completed",
@@ -442,11 +655,435 @@ class GenerationService:
 
         except Exception as e:
             logger.error(f"Error regenerating shot {shot_index} video: {e}")
+            # Broadcast cancelled event to clear loading state in UI
+            manager.broadcast_sync(session_id, {
+                "type": "cancelled",
+                "session_id": session_id,
+                "shot_index": shot_index,
+                "shot_id": shot.get('id')
+            })
+            raise
+
+    def _find_next_shot_for_departure(self, current_shot: dict, all_shots: list, story: dict) -> dict:
+        """
+        Find next shot for departure video with cross-scene and circular support.
+
+        Transition Rules:
+        1. Within scene: next shot in same scene
+        2. Cross scene: first shot of next scene (at last shot of scene)
+        3. Circular: first shot of first scene (at last shot of last scene)
+
+        Args:
+            current_shot: The current shot dict
+            all_shots: List of all shot dicts
+            story: Story dict with scenes array
+
+        Returns:
+            Dict with keys: next_shot, transition_type, last_frame_image, description
+        """
+        current_scene_id = current_shot.get('scene_id')
+        scenes = story.get('scenes', [])
+
+        # Debug logging
+        logger.info(f"[DEPARTURE] Finding next shot for departure - Shot {current_shot.get('index')}, scene_id={current_scene_id}")
+
+        # Group shots by scene_id
+        shots_by_scene = {}
+        for shot in all_shots:
+            sid = shot.get('scene_id', 0)
+            if sid not in shots_by_scene:
+                shots_by_scene[sid] = []
+            shots_by_scene[sid].append(shot)
+
+        logger.info(f"[DEPARTURE] Shots by scene: {[(sid, len(shots)) for sid, shots in shots_by_scene.items()]}")
+
+        # Sort shots within each scene by order_in_scene, then index
+        for sid in shots_by_scene:
+            shots_by_scene[sid].sort(key=lambda s: (s.get('order_in_scene', 0), s.get('index', 0)))
+
+        current_scene_shots = shots_by_scene.get(current_scene_id, [])
+        logger.info(f"[DEPARTURE] Current scene ({current_scene_id}) has {len(current_scene_shots)} shots")
+
+        # Group shots by scene_id
+        shots_by_scene = {}
+        for shot in all_shots:
+            sid = shot.get('scene_id', 0)
+            if sid not in shots_by_scene:
+                shots_by_scene[sid] = []
+            shots_by_scene[sid].append(shot)
+
+        # Sort shots within each scene by order_in_scene, then index
+        for sid in shots_by_scene:
+            shots_by_scene[sid].sort(key=lambda s: (s.get('order_in_scene', 0), s.get('index', 0)))
+
+        current_scene_shots = shots_by_scene.get(current_scene_id, [])
+
+        # Find current position
+        current_id = current_shot.get('id')
+        current_pos = next((i for i, s in enumerate(current_scene_shots) if s.get('id') == current_id), 0)
+
+        # Rule 1: Within scene transition
+        if current_pos < len(current_scene_shots) - 1:
+            next_shot = current_scene_shots[current_pos + 1]
+            then_image = next_shot.get('then_image_path')
+
+            if then_image:
+                current_char_name = current_shot.get('character_name', f'Shot {current_shot.get("index")}')
+                next_char_name = next_shot.get('character_name', f'Shot {next_shot.get("index")}')
+                scene_name = current_shot.get('scene_name', f'Scene {current_scene_id}')
+                logger.info(f"[DEPARTURE] WITHIN-SCENE: shot {current_shot.get('index')} -> shot {next_shot.get('index')}")
+                # For within-scene departure, use THEN image (traveling to past era of next character)
+                return {
+                    'next_shot': next_shot,
+                    'transition_type': 'within_scene',
+                    'last_frame_image': then_image,
+                    'description': f'Within {scene_name}: {current_char_name} -> {next_char_name}'
+                }
+            else:
+                # Shot exists but no THEN image - this is an error
+                error_msg = f"THEN image not generated for shot {next_shot.get('index')} ({next_shot.get('character_name')}). Please generate THEN images first."
+                logger.error(f"[DEPARTURE] {error_msg}")
+                raise ValueError(error_msg)
+
+        # Rule 2: Cross-scene transition
+        # Find current scene's index in scenes array
+        current_scene_index = None
+        for i, sc in enumerate(scenes):
+            if sc.get('scene_id') == current_scene_id:
+                current_scene_index = i
+                break
+
+        # Debug logging
+        logger.info(f"[DEPARTURE] Current shot {current_shot.get('index')}: scene_id={current_scene_id}, current_scene_index={current_scene_index}")
+        scene_list = [f"{i}: scene_id={sc.get('scene_id')} ({sc.get('scene_name')})" for i, sc in enumerate(scenes)]
+        logger.info(f"[DEPARTURE] Available scenes: {scene_list}")
+        logger.info(f"[DEPARTURE] Total scenes: {len(scenes)}")
+
+        # Check subsequent scenes for valid shots with THEN images
+        if current_scene_index is not None:
+            current_scene_name = current_shot.get('scene_name', f'Scene {current_scene_id}')
+            current_char_name = current_shot.get('character_name', f'Shot {current_shot.get("index")}')
+
+            # Loop through all subsequent scenes
+            for offset in range(1, len(scenes) - current_scene_index):
+                next_scene_index = current_scene_index + offset
+                if next_scene_index >= len(scenes):
+                    break
+
+                next_scene = scenes[next_scene_index]
+                next_scene_id = next_scene.get('scene_id')
+                next_scene_name = next_scene.get('scene_name', f'Scene {next_scene_id}')
+                next_scene_shots = shots_by_scene.get(next_scene_id, [])
+
+                logger.info(f"[DEPARTURE] Checking scene {next_scene_index}: scene_id={next_scene_id}, name={next_scene_name}, shots_count={len(next_scene_shots)}")
+
+                if next_scene_shots:
+                    next_shot = next_scene_shots[0]
+                    then_image = next_shot.get('then_image_path')
+
+                    if then_image:
+                        next_char_name = next_shot.get('character_name', f'Shot {next_shot.get("index")}')
+                        # Found a scene with a valid THEN image
+                        logger.info(f"[DEPARTURE] CROSS-SCENE: Using scene {next_scene_id}'s first shot (shot {next_shot.get('index')}) THEN image")
+                        return {
+                            'next_shot': next_shot,
+                            'transition_type': 'cross_scene',
+                            'last_frame_image': then_image,
+                            'description': f'Cross-scene: {current_scene_name} -> {next_scene_name} ({current_char_name} -> {next_char_name})'
+                        }
+                    else:
+                        # Shot exists but no THEN image - this is an error
+                        error_msg = f"THEN image not generated for shot {next_shot.get('index')} ({next_shot.get('character_name')}) in scene {next_scene_name}. Please generate THEN images first."
+                        logger.error(f"[DEPARTURE] {error_msg}")
+                        raise ValueError(error_msg)
+                else:
+                    logger.info(f"[DEPARTURE] Scene {next_scene_id} has no shots, checking next scene...")
+
+            logger.warning(f"[DEPARTURE] No subsequent scenes with valid THEN images found, falling back to circular")
+        else:
+            logger.warning(f"[DEPARTURE] Cross-scene transition not available: current_scene_index={current_scene_index}, total_scenes={len(scenes)}")
+
+        # Rule 3: Circular transition
+        if scenes:
+            current_scene_name = current_shot.get('scene_name', f'Scene {current_scene_id}')
+            current_char_name = current_shot.get('character_name', f'Shot {current_shot.get("index")}')
+
+            # Try to find first scene with valid THEN image
+            for scene in scenes:
+                first_scene_id = scene.get('scene_id', 0)
+                first_scene_name = scene.get('scene_name', f'Scene {first_scene_id}')
+                first_scene_shots = shots_by_scene.get(first_scene_id, [])
+
+                if first_scene_shots:
+                    first_shot = first_scene_shots[0]
+                    then_image = first_shot.get('then_image_path')
+
+                    if then_image:
+                        first_char_name = first_shot.get('character_name', f'Shot {first_shot.get("index")}')
+                        logger.info(f"[DEPARTURE] Using CIRCULAR transition to scene {first_scene_id} ({first_scene_name})")
+                        return {
+                            'next_shot': first_shot,
+                            'transition_type': 'circular',
+                            'last_frame_image': then_image,
+                            'description': f'Circular loop: {current_scene_name} -> {first_scene_name} ({current_char_name} -> {first_char_name})'
+                        }
+                    else:
+                        # Shot exists but no THEN image - this is an error
+                        error_msg = f"THEN image not generated for shot {first_shot.get('index')} ({first_shot.get('character_name')}) in scene {first_scene_name}. Please generate THEN images first."
+                        logger.error(f"[DEPARTURE] {error_msg}")
+                        raise ValueError(error_msg)
+                else:
+                    logger.info(f"[DEPARTURE] Scene {first_scene_id} has no shots, checking next scene...")
+
+        # Fallback: return current shot
+        logger.warning(f"[DEPARTURE] Using FALLBACK: current shot's NOW image")
+        return {
+            'next_shot': current_shot,
+            'transition_type': 'fallback',
+            'last_frame_image': current_shot.get('now_image_path') or current_shot.get('image_path'),
+            'description': 'Fallback: using current shot'
+        }
+
+    async def _regenerate_flfi2v_videos(
+        self, session_id: str, shot_index: int, shot: dict,
+        force: bool, video_mode: Optional[str], video_workflow: Optional[str],
+        session_title: Optional[str], video_variant: str
+    ) -> dict:
+        """Regenerate meeting and/or departure videos for FLFI2V shot"""
+        shots = self.session_manager.get_shots(session_id)
+        results = {}
+
+        # Default to both if not specified
+        if not video_variant:
+            video_variant = "both"
+
+        # Check if we have both images
+        if not shots[shot_index - 1].get('then_image_path') or not shots[shot_index - 1].get('now_image_path'):
+            raise ValueError(f"FLFI2V shot {shot_index} requires both THEN and NOW images")
+
+        # Use FLFI2V workflow by default
+        if not video_workflow:
+            video_workflow = "wan22_flfi2v"
+
+        # Generate meeting video
+        if video_variant in ["meeting", "both"]:
+            if shot.get('meeting_video_prompt') and (not shots[shot_index - 1].get('meeting_video_rendered') or force):
+                next_version = self._get_next_video_version(
+                    self.session_manager.get_videos_dir(session_id), shot_index, "meeting"
+                )
+                video_filename = f"shot_{shot_index:03d}_meeting_{next_version:03d}.mp4"
+
+                # Use seed=1 for first meeting video
+                meeting_seed = 1 if next_version == 1 else None
+                if next_version == 1:
+                    logger.info(f"FLFI2V shot {shot_index} meeting video using fixed seed: 1")
+
+                # Broadcast progress
+                manager.broadcast_sync(session_id, {
+                    "type": "progress",
+                    "session_id": session_id,
+                    "shot_index": shot_index,
+                    "shot_id": shot.get('id'),
+                    "progress": 0
+                })
+
+                # Generate
+                result_path = await asyncio.to_thread(
+                    self._generate_flfi2v_video,
+                    session_id,
+                    shot,
+                    "meeting",
+                    video_mode,
+                    video_workflow,
+                    session_title,
+                    video_filename,
+                    meeting_seed
+                )
+
+                shots[shot_index - 1]['meeting_video_rendered'] = True
+                shots[shot_index - 1]['meeting_video_path'] = self._get_relative_path(result_path)
+                results['meeting'] = shots[shot_index - 1]['meeting_video_path']
+
+        # Generate departure video
+        if video_variant in ["departure", "both"]:
+            if shot.get('departure_video_prompt') and (not shots[shot_index - 1].get('departure_video_rendered') or force):
+                next_version = self._get_next_video_version(
+                    self.session_manager.get_videos_dir(session_id), shot_index, "departure"
+                )
+                video_filename = f"shot_{shot_index:03d}_departure_{next_version:03d}.mp4"
+
+                # Use seed=1 for first departure video
+                departure_seed = 1 if next_version == 1 else None
+                if next_version == 1:
+                    logger.info(f"FLFI2V shot {shot_index} departure video using fixed seed: 1")
+
+                # Find next shot for departure video using intelligent transition algorithm
+                story = self.session_manager.get_story(session_id)
+                transition_result = self._find_next_shot_for_departure(shot, shots, story)
+                last_frame_image = transition_result['last_frame_image']
+
+                logger.info(f"Departure transition: {transition_result['transition_type']}")
+                logger.info(f"  -> {transition_result.get('description', '')}")
+
+                # Broadcast progress
+                manager.broadcast_sync(session_id, {
+                    "type": "progress",
+                    "session_id": session_id,
+                    "shot_index": shot_index,
+                    "shot_id": shot.get('id'),
+                    "progress": 50 if video_variant == "both" else 0
+                })
+
+                # Generate with last_frame_image
+                result_path = await asyncio.to_thread(
+                    self._generate_flfi2v_video,
+                    session_id,
+                    shot,
+                    "departure",
+                    video_mode,
+                    video_workflow,
+                    session_title,
+                    video_filename,
+                    departure_seed,
+                    last_frame_image
+                )
+
+                shots[shot_index - 1]['departure_video_rendered'] = True
+                shots[shot_index - 1]['departure_video_path'] = self._get_relative_path(result_path)
+                results['departure'] = shots[shot_index - 1]['departure_video_path']
+
+        # Update standard video_path to meeting (for backward compatibility)
+        if shots[shot_index - 1].get('meeting_video_path'):
+            shots[shot_index - 1]['video_path'] = shots[shot_index - 1]['meeting_video_path']
+            shots[shot_index - 1]['video_rendered'] = True
+
+        # Save shots
+        self.session_manager._save_shots(session_id, shots)
+
+        # Broadcast completion
+        manager.broadcast_sync(session_id, {
+            "type": "completed",
+            "session_id": session_id,
+            "shot_index": shot_index,
+            "shot_id": shot.get('id')
+        })
+
+        logger.info(f"FLFI2V shot {shot_index} videos regenerated: {results}")
+        return results
+
+    async def generate_scene_background(
+        self, session_id: str, scene_id: int, set_prompt: str
+    ) -> str:
+        """
+        Generate background image for a scene using AI
+
+        Args:
+            session_id: Session identifier
+            scene_id: Scene ID in the story
+            set_prompt: Background description prompt
+
+        Returns:
+            Path to generated background image
+        """
+        try:
+            import config
+
+            # Create backgrounds directory
+            session_dir = self.session_manager.get_session_dir(session_id)
+            backgrounds_dir = os.path.join(session_dir, "backgrounds")
+            os.makedirs(backgrounds_dir, exist_ok=True)
+
+            # Generate filename
+            background_filename = f"scene_{scene_id}_background_001.png"
+            background_path = os.path.join(backgrounds_dir, background_filename)
+
+            # Broadcast 0% progress
+            manager.broadcast_sync(session_id, {
+                "type": "progress",
+                "session_id": session_id,
+                "scene_id": scene_id,
+                "step": "background_generation",
+                "progress": 0
+            })
+
+            # Progress callback
+            def on_step_progress(current, total):
+                progress = int((current / total) * 100) if total > 0 else 0
+                manager.broadcast_sync(session_id, {
+                    "type": "progress",
+                    "session_id": session_id,
+                    "scene_id": scene_id,
+                    "step": "background_generation",
+                    "progress": progress
+                })
+
+            # Generate background using standard Flux workflow
+            logger.info(f"Generating background for scene {scene_id}: {set_prompt[:60]}...")
+
+            result_path = await asyncio.to_thread(
+                self._generate_single_image,
+                session_id,
+                {'image_prompt': set_prompt, 'index': 0},
+                "comfyui",  # Always use ComfyUI for backgrounds
+                "flux",  # Use standard Flux workflow
+                1,  # Fixed seed for consistency
+                set_prompt,  # Use set_prompt directly
+                None,  # No session title for backgrounds
+                None,  # No variant
+                None  # No reference image for backgrounds
+            )
+
+            if not result_path or not os.path.exists(result_path):
+                raise RuntimeError(f"Failed to generate background for scene {scene_id}")
+
+            # Convert to relative path
+            relative_path = self._get_relative_path(result_path)
+
+            # Load and update story
+            story_path = os.path.join(session_dir, "story.json")
+            with open(story_path, 'r', encoding='utf-8') as f:
+                story_data = json.load(f)
+
+            scenes = story_data.get('scenes', [])
+
+            # Find scene by scene_id
+            for i, scene in enumerate(scenes):
+                if scene.get('scene_id') == scene_id:
+                    scenes[i]['background_image_path'] = relative_path
+                    scenes[i]['background_generated'] = True
+                    scenes[i]['background_is_generated'] = True  # AI-generated
+                    break
+
+            # Save story
+            with open(story_path, 'w', encoding='utf-8') as f:
+                json.dump(story_data, f, indent=4, ensure_ascii=False)
+
+            # Broadcast completion
+            manager.broadcast_sync(session_id, {
+                "type": "completed",
+                "session_id": session_id,
+                "scene_id": scene_id,
+                "step": "background_generation",
+                "background_image_path": relative_path
+            })
+
+            logger.info(f"Background generated for scene {scene_id}: {relative_path}")
+            return relative_path
+
+        except Exception as e:
+            logger.error(f"Error generating background for scene {scene_id}: {e}")
+            manager.broadcast_sync(session_id, {
+                "type": "error",
+                "session_id": session_id,
+                "scene_id": scene_id,
+                "step": "background_generation",
+                "message": str(e)
+            })
             raise
 
     async def regenerate_scene_narration(
-        self, session_id: str, scene_id: int, 
-        tts_method: Optional[str] = None, 
+        self, session_id: str, scene_id: int,
+        tts_method: Optional[str] = None,
         tts_workflow: Optional[str] = None,
         voice: Optional[str] = None
     ) -> str:
@@ -665,55 +1302,74 @@ class GenerationService:
             logger.error(f"Error generating thumbnail for session {session_id}: {e}")
             raise
 
-    def _get_next_image_version(self, images_dir: str, shot_index: int) -> int:
+    def _get_next_image_version(self, images_dir: str, shot_index: int, variant: str = None) -> int:
         """Find the next available version number for a shot image.
-        
+
         Scans for existing files like shot_001_001.png, shot_001_002.png, etc.
+        For FLFI2V variants, scans for shot_001_then_001.png or shot_001_now_001.png
         Returns the next version number (starting from 1).
         """
-        pattern = os.path.join(images_dir, f"shot_{shot_index:03d}_*.png")
-        existing_files = glob.glob(pattern)
-        
+        if variant:
+            pattern = os.path.join(images_dir, f"shot_{shot_index:03d}_{variant}_*.png")
+            version_re = re.compile(rf"shot_{shot_index:03d}_{variant}_(\d+)\.png$")
+        else:
+            pattern = os.path.join(images_dir, f"shot_{shot_index:03d}_*.png")
+            version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.png$")
+
+        existing_files = glob.glob(pattern) if os.path.exists(images_dir) else []
+
         max_version = 0
-        version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.png$")
-        
+
         for filepath in existing_files:
             filename = os.path.basename(filepath)
             match = version_re.match(filename)
             if match:
                 version = int(match.group(1))
                 max_version = max(max_version, version)
-        
+
         return max_version + 1
 
-    def _get_next_video_version(self, videos_dir: str, shot_index: int) -> int:
+    def _get_next_video_version(self, videos_dir: str, shot_index: int, variant: str = None) -> int:
         """Find the next available version number for a shot video.
-        
+
         Scans for existing files like shot_001_001.mp4, shot_001_002.mp4, etc.
+        For FLFI2V variants, scans for shot_001_meeting_001.mp4 or shot_001_departure_001.mp4
         Returns the next version number (starting from 1).
         """
-        pattern = os.path.join(videos_dir, f"shot_{shot_index:03d}_*.mp4")
-        existing_files = glob.glob(pattern)
-        
+        if variant:
+            pattern = os.path.join(videos_dir, f"shot_{shot_index:03d}_{variant}_*.mp4")
+            version_re = re.compile(rf"shot_{shot_index:03d}_{variant}_(\d+)\.mp4$")
+        else:
+            pattern = os.path.join(videos_dir, f"shot_{shot_index:03d}_*.mp4")
+            version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.mp4$")
+
+        existing_files = glob.glob(pattern) if os.path.exists(videos_dir) else []
+
         max_version = 0
-        version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.mp4$")
-        
+
         for filepath in existing_files:
             filename = os.path.basename(filepath)
             match = version_re.match(filename)
             if match:
                 version = int(match.group(1))
                 max_version = max(max_version, version)
-        
+
         return max_version + 1
 
-    def _generate_single_image(self, session_id: str, shot: Dict[str, Any], 
-                               mode: Optional[str] = None, 
+    def _generate_single_image(self, session_id: str, shot: Dict[str, Any],
+                               mode: Optional[str] = None,
                                workflow_name: Optional[str] = None,
                                seed: Optional[int] = None,
                                prompt_override: Optional[str] = None,
-                               session_title: Optional[str] = None) -> str:
-        """Generate image for a single shot (synchronous)"""
+                               session_title: Optional[str] = None,
+                               variant: str = None,
+                               reference_image_path: str = None) -> str:
+        """Generate image for a single shot (synchronous)
+
+        Args:
+            variant: Optional variant name for FLFI2V ("then", "now", etc.)
+            reference_image_path: Optional path to reference image for IP-Adapter
+        """
         from core.image_generator import generate_image
         import config
 
@@ -724,10 +1380,16 @@ class GenerationService:
         # Use override prompt if provided, otherwise fall back to saved shot prompt
         prompt = prompt_override.strip() if prompt_override and prompt_override.strip() else shot['image_prompt']
 
-        
-        # Generate versioned filename: shot_001_001.png, shot_001_002.png, etc.
-        next_version = self._get_next_image_version(images_dir, shot_index)
-        image_filename = f"shot_{shot_index:03d}_{next_version:03d}.png"
+        # Load session to get aspect_ratio
+        session_meta = self.session_manager.load_session(session_id)
+        aspect_ratio = session_meta.get('aspect_ratio', '16:9')
+
+        # Generate versioned filename with optional variant suffix
+        next_version = self._get_next_image_version(images_dir, shot_index, variant)
+        if variant:
+            image_filename = f"shot_{shot_index:03d}_{variant}_{next_version:03d}.png"
+        else:
+            image_filename = f"shot_{shot_index:03d}_{next_version:03d}.png"
         image_path = os.path.join(images_dir, image_filename)
 
         # 1st time generation for a shot uses seed 1, next generations use random
@@ -757,11 +1419,13 @@ class GenerationService:
         result_path = generate_image(
             prompt=prompt,
             output_path=image_path,
+            aspect_ratio=aspect_ratio,  # Use session's aspect ratio
             mode=mode, # If None, uses config.IMAGE_GENERATION_MODE
             seed=seed,
             workflow_name=workflow_name, # If None, uses config.IMAGE_WORKFLOW
             step_progress_callback=on_step_progress,
-            session_title=session_title
+            session_title=session_title,
+            reference_image_path=reference_image_path  # Pass reference image for IP-Adapter
         )
 
         if not result_path or not os.path.exists(result_path):
@@ -821,18 +1485,28 @@ class GenerationService:
             from core.prompt_compiler import load_workflow, compile_workflow
             from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
 
+            # Load session to get aspect_ratio
+            session_meta = self.session_manager.load_session(session_id)
+            aspect_ratio = session_meta.get('aspect_ratio', '16:9')
+
             # Determine workflow path and resolve alias if needed
             if not workflow_path:
                 workflow_path = getattr(config, 'VIDEO_WORKFLOW', 'wan22')
-                
+
             # If workflow_path is an alias in VIDEO_WORKFLOWS, resolve it to the actual file path
             video_workflows = getattr(config, 'VIDEO_WORKFLOWS', {})
+            workflow_name = workflow_path  # Store the original alias/name
             if workflow_path in video_workflows:
-                workflow_path = video_workflows[workflow_path].get('workflow_path', workflow_path)
+                workflow_config = video_workflows[workflow_path]
+                workflow_path = workflow_config.get('workflow_path', workflow_path)
+                workflow_description = workflow_config.get('description', 'No description')
+                logger.info(f"Using video workflow: {workflow_name} ({workflow_description})")
+            else:
+                logger.info(f"Using video workflow: {workflow_path}")
 
             # Load and compile workflow for this shot
             shot_length = getattr(config, 'DEFAULT_SHOT_LENGTH', 5)
-            template = load_workflow(workflow_path, video_length_seconds=shot_length)
+            template = load_workflow(workflow_path, video_length_seconds=shot_length, aspect_ratio=aspect_ratio)
             wf = compile_workflow(template, shot, video_length_seconds=shot_length)
 
             # Submit to ComfyUI
@@ -891,3 +1565,163 @@ class GenerationService:
                 return video_save_path
             else:
                 raise RuntimeError(f"Video source file not found: {source_path}")
+
+    def _generate_flfi2v_video(
+        self, session_id: str, shot: Dict[str, Any],
+        variant: str, video_mode: Optional[str],
+        workflow_name: Optional[str], session_title: Optional[str],
+        video_filename: str, seed: Optional[int] = None,
+        last_frame_image_path: Optional[str] = None
+    ) -> str:
+        """Generate FLFI2V video for a single shot (synchronous)
+
+        Args:
+            variant: "meeting" or "departure"
+            video_filename: The filename to save the video as
+            seed: Optional seed for deterministic generation (use 1 for first video)
+            last_frame_image_path: For departure videos, the next character's NOW image or scene image
+
+        Video logic:
+        - Meeting: THEN image (first frame) + NOW image (last frame)
+        - Departure: NOW image (first frame) + next character's NOW image or scene image (last frame)
+        """
+        import shutil
+        import copy
+        import config
+        from core.prompt_compiler import load_workflow
+        from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
+
+        videos_dir = self.session_manager.get_videos_dir(session_id)
+        os.makedirs(videos_dir, exist_ok=True)
+        video_save_path = os.path.join(videos_dir, video_filename)
+
+        shot_index = shot['index']
+
+        # Load session to get aspect_ratio
+        session_meta = self.session_manager.load_session(session_id)
+        aspect_ratio = session_meta.get('aspect_ratio', '16:9')
+
+        # Load FLFI2V workflow
+        workflow_config = config.VIDEO_WORKFLOWS.get(workflow_name, {})
+        workflow_path = workflow_config.get('workflow_path')
+
+        if not workflow_path:
+            raise RuntimeError(f"FLFI2V workflow {workflow_name} not found in VIDEO_WORKFLOWS")
+
+        workflow_description = workflow_config.get('description', 'No description')
+        logger.info(f"Using FLFI2V video workflow: {workflow_name} ({workflow_description})")
+
+        template = load_workflow(workflow_path, aspect_ratio=aspect_ratio)
+        wf = copy.deepcopy(template)
+
+        # Get node IDs from config
+        load_first_node_id = workflow_config.get('load_image_first_node_id', '128')
+        load_last_node_id = workflow_config.get('load_image_last_node_id', '151')
+        motion_prompt_node_id = workflow_config.get('motion_prompt_node_id', '93')
+        seed_node_id = workflow_config.get('seed_node_id', '142')
+
+        # Set seed if provided (for first video generation)
+        if seed is not None and seed_node_id in wf:
+            wf[seed_node_id]["inputs"]["value"] = seed
+            logger.info(f"FLFI2V video generation using seed: {seed}")
+
+        # Inject images based on variant
+        if variant == "meeting":
+            # Meeting: THEN image (first frame) + NOW image (last frame)
+            then_image = shot.get('then_image_path') or shot.get('image_path')
+            if then_image:
+                then_path = config.resolve_path(then_image).replace('\\', '/')
+                if load_first_node_id in wf:
+                    wf[load_first_node_id]["inputs"]["image"] = then_path
+                    logger.info(f"Meeting video first frame: {then_image}")
+
+            now_image = shot.get('now_image_path') or shot.get('image_path')
+            if now_image:
+                now_path = config.resolve_path(now_image).replace('\\', '/')
+                if load_last_node_id in wf:
+                    wf[load_last_node_id]["inputs"]["image"] = now_path
+                    logger.info(f"Meeting video last frame: {now_image}")
+
+        elif variant == "departure":
+            # Departure: NOW image (first frame) + next character's NOW image or scene image (last frame)
+            now_image = shot.get('now_image_path') or shot.get('image_path')
+            if now_image:
+                now_path = config.resolve_path(now_image).replace('\\', '/')
+                if load_first_node_id in wf:
+                    wf[load_first_node_id]["inputs"]["image"] = now_path
+                    logger.info(f"Departure video first frame: {now_image}")
+
+            if last_frame_image_path:
+                # Use next character's NOW image or scene image
+                last_frame_path = config.resolve_path(last_frame_image_path).replace('\\', '/')
+                if load_last_node_id in wf:
+                    wf[load_last_node_id]["inputs"]["image"] = last_frame_path
+                    logger.info(f"Departure video last frame: {last_frame_image_path}")
+            else:
+                # Fallback to NOW image if no last frame provided
+                if shot.get('now_image_path'):
+                    now_path = config.resolve_path(shot['now_image_path']).replace('\\', '/')
+                    if load_last_node_id in wf:
+                        wf[load_last_node_id]["inputs"]["image"] = now_path
+                        logger.warning(f"Departure video last frame: Using current character's NOW image (fallback)")
+
+        # Inject motion prompt based on variant
+        motion_prompt = shot.get(
+            'departure_video_prompt' if variant == 'departure' else 'meeting_video_prompt',
+            "Animate this scene"
+        )
+
+        if motion_prompt_node_id in wf:
+            wf[motion_prompt_node_id]["inputs"]["text"] = motion_prompt
+
+        # Submit to ComfyUI
+        result = submit(wf)
+        prompt_id = result.get('prompt_id')
+        if not prompt_id:
+            raise RuntimeError(f"No prompt_id returned for FLFI2V shot {shot_index}")
+
+        logger.info(f"FLFI2V video submitted for shot {shot_index} ({variant}): prompt_id={prompt_id}")
+
+        # Progress callback
+        def on_step_progress(current, total):
+            if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
+                raise InterruptedError(f"Shot {shot_index} was cancelled")
+            if session_id in self.cancelled_sessions:
+                raise InterruptedError(f"Session {session_id} was cancelled")
+
+            progress = int((current / total) * 100) if total > 0 else 0
+            manager.broadcast_sync(session_id, {
+                "type": "progress",
+                "session_id": session_id,
+                "shot_index": shot_index,
+                "shot_id": shot.get('id'),
+                "progress": progress
+            })
+
+        # Wait for completion
+        wait_result = wait_for_prompt_completion_with_progress(
+            prompt_id,
+            progress_callback=on_step_progress,
+            timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
+        )
+
+        if not wait_result.get('success'):
+            raise RuntimeError(f"FLFI2V video render failed for shot {shot_index}: {wait_result.get('error')}")
+
+        # Get output files
+        outputs = wait_result.get('outputs', [])
+        video_outputs = [o for o in outputs if o['type'] == 'video']
+
+        if not video_outputs:
+            raise RuntimeError(f"No video output for FLFI2V shot {shot_index}")
+
+        # Copy video to session folder
+        video_info = video_outputs[0]
+        source_path = get_output_file_path(video_info)
+
+        if os.path.exists(source_path):
+            shutil.copy2(source_path, video_save_path)
+            logger.info(f"FLFI2V video copied: {video_filename} ({os.path.getsize(video_save_path):,} bytes)")
+            return video_save_path
+        else:
+            raise RuntimeError(f"FLFI2V video source file not found: {source_path}")

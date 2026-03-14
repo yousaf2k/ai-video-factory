@@ -7,7 +7,7 @@ import config
 # Set up logging
 logger = logging.getLogger(__name__)
 
-def load_workflow(path, video_length_seconds=None):
+def load_workflow(path, video_length_seconds=None, aspect_ratio=None):
     """Load workflow and optionally set video length and dimensions"""
     if not os.path.isabs(path):
         # Resolve relative to the project root (one level up from core/)
@@ -18,7 +18,9 @@ def load_workflow(path, video_length_seconds=None):
         workflow = json.load(f)
 
     # Get dimensions from config (use video dimensions for video workflow)
-    width, height = config.calculate_video_dimensions()
+    if aspect_ratio is None:
+        aspect_ratio = config.VIDEO_ASPECT_RATIO
+    width, height = config.calculate_video_dimensions(aspect_ratio=aspect_ratio)
 
     # Get workflow settings for node IDs
     work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')

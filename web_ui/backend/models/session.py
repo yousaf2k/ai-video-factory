@@ -1,7 +1,7 @@
 """
 Pydantic models for session data
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 
@@ -99,6 +99,14 @@ class CreateSessionRequest(BaseModel):
     shots_agent: str = Field(default="default", description="Shots prompt agent")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
     prompts_file: Optional[str] = Field(default=None, description="Path to a custom prompts file")
+    aspect_ratio: str = Field(default="16:9", description="Video aspect ratio (16:9 or 9:16)")
+
+    @field_validator('aspect_ratio')
+    @classmethod
+    def validate_aspect_ratio(cls, v):
+        if v not in ["16:9", "9:16"]:
+            raise ValueError("aspect_ratio must be '16:9' or '9:16'")
+        return v
 
 
 class UpdateSessionRequest(BaseModel):
@@ -107,6 +115,14 @@ class UpdateSessionRequest(BaseModel):
     completed: Optional[bool] = None
     story_agent: Optional[str] = None
     shots_agent: Optional[str] = None
+    aspect_ratio: Optional[str] = Field(default=None, description="Video aspect ratio (16:9 or 9:16)")
+
+    @field_validator('aspect_ratio')
+    @classmethod
+    def validate_aspect_ratio(cls, v):
+        if v is not None and v not in ["16:9", "9:16"]:
+            raise ValueError("aspect_ratio must be '16:9' or '9:16'")
+        return v
 
 
 class DuplicateSessionRequest(BaseModel):

@@ -21,6 +21,25 @@ class Shot(BaseModel):
     video_path: Optional[str] = Field(default=None, description="Path to rendered video")
     video_paths: List[str] = Field(default_factory=list, description="All video paths (for variations)")
     scene_id: Optional[int] = Field(default=None, description="ID of the scene this shot belongs to")
+    character_name: Optional[str] = Field(default=None, description="Human-readable character name")
+    scene_name: Optional[str] = Field(default=None, description="Human-readable scene name")
+    order_in_scene: Optional[int] = Field(default=0, description="Position within scene (0-based)")
+
+    # FLFI2V mode fields
+    is_flfi2v: bool = Field(default=False, description="Whether this shot uses FLFI2V (first/last frame image to video)")
+    character_id: Optional[str] = Field(default=None, description="Character ID for FLFI2V shots")
+    then_image_prompt: Optional[str] = Field(default=None, description="Prompt for THEN image (original appearance)")
+    then_image_path: Optional[str] = Field(default=None, description="Path to THEN image")
+    then_image_generated: bool = Field(default=False, description="Whether THEN image has been generated")
+    now_image_prompt: Optional[str] = Field(default=None, description="Prompt for NOW image (current appearance)")
+    now_image_path: Optional[str] = Field(default=None, description="Path to NOW image")
+    now_image_generated: bool = Field(default=False, description="Whether NOW image has been generated")
+    meeting_video_prompt: Optional[str] = Field(default=None, description="Prompt for meeting video")
+    meeting_video_path: Optional[str] = Field(default=None, description="Path to meeting video")
+    meeting_video_rendered: bool = Field(default=False, description="Whether meeting video has been rendered")
+    departure_video_prompt: Optional[str] = Field(default=None, description="Prompt for departure/transitional video")
+    departure_video_path: Optional[str] = Field(default=None, description="Path to departure video")
+    departure_video_rendered: bool = Field(default=False, description="Whether departure video has been rendered")
 
     class Config:
         json_schema_extra = {
@@ -52,6 +71,11 @@ class UpdateShotRequest(BaseModel):
     camera: Optional[str] = None
     narration: Optional[str] = None
     scene_id: Optional[int] = None
+    # FLFI2V fields
+    then_image_prompt: Optional[str] = None
+    now_image_prompt: Optional[str] = None
+    meeting_video_prompt: Optional[str] = None
+    departure_video_prompt: Optional[str] = None
 
 
 class RegenerateImageRequest(BaseModel):
@@ -61,6 +85,7 @@ class RegenerateImageRequest(BaseModel):
     image_workflow: Optional[str] = Field(default=None, description="Override image workflow for ComfyUI (e.g. flux2, sdxl)")
     seed: Optional[int] = Field(default=None, description="Optional specific seed for regeneration")
     prompt_override: Optional[str] = Field(default=None, description="Override the image prompt for this generation only")
+    image_variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then', 'now', or 'both'")
 
 
 
@@ -69,6 +94,7 @@ class RegenerateVideoRequest(BaseModel):
     force: bool = Field(default=False, description="Force regeneration even if video exists")
     video_mode: Optional[str] = Field(default=None, description="Override video generation mode (geminiweb/comfyui)")
     video_workflow: Optional[str] = Field(default=None, description="Override video workflow")
+    video_variant: Optional[str] = Field(default=None, description="Video variant for FLFI2V: 'meeting', 'departure', or 'both'")
 
 
 class BatchRegenerateRequest(BaseModel):
@@ -99,4 +125,9 @@ class SelectImageRequest(BaseModel):
 class SelectVideoRequest(BaseModel):
     """Request to select a specific video as the active one for a shot"""
     video_path: str = Field(..., description="Path of the video to set as active")
+
+
+class RemoveWatermarkRequest(BaseModel):
+    """Request to remove watermark from a shot image"""
+    variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then' or 'now'")
 

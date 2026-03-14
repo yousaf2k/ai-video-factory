@@ -45,8 +45,8 @@ export function useRegenerateImage(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force, imageMode, imageWorkflow, seed, promptOverride }: { shotIndex: number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number; promptOverride?: string }) =>
-      api.regenerateShotImage(sessionId, shotIndex, force, imageMode, imageWorkflow, seed, promptOverride),
+    mutationFn: ({ shotIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant }: { shotIndex: number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number; promptOverride?: string; imageVariant?: string }) =>
+      api.regenerateShotImage(sessionId, shotIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -59,8 +59,8 @@ export function useRegenerateVideo(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force, videoMode, videoWorkflow }: { shotIndex: number; force?: boolean; videoMode?: string; videoWorkflow?: string }) =>
-      api.regenerateShotVideo(sessionId, shotIndex, force, videoMode, videoWorkflow),
+    mutationFn: ({ shotIndex, force, videoMode, videoWorkflow, videoVariant }: { shotIndex: number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string }) =>
+      api.regenerateShotVideo(sessionId, shotIndex, force, videoMode, videoWorkflow, videoVariant),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -122,7 +122,8 @@ export function useRemoveWatermark(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (shotIndex: number) => api.removeWatermark(sessionId, shotIndex),
+    mutationFn: ({ shotIndex, variant }: { shotIndex: number; variant?: string }) =>
+      api.removeWatermark(sessionId, shotIndex, variant),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -135,8 +136,8 @@ export function useUploadShotImage(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, file }: { shotIndex: number; file: File }) =>
-      api.uploadShotImage(sessionId, shotIndex, file),
+    mutationFn: ({ shotIndex, file, variant }: { shotIndex: number; file: File; variant?: string }) =>
+      api.uploadShotImage(sessionId, shotIndex, file, variant),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
@@ -149,8 +150,8 @@ export function useUploadShotVideo(sessionId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, file }: { shotIndex: number; file: File }) =>
-      api.uploadShotVideo(sessionId, shotIndex, file),
+    mutationFn: ({ shotIndex, file, variant }: { shotIndex: number; file: File; variant?: string }) =>
+      api.uploadShotVideo(sessionId, shotIndex, file, variant),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] });

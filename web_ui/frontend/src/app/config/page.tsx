@@ -23,6 +23,7 @@ export default function ConfigPage() {
   const [formData, setFormData] = useState({
     llm_provider: "",
     image_generation_mode: "",
+    image_workflow: "",
     video_generation_mode: "",
     video_workflow: "",
     comfy_url: "",
@@ -37,6 +38,7 @@ export default function ConfigPage() {
       setFormData({
         llm_provider: config.llm_provider || "gemini",
         image_generation_mode: config.image_generation_mode || "comfyui",
+        image_workflow: config.image_workflow || "flux",
         video_generation_mode: config.video_generation_mode || "comfyui",
         video_workflow: config.video_workflow || "wan22",
         comfy_url: config.comfy_url || "http://127.0.0.1:8188",
@@ -146,6 +148,29 @@ export default function ConfigPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">
+                Image Workflow (ComfyUI)
+              </label>
+              <Select
+                value={formData.image_workflow}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, image_workflow: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Image Workflow" />
+                </SelectTrigger>
+                <SelectContent>
+                  {config?.available_image_workflows?.map((wf: string) => (
+                    <SelectItem key={wf} value={wf}>
+                      {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
                 Video Mode
               </label>
               <Select
@@ -180,8 +205,11 @@ export default function ConfigPage() {
                   <SelectValue placeholder="Select Video Workflow" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="wan22">Wan 2.2</SelectItem>
-                  <SelectItem value="default">Default</SelectItem>
+                  {config?.available_video_workflows?.map((wf: string) => (
+                    <SelectItem key={wf} value={wf}>
+                      {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

@@ -25,6 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useConfirmDialog, ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { toast } from "sonner";
 
 export default function SessionEditPage() {
   const params = useParams();
@@ -36,6 +38,7 @@ export default function SessionEditPage() {
   const updateStoryMutation = useUpdateStory(sessionId);
   const regenerateStoryMutation = useRegenerateStory(sessionId);
   const replanShotsMutation = useReplanShots(sessionId);
+  const confirmDialog = useConfirmDialog();
 
   // Local state for story editing
   const [story, setStory] = useState<Story | null>(null);
@@ -66,44 +69,139 @@ export default function SessionEditPage() {
       .catch(console.error);
   }, []);
 
-  const handleUpdateScene = (index: number, updatedScene: Scene) => {
+  const handleUpdateScene = async (index: number, updatedScene: Scene) => {
     if (!story) return;
+
+    const confirmed = await confirmDialog.showDialog({
+      title: "Save Scene Changes",
+      description: `Do you want to save changes to "${updatedScene.location || 'this scene'}"?`,
+      type: "update",
+    });
+
+    if (!confirmed) return;
 
     const newScenes = [...story.scenes];
     newScenes[index] = updatedScene;
-
-    setStory({
+    const updatedStory = {
       ...story,
       scenes: newScenes,
-    });
-    setHasChanges(true);
+    };
+
+    // Update local state immediately for responsive UI
+    setStory(updatedStory);
+    setHasChanges(false); // Clear hasChanges since we're saving immediately
+
+    // Automatically save to backend
+    try {
+      await updateStoryMutation.mutateAsync(updatedStory);
+      toast.success("Scene updated successfully", {
+        description: `"${updatedScene.location || 'Scene ' + (index + 1)}" has been saved.`,
+        
+      });
+    } catch (error) {
+      console.error("Failed to update scene:", error);
+      await confirmDialog.showDialog({
+        title: "Error",
+        description: "Failed to update scene. Please try again.",
+        type: "warning",
+      });
+      // Revert local state on error
+      setStory(story);
+      setHasChanges(true);
+    }
   };
 
-  const handleDeleteScene = (index: number) => {
+  const handleDeleteScene = async (index: number) => {
     if (!story) return;
-    if (!confirm("Are you sure you want to delete this scene?")) return;
+
+    const sceneToDelete = story.scenes[index];
+    const confirmed = await confirmDialog.showDialog({
+      title: "Delete Scene",
+      description: `Are you sure you want to delete "${sceneToDelete?.location || 'this scene'}"? This action cannot be undone.`,
+      type: "delete",
+      confirmText: "Delete Scene",
+    });
+
+    if (!confirmed) return;
 
     const newScenes = story.scenes.filter((_, i) => i !== index);
-
-    setStory({
+    const updatedStory = {
       ...story,
       scenes: newScenes,
-    });
-    setHasChanges(true);
+    };
+
+    // Update local state immediately for responsive UI
+    setStory(updatedStory);
+    setHasChanges(false); // Clear hasChanges since we're saving immediately
+
+    // Automatically save to backend
+    try {
+      await updateStoryMutation.mutateAsync(updatedStory);
+      toast.success("Scene deleted successfully", {
+        description: `"${sceneToDelete?.location || 'Scene ' + (index + 1)}" has been removed.`,
+      });
+    } catch (error) {
+      console.error("Failed to delete scene:", error);
+      await confirmDialog.showDialog({
+        title: "Error",
+        description: "Failed to delete scene. Please try again.",
+        type: "warning",
+      });
+      // Revert local state on error
+      setStory(story);
+      setHasChanges(true);
+    }
   };
 
-  const handleReorderScenes = (newScenes: Scene[]) => {
+  const handleReorderScenes = async (newScenes: Scene[]) => {
     if (!story) return;
 
-    setStory({
+    const confirmed = await confirmDialog.showDialog({
+      title: "Reorder Scenes",
+      description: "Do you want to save the new scene order?",
+      type: "reorder",
+    });
+
+    if (!confirmed) return;
+
+    const updatedStory = {
       ...story,
       scenes: newScenes,
-    });
-    setHasChanges(true);
+    };
+
+    // Update local state immediately for responsive UI
+    setStory(updatedStory);
+    setHasChanges(false); // Clear hasChanges since we're saving immediately
+
+    // Automatically save to backend
+    try {
+      await updateStoryMutation.mutateAsync(updatedStory);
+      toast.success("Scenes reordered successfully", {
+        description: "The scene order has been updated.",
+      });
+    } catch (error) {
+      console.error("Failed to reorder scenes:", error);
+      await confirmDialog.showDialog({
+        title: "Error",
+        description: "Failed to reorder scenes. Please try again.",
+        type: "warning",
+      });
+      // Revert local state on error
+      setStory(story);
+      setHasChanges(true);
+    }
   };
 
-  const handleAddScene = () => {
+  const handleAddScene = async () => {
     if (!story) return;
+
+    const confirmed = await confirmDialog.showDialog({
+      title: "Add New Scene",
+      description: "Do you want to add a new scene to the story?",
+      type: "add",
+    });
+
+    if (!confirmed) return;
 
     const newScene: Scene = {
       location: "New Location",
@@ -114,11 +212,32 @@ export default function SessionEditPage() {
       scene_duration: 30,
     };
 
-    setStory({
+    const updatedStory = {
       ...story,
       scenes: [...story.scenes, newScene],
-    });
-    setHasChanges(true);
+    };
+
+    // Update local state immediately for responsive UI
+    setStory(updatedStory);
+    setHasChanges(false); // Clear hasChanges since we're saving immediately
+
+    // Automatically save to backend
+    try {
+      await updateStoryMutation.mutateAsync(updatedStory);
+      toast.success("Scene added successfully", {
+        description: "New scene has been added to the story.",
+      });
+    } catch (error) {
+      console.error("Failed to add scene:", error);
+      await confirmDialog.showDialog({
+        title: "Error",
+        description: "Failed to add scene. Please try again.",
+        type: "warning",
+      });
+      // Revert local state on error
+      setStory(story);
+      setHasChanges(true);
+    }
   };
 
   const handleSaveStory = async () => {
@@ -217,24 +336,54 @@ export default function SessionEditPage() {
               Edit story structure and shot prompts
             </p>
           </div>
-          {activeTab === "story" && hasChanges && (
-            <div className="flex items-center gap-3">
-              <Link
-                href={`/sessions/${sessionId}/settings`}
-                className="px-4 py-2 border rounded-md hover:bg-muted transition-colors flex items-center gap-2"
-              >
-                Settings
-              </Link>
-              <Button
-                onClick={handleSaveStory}
-                disabled={!hasChanges || updateStoryMutation.isPending}
-                className="flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                {updateStoryMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {/* Test Toast Button - Remove after testing */}
+            <Button
+              onClick={() => {
+                toast.success("Success Toast Test", {
+                  description: "This is a success message in green.",
+                });
+                setTimeout(() => {
+                  toast.error("Error Toast Test", {
+                    description: "This is an error message in red.",
+                  });
+                }, 1500);
+                setTimeout(() => {
+                  toast.warning("Warning Toast Test", {
+                    description: "This is a warning message in yellow.",
+                  });
+                }, 3000);
+                setTimeout(() => {
+                  toast.info("Info Toast Test", {
+                    description: "This is an info message in blue.",
+                  });
+                }, 4500);
+              }}
+              variant="outline"
+              size="sm"
+              className="text-xs"
+            >
+              Test Toasts
+            </Button>
+            {activeTab === "story" && hasChanges && (
+              <>
+                <Link
+                  href={`/sessions/${sessionId}/settings`}
+                  className="px-4 py-2 border rounded-md hover:bg-muted transition-colors flex items-center gap-2"
+                >
+                  Settings
+                </Link>
+                <Button
+                  onClick={handleSaveStory}
+                  disabled={!hasChanges || updateStoryMutation.isPending}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {updateStoryMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -503,6 +652,9 @@ export default function SessionEditPage() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog {...confirmDialog.dialogProps} />
     </div>
   );
 }

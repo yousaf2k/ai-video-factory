@@ -31,6 +31,8 @@ class UpdateConfigRequest(BaseModel):
     gemini_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
     elevenlabs_api_key: Optional[str] = None
+    video_workflow: Optional[str] = None
+    image_workflow: Optional[str] = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -92,6 +94,7 @@ async def get_config():
         safe_config = {
             "llm_provider": config.LLM_PROVIDER,
             "image_generation_mode": config.IMAGE_GENERATION_MODE,
+            "image_workflow": getattr(config, 'IMAGE_WORKFLOW', 'flux'),
             "video_generation_mode": getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui'),
             "video_workflow": getattr(config, 'VIDEO_WORKFLOW', 'wan22'),
             "default_story_agent": getattr(config, 'DEFAULT_STORY_AGENT', 'default'),
@@ -100,6 +103,7 @@ async def get_config():
             "target_video_length": getattr(config, 'TARGET_VIDEO_LENGTH', None),
             "default_max_shots": getattr(config, 'DEFAULT_MAX_SHOTS', 0),
             "available_video_workflows": list(getattr(config, 'VIDEO_WORKFLOWS', {}).keys()),
+            "available_image_workflows": list(getattr(config, 'IMAGE_WORKFLOWS', {}).keys()),
         }
 
         return safe_config
@@ -131,6 +135,8 @@ async def update_config(request: UpdateConfigRequest):
             updates["OPENAI_API_KEY"] = request.openai_api_key
         if hasattr(request, 'video_workflow') and request.video_workflow is not None:
             updates["VIDEO_WORKFLOW"] = request.video_workflow
+        if hasattr(request, 'image_workflow') and request.image_workflow is not None:
+            updates["IMAGE_WORKFLOW"] = request.image_workflow
         if request.elevenlabs_api_key is not None:
             updates["ELEVENLABS_API_KEY"] = request.elevenlabs_api_key
 

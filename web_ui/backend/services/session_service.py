@@ -90,8 +90,70 @@ class SessionService:
             session_id=request.session_id,
             story_agent=request.story_agent,
             shots_agent=request.shots_agent,
-            total_duration=request.total_duration
+            total_duration=request.total_duration,
+            aspect_ratio=request.aspect_ratio
         )
+
+        # Detect if this is a ThenVsNow project
+        is_then_vs_now = request.story_agent == "then_vs_now"
+
+        if is_then_vs_now:
+            # Use special story generation flow for ThenVsNow
+            from core.story_engine import build_story_then_vs_now
+            import logging
+            logger = logging.getLogger(__name__)
+
+            try:
+                logger.info(f"Creating ThenVsNow session for movie: {request.idea}")
+                print(f"[INFO] Creating ThenVsNow session for movie: {request.idea}")
+
+                # Generate story with shots directly
+                story_json = build_story_then_vs_now(
+                    movie_name=request.idea,
+                    target_length=request.total_duration,
+                    aspect_ratio=request.aspect_ratio
+                )
+                story = json.loads(story_json)
+
+                # Extract shots from story (already generated)
+                shots = story.pop('shots', [])
+
+                # Save story.json
+                session_dir = self.session_manager.get_session_dir(session_id)
+                story_path = os.path.join(session_dir, "story.json")
+                with open(story_path, 'w', encoding='utf-8') as f:
+                    json.dump(story, f, indent=2, ensure_ascii=False)
+
+                # Save shots.json directly (bypass shot planner)
+                shots_path = os.path.join(session_dir, "shots.json")
+                with open(shots_path, 'w', encoding='utf-8') as f:
+                    json.dump(shots, f, indent=2, ensure_ascii=False)
+
+                # Update metadata with story info
+                meta['idea'] = story.get('title', request.idea)
+                if 'total_duration' in story:
+                    meta['total_duration'] = story['total_duration']
+
+                # Mark steps as complete
+                meta['steps']['story'] = True
+                meta['steps']['scene_graph'] = True
+                meta['steps']['shots'] = True
+
+                # Update stats
+                meta['stats']['total_shots'] = len(shots)
+
+                # Save updated metadata
+                self.session_manager._save_meta(session_id, meta)
+
+                logger.info(f"ThenVsNow session created with {len(shots)} shots")
+                print(f"[INFO] ThenVsNow session created with {len(shots)} shots")
+
+            except Exception as e:
+                logger.error(f"Failed to create ThenVsNow story: {e}")
+                print(f"[ERROR] Failed to create ThenVsNow story: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continue with empty session
 
         # Handle prompts file if provided
         if request.prompts_file:
@@ -172,6 +234,9 @@ class SessionService:
 
         if request.shots_agent is not None:
             meta['shots_agent'] = request.shots_agent
+
+        if request.aspect_ratio is not None:
+            meta['aspect_ratio'] = request.aspect_ratio
 
         if request.completed is not None:
             meta['completed'] = request.completed

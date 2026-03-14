@@ -28,6 +28,7 @@ import {
   Music,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useProgress } from "@/hooks/useProgress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
+import { restrictToParentElement } from "@dnd-kit/modifiers";
 
 interface ShotGridProps {
   shots: Shot[];
@@ -83,6 +100,11 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
     motion_prompt: "",
     camera: "static",
     narration: "",
+    character_id: undefined,
+    then_image_prompt: undefined,
+    now_image_prompt: undefined,
+    meeting_video_prompt: undefined,
+    departure_video_prompt: undefined,
   });
 
   const { shotProgress, sceneProgress } = useProgress(
@@ -116,6 +138,69 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
 
   const { data: agents } = useAgents();
   const { data: globalConfig } = useConfig();
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // 8px movement required to start dragging
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) {
+      return;
+    }
+
+    // Find the shots in the filtered list
+    const oldIndex = filteredShots.findIndex((s) => s.index === active.id);
+    const newIndex = filteredShots.findIndex((s) => s.index === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    // Reorder the filtered shots
+    const reorderedFilteredShots = arrayMove(filteredShots, oldIndex, newIndex);
+
+    // Now we need to update the full shots array
+    // Create a map of the new indices for reordered shots
+    const indexUpdates: Record<number, number> = {};
+    reorderedFilteredShots.forEach((shot, idx) => {
+      indexUpdates[shot.index] = idx + 1;
+    });
+
+    // Create updated shots array with new indices
+    const updatedShots = shots.map((shot) => {
+      if (indexUpdates[shot.index] !== undefined) {
+        return { ...shot, index: indexUpdates[shot.index] };
+      }
+      return shot;
+    });
+
+    // Sort by new index to ensure proper order
+    updatedShots.sort((a, b) => a.index - b.index);
+
+    try {
+      await updateShotsMutation.mutateAsync(updatedShots);
+      toast.success("Shots reordered successfully", {
+        description: `Shot ${active.id} has been moved to position ${newIndex + 1}.`,
+        className: toastStyles.success,
+      });
+    } catch (error) {
+      console.error("Failed to reorder shots:", error);
+      toast.error("Failed to reorder shots", {
+        description: "Please try again.",
+        className: toastStyles.error,
+      });
+    }
+  };
 
   // Update default workflow when config loads
   useEffect(() => {
@@ -428,14 +513,24 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
 
     try {
       await updateShotsMutation.mutateAsync(reindexedShots);
+      toast.success("Shot deleted successfully", {
+        description: `Shot ${indexToRemove} has been removed.`,
+        className: toastStyles.success,
+      });
     } catch (error) {
       console.error("Failed to delete shot:", error);
-      alert("Failed to delete shot. Please try again.");
+      toast.error("Failed to delete shot", {
+        description: "Please try again.",
+        className: toastStyles.error,
+      });
     }
   };
 
   const handleInsertShot = async () => {
     if (!insertModalConfig) return;
+
+    // Check if this is an FLFI2V session
+    const isFlfi2vSession = shots.length > 0 && shots.some(s => s.is_flfi2v);
 
     // Build a clean default shot
     const defaultShot: Shot = {
@@ -450,6 +545,23 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
       image_path: null,
       image_paths: [],
       video_path: null,
+      // FLFI2V fields - include if this is an FLFI2V session
+      ...(isFlfi2vSession ? {
+        is_flfi2v: true,
+        character_id: newShotData.character_id || undefined,
+        then_image_prompt: newShotData.then_image_prompt || undefined,
+        now_image_prompt: newShotData.now_image_prompt || undefined,
+        then_image_generated: false,
+        now_image_generated: false,
+        then_image_path: undefined,
+        now_image_path: undefined,
+        meeting_video_prompt: newShotData.meeting_video_prompt || undefined,
+        departure_video_prompt: newShotData.departure_video_prompt || undefined,
+        meeting_video_rendered: false,
+        departure_video_rendered: false,
+        meeting_video_path: undefined,
+        departure_video_path: undefined,
+      } : {}),
     };
 
     // Slice the array and insert exactly at position
@@ -474,10 +586,22 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
         motion_prompt: "",
         camera: "static",
         narration: "",
+        character_id: undefined,
+        then_image_prompt: undefined,
+        now_image_prompt: undefined,
+        meeting_video_prompt: undefined,
+        departure_video_prompt: undefined,
+      });
+      toast.success("Shot added successfully", {
+        description: `New shot has been inserted at position ${pos + 1}.`,
+        className: toastStyles.success,
       });
     } catch (error) {
       console.error("Failed to insert shot:", error);
-      alert("Failed to insert shot. Please try again.");
+      toast.error("Failed to insert shot", {
+        description: "Please try again.",
+        className: toastStyles.error,
+      });
     }
   };
 
@@ -715,151 +839,163 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
       )}
 
       {/* Grid */}
-      <div className="space-y-8">
-        {Object.entries(groupedShots).map(([sceneIdxStr, groupShots]) => {
-          const isUnassigned = sceneIdxStr === "unassigned" || sceneIdxStr === "all" || sceneIdxStr === "null";
-          const sIdx = isUnassigned ? null : parseInt(sceneIdxStr);
-          const scene = sIdx !== null && scenes ? scenes[sIdx] : null;
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+        modifiers={[restrictToParentElement]}
+      >
+        <div className="space-y-8">
+          {Object.entries(groupedShots).map(([sceneIdxStr, groupShots]) => {
+            const isUnassigned = sceneIdxStr === "unassigned" || sceneIdxStr === "all" || sceneIdxStr === "null";
+            const sIdx = isUnassigned ? null : parseInt(sceneIdxStr);
+            const scene = sIdx !== null && scenes ? scenes[sIdx] : null;
 
-          return (
-            <div key={sceneIdxStr} className="space-y-4">
-              {isGroupingEnabled && (
-                <div className="flex flex-col gap-3 pb-4 border-b">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
-                        {sIdx !== null ? `Scene ${sIdx + 1}` : "Unmatched Shots"}
-                      </span>
-                      {scene && (
-                        <div className="flex flex-col gap-1">
-                          <h3 className="text-xl font-bold tracking-tight">
-                            {scene.location}
-                          </h3>
-                          {sIdx !== null && sceneProgress[sIdx] !== undefined && (
-                            <div className="flex items-center gap-2 mt-1">
-                              <div className="w-24 h-1 bg-pink-100 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-pink-500 transition-all"
-                                  style={{ width: `${sceneProgress[sIdx]}%` }}
-                                />
+            return (
+              <div key={sceneIdxStr} className="space-y-4">
+                {isGroupingEnabled && (
+                  <div className="flex flex-col gap-3 pb-4 border-b">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
+                          {sIdx !== null ? `Scene ${sIdx + 1}` : "Unmatched Shots"}
+                        </span>
+                        {scene && (
+                          <div className="flex flex-col gap-1">
+                            <h3 className="text-xl font-bold tracking-tight">
+                              {scene.location}
+                            </h3>
+                            {sIdx !== null && sceneProgress[sIdx] !== undefined && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <div className="w-24 h-1 bg-pink-100 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-pink-500 transition-all"
+                                    style={{ width: `${sceneProgress[sIdx]}%` }}
+                                  />
+                                </div>
+                                <span className="text-[10px] text-pink-600 font-medium">
+                                  Narration: {Math.round(sceneProgress[sIdx])}%
+                                </span>
                               </div>
-                              <span className="text-[10px] text-pink-600 font-medium">
-                                Narration: {Math.round(sceneProgress[sIdx])}%
-                              </span>
-                            </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {scene && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => sIdx !== null && toggleSceneExpansion(sIdx)}
+                          className="h-8 gap-1.5 text-muted-foreground hover:text-primary"
+                        >
+                          {sIdx !== null && expandedScenes[sIdx] ? (
+                            <>
+                              <ChevronDown className="w-4 h-4" />
+                              <span className="text-xs">Less Detail</span>
+                            </>
+                          ) : (
+                            <>
+                              <ChevronRight className="w-4 h-4" />
+                              <span className="text-xs">More Detail</span>
+                            </>
                           )}
-                        </div>
+                        </Button>
                       )}
                     </div>
+
                     {scene && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => sIdx !== null && toggleSceneExpansion(sIdx)}
-                        className="h-8 gap-1.5 text-muted-foreground hover:text-primary"
-                      >
-                        {sIdx !== null && expandedScenes[sIdx] ? (
-                          <>
-                            <ChevronDown className="w-4 h-4" />
-                            <span className="text-xs">Less Detail</span>
-                          </>
-                        ) : (
-                          <>
-                            <ChevronRight className="w-4 h-4" />
-                            <span className="text-xs">More Detail</span>
-                          </>
+                      <div className="space-y-3">
+                        <p className={cn(
+                          "text-sm text-muted-foreground italic leading-relaxed",
+                          !expandedScenes[sIdx || 0] && "line-clamp-1"
+                        )}>
+                          {scene.action}
+                        </p>
+
+                        {sIdx !== null && expandedScenes[sIdx] && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-muted/20 rounded-xl border border-border/50 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
+                                <Info className="w-3 h-3" /> Characters
+                              </span>
+                              <p className="text-sm font-medium">{scene.characters || "None specified"}</p>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
+                                <Info className="w-3 h-3" /> Emotion
+                              </span>
+                              <p className="text-sm font-medium capitalize">{scene.emotion || "Neutral"}</p>
+                            </div>
+                            <div className="col-span-full space-y-1">
+                              <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
+                                <Info className="w-3 h-3" /> Narration
+                              </span>
+                              <p className="text-sm leading-relaxed bg-background/50 p-2.5 rounded-lg border italic">
+                                "{scene.narration || "No narration for this scene."}"
+                              </p>
+                            </div>
+                            {scene.scene_duration && (
+                              <div className="col-span-full pt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>Estimated Duration: <strong>{scene.scene_duration}s</strong></span>
+                              </div>
+                            )}
+                          </div>
                         )}
-                      </Button>
+                      </div>
                     )}
                   </div>
+                )}
 
-                  {scene && (
-                    <div className="space-y-3">
-                      <p className={cn(
-                        "text-sm text-muted-foreground italic leading-relaxed",
-                        !expandedScenes[sIdx || 0] && "line-clamp-1"
-                      )}>
-                        {scene.action}
-                      </p>
-
-                      {sIdx !== null && expandedScenes[sIdx] && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-muted/20 rounded-xl border border-border/50 animate-in fade-in slide-in-from-top-2 duration-300">
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
-                              <Info className="w-3 h-3" /> Characters
-                            </span>
-                            <p className="text-sm font-medium">{scene.characters || "None specified"}</p>
-                          </div>
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
-                              <Info className="w-3 h-3" /> Emotion
-                            </span>
-                            <p className="text-sm font-medium capitalize">{scene.emotion || "Neutral"}</p>
-                          </div>
-                          <div className="col-span-full space-y-1">
-                            <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest flex items-center gap-1.5">
-                              <Info className="w-3 h-3" /> Narration
-                            </span>
-                            <p className="text-sm leading-relaxed bg-background/50 p-2.5 rounded-lg border italic">
-                              "{scene.narration || "No narration for this scene."}"
-                            </p>
-                          </div>
-                          {scene.scene_duration && (
-                            <div className="col-span-full pt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                              <Clock className="w-3.5 h-3.5" />
-                              <span>Estimated Duration: <strong>{scene.scene_duration}s</strong></span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {groupShots.map((shot) => {
-                  const progressKey = shot.id || shot.index.toString();
-                  const isCurrentlyGenerating =
-                    generatingIndices.has(shot.index) ||
-                    shotProgress[progressKey] !== undefined;
-                  const isCurrentlyQueued =
-                    queuedIndices.has(shot.index) && !isCurrentlyGenerating;
-                  return (
-                    <ShotCard
-                      key={`${progressKey}-${shot.image_path}`}
-                      shot={shot}
-                      sessionId={sessionId}
-                      selectable={true}
-                      selected={selectedIndices.includes(shot.index)}
-                      onSelectChange={(selected: boolean) =>
-                        toggleSelectShot(shot.index, selected)
-                      }
-                      isGenerating={isCurrentlyGenerating}
-                      isQueued={isCurrentlyQueued}
-                      progress={shotProgress[progressKey]}
-                      onCancel={
-                        isCurrentlyGenerating || isCurrentlyQueued
-                          ? () => handleCancelShot(shot.index)
-                          : undefined
-                      }
-                      onInsertBefore={() =>
-                        setInsertModalConfig({ position: shot.index - 1 })
-                      }
-                      onInsertAfter={() =>
-                        setInsertModalConfig({ position: shot.index })
-                      }
-                      onDelete={() => handleDeleteShot(shot.index)}
-                      viewModeOverride={viewModeOverride}
-                      scenes={scenes}
-                    />
-                  );
-                })}
+                <SortableContext
+                  items={groupShots.map(s => s.index)}
+                  strategy={rectSortingStrategy}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {groupShots.map((shot) => {
+                      const progressKey = shot.id || shot.index.toString();
+                      const isCurrentlyGenerating =
+                        generatingIndices.has(shot.index) ||
+                        shotProgress[progressKey] !== undefined;
+                      const isCurrentlyQueued =
+                        queuedIndices.has(shot.index) && !isCurrentlyGenerating;
+                      return (
+                        <ShotCard
+                          key={`${progressKey}-${shot.image_path}`}
+                          shot={shot}
+                          sessionId={sessionId}
+                          selectable={true}
+                          selected={selectedIndices.includes(shot.index)}
+                          onSelectChange={(selected: boolean) =>
+                            toggleSelectShot(shot.index, selected)
+                          }
+                          isGenerating={isCurrentlyGenerating}
+                          isQueued={isCurrentlyQueued}
+                          progress={shotProgress[progressKey]}
+                          onCancel={
+                            isCurrentlyGenerating || isCurrentlyQueued
+                              ? () => handleCancelShot(shot.index)
+                              : undefined
+                          }
+                          onInsertBefore={() =>
+                            setInsertModalConfig({ position: shot.index - 1 })
+                          }
+                          onInsertAfter={() =>
+                            setInsertModalConfig({ position: shot.index })
+                          }
+                          onDelete={() => handleDeleteShot(shot.index)}
+                          viewModeOverride={viewModeOverride}
+                          scenes={scenes}
+                        />
+                      );
+                    })}
+                  </div>
+                </SortableContext>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </DndContext>
 
       <div className="mt-8 flex justify-center">
         <button
@@ -886,6 +1022,20 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
               <h2 className="text-xl font-semibold mb-6">Insert New Shot</h2>
 
               <div className="space-y-4">
+                {/* FLFI2V Indicator */}
+                {shots.length > 0 && shots.some(s => s.is_flfi2v) && (
+                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-0.5 rounded-full font-bold">
+                        FLFI2V MODE
+                      </span>
+                      <span className="text-sm text-purple-700 dark:text-purple-300">
+                        This is a ThenVsNow session - FLFI2V fields will be included
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Image Prompt
@@ -903,6 +1053,46 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                   />
                 </div>
 
+                {/* FLFI2V: THEN Image Prompt */}
+                {shots.length > 0 && shots.some(s => s.is_flfi2v) && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-purple-700 dark:text-purple-300">
+                      THEN Image Prompt (Original Appearance)
+                    </label>
+                    <Textarea
+                      value={newShotData.then_image_prompt || ""}
+                      onChange={(e) =>
+                        setNewShotData({
+                          ...newShotData,
+                          then_image_prompt: e.target.value,
+                        })
+                      }
+                      className="min-h-[80px]"
+                      placeholder="Describe the character's original/THEN appearance..."
+                    />
+                  </div>
+                )}
+
+                {/* FLFI2V: NOW Image Prompt */}
+                {shots.length > 0 && shots.some(s => s.is_flfi2v) && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-pink-700 dark:text-pink-300">
+                      NOW Image Prompt (Current Appearance)
+                    </label>
+                    <Textarea
+                      value={newShotData.now_image_prompt || ""}
+                      onChange={(e) =>
+                        setNewShotData({
+                          ...newShotData,
+                          now_image_prompt: e.target.value,
+                        })
+                      }
+                      className="min-h-[80px]"
+                      placeholder="Describe the character's current/NOW appearance..."
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Motion Prompt
@@ -919,6 +1109,69 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                     placeholder="Describe the motion/video prompt..."
                   />
                 </div>
+
+                {/* FLFI2V: Meeting Video Prompt */}
+                {shots.length > 0 && shots.some(s => s.is_flfi2v) && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-purple-700 dark:text-purple-300">
+                      Meeting Video Prompt
+                    </label>
+                    <Textarea
+                      value={newShotData.meeting_video_prompt || ""}
+                      onChange={(e) =>
+                        setNewShotData({
+                          ...newShotData,
+                          meeting_video_prompt: e.target.value,
+                        })
+                      }
+                      className="min-h-[80px]"
+                      placeholder="Describe the meeting video motion..."
+                    />
+                  </div>
+                )}
+
+                {/* FLFI2V: Departure Video Prompt */}
+                {shots.length > 0 && shots.some(s => s.is_flfi2v) && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1 text-pink-700 dark:text-pink-300">
+                      Departure Video Prompt
+                    </label>
+                    <Textarea
+                      value={newShotData.departure_video_prompt || ""}
+                      onChange={(e) =>
+                        setNewShotData({
+                          ...newShotData,
+                          departure_video_prompt: e.target.value,
+                        })
+                      }
+                      className="min-h-[80px]"
+                      placeholder="Describe the departure/transitional video motion..."
+                    />
+                  </div>
+                )}
+
+                {/* FLFI2V: Character ID */}
+                {shots.length > 0 && shots.some(s => s.is_flfi2v) && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Character ID (Optional)
+                    </label>
+                    <Input
+                      type="text"
+                      value={newShotData.character_id || ""}
+                      onChange={(e) =>
+                        setNewShotData({
+                          ...newShotData,
+                          character_id: e.target.value,
+                        })
+                      }
+                      placeholder="e.g., char_000, char_001..."
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Assign this shot to a character (leave empty to auto-assign)
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium mb-1">
@@ -1050,14 +1303,18 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                           <SelectValue placeholder="Select Workflow" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="flux2">
-                            Flux 2 (High Quality)
-                          </SelectItem>
-                          <SelectItem value="flux">Flux (Standard)</SelectItem>
-                          <SelectItem value="sdxl">SDXL</SelectItem>
-                          <SelectItem value="hidream">HiDream</SelectItem>
-                          <SelectItem value="qwen">Qwen</SelectItem>
-                          <SelectItem value="default">Default</SelectItem>
+                          {globalConfig?.available_image_workflows?.map((wf) => (
+                            <SelectItem key={wf} value={wf}>
+                              {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                            </SelectItem>
+                          )) || (
+                              <>
+                                <SelectItem value="flux2">Flux 2</SelectItem>
+                                <SelectItem value="flux">Flux</SelectItem>
+                                <SelectItem value="sdxl">SDXL</SelectItem>
+                                <SelectItem value="default">Default</SelectItem>
+                              </>
+                            )}
                         </SelectContent>
                       </Select>
                     </div>

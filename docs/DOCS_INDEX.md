@@ -42,6 +42,14 @@ Complete guide to all documentation for the AI Video Factory system.
 | [Session Guide](SESSION_GUIDE.md) | Session management |
 | [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md) | Regenerate failed shots |
 | [Workflow Diagram](WORKFLOW_DIAGRAM.md) | Visual system architecture |
+| **[Then Vs Now Quick Start](features/thenvsnow/THEN_VS_NOW_QUICKSTART.md)** 🆕 | FLFI2V reunion video guide |
+| **[Then Vs Now Scene Requirements](features/thenvsnow/THEN_VS_NOW_SCENE_REQUIREMENTS.md)** 🆕 | 7 mandatory scene elements |
+| **[Then Vs Now Thumbnail Guide](features/thenvsnow/THEN_VS_NOW_THUMBNAIL_GUIDE.md)** 🆕 | YouTube thumbnail specifications |
+| **[Then Vs Now Motion Prompt Guide](features/thenvsnow/THEN_VS_NOW_MOTION_PROMPT_GUIDE.md)** 🆕 | Animation/motion prompt specs |
+| **[How to Make Departure Videos](features/thenvsnow/HOW_TO_MAKE_DEPARTURE_VIDEOS.md)** 🆕 | Departure video generation guide |
+| **[FLFI2V Video Generation Logic](features/thenvsnow/FLFI2V_VIDEO_GENERATION_LOGIC.md)** 🆕 | First/last frame logic |
+| **[Viewing FLFI2V Prompts](features/thenvsnow/VIEWING_FLFI2V_PROMPTS.md)** 🆕 | How to view THEN/NOW prompts |
+| **[FLFI2V Selfie Composition](features/thenvsnow/FLFI2V_SELFIE_COMPOSITION.md)** 🆕 | Selfie composition details |
 
 ### Reference
 
@@ -51,6 +59,7 @@ Complete guide to all documentation for the AI Video Factory system.
 | [Features Overview](COMPLETE_FEATURE_OVERVIEW.md) | All features explained |
 | [Project Overview](PROJECT_OVERVIEW.md) | Project structure and implementation |
 | [Implementation Summary](IMPLEMENTATION_SUMMARY.md) | Technical implementation details |
+| **[Then Vs Now Implementation](features/thenvsnow/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)** 🆕 | FLFI2V technical docs |
 
 ### Quick Reference
 
@@ -70,6 +79,7 @@ Complete guide to all documentation for the AI Video Factory system.
 | Document | Description |
 |----------|-------------|
 | [Test Results](TEST_RESULTS.md) | System test results |
+| **[Then Vs Now Test Report](testing/THEN_VS_NOW_TEST_REPORT.md)** 🆕 | FLFI2V feature test results |
 
 ---
 
@@ -327,13 +337,15 @@ Do you want to...
 
 **New in This Version:**
 
+- 🆕 **[Then Vs Now Implementation](features/thenvsnow/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)** - Complete FLFI2V feature documentation
+- 🆕 **[Then Vs Now Quick Start](features/thenvsnow/THEN_VS_NOW_QUICKSTART.md)** - User guide for FLFI2V reunion videos
 - ⭐ **[Configuration Guide](CONFIGURATION.md)** - Complete config.py reference
 - ⭐ **[Camera LoRA Guide](CAMERA_LORA_GUIDE.md)** - Multi-camera LoRA system documentation
 - ⭐ **[Workflow Guide](WORKFLOW_GUIDE.md)** - Complete pipeline overview
 - ⭐ **[API Reference](API_REFERENCE.md)** - Full API documentation
 
-**Last Updated:** February 11, 2026
-**Version:** 3.0 (Multi-Camera LoRA System)
+**Last Updated:** March 12, 2026
+**Version:** 4.0 (FLFI2V Then Vs Now Feature)
 
 ---
 

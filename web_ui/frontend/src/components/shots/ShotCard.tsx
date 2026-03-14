@@ -23,8 +23,12 @@ import {
   ChevronDown,
   Copy,
   ClipboardCheck,
+  GripVertical,
 } from "lucide-react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Shot } from "@/types";
+import { toast } from "sonner";
 import {
   useUpdateShot,
   useRegenerateImage,
@@ -91,6 +95,26 @@ export function ShotCard({
   const [editedShot, setEditedShot] = useState(shot);
   const [viewMode, setViewMode] = useState<"image" | "video">("image");
 
+  // FLFI2V state management
+  const [activeImageMode, setActiveImageMode] = useState<"then" | "now">("now");
+  const [activeVideoMode, setActiveVideoMode] = useState<"meeting" | "departure">("meeting");
+
+  // Update cache buster when video mode or image mode changes to force media reload
+  useEffect(() => {
+    if (shot.is_flfi2v) {
+      setCacheBuster(Date.now());
+    }
+  }, [activeVideoMode, activeImageMode, shot.is_flfi2v]);
+
+  // Update editedShot when shot prop changes (e.g., after regeneration)
+  useEffect(() => {
+    setEditedShot(shot);
+    // Force cache buster update when shot changes to refresh media URLs
+    if (shot.is_flfi2v) {
+      setCacheBuster(Date.now());
+    }
+  }, [shot]);
+
   // Regeneration modal state
   const [showRegenModal, setShowRegenModal] = useState<
     "image" | "video" | null
@@ -99,7 +123,7 @@ export function ShotCard({
   const [regenImageMode, setRegenImageMode] = useState("comfyui");
   const [regenImageWorkflow, setRegenImageWorkflow] = useState("flux2");
   const [regenVideoWorkflow, setRegenVideoWorkflow] = useState("wan22");
-  const [regenVideoMode, setRegenVideoMode] = useState("geminiweb");
+  const [regenVideoMode, setRegenVideoMode] = useState("comfyui");
   const [regenSeed, setRegenSeed] = useState<number | "">("");
   const [regenPromptOverride, setRegenPromptOverride] = useState<string>("");
 
@@ -114,7 +138,6 @@ export function ShotCard({
   const uploadShotVideo = useUploadShotVideo(sessionId);
   const deleteVariation = useDeleteVariationImage(sessionId);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isVideoUploading, setIsVideoUploading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -131,6 +154,25 @@ export function ShotCard({
 
   const { data: globalConfig } = useConfig();
 
+  // Drag and drop functionality
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: shot.index,
+    disabled: isEditing || isGenerating,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   // Update default workflow when config loads
   useEffect(() => {
     if (globalConfig?.video_workflow) {
@@ -138,8 +180,25 @@ export function ShotCard({
     }
   }, [globalConfig]);
 
+  // Load saved video mode preference for this session on mount
+  useEffect(() => {
+    const savedVideoMode = localStorage.getItem(`video_mode_${sessionId}`);
+    if (savedVideoMode) {
+      setRegenVideoMode(savedVideoMode);
+    }
+  }, [sessionId]);
+
   // Derived data for the fullscreen carousel
-  const fsImages = viewMode === "video" ? (shot.video_paths ?? []) : (shot.image_paths ?? []);
+  // For FLFI2V shots, construct array with THEN and NOW images
+  const fsImages = (() => {
+    if (shot.is_flfi2v && viewMode === "image") {
+      const flfi2vImages = [];
+      if (shot.then_image_path) flfi2vImages.push(shot.then_image_path);
+      if (shot.now_image_path) flfi2vImages.push(shot.now_image_path);
+      return flfi2vImages.length > 0 ? flfi2vImages : (shot.image_paths ?? []);
+    }
+    return viewMode === "video" ? (shot.video_paths ?? []) : (shot.image_paths ?? []);
+  })();
   const fsTotal = fsImages.length;
 
   const openFullscreen = useCallback((idx: number) => {
@@ -175,9 +234,15 @@ export function ShotCard({
     }
   }, [viewModeOverride]);
 
-  const hasMultipleVariations = viewMode === "video"
-    ? (shot.video_paths?.length ?? 0) > 1
-    : (shot.image_paths?.length ?? 0) > 1;
+  const hasMultipleVariations = (() => {
+    if (shot.is_flfi2v && viewMode === "image") {
+      // FLFI2V has multiple variations if both THEN and NOW images exist
+      return !!(shot.then_image_path && shot.now_image_path);
+    }
+    return viewMode === "video"
+      ? (shot.video_paths?.length ?? 0) > 1
+      : (shot.image_paths?.length ?? 0) > 1;
+  })();
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -195,11 +260,21 @@ export function ShotCard({
         camera: editedShot.camera,
         narration: editedShot.narration,
         scene_id: editedShot.scene_id,
+        // FLFI2V fields
+        then_image_prompt: editedShot.then_image_prompt,
+        now_image_prompt: editedShot.now_image_prompt,
+        meeting_video_prompt: editedShot.meeting_video_prompt,
+        departure_video_prompt: editedShot.departure_video_prompt,
       });
       setIsEditing(false);
+      toast.success("Shot updated successfully", {
+        description: `Shot ${shot.index} has been saved.`,
+      });
     } catch (error) {
       console.error("Failed to update shot:", error);
-      alert("Failed to update shot. Please try again.");
+      toast.error("Failed to update shot", {
+        description: "Please try again.",
+      });
     }
   };
 
@@ -210,7 +285,10 @@ export function ShotCard({
 
   const handleRegenerateImage = async () => {
     // Pre-populate prompt textarea with the shot's current prompt
-    setRegenPromptOverride(shot.image_prompt ?? "");
+    const promptToUse = shot.is_flfi2v
+      ? (activeImageMode === 'then' ? shot.then_image_prompt : shot.now_image_prompt) || shot.image_prompt
+      : shot.image_prompt;
+    setRegenPromptOverride(promptToUse ?? "");
     setShowRegenModal("image");
   };
 
@@ -225,6 +303,8 @@ export function ShotCard({
       setShowRegenModal(null);
 
       if (type === "image") {
+        // For FLFI2V shots, only generate the currently active variant (THEN or NOW)
+        const imageVariant = shot.is_flfi2v ? activeImageMode : undefined;
         regenerateImage.mutate({
           shotIndex: shot.index,
           force: regenForce,
@@ -232,24 +312,49 @@ export function ShotCard({
           imageWorkflow: regenImageWorkflow,
           seed: regenSeed === "" ? undefined : regenSeed,
           promptOverride: regenPromptOverride.trim() || undefined,
+          imageVariant,
+        });
+        toast.info("Image regeneration started", {
+          description: `Shot ${shot.index}${shot.is_flfi2v && imageVariant ? ` (${imageVariant.toUpperCase()})` : ""} image is being generated.`,
         });
       } else if (type === "video") {
+        // For FLFI2V shots, only generate the currently active variant (Meeting or Departure)
+        const videoVariant = shot.is_flfi2v ? activeVideoMode : undefined;
         regenerateVideo.mutate({
           shotIndex: shot.index,
           force: regenForce,
           videoMode: regenVideoMode,
           videoWorkflow: regenVideoMode === "comfyui" ? regenVideoWorkflow : undefined,
+          videoVariant,
         });
         setViewMode("video");
+        toast.info("Video regeneration started", {
+          description: `Shot ${shot.index}${shot.is_flfi2v && videoVariant ? ` (${videoVariant.charAt(0).toUpperCase() + videoVariant.slice(1)})` : ""} video is being generated.`,
+        });
       }
       setCacheBuster(Date.now());
     } catch (error) {
       console.error(`Failed to trigger regeneration:`, error);
+      toast.error("Failed to start regeneration", {
+        description: "Please try again.",
+      });
     }
   };
 
-  const imageUrl = getMediaUrl(shot.image_path);
-  const videoUrl = getMediaUrl(shot.video_path);
+  const imageUrl = shot.is_flfi2v
+    ? getMediaUrl(
+        activeImageMode === 'then'
+          ? shot.then_image_path || shot.now_image_path || shot.image_path
+          : shot.now_image_path || shot.then_image_path || shot.image_path
+      )
+    : getMediaUrl(shot.image_path);
+  const videoUrl = shot.is_flfi2v
+    ? getMediaUrl(
+        activeVideoMode === 'meeting'
+          ? shot.meeting_video_path || shot.departure_video_path || shot.video_path
+          : shot.departure_video_path || shot.meeting_video_path || shot.video_path
+      )
+    : getMediaUrl(shot.video_path);
 
   // Append cache-busting param so browser fetches the latest file from disk
   const bustCache = (url: string) =>
@@ -295,31 +400,89 @@ export function ShotCard({
         </div>
 
         <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground">
-              Image Prompt
-            </label>
-            <Textarea
-              value={editedShot.image_prompt}
-              onChange={(e) =>
-                setEditedShot({ ...editedShot, image_prompt: e.target.value })
-              }
-              className="mt-1 min-h-[120px]"
-            />
-          </div>
+          {/* FLFI2V Image Prompts */}
+          {shot.is_flfi2v ? (
+            <>
+              <div>
+                <label className="text-xs text-purple-600 font-semibold">THEN Image Prompt</label>
+                <Textarea
+                  value={editedShot.then_image_prompt || ''}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, then_image_prompt: e.target.value })
+                  }
+                  placeholder="Prompt for THEN image (original appearance)"
+                  className="mt-1 min-h-[80px] border-purple-200 focus:border-purple-500"
+                />
+              </div>
 
-          <div>
-            <label className="text-xs text-muted-foreground">
-              Motion Prompt
-            </label>
-            <Textarea
-              value={editedShot.motion_prompt}
-              onChange={(e) =>
-                setEditedShot({ ...editedShot, motion_prompt: e.target.value })
-              }
-              className="mt-1 min-h-[120px]"
-            />
-          </div>
+              <div>
+                <label className="text-xs text-pink-600 font-semibold">NOW Image Prompt</label>
+                <Textarea
+                  value={editedShot.now_image_prompt || ''}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, now_image_prompt: e.target.value })
+                  }
+                  placeholder="Prompt for NOW image (current appearance with selfie)"
+                  className="mt-1 min-h-[80px] border-pink-200 focus:border-pink-500"
+                />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="text-xs text-muted-foreground">
+                Image Prompt
+              </label>
+              <Textarea
+                value={editedShot.image_prompt}
+                onChange={(e) =>
+                  setEditedShot({ ...editedShot, image_prompt: e.target.value })
+                }
+                className="mt-1 min-h-[120px]"
+              />
+            </div>
+          )}
+
+          {/* FLFI2V Motion Prompts */}
+          {shot.is_flfi2v ? (
+            <>
+              <div>
+                <label className="text-xs text-purple-600 font-semibold">Meeting Video Prompt</label>
+                <Textarea
+                  value={editedShot.meeting_video_prompt || ''}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, meeting_video_prompt: e.target.value })
+                  }
+                  placeholder="Prompt for meeting video (arrival at set)"
+                  className="mt-1 min-h-[80px] border-purple-200 focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-pink-600 font-semibold">Departure Video Prompt</label>
+                <Textarea
+                  value={editedShot.departure_video_prompt || ''}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, departure_video_prompt: e.target.value })
+                  }
+                  placeholder="Prompt for departure video (leaving set)"
+                  className="mt-1 min-h-[80px] border-pink-200 focus:border-pink-500"
+                />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="text-xs text-muted-foreground">
+                Motion Prompt
+              </label>
+              <Textarea
+                value={editedShot.motion_prompt}
+                onChange={(e) =>
+                  setEditedShot({ ...editedShot, motion_prompt: e.target.value })
+                }
+                className="mt-1 min-h-[120px]"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -376,14 +539,26 @@ export function ShotCard({
 
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       className={cn(
         "border rounded-lg p-4 bg-background hover:shadow-md transition-shadow relative",
         selected && "border-primary ring-1 ring-primary",
+        isDragging && "shadow-xl",
       )}
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-0.5">
         <div className="flex items-center gap-2">
+          {/* Drag Handle */}
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded hover:bg-muted/50"
+            title="Drag to reorder"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
           {selectable && (
             <input
               type="checkbox"
@@ -397,30 +572,71 @@ export function ShotCard({
               {shot.index}
             </span>
           )}
+          {shot.is_flfi2v && (
+            <span className="text-[9px] bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-0.5 rounded-full font-bold">
+              Then VS Now
+            </span>
+          )}
         </div>
 
         {/* Actions */}
         <div className="flex gap-1.5 bg-muted/30 p-1 rounded-md">
-          {/* Hidden file input for image upload */}
+          {/* Hidden file input for image/video upload */}
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
             className="hidden"
             onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
               // Reset so the same file can be re-selected later
               e.target.value = "";
-              setIsUploading(true);
-              try {
-                await uploadShotImage.mutateAsync({ shotIndex: shot.index, file });
-                setCacheBuster(Date.now());
-              } catch (error) {
-                console.error("Failed to upload image:", error);
-                alert("Failed to upload image. Please try again.");
-              } finally {
-                setIsUploading(false);
+
+              // Detect file type
+              const isVideo = file.type.startsWith('video/');
+              const isImage = file.type.startsWith('image/');
+
+              if (isVideo) {
+                setIsVideoUploading(true);
+                try {
+                  // For FLFI2V shots, pass the current variant (meeting/departure)
+                  const variant = shot.is_flfi2v ? activeVideoMode : undefined;
+                  await uploadShotVideo.mutateAsync({ shotIndex: shot.index, file, variant });
+                  setCacheBuster(Date.now());
+                  toast.success("Video uploaded successfully", {
+                    description: `Shot ${shot.index}${shot.is_flfi2v && variant ? ` (${variant.charAt(0).toUpperCase() + variant.slice(1)})` : ""} video has been uploaded.`,
+                  });
+                } catch (error) {
+                  console.error("Failed to upload video:", error);
+                  toast.error("Failed to upload video", {
+                    description: "Please try again.",
+                  });
+                } finally {
+                  setIsVideoUploading(false);
+                }
+              } else if (isImage) {
+                setIsUploading(true);
+                try {
+                  // For FLFI2V shots, pass the current variant (THEN/NOW)
+                  const variant = shot.is_flfi2v ? activeImageMode : undefined;
+                  await uploadShotImage.mutateAsync({ shotIndex: shot.index, file, variant });
+                  setCacheBuster(Date.now());
+                  toast.success("Image uploaded successfully", {
+                    description: `Shot ${shot.index}${shot.is_flfi2v && variant ? ` (${variant.toUpperCase()})` : ""} image has been uploaded.`,
+                  });
+                } catch (error) {
+                  console.error("Failed to upload image:", error);
+                  toast.error("Failed to upload image", {
+                    description: "Please try again.",
+                  });
+                } finally {
+                  setIsUploading(false);
+                }
+              } else {
+                toast.warning("Unsupported file type", {
+                  description: "Please select an image or video file.",
+                });
               }
             }}
           />
@@ -436,48 +652,19 @@ export function ShotCard({
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="p-1 hover:bg-indigo-50 text-indigo-600 rounded disabled:opacity-50"
-            title="Upload image from disk"
-          >
-            {isUploading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Upload className="w-4 h-4" />
+            disabled={isUploading || isVideoUploading}
+            className={cn(
+              "p-1 rounded disabled:opacity-50",
+              viewMode === "image"
+                ? "hover:bg-indigo-50 text-indigo-600"
+                : "hover:bg-purple-50 text-purple-600"
             )}
-          </button>
-
-          {/* Hidden file input for video upload */}
-          <input
-            ref={videoFileInputRef}
-            type="file"
-            accept="video/*"
-            className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              // Reset so the same file can be re-selected later
-              e.target.value = "";
-              setIsVideoUploading(true);
-              try {
-                await uploadShotVideo.mutateAsync({ shotIndex: shot.index, file });
-                setCacheBuster(Date.now());
-              } catch (error) {
-                console.error("Failed to upload video:", error);
-                alert("Failed to upload video. Please try again.");
-              } finally {
-                setIsVideoUploading(false);
-              }
-            }}
-          />
-          <button
-            onClick={() => videoFileInputRef.current?.click()}
-            disabled={isVideoUploading}
-            className="p-1 hover:bg-purple-50 text-purple-600 rounded disabled:opacity-50"
-            title="Upload video from disk"
+            title={viewMode === "image" ? "Upload image from disk" : "Upload video from disk"}
           >
-            {isVideoUploading ? (
+            {(isUploading || isVideoUploading) ? (
               <Loader2 className="w-4 h-4 animate-spin" />
+            ) : viewMode === "image" ? (
+              <Upload className="w-4 h-4" />
             ) : (
               <div className="relative">
                 <Video className="w-4 h-4" />
@@ -485,21 +672,26 @@ export function ShotCard({
               </div>
             )}
           </button>
-          {shot.image_generated && (
+          {(shot.is_flfi2v
+            ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated)
+            : shot.image_generated) && (
             <button
               onClick={async () => {
                 try {
-                  await removeWatermark.mutateAsync(shot.index);
+                  // For FLFI2V shots, pass the currently active image variant
+                  const variant = shot.is_flfi2v ? activeImageMode : undefined;
+                  await removeWatermark.mutateAsync({ shotIndex: shot.index, variant });
                   // Refresh the cache buster to show the updated image
                   setCacheBuster(Date.now());
-                } catch (error) {
+                } catch (error: any) {
                   console.error("Failed to remove watermark:", error);
-                  alert("Failed to remove watermark. Ensure the image exists.");
+                  const errorMessage = error?.response?.data?.detail || error?.message || "Unknown error";
+                  alert(`Failed to remove watermark: ${errorMessage}\n\nPlease ensure the image file exists on disk.`);
                 }
               }}
               disabled={removeWatermark.isPending}
               className="p-1 hover:bg-teal-50 text-teal-600 rounded disabled:opacity-50"
-              title="Remove Gemini Watermark"
+              title={`Remove Gemini Watermark${shot.is_flfi2v ? ` from ${activeImageMode.toUpperCase()} image` : ''}`}
             >
               <Wand2 className={cn("w-4 h-4", removeWatermark.isPending && "animate-pulse")} />
             </button>
@@ -571,29 +763,88 @@ export function ShotCard({
           <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground truncate uppercase font-semibold tracking-wider">
             {shot.camera}
           </span>
+          {/* FLFI2V Mode Toggle Buttons - Image or Video */}
+          {shot.is_flfi2v && viewMode === "image" && (
+            <div className="flex gap-1 bg-muted/50 p-0.5 rounded-md">
+              <button
+                onClick={() => setActiveImageMode('then')}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold transition-all",
+                  activeImageMode === 'then' ? "bg-purple-500 text-white" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                THEN
+              </button>
+              <button
+                onClick={() => setActiveImageMode('now')}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold transition-all",
+                  activeImageMode === 'now' ? "bg-pink-500 text-white" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                NOW
+              </button>
+            </div>
+          )}
+          {shot.is_flfi2v && viewMode === "video" && (
+            <div className="flex gap-1 bg-muted/50 p-0.5 rounded-md">
+              <button
+                onClick={() => setActiveVideoMode('meeting')}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold transition-all",
+                  activeVideoMode === 'meeting' ? "bg-purple-500 text-white" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Meeting
+              </button>
+              <button
+                onClick={() => setActiveVideoMode('departure')}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold transition-all",
+                  activeVideoMode === 'departure' ? "bg-pink-500 text-white" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Departure
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2.5 ml-auto">
-          <span
+          <button
+            onClick={() => setViewMode("image")}
             className={cn(
-              "flex items-center gap-1",
-              shot.image_generated ? "text-green-600" : "text-gray-400 font-light",
+              "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
+              viewMode === "image"
+                ? "bg-purple-500 text-white font-semibold"
+                : "text-muted-foreground hover:text-foreground",
             )}
-            title={shot.image_generated ? "Image Generated" : "Image Not Generated"}
+            title={(shot.is_flfi2v ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated) : shot.image_generated)
+              ? "Image Generated - Click to view"
+              : "Image Not Generated - Click to view"}
           >
             <Image className="w-3 h-3" />
-            {shot.image_generated ? "✓" : "○"}
-          </span>
-          <span
+            {(shot.is_flfi2v ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated) : shot.image_generated)
+              ? "✓"
+              : "○"}
+          </button>
+          <button
+            onClick={() => setViewMode("video")}
             className={cn(
-              "flex items-center gap-1",
-              shot.video_rendered ? "text-green-600" : "text-gray-400 font-light",
+              "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
+              viewMode === "video"
+                ? "bg-purple-500 text-white font-semibold"
+                : "text-muted-foreground hover:text-foreground",
             )}
-            title={shot.video_rendered ? "Video Rendered" : "Video Not Rendered"}
+            title={(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)
+              ? "Video Rendered - Click to view"
+              : "Video Not Rendered - Click to view"}
           >
             <Video className="w-3 h-3" />
-            {shot.video_rendered ? "✓" : "○"}
-          </span>
+            {(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)
+              ? "✓"
+              : "○"}
+          </button>
         </div>
       </div>
 
@@ -643,6 +894,7 @@ export function ShotCard({
           ) : null}
           {viewMode === "video" && cachedVideoUrl ? (
             <video
+              key={shot.is_flfi2v ? activeVideoMode : shot.video_path}
               src={cachedVideoUrl}
               poster={cachedImageUrl}
               controls
@@ -654,11 +906,19 @@ export function ShotCard({
             />
           ) : cachedImageUrl ? (
             <img
+              key={shot.is_flfi2v ? `${activeImageMode}-${activeVideoMode}` : shot.image_path}
               src={cachedImageUrl}
               alt={`Shot ${shot.index}`}
               className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
               onClick={() => {
-                const activeIdx = fsImages.indexOf(shot.image_path ?? "");
+                // Get the currently displayed image path based on FLFI2V mode
+                const currentImagePath = shot.is_flfi2v
+                  ? (activeImageMode === 'then'
+                      ? shot.then_image_path || shot.now_image_path || shot.image_path
+                      : shot.now_image_path || shot.then_image_path || shot.image_path)
+                  : shot.image_path;
+
+                const activeIdx = fsImages.indexOf(currentImagePath ?? "");
                 openFullscreen(activeIdx >= 0 ? activeIdx : 0);
               }}
               title="Click to view full screen"
@@ -669,44 +929,25 @@ export function ShotCard({
             </span>
           )}
         </div>
-
-        {/* Media Toggle Controls */}
-        {shot.image_path && shot.video_path && (
-          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 backdrop-blur-sm p-1 rounded-md">
-            <button
-              onClick={() => setViewMode("image")}
-              className={cn(
-                "p-1.5 rounded transition-colors",
-                viewMode === "image"
-                  ? "bg-white text-black"
-                  : "text-white hover:bg-white/20",
-              )}
-              title="View Image"
-            >
-              <Image className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode("video")}
-              className={cn(
-                "p-1.5 rounded transition-colors",
-                viewMode === "video"
-                  ? "bg-white text-black"
-                  : "text-white hover:bg-white/20",
-              )}
-              title="View Video"
-            >
-              <Video className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Prompts */}
       <div className="space-y-2 text-sm">
+        {/* Image Prompt Section */}
         <div className="p-2 bg-muted rounded">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-1.5">
-              <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Image Prompt</div>
+              <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+                Image Prompt
+                {shot.is_flfi2v && (
+                  <span className={cn(
+                    "ml-2 text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                    activeImageMode === 'then' ? "bg-purple-500 text-white" : "bg-pink-500 text-white"
+                  )}>
+                    {activeImageMode === 'then' ? 'THEN' : 'NOW'}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => setIsImagePromptExpanded(!isImagePromptExpanded)}
                 className="p-0.5 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
@@ -717,7 +958,10 @@ export function ShotCard({
             </div>
             <button
               onClick={() => {
-                navigator.clipboard.writeText(shot.image_prompt || "");
+                const promptToCopy = shot.is_flfi2v
+                  ? (activeImageMode === 'then' ? shot.then_image_prompt : shot.now_image_prompt) || shot.image_prompt
+                  : shot.image_prompt;
+                navigator.clipboard.writeText(promptToCopy || "");
                 setCopiedField("image");
                 setTimeout(() => setCopiedField(null), 1500);
               }}
@@ -731,12 +975,28 @@ export function ShotCard({
               )}
             </button>
           </div>
-          <div className={cn("text-sm", !isImagePromptExpanded && "line-clamp-2")}>{shot.image_prompt}</div>
+          <div className={cn("text-sm", !isImagePromptExpanded && "line-clamp-2")}>
+            {shot.is_flfi2v
+              ? (activeImageMode === 'then' ? (shot.then_image_prompt || shot.image_prompt) : (shot.now_image_prompt || shot.image_prompt))
+              : shot.image_prompt}
+          </div>
         </div>
-        <div className="p-2 bg-muted rounded">
+
+        {/* Motion Prompt Section */}
+        <div key={shot.is_flfi2v ? `motion-section-${activeVideoMode}` : 'motion-section'} className="p-2 bg-muted rounded">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-1.5">
-              <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Motion Prompt</div>
+              <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+                Motion Prompt
+                {shot.is_flfi2v && (
+                  <span className={cn(
+                    "ml-2 text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                    activeVideoMode === 'meeting' ? "bg-purple-500 text-white" : "bg-pink-500 text-white"
+                  )}>
+                    {activeVideoMode === 'meeting' ? 'MEETING' : 'DEPARTURE'}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => setIsMotionPromptExpanded(!isMotionPromptExpanded)}
                 className="p-0.5 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
@@ -747,7 +1007,10 @@ export function ShotCard({
             </div>
             <button
               onClick={() => {
-                navigator.clipboard.writeText(shot.motion_prompt || "");
+                const promptToCopy = shot.is_flfi2v
+                  ? (activeVideoMode === 'meeting' ? shot.meeting_video_prompt : shot.departure_video_prompt) || shot.motion_prompt
+                  : shot.motion_prompt;
+                navigator.clipboard.writeText(promptToCopy || "");
                 setCopiedField("motion");
                 setTimeout(() => setCopiedField(null), 1500);
               }}
@@ -761,7 +1024,11 @@ export function ShotCard({
               )}
             </button>
           </div>
-          <div className={cn("text-sm", !isMotionPromptExpanded && "line-clamp-2")}>{shot.motion_prompt}</div>
+          <div key={shot.is_flfi2v ? `motion-${activeVideoMode}` : 'motion'} className={cn("text-sm", !isMotionPromptExpanded && "line-clamp-2")}>
+            {shot.is_flfi2v
+              ? (activeVideoMode === 'meeting' ? (shot.meeting_video_prompt || shot.motion_prompt) : (shot.departure_video_prompt || shot.motion_prompt))
+              : shot.motion_prompt}
+          </div>
         </div>
       </div>
 
@@ -838,14 +1105,18 @@ export function ShotCard({
                             <SelectValue placeholder="Select Workflow" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="flux2">
-                              Flux 2 (High Quality)
-                            </SelectItem>
-                            <SelectItem value="flux">
-                              Flux (Standard)
-                            </SelectItem>
-                            <SelectItem value="sdxl">SDXL</SelectItem>
-                            <SelectItem value="default">Default</SelectItem>
+                            {globalConfig?.available_image_workflows?.map((wf) => (
+                              <SelectItem key={wf} value={wf}>
+                                {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                              </SelectItem>
+                            )) || (
+                                <>
+                                  <SelectItem value="flux2">Flux 2</SelectItem>
+                                  <SelectItem value="flux">Flux</SelectItem>
+                                  <SelectItem value="sdxl">SDXL</SelectItem>
+                                  <SelectItem value="default">Default</SelectItem>
+                                </>
+                              )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -901,7 +1172,10 @@ export function ShotCard({
                     </label>
                     <Select
                       value={regenVideoMode}
-                      onValueChange={(val) => setRegenVideoMode(val)}
+                      onValueChange={(val) => {
+                        setRegenVideoMode(val);
+                        localStorage.setItem(`video_mode_${sessionId}`, val);
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select Mode" />

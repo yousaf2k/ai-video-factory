@@ -4,8 +4,10 @@ Story Engine - Generate cinematic stories from ideas using LLM agents.
 from core.llm_engine import get_provider
 from core.agent_loader import load_agent_prompt
 from core.logger_config import setup_agent_logger
+from web_ui.backend.models.story import ProjectType
 import config
 import json
+import uuid
 
 
 # Get logger for story engine operations
@@ -87,7 +89,7 @@ def validate_and_adjust_scene_durations(story, target_length, tolerance=0.15):
     return False, actual_total, difference, adjusted_story
 
 
-def build_story(idea, agent_name="default", target_length=None):
+def build_story(idea, agent_name="default", target_length=None, aspect_ratio="16:9"):
     """
     Build a cinematic story from an idea using the specified agent.
     Performs a two-pass generation:
@@ -99,6 +101,7 @@ def build_story(idea, agent_name="default", target_length=None):
         agent_name: Name of story agent to use (default: "default")
         target_length: Target video length in seconds (optional).
                       Injected via {VIDEO_LENGTH} placeholder in agent prompts.
+        aspect_ratio: Video aspect ratio (default: "16:9")
 
     Returns:
         JSON string with story structure including scenes
@@ -177,12 +180,15 @@ Return JSON:
             story = json.loads(story_json_str)
             # Add total_duration to story dict
             story['total_duration'] = int(target_length)
-            
+
             # Inject master data
             story['title'] = master_data.get('title', story.get('title', 'Video'))
             story['style'] = master_data.get('style', story.get('style', 'cinematic'))
             story['master_script'] = master_script
-            
+
+            # Add aspect_ratio to story dict
+            story['aspect_ratio'] = aspect_ratio
+
             is_valid, actual_total, diff, adjusted_story = validate_and_adjust_scene_durations(
                 story, target_length, config.SCENE_DURATION_TOLERANCE
             )
@@ -196,15 +202,144 @@ Return JSON:
             story['title'] = master_data.get('title', story.get('title', 'Video'))
             story['style'] = master_data.get('style', story.get('style', 'cinematic'))
             story['master_script'] = master_script
-            
+
+            # Add aspect_ratio to story dict
+            story['aspect_ratio'] = aspect_ratio
+
             # Ensure scene_id in all scenes
             if 'scenes' in story:
                 for i, scene in enumerate(story['scenes']):
                     if 'scene_id' not in scene:
                         scene['scene_id'] = i
-            
+
             story_json_str = json.dumps(story, ensure_ascii=False, indent=2)
         except json.JSONDecodeError:
             logger.warning("Failed to parse story JSON for formatting")
 
     return story_json_str
+
+
+def build_story_then_vs_now(movie_name: str, target_length: int = None, aspect_ratio: str = "16:9") -> str:
+    """
+    Build a ThenVsNow story from a movie name.
+    Generates both story and shots directly (bypasses shot planner).
+
+    Args:
+        movie_name: The movie name to generate a reunion story for
+        target_length: Target video length in seconds (optional)
+        aspect_ratio: Video aspect ratio (default: "16:9")
+
+    Returns:
+        JSON string with story structure including shots
+    """
+    provider = get_provider()
+
+    # Load the then_vs_now agent
+    prompt = load_agent_prompt("story", movie_name, "then_vs_now")
+    if target_length:
+        prompt = prompt.replace("{VIDEO_LENGTH}", str(int(target_length)))
+
+    # Generate story
+    logger.info(f"Generating ThenVsNow story for movie: {movie_name}")
+    print(f"[INFO] Generating ThenVsNow story for movie: {movie_name}")
+
+    story_json_str = provider.ask(prompt, response_format="application/json")
+    story = json.loads(story_json_str)
+
+    # Ensure project_type is set
+    story['project_type'] = ProjectType.THEN_VS_NOW
+
+    # Add aspect_ratio to story
+    story['aspect_ratio'] = aspect_ratio
+
+    # CRITICAL: Normalize scene_id to array indices BEFORE generating shots
+    # This ensures shots' scene_id values match the scenes array indices
+    if 'scenes' in story:
+        for i, scene in enumerate(story['scenes']):
+            scene['scene_id'] = i
+
+    # Generate shots directly from story
+    shots = generate_shots_from_then_vs_now_story(story)
+    story['shots'] = shots
+
+    # Validate durations
+    if target_length:
+        story['total_duration'] = int(target_length)
+        _, _, _, adjusted_story = validate_and_adjust_scene_durations(
+            story, target_length, config.SCENE_DURATION_TOLERANCE
+        )
+        story_json_str = json.dumps(adjusted_story, ensure_ascii=False, indent=2)
+    else:
+        story_json_str = json.dumps(story, ensure_ascii=False, indent=2)
+
+    logger.info(f"Generated {len(shots)} shots for {len(story.get('characters', []))} characters")
+    return story_json_str
+
+
+def generate_shots_from_then_vs_now_story(story: dict) -> list:
+    """
+    Generate FLFI2V shots directly from a ThenVsNow story.
+    Each character gets 1 shot with BOTH Meeting and Departure videos.
+
+    Args:
+        story: Story dict with characters and scenes
+
+    Returns:
+        List of shot dicts with FLFI2V structure
+    """
+    characters = story.get('characters', [])
+    scenes = story.get('scenes', [])
+
+    # Build scene lookup
+    scenes_by_id = {scene.get('scene_id', 0): scene for scene in scenes}
+
+    # Group characters by scene_id
+    characters_by_scene = {}
+    for char in characters:
+        scene_id = char.get('scene_id', 0)  # Use character's scene_id
+        if scene_id not in characters_by_scene:
+            characters_by_scene[scene_id] = []
+        characters_by_scene[scene_id].append(char)
+
+    shots = []
+    shot_index = 1
+
+    # Generate shots in scene order
+    for scene_id in sorted(characters_by_scene.keys()):
+        scene = scenes_by_id.get(scene_id, {})
+        scene_name = scene.get('scene_name', f'Scene {scene_id}')
+        scene_characters = characters_by_scene[scene_id]
+
+        for char_idx, character in enumerate(scene_characters):
+            # Single shot per character with BOTH meeting and departure prompts
+            shot = {
+                'id': uuid.uuid4().hex[:8],
+                'index': shot_index,
+                'is_flfi2v': True,
+                'character_id': f"char_{scene_id:02d}_{char_idx:02d}",
+                'character_name': character.get('name', ''),
+                'scene_id': scene_id,
+                'scene_name': scene_name,
+                'order_in_scene': char_idx,
+                'then_image_prompt': character.get('then_prompt', ''),
+                'now_image_prompt': character.get('now_prompt', ''),
+                'meeting_video_prompt': character.get('meeting_prompt', ''),
+                'departure_video_prompt': character.get('departure_prompt', ''),
+                'camera': 'tracking',
+                'narration': '',
+                'batch_number': 1,
+                # Standard fields for compatibility
+                'image_prompt': character.get('now_prompt', ''),
+                'motion_prompt': character.get('meeting_prompt', ''),  # Default to meeting
+                'image_generated': False,
+                'image_path': None,
+                'image_paths': [],
+                'video_rendered': False,
+                'video_path': None,
+                'video_paths': []
+            }
+            shots.append(shot)
+            shot_index += 1
+
+    logger.info(f"Generated {len(shots)} shots for {len(characters)} characters (1 shot per character with both meeting and departure prompts)")
+    return shots

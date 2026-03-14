@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
     RegenerateVideoRequest, BatchRegenerateRequest, ReplanShotsRequest,
-    SelectImageRequest, SelectVideoRequest
+    SelectImageRequest, SelectVideoRequest, RemoveWatermarkRequest
 )
 from web_ui.backend.services.session_service import SessionService
 from web_ui.backend.services.generation_service import GenerationService
@@ -157,8 +157,8 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         dst = os.path.join(images_dir, new_basename)
                         
                         rename_operations.append((src, tmp, dst))
-                        # Update the dict path explicitly
-                        shot['image_path'] = os.path.join(session_id, "images", new_basename).replace('\\', '/')
+                        # Update the dict path explicitly with proper prefix
+                        shot['image_path'] = os.path.join("output", "sessions", session_id, "images", new_basename).replace('\\', '/')
 
             # Check alternative image_paths
             current_image_paths = shot.get('image_paths', [])
@@ -175,9 +175,9 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         src = os.path.join(images_dir, basename)
                         tmp = os.path.join(images_dir, tmp_basename)
                         dst = os.path.join(images_dir, new_basename)
-                        
+
                         rename_operations.append((src, tmp, dst))
-                        new_image_paths.append(os.path.join(session_id, "images", new_basename).replace('\\', '/'))
+                        new_image_paths.append(os.path.join("output", "sessions", session_id, "images", new_basename).replace('\\', '/'))
                     else:
                         new_image_paths.append(img_path) # unchanged
                 else:
@@ -198,9 +198,9 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         src = os.path.join(videos_dir, basename)
                         tmp = os.path.join(videos_dir, tmp_basename)
                         dst = os.path.join(videos_dir, new_basename)
-                        
+
                         rename_operations.append((src, tmp, dst))
-                        shot['video_path'] = os.path.join(session_id, "videos", new_basename).replace('\\', '/')
+                        shot['video_path'] = os.path.join("output", "sessions", session_id, "videos", new_basename).replace('\\', '/')
 
             # Check alternative video_paths
             current_video_paths = shot.get('video_paths', [])
@@ -213,18 +213,94 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                     if embedded_idx != true_index:
                         new_basename = get_new_filename(basename, true_index)
                         tmp_basename = f"{new_basename}.tmp-{tmp_id}"
-                        
+
                         src = os.path.join(videos_dir, basename)
                         tmp = os.path.join(videos_dir, tmp_basename)
                         dst = os.path.join(videos_dir, new_basename)
-                        
+
                         rename_operations.append((src, tmp, dst))
-                        new_video_paths.append(os.path.join(session_id, "videos", new_basename).replace('\\', '/'))
+                        new_video_paths.append(os.path.join("output", "sessions", session_id, "videos", new_basename).replace('\\', '/'))
                     else:
                         new_video_paths.append(vid_path) # unchanged
                 else:
                     new_video_paths.append(vid_path)
             shot['video_paths'] = new_video_paths
+
+            # ----------------------------------------------------
+            # FLFI2V-specific fields: handle renaming for THEN/NOW images
+            # and meeting/departure videos
+            # ----------------------------------------------------
+            # THEN image path
+            then_image_path = shot.get('then_image_path')
+            if then_image_path:
+                basename = os.path.basename(then_image_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+
+                        src = os.path.join(images_dir, basename)
+                        tmp = os.path.join(images_dir, tmp_basename)
+                        dst = os.path.join(images_dir, new_basename)
+
+                        rename_operations.append((src, tmp, dst))
+                        shot['then_image_path'] = os.path.join("output", "sessions", session_id, "images", new_basename).replace('\\', '/')
+
+            # NOW image path
+            now_image_path = shot.get('now_image_path')
+            if now_image_path:
+                basename = os.path.basename(now_image_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+
+                        src = os.path.join(images_dir, basename)
+                        tmp = os.path.join(images_dir, tmp_basename)
+                        dst = os.path.join(images_dir, new_basename)
+
+                        rename_operations.append((src, tmp, dst))
+                        shot['now_image_path'] = os.path.join("output", "sessions", session_id, "images", new_basename).replace('\\', '/')
+
+            # Meeting video path
+            meeting_video_path = shot.get('meeting_video_path')
+            if meeting_video_path:
+                basename = os.path.basename(meeting_video_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+
+                        src = os.path.join(videos_dir, basename)
+                        tmp = os.path.join(videos_dir, tmp_basename)
+                        dst = os.path.join(videos_dir, new_basename)
+
+                        rename_operations.append((src, tmp, dst))
+                        shot['meeting_video_path'] = os.path.join("output", "sessions", session_id, "videos", new_basename).replace('\\', '/')
+
+            # Departure video path
+            departure_video_path = shot.get('departure_video_path')
+            if departure_video_path:
+                basename = os.path.basename(departure_video_path)
+                match = prefix_re.match(basename)
+                if match:
+                    embedded_idx = int(match.group(2))
+                    if embedded_idx != true_index:
+                        new_basename = get_new_filename(basename, true_index)
+                        tmp_basename = f"{new_basename}.tmp-{tmp_id}"
+
+                        src = os.path.join(videos_dir, basename)
+                        tmp = os.path.join(videos_dir, tmp_basename)
+                        dst = os.path.join(videos_dir, new_basename)
+
+                        rename_operations.append((src, tmp, dst))
+                        shot['departure_video_path'] = os.path.join("output", "sessions", session_id, "videos", new_basename).replace('\\', '/')
 
         # Execute Pass 1: Move to temporary files (prevents filename collisions during shifting)
         for src, tmp, dst in rename_operations:
@@ -289,6 +365,15 @@ async def update_shot(session_id: str, shot_index: int, request: UpdateShotReque
             shot['narration'] = request.narration
         if request.scene_id is not None:
             shot['scene_id'] = request.scene_id
+        # FLFI2V fields
+        if request.then_image_prompt is not None:
+            shot['then_image_prompt'] = request.then_image_prompt
+        if request.now_image_prompt is not None:
+            shot['now_image_prompt'] = request.now_image_prompt
+        if request.meeting_video_prompt is not None:
+            shot['meeting_video_prompt'] = request.meeting_video_prompt
+        if request.departure_video_prompt is not None:
+            shot['departure_video_prompt'] = request.departure_video_prompt
 
         # Save updated shots
         session_dir = session_service.get_session_dir(session_id)
@@ -309,7 +394,7 @@ async def update_shot(session_id: str, shot_index: int, request: UpdateShotReque
 
 
 @router.post("/{shot_index}/remove-watermark")
-async def remove_shot_watermark(session_id: str, shot_index: int):
+async def remove_shot_watermark(session_id: str, shot_index: int, request: RemoveWatermarkRequest):
     """Remove watermark from the currently active image of this shot"""
     from core.geminiweb_subprocess import _remove_watermark
 
@@ -322,27 +407,42 @@ async def remove_shot_watermark(session_id: str, shot_index: int):
             )
 
         shot = shots[shot_index - 1]
-        image_path = shot.get('image_path')
+
+        # Determine which image path to use based on variant
+        variant = request.variant
+        if variant == 'then':
+            image_path = shot.get('then_image_path') or shot.get('image_path')
+        elif variant == 'now':
+            image_path = shot.get('now_image_path') or shot.get('image_path')
+        else:
+            # For regular shots or when no variant specified, use image_path
+            image_path = shot.get('image_path')
+
         if not image_path:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Shot has no image"
+                detail=f"Shot has no image for variant '{variant or 'default'}'"
             )
 
-        # Build absolute path
-        abs_image_path = os.path.join(config.PROJECT_ROOT, "output", image_path.replace("/", os.sep))
+        # Resolve the path using the config helper which handles all edge cases
+        abs_image_path = config.resolve_path(image_path)
+
         if not os.path.exists(abs_image_path):
-            abs_image_path = os.path.join(config.ABS_OUTPUT_DIR, image_path.replace("/", os.sep))
-        
-        if not os.path.exists(abs_image_path):
-             raise HTTPException(
+            logger.error(f"Image file not found: {abs_image_path}")
+            logger.error(f"Original path: {image_path}")
+            # Try listing files in the session directory for debugging
+            session_dir = os.path.join(getattr(config, 'ABS_SESSIONS_DIR', 'output/sessions'), session_id)
+            images_dir = os.path.join(session_dir, 'images')
+            if os.path.exists(images_dir):
+                logger.error(f"Files in images directory: {os.listdir(images_dir)}")
+            raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Image file not found on disk"
             )
 
-        logger.info(f"Removing watermark for shot {shot_index}: {abs_image_path}")
+        logger.info(f"Removing watermark for shot {shot_index} (variant={variant}): {abs_image_path}")
         _remove_watermark(abs_image_path)
-        
+
         return {"status": "success"}
 
     except HTTPException:
@@ -360,7 +460,8 @@ async def regenerate_shot_image(session_id: str, shot_index: int, request: Regen
         result = await generation_service.regenerate_shot_image(
             session_id, shot_index, force=request.force,
             image_mode=request.image_mode, image_workflow=request.image_workflow,
-            seed=request.seed, prompt_override=request.prompt_override
+            seed=request.seed, prompt_override=request.prompt_override,
+            image_variant=request.image_variant or "both"
         )
         return {"status": "success", "image_path": result}
     except Exception as e:
@@ -377,7 +478,8 @@ async def regenerate_shot_video(session_id: str, shot_index: int, request: Regen
     try:
         result = await generation_service.regenerate_shot_video(
             session_id, shot_index, force=request.force,
-            video_mode=request.video_mode, video_workflow=request.video_workflow
+            video_mode=request.video_mode, video_workflow=request.video_workflow,
+            video_variant=request.video_variant or "both"
         )
         return {"status": "success", "video_path": result}
     except Exception as e:
@@ -650,7 +752,7 @@ async def delete_shot_video_variation(session_id: str, shot_index: int, video_pa
 
 
 @router.post("/{shot_index}/upload-image")
-async def upload_shot_image(session_id: str, shot_index: int, file: UploadFile = File(...)):
+async def upload_shot_image(session_id: str, shot_index: int, variant: str = None, file: UploadFile = File(...)):
     """Upload a custom image from disk for a shot (bypasses AI generation)"""
     try:
         shots = await get_shots(session_id)
@@ -709,6 +811,18 @@ async def upload_shot_image(session_id: str, shot_index: int, file: UploadFile =
         # Update the shot record
         shot['image_path'] = rel_path
         shot['image_generated'] = True
+        
+        # If this is an FLFI2V shot and a variant was specified, set the specific path
+        if variant and shot.get('is_flfi2v'):
+            if variant == 'then':
+                shot['then_image_path'] = rel_path
+                shot['then_image_generated'] = True
+                logger.info(f"Set uploaded image as THEN image for shot {shot_index}")
+            elif variant == 'now':
+                shot['now_image_path'] = rel_path
+                shot['now_image_generated'] = True
+                logger.info(f"Set uploaded image as NOW image for shot {shot_index}")
+
         image_paths = shot.get('image_paths', [])
         if rel_path not in image_paths:
             image_paths.append(rel_path)
@@ -733,7 +847,7 @@ async def upload_shot_image(session_id: str, shot_index: int, file: UploadFile =
 
 
 @router.post("/{shot_index}/upload-video")
-async def upload_shot_video(session_id: str, shot_index: int, file: UploadFile = File(...)):
+async def upload_shot_video(session_id: str, shot_index: int, variant: str = None, file: UploadFile = File(...)):
     """Upload a custom video from disk for a shot (bypasses AI generation)"""
     try:
         shots = await get_shots(session_id)
@@ -789,6 +903,18 @@ async def upload_shot_video(session_id: str, shot_index: int, file: UploadFile =
         # Update the shot record
         shot['video_path'] = rel_path
         shot['video_rendered'] = True
+
+        # If this is an FLFI2V shot and a variant was specified, set the specific path
+        if variant and shot.get('is_flfi2v'):
+            if variant == 'meeting':
+                shot['meeting_video_path'] = rel_path
+                shot['meeting_video_rendered'] = True
+                logger.info(f"Set uploaded video as MEETING video for shot {shot_index}")
+            elif variant == 'departure':
+                shot['departure_video_path'] = rel_path
+                shot['departure_video_rendered'] = True
+                logger.info(f"Set uploaded video as DEPARTURE video for shot {shot_index}")
+
         video_paths = shot.get('video_paths', [])
         if rel_path not in video_paths:
             video_paths.append(rel_path)

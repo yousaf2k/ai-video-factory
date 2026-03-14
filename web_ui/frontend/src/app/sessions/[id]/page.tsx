@@ -31,6 +31,7 @@ export default function SessionDetailPage() {
     Record<string, boolean>
   >({});
   const [imageVersion, setImageVersion] = useState<number>(Date.now());
+  const [isUpdatingAspectRatio, setIsUpdatingAspectRatio] = useState(false);
 
   // Regeneration Modal State
   const [showRegenModal, setShowRegenModal] = useState<"16:9" | "9:16" | null>(
@@ -40,6 +41,22 @@ export default function SessionDetailPage() {
   const [regenImageWorkflow, setRegenImageWorkflow] = useState<string>("flux2");
   const [regenSeed, setRegenSeed] = useState<number | "">("");
   const [regenForce, setRegenForce] = useState(true);
+
+  const handleUpdateAspectRatio = async (newAspectRatio: "16:9" | "9:16") => {
+    try {
+      setIsUpdatingAspectRatio(true);
+      await api.updateSession(sessionId, {
+        aspect_ratio: newAspectRatio
+      });
+      queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    } catch (error) {
+      console.error("Failed to update aspect ratio:", error);
+      alert("Failed to update aspect ratio. Please try again.");
+    } finally {
+      setIsUpdatingAspectRatio(false);
+    }
+  };
 
   const handleGenerateThumbnail = async (aspectRatio: "16:9" | "9:16") => {
     try {
@@ -160,6 +177,44 @@ export default function SessionDetailPage() {
               <p className="text-sm text-foreground/90 whitespace-pre-wrap">
                 {session.idea}
               </p>
+            </div>
+
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[10px]">
+                  📐
+                </span>
+                Aspect Ratio
+              </h2>
+              <div className="bg-background/50 rounded-lg p-4 border border-border/30">
+                <Select
+                  value={session.aspect_ratio || "16:9"}
+                  onValueChange={(val) => handleUpdateAspectRatio(val as "16:9" | "9:16")}
+                  disabled={isUpdatingAspectRatio}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Aspect Ratio" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="16:9">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">16:9 Landscape</span>
+                        <span className="text-xs text-muted-foreground">(YouTube, Desktop)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="9:16">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">9:16 Portrait</span>
+                        <span className="text-xs text-muted-foreground">(TikTok, Reels, Shorts)</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  Current: <span className="font-semibold">{session.aspect_ratio || "16:9"}</span>
+                  {isUpdatingAspectRatio && " (Updating...)"}
+                </p>
+              </div>
             </div>
 
             <div className="mt-6">

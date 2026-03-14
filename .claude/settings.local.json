@@ -7,7 +7,8 @@
       "Bash(ls:*)",
       "Bash(npm run dev)",
       "Bash(start http://localhost:3000)",
-      "Bash(start http://localhost:3001/sessions)"
+      "Bash(start http://localhost:3001/sessions)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

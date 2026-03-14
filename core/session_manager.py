@@ -61,7 +61,7 @@ class SessionManager:
             return latest['meta']
         return None
 
-    def create_session(self, idea, session_id=None, story_agent="default", shots_agent="default", total_duration=None):
+    def create_session(self, idea, session_id=None, story_agent="default", shots_agent="default", total_duration=None, aspect_ratio="16:9"):
         """Create a new session
 
         Args:
@@ -70,6 +70,7 @@ class SessionManager:
             story_agent: Story generation agent
             shots_agent: Shots prompt agent
             total_duration: Target video length in seconds
+            aspect_ratio: Video aspect ratio ("16:9" or "9:16")
         """
         if session_id is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -91,6 +92,7 @@ class SessionManager:
             'story_agent': story_agent,
             'shots_agent': shots_agent,
             'total_duration': total_duration,
+            'aspect_ratio': aspect_ratio,
             'started_at': datetime.now().isoformat(),
             'completed': False,
             'steps': {
@@ -163,12 +165,27 @@ class SessionManager:
                 'scene_id': shot.get('scene_id', 0),
                 'batch_number': shot.get('batch_number', idx),
                 # Status fields
-                'image_generated': False,
-                'image_path': None,
-                'image_paths': [],  # For multiple image variations
-                'video_rendered': False,
-                'video_path': None,
-                'video_paths': []
+                'image_generated': shot.get('image_generated', False),
+                'image_path': shot.get('image_path'),
+                'image_paths': shot.get('image_paths', []),  # For multiple image variations
+                'video_rendered': shot.get('video_rendered', False),
+                'video_path': shot.get('video_path'),
+                'video_paths': shot.get('video_paths', []),
+                # FLFI2V fields - preserve if present
+                'is_flfi2v': shot.get('is_flfi2v', False),
+                'character_id': shot.get('character_id'),
+                'then_image_prompt': shot.get('then_image_prompt'),
+                'then_image_generated': shot.get('then_image_generated'),
+                'then_image_path': shot.get('then_image_path'),
+                'now_image_prompt': shot.get('now_image_prompt'),
+                'now_image_generated': shot.get('now_image_generated'),
+                'now_image_path': shot.get('now_image_path'),
+                'meeting_video_prompt': shot.get('meeting_video_prompt'),
+                'meeting_video_rendered': shot.get('meeting_video_rendered'),
+                'meeting_video_path': shot.get('meeting_video_path'),
+                'departure_video_prompt': shot.get('departure_video_prompt'),
+                'departure_video_rendered': shot.get('departure_video_rendered'),
+                'departure_video_path': shot.get('departure_video_path'),
             }
             shots_with_status.append(shot_data)
 
@@ -311,6 +328,84 @@ class SessionManager:
         meta['completed_at'] = datetime.now().isoformat()
         self._save_meta(session_id, meta)
 
+    def mark_then_image_generated(self, session_id, shot_index, image_path):
+        """Mark THEN image as generated for FLFI2V shot"""
+        shots = self._load_shots(session_id)
+
+        if 0 <= shot_index - 1 < len(shots):
+            normalized_path = self._relativize_path(image_path)
+
+            shots[shot_index - 1]['then_image_generated'] = True
+            shots[shot_index - 1]['then_image_path'] = normalized_path
+
+            # Save updated shots.json
+            self._save_shots(session_id, shots)
+
+    def mark_now_image_generated(self, session_id, shot_index, image_path):
+        """Mark NOW image as generated for FLFI2V shot"""
+        shots = self._load_shots(session_id)
+
+        if 0 <= shot_index - 1 < len(shots):
+            normalized_path = self._relativize_path(image_path)
+
+            shots[shot_index - 1]['now_image_generated'] = True
+            shots[shot_index - 1]['now_image_path'] = normalized_path
+
+            # Save updated shots.json
+            self._save_shots(session_id, shots)
+
+    def mark_meeting_video_rendered(self, session_id, shot_index, video_path):
+        """Mark meeting video as rendered for FLFI2V shot"""
+        import os
+
+        # Verify video file exists before marking as rendered
+        if video_path and not os.path.exists(video_path):
+            print(f"[WARN] mark_meeting_video_rendered: Video file doesn't exist: {video_path}")
+            return
+
+        shots = self._load_shots(session_id)
+
+        if 0 <= shot_index - 1 < len(shots):
+            normalized_path = self._relativize_path(video_path)
+
+            shots[shot_index - 1]['meeting_video_rendered'] = True
+            shots[shot_index - 1]['meeting_video_path'] = normalized_path
+
+            # Also add to video_paths array if not already there
+            if normalized_path not in shots[shot_index - 1].get('video_paths', []):
+                if 'video_paths' not in shots[shot_index - 1]:
+                    shots[shot_index - 1]['video_paths'] = []
+                shots[shot_index - 1]['video_paths'].append(normalized_path)
+
+            # Save updated shots.json
+            self._save_shots(session_id, shots)
+
+    def mark_departure_video_rendered(self, session_id, shot_index, video_path):
+        """Mark departure video as rendered for FLFI2V shot"""
+        import os
+
+        # Verify video file exists before marking as rendered
+        if video_path and not os.path.exists(video_path):
+            print(f"[WARN] mark_departure_video_rendered: Video file doesn't exist: {video_path}")
+            return
+
+        shots = self._load_shots(session_id)
+
+        if 0 <= shot_index - 1 < len(shots):
+            normalized_path = self._relativize_path(video_path)
+
+            shots[shot_index - 1]['departure_video_rendered'] = True
+            shots[shot_index - 1]['departure_video_path'] = normalized_path
+
+            # Also add to video_paths array if not already there
+            if normalized_path not in shots[shot_index - 1].get('video_paths', []):
+                if 'video_paths' not in shots[shot_index - 1]:
+                    shots[shot_index - 1]['video_paths'] = []
+                shots[shot_index - 1]['video_paths'].append(normalized_path)
+
+            # Save updated shots.json
+            self._save_shots(session_id, shots)
+
     def get_session_dir(self, session_id):
         """Get the directory path for a session"""
         return os.path.join(self.sessions_dir, session_id)
@@ -330,6 +425,26 @@ class SessionManager:
     def get_shots(self, session_id):
         """Get shots from shots.json"""
         return self._load_shots(session_id)
+
+    def get_story(self, session_id):
+        """Get story from story.json"""
+        return self._load_story(session_id)
+
+    def _load_story(self, session_id):
+        """Load story from story.json"""
+        session_dir = os.path.join(self.sessions_dir, session_id)
+        story_path = os.path.join(session_dir, "story.json")
+
+        if os.path.exists(story_path):
+            try:
+                with open(story_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load story from {story_path}: {e}")
+                return None
+        else:
+            logger.warning(f"Story file not found: {story_path}")
+            return None
 
     def _save_meta(self, session_id, meta):
         """Save session metadata"""
