@@ -186,8 +186,8 @@ async def get_session_video(session_id: str, filename: str):
 async def generate_thumbnail(session_id: str, request: GenerateThumbnailRequest):
     """Generate a thumbnail for the session"""
     try:
-        from web_ui.backend.services.generation_service import GenerationService
-        gen_service = GenerationService()
+        from web_ui.backend.services.generation_service import get_generation_service
+        gen_service = get_generation_service()
         
         image_path = await gen_service.generate_thumbnail(
             session_id, 

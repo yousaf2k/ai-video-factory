@@ -881,6 +881,9 @@ GEMINIWEB_URL = "https://gemini.google.com/app"
 # ==========================================
 # Enable/disable Web UI server
 WEB_UI_ENABLED = os.getenv("WEB_UI_ENABLED", "true").lower() == "true"
+# ==========================================
+# Enable/disable Web UI server
+WEB_UI_ENABLED = os.getenv("WEB_UI_ENABLED", "true").lower() == "true"
 
 # Web UI backend host
 WEB_UI_HOST = os.getenv("WEB_UI_HOST", "127.0.0.1")

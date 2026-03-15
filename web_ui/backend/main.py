@@ -17,7 +17,7 @@ import config
 if sys.platform == 'win32':
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-from web_ui.backend.api import sessions, stories, shots, config as config_api
+from web_ui.backend.api import sessions, stories, shots, config as config_api, queue
 from web_ui.backend.websocket.manager import manager
 
 # Configure logging
@@ -48,11 +48,12 @@ app.include_router(sessions.router)
 app.include_router(stories.router)
 app.include_router(shots.router)
 app.include_router(config_api.router)
-
+app.include_router(queue.router)
 
 @app.get("/")
 async def root():
     """Root endpoint - API info"""
+    print("[DEBUG] Root endpoint accessed")
     return {
         "name": "AI Video Factory API",
         "version": "1.0.0",
@@ -95,14 +96,33 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
-    import asyncio
+    with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "w") as f: f.write("[DEBUG] Startup: event triggered\n")
+    print("[DEBUG] Startup: Event triggered")
+    print("[DEBUG] Startup: Initializing ConnectionManager")
+    from web_ui.backend.websocket.manager import manager
     manager.set_loop(asyncio.get_running_loop())
-    logger.info("Starting AI Video Factory API")
-    logger.info(f"CORS origins: {config.WEB_UI_CORS_ORIGINS}")
 
-    # Ensure output directories exist
+    print("[DEBUG] Startup: Ensuring output directories exist")
+    import config
     sessions_dir = config.ABS_SESSIONS_DIR
     os.makedirs(sessions_dir, exist_ok=True)
+    
+    print("[DEBUG] Startup: Importing get_generation_service")
+    from web_ui.backend.services.generation_service import get_generation_service
+    print("[DEBUG] Startup: Getting generation service instance")
+    gen_service = get_generation_service()
+    print("[DEBUG] Startup: Ensuring queue processor started")
+
+    async def deferred_start():
+        await asyncio.sleep(5)
+        print("[DEBUG] Startup: 5s Deferral complete, starting processor task")
+        gen_service._ensure_queue_processor_started()
+
+    asyncio.create_task(deferred_start())
+    print("[DEBUG] Startup: Scheduled deferred queue processor start")
+    logger.info("Generation Queue Processor started on startup")
+    
+    with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "a") as f: f.write("[DEBUG] Startup: Completed startup_event\n")
     
     # Note: Sessions assets (images/videos) are now served dynamically 
     # via endpoints in sessions.py to support newly created sessions
@@ -119,11 +139,12 @@ def run_server(host: str = None, port: int = None):
     logger.info(f"Starting server at http://{host}:{port}")
     logger.info(f"API documentation available at http://{host}:{port}/docs")
 
+    print(f"[DEBUG] Uvicorn running with host={host}, port={port}")
     uvicorn.run(
         "web_ui.backend.main:app",
         host=host,
         port=port,
-        reload=True,
+        reload=False,
         log_level="info"
     )
 

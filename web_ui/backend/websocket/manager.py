@@ -89,8 +89,20 @@ class ConnectionManager:
     def broadcast_sync(self, session_id: str, message: dict):
         """Synchronous version of broadcast_to_session for use in threads"""
         import asyncio
-        
+
         self._update_cache(session_id, message)
+
+        # Special handling for 'global' session (queue updates)
+        if session_id == 'global':
+            if self.loop and self.loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(
+                    self._broadcast_to_all_clients(message), self.loop
+                )
+                future.add_done_callback(
+                    lambda f: logger.warning(f"Broadcast error: {f.exception()}") if f.exception() else None
+                )
+            return
+
         if session_id not in self.active_connections:
             return
         if self.loop and self.loop.is_running():
@@ -103,6 +115,55 @@ class ConnectionManager:
             )
         else:
             logger.warning(f"Cannot broadcast: no event loop available (loop={self.loop})")
+
+    async def _broadcast_to_all_clients(self, message: dict):
+        """Send a message to all connected clients regardless of session"""
+        all_connections = []
+        for session_conns in self.active_connections.values():
+            all_connections.extend(session_conns)
+
+        disconnected = []
+        for connection in all_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.warning(f"Failed to send global WebSocket message: {e}")
+                disconnected.append(connection)
+
+        # Clean up dead connections across all sessions
+        for conn in disconnected:
+            for session_id, conns in list(self.active_connections.items()):
+                if conn in conns:
+                    self.disconnect(conn, session_id)
+                    break
+
+    # Queue-specific broadcast methods (convenience wrappers)
+    def broadcast_queue_update(self, event_type: str, data: dict):
+        """Broadcast queue state change to all clients"""
+        self.broadcast_sync('global', {
+            'type': event_type,
+            'data': data
+        })
+
+    def broadcast_queue_item_progress(self, item_id: str, progress: int):
+        """Update progress percentage for active item"""
+        self.broadcast_queue_update('queue.item_progress', {
+            'item_id': item_id,
+            'progress': progress
+        })
+
+    def broadcast_queue_item_status(self, item_id: str, status: str):
+        """Update item status (queued -> active -> completed)"""
+        self.broadcast_queue_update(f'queue.item_{status}', {
+            'item_id': item_id,
+            'status': status
+        })
+
+    def broadcast_queue_statistics(self):
+        """Broadcast updated statistics (called automatically by QueueService)"""
+        # This is handled by QueueService._broadcast_statistics()
+        # Kept here for API consistency
+        pass
 
 # Global instance
 manager = ConnectionManager()

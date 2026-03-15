@@ -21,6 +21,14 @@ from web_ui.backend.websocket.manager import manager
 
 logger = get_logger(__name__)
 
+# Import queue models and service
+from web_ui.backend.models.queue import (
+    QueueItem,
+    GenerationType,
+    QueueItemStatus
+)
+from web_ui.backend.services.queue_service import get_queue_service
+
 
 class GenerationService:
     """Service for async generation operations"""
@@ -45,11 +53,229 @@ class GenerationService:
         self.active_shots: dict[str, int] = {}
         self.active_scenes: dict[str, int] = {}
 
+        # Track active queue items for progress updates
+        # Maps (session_id, shot_index, generation_type) -> item_id
+        self.active_queue_items: dict[str, str] = {}
+
+        # Queue processor state
+        self._queue_processor_running = False
+        self._queue_processor_task = None # This is no longer used for the main loop, but might be for other tasks
+        self._queue_processor_started = False
+        self._queue_processor_thread: Optional[threading.Thread] = None # New thread object
+
+    def _ensure_queue_processor_started(self):
+        """Ensure background task is running"""
+        # with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "a") as f: f.write("[DEBUG] inside _ensure_queue_processor_started\n")
+
+        if self._queue_processor_started:
+            return
+
+        if self._queue_processor_running:
+            logger.warning("Queue processor already starting")
+            return
+
+        self._queue_processor_running = True
+        self._queue_processor_started = True
+
+        # Create background thread for queue processor
+        def run_processor():
+            import asyncio
+            logger.info("Background thread starting queue processor loop")
+            asyncio.run(self._queue_processor_loop())
+            logger.info("Background thread queue processor loop finished")
+
+        import threading
+        thread = threading.Thread(target=run_processor, daemon=True)
+        thread.start()
+        logger.info("Started generation queue processor thread")
+
+    async def _queue_processor_loop(self):
+        """Background loop that processes queue items with concurrency limit"""
+        import config
+
+        with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "a") as f: f.write("[DEBUG] loop: started\n")
+
+        # Get concurrency limit
+        limit = getattr(config, 'CONCURRENT_GENERATION_LIMIT', 2)
+        semaphore = asyncio.Semaphore(limit)
+        logger.info(f"Queue processor started with concurrency limit of {limit}")
+
+        async def process_single_item(item: QueueItem):
+            """Process a single queue item with semaphore control"""
+            async with semaphore:
+                try:
+                    logger.info(f"Processing queue item {item.item_id}: {item.generation_type.value} for shot {item.shot_index}")
+                    print(f"[DEBUG] getting queue_service", flush=True)
+                    # Mark as active
+                    queue_service = get_queue_service()
+                    print(f"[DEBUG] mark_active", flush=True)
+                    queue_service.mark_active(item.item_id)
+                    print(f"[DEBUG] finished mark_active", flush=True)
+
+                    # Process the item based on generation type
+                    print(f"[DEBUG] routing generation type", flush=True)
+                    if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]:
+                        print(f"[DEBUG] routing to process_image_generation", flush=True)
+                        await self._process_image_generation(item)
+                    elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
+                        print(f"[DEBUG] routing to process_video_generation", flush=True)
+                        await self._process_video_generation(item)
+                    elif item.generation_type == GenerationType.NARRATION:
+                        await self._process_narration_generation(item)
+                    elif item.generation_type == GenerationType.BACKGROUND:
+                        await self._process_background_generation(item)
+                    else:
+                        logger.warning(f"Unknown generation type: {item.generation_type}")
+                        queue_service.mark_failed(item.item_id, f"Unknown generation type: {item.generation_type}")
+
+                except Exception as e:
+                    logger.error(f"Error processing queue item {item.item_id}: {e}")
+                    queue_service = get_queue_service()
+                    queue_service.mark_failed(item.item_id, str(e))
+
+        # Track active tasks
+        active_tasks = set()
+
+        while self._queue_processor_running:
+            try:
+                # Get queue service
+                queue_service = get_queue_service()
+
+                # Check if queue is paused
+                if queue_service.is_paused():
+                    await asyncio.sleep(1)
+                    continue
+
+                # Clean up completed tasks
+                active_tasks = {task for task in active_tasks if not task.done()}
+
+                # Check if we've reached concurrency limit
+                if len(active_tasks) >= limit:
+                    await asyncio.sleep(0.5)
+                    continue
+
+                # Get next queued items (up to available slots)
+                queued_items = queue_service.get_queue(status=QueueItemStatus.QUEUED)
+                available_slots = limit - len(active_tasks)
+
+                if not queued_items:
+                    # No items to process, wait a bit
+                    await asyncio.sleep(0.5)
+                    continue
+
+                # Start processing items (up to available slots)
+                items_to_process = queued_items[:available_slots]
+                for item in items_to_process:
+                    task = asyncio.create_task(process_single_item(item))
+                    active_tasks.add(task)
+
+                # Small delay before checking for more items
+                await asyncio.sleep(0.1)
+
+            except Exception as e:
+                logger.error(f"Error in queue processor loop: {e}")
+                await asyncio.sleep(1)
+
+        # Wait for remaining tasks to complete
+        if active_tasks:
+            logger.info(f"Waiting for {len(active_tasks)} active tasks to complete...")
+            await asyncio.gather(*active_tasks, return_exceptions=True)
+
+        logger.info("Queue processor stopped")
+
+    async def _process_image_generation(self, item: QueueItem):
+        """Process image generation for a queue item"""
+        try:
+            # Determine if this is a FLFI2V variant
+            if item.generation_type == GenerationType.THEN_IMAGE:
+                image_variant = "then"
+            elif item.generation_type == GenerationType.NOW_IMAGE:
+                image_variant = "now"
+            else:
+                image_variant = None
+
+            # Get session title
+            session_meta = self.session_manager.get_session(item.session_id)
+            session_title = session_meta.get('title', item.session_id) if session_meta else item.session_id
+
+            logger.info(f"ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}")
+            print(f"[DEBUG] ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}", flush=True)
+            
+            # Call regenerate_shot_image
+            await self.regenerate_shot_image(
+                item.session_id,
+                item.shot_index,
+                force=True,
+                image_mode=None,
+                image_workflow=None,
+                prompt_override=None,
+                session_title=session_title,
+                image_variant=image_variant
+            )
+
+            logger.info(f"Completed image generation for queue item {item.item_id}")
+            print(f"[DEBUG] FINISHED AWAIT regenerate_shot_image for item {item.item_id}", flush=True)
+
+        except Exception as e:
+            logger.error(f"Error processing image generation for {item.item_id}: {e}")
+            raise
+
+    async def _process_video_generation(self, item: QueueItem):
+        """Process video generation for a queue item"""
+        try:
+            # Determine if this is a FLFI2V variant
+            if item.generation_type == GenerationType.MEETING_VIDEO:
+                video_variant = "meeting"
+            elif item.generation_type == GenerationType.DEPARTURE_VIDEO:
+                video_variant = "departure"
+            else:
+                video_variant = None
+
+            # Get session title
+            session_meta = self.session_manager.get_session(item.session_id)
+            session_title = session_meta.get('title', item.session_id) if session_meta else item.session_id
+
+            # Call regenerate_shot_video
+            await self.regenerate_shot_video(
+                item.session_id,
+                item.shot_index,
+                force=True,
+                video_mode=None,
+                video_workflow=None,
+                session_title=session_title,
+                video_variant=video_variant
+            )
+
+            logger.info(f"Completed video generation for queue item {item.item_id}")
+        except Exception as e:
+            logger.error(f"Error processing video generation for {item.item_id}: {e}")
+            raise
+
+    async def _process_narration_generation(self, item: QueueItem):
+        """Process narration generation for a queue item"""
+        # TODO: Implement narration generation
+        logger.warning(f"Narration generation not yet implemented for item {item.item_id}")
+        raise NotImplementedError("Narration generation not yet implemented")
+
+    async def _process_background_generation(self, item: QueueItem):
+        """Process background generation for a queue item"""
+        # TODO: Implement background generation
+        logger.warning(f"Background generation not yet implemented for item {item.item_id}")
+        raise NotImplementedError("Background generation not yet implemented")
+
     def cancel_session(self, session_id: str):
         """Mark a session as cancelled to halt background queue processing."""
         self.cancelled_sessions.add(session_id)
         if session_id in self.queued_shots:
             self.queued_shots.pop(session_id)
+
+        # Also cancel all queued items in QueueService
+        queue_service = get_queue_service()
+        queued_items = queue_service.get_queue(session_id=session_id)
+        for item in queued_items:
+            if item.status == QueueItemStatus.QUEUED:
+                queue_service.mark_cancelled(item.item_id)
+
         logger.info(f"Marked session {session_id} as cancelled. Future queued items will be skipped.")
 
     def cancel_single_shot(self, session_id: str, shot_index: int):
@@ -59,13 +285,20 @@ class GenerationService:
         self.cancelled_shots[session_id].add(shot_index)
         if session_id in self.queued_shots and shot_index in self.queued_shots[session_id]:
             self.queued_shots[session_id].remove(shot_index)
-            
+
+        # Also cancel queued items in QueueService for this shot
+        queue_service = get_queue_service()
+        queued_items = queue_service.get_queue(session_id=session_id)
+        for item in queued_items:
+            if item.shot_index == shot_index and item.status == QueueItemStatus.QUEUED:
+                queue_service.mark_cancelled(item.item_id)
+
         # If this is the currently actively generating shot, tell ComfyUI to stop
         if self.active_shots.get(session_id) == shot_index:
             from core.comfy_client import interrupt_generation
             logger.info(f"Shot {shot_index} is currently active. Sending interrupt to ComfyUI.")
             interrupt_generation()
-            
+
         logger.info(f"Marked shot {shot_index} in session {session_id} as cancelled.")
 
     def cancel_scene_narration(self, session_id: str, scene_id: int):
@@ -84,130 +317,225 @@ class GenerationService:
             
         logger.info(f"Marked scene {scene_id} narration in session {session_id} as cancelled.")
 
+    def _create_queue_item(
+        self,
+        session_id: str,
+        shot_index: Optional[int],
+        generation_type: GenerationType,
+        shot: dict = None,
+        story: dict = None
+    ) -> QueueItem:
+        """
+        Create a QueueItem for tracking generation in the unified queue.
+
+        Args:
+            session_id: Session identifier
+            shot_index: Shot index (1-based)
+            generation_type: Type of generation
+            shot: Shot data dictionary
+            story: Story data dictionary
+
+        Returns:
+            QueueItem object
+        """
+        # Get session metadata for display
+        session_meta = self.session_manager.get_session(session_id)
+        session_title = session_meta.get('title', session_id) if session_meta else session_id
+
+        # Extract shot details if available
+        shot_id = shot.get('id') if shot else None
+        scene_name = shot.get('scene_name') if shot else None
+        character_name = shot.get('character_name') if shot else None
+
+        # Check if FLFI2V
+        is_flfi2v = shot.get('is_flfi2v', False) if shot else False
+
+        return QueueItem(
+            item_id="",  # Will be assigned by QueueService
+            session_id=session_id,
+            shot_index=shot_index,
+            scene_id=shot.get('scene_id') if shot else None,
+            generation_type=generation_type,
+            status=QueueItemStatus.QUEUED,
+            progress=0,
+            priority=100,  # Default priority
+            is_flfi2v=is_flfi2v,
+            character_name=character_name,
+            session_title=session_title,
+            scene_name=scene_name,
+            shot_id=shot_id
+        )
+
+    def _get_queue_item_id(
+        self,
+        session_id: str,
+        shot_index: int,
+        generation_type: GenerationType
+    ) -> Optional[str]:
+        """
+        Get the queue item_id for a specific shot and generation type.
+
+        Args:
+            session_id: Session identifier
+            shot_index: Shot index (1-based)
+            generation_type: Type of generation
+
+        Returns:
+            Queue item ID or None if not found
+        """
+        queue_service = get_queue_service()
+        queue_items = queue_service.get_queue(session_id=session_id)
+
+        # Find matching queue item
+        for item in queue_items:
+            if (item.shot_index == shot_index and
+                item.generation_type == generation_type and
+                item.status in [QueueItemStatus.QUEUED, QueueItemStatus.ACTIVE]):
+                return item.item_id
+
+        return None
+
+    def _mark_queue_item_active(
+        self,
+        session_id: str,
+        shot_index: int,
+        generation_type: GenerationType
+    ):
+        """Mark a queue item as active (started processing)."""
+        item_id = self._get_queue_item_id(session_id, shot_index, generation_type)
+        if item_id:
+            queue_service = get_queue_service()
+            queue_service.mark_active(item_id)
+            # Store active mapping for progress updates
+            key = f"{session_id}:{shot_index}:{generation_type.value}"
+            self.active_queue_items[key] = item_id
+            logger.info(f"Marked queue item {item_id} as active ({generation_type.value}, shot {shot_index})")
+
+    def _update_queue_item_progress(
+        self,
+        session_id: str,
+        shot_index: int,
+        generation_type: GenerationType,
+        progress: int
+    ):
+        """Update progress for an active queue item."""
+        item_id = self._get_queue_item_id(session_id, shot_index, generation_type)
+        if item_id:
+            queue_service = get_queue_service()
+            queue_service.update_progress(item_id, progress)
+            logger.debug(f"Updated queue item {item_id} progress to {progress}%")
+
+    def _mark_queue_item_completed(
+        self,
+        session_id: str,
+        shot_index: int,
+        generation_type: GenerationType,
+        progress: int = 100
+    ):
+        """Mark a queue item as completed."""
+        item_id = self._get_queue_item_id(session_id, shot_index, generation_type)
+        if item_id:
+            queue_service = get_queue_service()
+            queue_service.mark_completed(item_id, progress)
+            # Remove from active tracking
+            key = f"{session_id}:{shot_index}:{generation_type.value}"
+            self.active_queue_items.pop(key, None)
+            logger.info(f"Marked queue item {item_id} as completed ({generation_type.value}, shot {shot_index})")
+
+    def _mark_queue_item_failed(
+        self,
+        session_id: str,
+        shot_index: int,
+        generation_type: GenerationType,
+        error_message: str
+    ):
+        """Mark a queue item as failed."""
+        item_id = self._get_queue_item_id(session_id, shot_index, generation_type)
+        if item_id:
+            queue_service = get_queue_service()
+            queue_service.mark_failed(item_id, error_message)
+            # Remove from active tracking
+            key = f"{session_id}:{shot_index}:{generation_type.value}"
+            self.active_queue_items.pop(key, None)
+            logger.warning(f"Marked queue item {item_id} as failed: {error_message}")
+
     async def run_batch_generation(self, session_id: str, request: Any):
         """
-        Background task to process a batch of generations sequentially with a concurrency limit.
-        Since ComfyUI takes time, this prevents destroying progress on browser refresh.
+        Add items to queue for batch generation.
+        Actual processing is handled by the background queue processor.
         """
         from web_ui.backend.websocket.manager import manager
         import config
-        
+
+        # Ensure queue processor is running
+        self._ensure_queue_processor_started()
+
         # Clear any old cancellation flags from previous runs
         if session_id in self.cancelled_sessions:
             self.cancelled_sessions.remove(session_id)
         if session_id in self.cancelled_shots:
             self.cancelled_shots.pop(session_id)
-            
-        limit = getattr(config, 'CONCURRENT_GENERATION_LIMIT', 2)
-        logger.info(f"Using concurrency limit of {limit} for batch generation")
-        semaphore = asyncio.Semaphore(limit)
-        
-        # Populate the queued tracking dict for UI refreshes
+
+        # Create QueueItems and add to QueueService
+        queue_service = get_queue_service()
+        shots = self.session_manager.get_shots(session_id)
+        story = self.session_manager.get_story(session_id)
+
+        queue_items = []
+        for idx in request.shot_indices:
+            shot = shots[idx - 1] if idx <= len(shots) else None
+
+            # Create image queue item if regenerating images
+            if request.regenerate_images:
+                # For FLFI2V shots, create separate items for THEN and NOW images
+                if shot and shot.get('is_flfi2v') and story.get('project_type') == 2:
+                    # THEN image item
+                    then_item = self._create_queue_item(
+                        session_id, idx, GenerationType.THEN_IMAGE, shot, story
+                    )
+                    queue_items.append(then_item)
+                    # NOW image item
+                    now_item = self._create_queue_item(
+                        session_id, idx, GenerationType.NOW_IMAGE, shot, story
+                    )
+                    queue_items.append(now_item)
+                else:
+                    # Standard image item
+                    image_item = self._create_queue_item(
+                        session_id, idx, GenerationType.IMAGE, shot, story
+                    )
+                    queue_items.append(image_item)
+
+            # Create video queue item if regenerating videos
+            if request.regenerate_videos:
+                # For FLFI2V shots, create separate items for meeting and departure videos
+                if shot and shot.get('is_flfi2v') and story.get('project_type') == 2:
+                    # Meeting video item
+                    meeting_item = self._create_queue_item(
+                        session_id, idx, GenerationType.MEETING_VIDEO, shot, story
+                    )
+                    queue_items.append(meeting_item)
+                    # Departure video item
+                    departure_item = self._create_queue_item(
+                        session_id, idx, GenerationType.DEPARTURE_VIDEO, shot, story
+                    )
+                    queue_items.append(departure_item)
+                else:
+                    # Standard video item
+                    video_item = self._create_queue_item(
+                        session_id, idx, GenerationType.VIDEO, shot, story
+                    )
+                    queue_items.append(video_item)
+
+        # Add all items to queue
+        if queue_items:
+            added_items = queue_service.add_items(queue_items)
+            logger.info(f"Added {len(added_items)} items to queue for session {session_id}")
+
+        # Also keep the old tracking for backward compatibility
         self.queued_shots[session_id] = set(request.shot_indices)
-        
-        # Helper to process a single shot synchronously within the bounded async loop
-        async def process_shot(shot_index: int):
-            # Abort before even acquiring semaphore if session or shot was cancelled
-            if session_id in self.cancelled_sessions:
-                logger.info(f"Session {session_id} cancelled. Skipping background shot {shot_index}.")
-                return
-            if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
-                logger.info(f"Shot {shot_index} cancelled explicitly. Skipping background generation.")
-                return
-                
-            async with semaphore:
-                try:
-                    # Double check inside semaphore just in case it took a while to acquire
-                    if session_id in self.cancelled_sessions:
-                        logger.info(f"Session {session_id} cancelled (after wait). Skipping shot {shot_index}.")
-                        return
-                    if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
-                        logger.info(f"Shot {shot_index} cancelled explicitly (after wait). Skipping.")
-                        return
 
-                    # Drop from queued tracking state (it is now actively generating)
-                    if session_id in self.queued_shots and shot_index in self.queued_shots[session_id]:
-                        self.queued_shots[session_id].remove(shot_index)
-
-                    # Determine granular force flags (with fallback to legacy 'force')
-                    f_images = getattr(request, 'force_images', None)
-                    if f_images is None:
-                        f_images = request.force
-                        
-                    f_videos = getattr(request, 'force_videos', None)
-                    if f_videos is None:
-                        f_videos = request.force
-
-                    # Load current shot state in case we need to skip existing images
-                    # (only load if we're actually generating images to save disk IO)
-                    shot_wants_skip = False
-                    if request.regenerate_images and not f_images:
-                        try:
-                            session = self.session_manager.get_session(session_id)
-                            if session and session.shots:
-                                shot_data = next((s for s in session.shots if s.get('index') == shot_index), None)
-                                if shot_data and shot_data.get('image_generated') and shot_data.get('image_path'):
-                                    shot_wants_skip = True
-                                    logger.info(f"Batch generation skipping existing image for shot {shot_index}")
-                        except Exception as e:
-                            logger.warning(f"Failed to check shot state before batch: {e}")
-
-                    # Load session meta for title
-                    session_meta = self.session_manager.get_session(session_id)
-                    session_title = session_meta.get('title', session_id) if session_meta else session_id
-
-                    # 1. Regenerate Image
-                    if request.regenerate_images and not shot_wants_skip:
-                        self.active_shots[session_id] = shot_index
-                        try:
-                            await self.regenerate_shot_image(
-                                session_id, shot_index, force=f_images,
-                                image_mode=request.image_mode, image_workflow=request.image_workflow,
-                                session_title=session_title
-                            )
-                        finally:
-                            self.active_shots.pop(session_id, None)
-
-                    # 2. Regenerate Video
-                    if request.regenerate_videos:
-                        # Check cancellation again before video
-                        if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
-                            logger.info(f"Shot {shot_index} cancelled before video phase.")
-                        else:
-                            self.active_shots[session_id] = shot_index
-                            try:
-                                # For videos, we use f_videos
-                                v_mode = getattr(request, 'video_mode', None)
-                                await self.regenerate_shot_video(
-                                    session_id, shot_index, force=f_videos,
-                                    video_mode=v_mode, video_workflow=request.video_workflow,
-                                    session_title=session_title
-                                )
-                            finally:
-                                self.active_shots.pop(session_id, None)
-                    
-                    # Ensure websocket completes for this shot if it hasn't somehow
-                    manager.broadcast_sync(session_id, {
-                        "type": "completed",
-                        "session_id": session_id,
-                        "shot_index": shot_index
-                    })
-
-                except Exception as e:
-                    logger.error(f"Batch error on shot {shot_index}: {str(e)}")
-                    # Broadcast error/cancel so UI spinner doesn't run forever
-                    manager.broadcast_sync(session_id, {
-                        "type": "cancelled",
-                        "session_id": session_id,
-                        "shot_index": shot_index,
-                        "shot_id": shot_data.get('id') if shot_data else None
-                    })
-
-        # Launch all tasks bounded by the semaphore
-        logger.info(f"Starting server-side batch generation for {len(request.shot_indices)} shots")
-        tasks = [process_shot(idx) for idx in request.shot_indices]
-        await asyncio.gather(*tasks, return_exceptions=True)
-        logger.info(f"Completed server-side batch generation for session {session_id}")
+        logger.info(f"Added {len(queue_items)} items to queue for session {session_id}. Queue processor will handle generation.")
 
     async def run_batch_narration_generation(self, session_id: str, request: Any):
         """
@@ -294,6 +622,8 @@ class GenerationService:
             Path to generated image (or dict with "then"/"now" keys for FLFI2V)
         """
         try:
+            print(f"[DEBUG] entering regenerate_shot_image for item {session_id} shot {shot_index} force={force}")
+            logger.info(f"entering regenerate_shot_image for item {session_id} shot {shot_index} force={force}")
             # Load shots and story
             shots = self.session_manager.get_shots(session_id)
             story = self.session_manager.get_story(session_id)
@@ -333,12 +663,16 @@ class GenerationService:
             # Generate image for single shot
             logger.info(f"Regenerating image for shot {shot_index}")
 
+            # Mark queue item as active
+            self._mark_queue_item_active(session_id, shot_index, GenerationType.IMAGE)
+
             # Broadcast initial 0% so UI resets from any stale progress
             manager.broadcast_sync(session_id, {
                 "type": "progress",
                 "session_id": session_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
+                "generation_type": "image",
                 "progress": 0
             })
 
@@ -358,12 +692,16 @@ class GenerationService:
             # Mark as generated
             self.session_manager.mark_image_generated(session_id, shot_index, image_path)
 
+            # Mark queue item as completed
+            self._mark_queue_item_completed(session_id, shot_index, GenerationType.IMAGE)
+
             # Broadcast completion to clear progress on frontend
             manager.broadcast_sync(session_id, {
                 "type": "completed",
                 "session_id": session_id,
                 "shot_index": shot_index,
-                "shot_id": shot.get('id')
+                "shot_id": shot.get('id'),
+                "generation_type": "image"
             })
 
             logger.info(f"Shot {shot_index} image regenerated: {image_path}")
@@ -371,12 +709,17 @@ class GenerationService:
 
         except Exception as e:
             logger.error(f"Error regenerating shot {shot_index} image: {e}")
+            # Mark queue item as failed
+            self._mark_queue_item_failed(session_id, shot_index, GenerationType.IMAGE, str(e))
+
             # Broadcast cancelled event to clear loading state in UI
             manager.broadcast_sync(session_id, {
                 "type": "cancelled",
                 "session_id": session_id,
                 "shot_index": shot_index,
-                "shot_id": shot.get('id')
+                "shot_id": shot.get('id'),
+                "generation_type": "image",
+                "error": str(e)
             })
             raise
 
@@ -423,104 +766,176 @@ class GenerationService:
         # Generate THEN image
         if image_variant in ["then", "both"]:
             if not shots[shot_index - 1].get('then_image_generated') or force:
-                then_prompt = shot.get('then_image_prompt', '')
-                if set_prompt:
-                    then_prompt = f"{then_prompt}. Background: {set_prompt}"
+                try:
+                    print(f"[DEBUG] entering _regenerate_flfi2v_images THEN-block for shot {shot_index}")
+                    logger.info(f"entering _regenerate_flfi2v_images THEN-block for shot {shot_index}")
+                    then_prompt = shot.get('then_image_prompt', '')
+                    if set_prompt:
+                        then_prompt = f"{then_prompt}. Background: {set_prompt}"
 
-                next_version = self._get_next_image_version(images_dir, shot_index, "then")
-                image_filename = f"shot_{shot_index:03d}_then_{next_version:03d}.png"
-                image_path = os.path.join(images_dir, image_filename)
+                    next_version = self._get_next_image_version(images_dir, shot_index, "then")
+                    image_filename = f"shot_{shot_index:03d}_then_{next_version:03d}.png"
+                    image_path = os.path.join(images_dir, image_filename)
 
-                # Use seed=1 for first THEN image, otherwise use provided seed or None
-                then_seed = 1 if next_version == 1 else seed
-                if next_version == 1:
-                    logger.info(f"FLFI2V shot {shot_index} THEN image using fixed seed: 1")
+                    # Use seed=1 for first THEN image, otherwise use provided seed or None
+                    then_seed = 1 if next_version == 1 else seed
+                    if next_version == 1:
+                        logger.info(f"FLFI2V shot {shot_index} THEN image using fixed seed: 1")
 
-                # Broadcast progress
-                manager.broadcast_sync(session_id, {
-                    "type": "progress",
-                    "session_id": session_id,
-                    "shot_index": shot_index,
-                    "shot_id": shot.get('id'),
-                    "progress": 0
-                })
+                    # Mark THEN_IMAGE queue item as active
+                    self._mark_queue_item_active(session_id, shot_index, GenerationType.THEN_IMAGE)
 
-                # Determine workflow and reference for THEN
-                then_workflow = image_workflow
-                if then_reference:
-                    # Auto-switch to IP-Adapter workflow when reference available
-                    if not then_workflow or then_workflow == "flux":
-                        then_workflow = "flux_ipadapter_then"
-                        logger.info(f"Using IP-Adapter workflow for THEN with reference: {then_reference}")
+                    # Broadcast progress
+                    manager.broadcast_sync(session_id, {
+                        "type": "progress",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "then_image",
+                        "progress": 0
+                    })
 
-                # Generate
-                result_path = await asyncio.to_thread(
-                    self._generate_single_image,
-                    session_id,
-                    {**shot, 'image_prompt': then_prompt},
-                    image_mode,
-                    then_workflow,
-                    then_seed,
-                    None,  # No prompt override for FLFI2V
-                    session_title,
-                    "then",
-                    then_reference  # Pass THEN reference image
-                )
+                    # Determine workflow and reference for THEN
+                    then_workflow = image_workflow
+                    if then_reference:
+                        # Auto-switch to IP-Adapter workflow when reference available
+                        if not then_workflow or then_workflow == "flux":
+                            then_workflow = "flux_ipadapter_then"
+                            logger.info(f"Using IP-Adapter workflow for THEN with reference: {then_reference}")
 
-                shots[shot_index - 1]['then_image_generated'] = True
-                shots[shot_index - 1]['then_image_path'] = self._get_relative_path(result_path)
-                results['then'] = shots[shot_index - 1]['then_image_path']
+                    # Generate
+                    result_path = await asyncio.to_thread(
+                        self._generate_single_image,
+                        session_id,
+                        {**shot, 'image_prompt': then_prompt},
+                        image_mode,
+                        then_workflow,
+                        then_seed,
+                        None,  # No prompt override for FLFI2V
+                        session_title,
+                        "then",
+                        then_reference,  # Pass THEN reference image
+                        GenerationType.THEN_IMAGE  # Pass generation type for queue tracking
+                    )
+
+                    shots[shot_index - 1]['then_image_generated'] = True
+                    shots[shot_index - 1]['then_image_path'] = self._get_relative_path(result_path)
+                    results['then'] = shots[shot_index - 1]['then_image_path']
+
+                    # Mark THEN_IMAGE queue item as completed
+                    self._mark_queue_item_completed(session_id, shot_index, GenerationType.THEN_IMAGE)
+
+                    # Broadcast completion
+                    manager.broadcast_sync(session_id, {
+                        "type": "completed",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "then_image"
+                    })
+                except Exception as e:
+                    logger.error(f"Error generating THEN image for shot {shot_index}: {e}")
+                    # Mark THEN_IMAGE queue item as failed
+                    self._mark_queue_item_failed(session_id, shot_index, GenerationType.THEN_IMAGE, str(e))
+
+                    # Broadcast error
+                    manager.broadcast_sync(session_id, {
+                        "type": "cancelled",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "then_image",
+                        "error": str(e)
+                    })
+                    # Continue to NOW image if "both" was requested
+                    if image_variant == "then":
+                        raise
 
         # Generate NOW image
         if image_variant in ["now", "both"]:
             if not shots[shot_index - 1].get('now_image_generated') or force:
-                now_prompt = shot.get('now_image_prompt', '')
-                if set_prompt:
-                    now_prompt = f"{now_prompt}. Background: {set_prompt}"
+                try:
+                    now_prompt = shot.get('now_image_prompt', '')
+                    if set_prompt:
+                        now_prompt = f"{now_prompt}. Background: {set_prompt}"
 
-                next_version = self._get_next_image_version(images_dir, shot_index, "now")
-                image_filename = f"shot_{shot_index:03d}_now_{next_version:03d}.png"
-                image_path = os.path.join(images_dir, image_filename)
+                    next_version = self._get_next_image_version(images_dir, shot_index, "now")
+                    image_filename = f"shot_{shot_index:03d}_now_{next_version:03d}.png"
+                    image_path = os.path.join(images_dir, image_filename)
 
-                # Use seed=1 for first NOW image, otherwise use provided seed or None
-                now_seed = 1 if next_version == 1 else seed
-                if next_version == 1:
-                    logger.info(f"FLFI2V shot {shot_index} NOW image using fixed seed: 1")
+                    # Use seed=1 for first NOW image, otherwise use provided seed or None
+                    now_seed = 1 if next_version == 1 else seed
+                    if next_version == 1:
+                        logger.info(f"FLFI2V shot {shot_index} NOW image using fixed seed: 1")
 
-                # Broadcast progress
-                manager.broadcast_sync(session_id, {
-                    "type": "progress",
-                    "session_id": session_id,
-                    "shot_index": shot_index,
-                    "shot_id": shot.get('id'),
-                    "progress": 50 if image_variant == "both" else 0
-                })
+                    # Mark NOW_IMAGE queue item as active
+                    self._mark_queue_item_active(session_id, shot_index, GenerationType.NOW_IMAGE)
 
-                # Determine workflow and reference for NOW
-                now_workflow = image_workflow
-                if now_reference:
-                    # Auto-switch to IP-Adapter workflow when reference available
-                    if not now_workflow or now_workflow == "flux":
-                        now_workflow = "flux_ipadapter_now"
-                        logger.info(f"Using IP-Adapter workflow for NOW with reference: {now_reference}")
+                    # Broadcast progress
+                    manager.broadcast_sync(session_id, {
+                        "type": "progress",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "now_image",
+                        "progress": 50 if image_variant == "both" else 0
+                    })
 
-                # Generate
-                result_path = await asyncio.to_thread(
-                    self._generate_single_image,
-                    session_id,
-                    {**shot, 'image_prompt': now_prompt},
-                    image_mode,
-                    now_workflow,
-                    now_seed,
-                    None,  # No prompt override for FLFI2V
-                    session_title,
-                    "now",
-                    now_reference  # Pass NOW reference image
-                )
+                    # Determine workflow and reference for NOW
+                    now_workflow = image_workflow
+                    if now_reference:
+                        # Auto-switch to IP-Adapter workflow when reference available
+                        if not now_workflow or now_workflow == "flux":
+                            now_workflow = "flux_ipadapter_now"
+                            logger.info(f"Using IP-Adapter workflow for NOW with reference: {now_reference}")
 
-                shots[shot_index - 1]['now_image_generated'] = True
-                shots[shot_index - 1]['now_image_path'] = self._get_relative_path(result_path)
-                results['now'] = shots[shot_index - 1]['now_image_path']
+                    # Generate
+                    result_path = await asyncio.to_thread(
+                        self._generate_single_image,
+                        session_id,
+                        {**shot, 'image_prompt': now_prompt},
+                        image_mode,
+                        now_workflow,
+                        now_seed,
+                        None,  # No prompt override for FLFI2V
+                        session_title,
+                        "now",
+                        now_reference,  # Pass NOW reference image
+                        GenerationType.NOW_IMAGE  # Pass generation type for queue tracking
+                    )
+
+                    shots[shot_index - 1]['now_image_generated'] = True
+                    shots[shot_index - 1]['now_image_path'] = self._get_relative_path(result_path)
+                    results['now'] = shots[shot_index - 1]['now_image_path']
+
+                    # Mark NOW_IMAGE queue item as completed
+                    self._mark_queue_item_completed(session_id, shot_index, GenerationType.NOW_IMAGE)
+
+                    # Broadcast completion
+                    manager.broadcast_sync(session_id, {
+                        "type": "completed",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "now_image"
+                    })
+                except Exception as e:
+                    logger.error(f"Error generating NOW image for shot {shot_index}: {e}")
+                    # Mark NOW_IMAGE queue item as failed
+                    self._mark_queue_item_failed(session_id, shot_index, GenerationType.NOW_IMAGE, str(e))
+
+                    # Broadcast error
+                    manager.broadcast_sync(session_id, {
+                        "type": "cancelled",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "now_image",
+                        "error": str(e)
+                    })
+                    # Only raise if this was the only variant requested
+                    if image_variant == "now":
+                        raise
 
         # Update standard image_path to NOW (for backward compatibility)
         if shots[shot_index - 1].get('now_image_path'):
@@ -529,14 +944,6 @@ class GenerationService:
 
         # Save shots
         self.session_manager._save_shots(session_id, shots)
-
-        # Broadcast completion
-        manager.broadcast_sync(session_id, {
-            "type": "completed",
-            "session_id": session_id,
-            "shot_index": shot_index,
-            "shot_id": shot.get('id')
-        })
 
         logger.info(f"FLFI2V shot {shot_index} images regenerated: {results}")
         return results
@@ -642,12 +1049,16 @@ class GenerationService:
             # Mark as rendered
             self.session_manager.mark_video_rendered(session_id, shot_index, video_path)
 
+            # Mark queue item as completed
+            self._mark_queue_item_completed(session_id, shot_index, GenerationType.VIDEO)
+
             # Broadcast completion to clear progress on frontend
             manager.broadcast_sync(session_id, {
                 "type": "completed",
                 "session_id": session_id,
                 "shot_index": shot_index,
-                "shot_id": shot.get('id')
+                "shot_id": shot.get('id'),
+                "generation_type": "video"
             })
 
             logger.info(f"Shot {shot_index} video regenerated: {video_path}")
@@ -868,89 +1279,160 @@ class GenerationService:
         # Generate meeting video
         if video_variant in ["meeting", "both"]:
             if shot.get('meeting_video_prompt') and (not shots[shot_index - 1].get('meeting_video_rendered') or force):
-                next_version = self._get_next_video_version(
-                    self.session_manager.get_videos_dir(session_id), shot_index, "meeting"
-                )
-                video_filename = f"shot_{shot_index:03d}_meeting_{next_version:03d}.mp4"
+                try:
+                    next_version = self._get_next_video_version(
+                        self.session_manager.get_videos_dir(session_id), shot_index, "meeting"
+                    )
+                    video_filename = f"shot_{shot_index:03d}_meeting_{next_version:03d}.mp4"
 
-                # Use seed=1 for first meeting video
-                meeting_seed = 1 if next_version == 1 else None
-                if next_version == 1:
-                    logger.info(f"FLFI2V shot {shot_index} meeting video using fixed seed: 1")
+                    # Use seed=1 for first meeting video
+                    meeting_seed = 1 if next_version == 1 else None
+                    if next_version == 1:
+                        logger.info(f"FLFI2V shot {shot_index} meeting video using fixed seed: 1")
 
-                # Broadcast progress
-                manager.broadcast_sync(session_id, {
-                    "type": "progress",
-                    "session_id": session_id,
-                    "shot_index": shot_index,
-                    "shot_id": shot.get('id'),
-                    "progress": 0
-                })
+                    # Mark MEETING_VIDEO queue item as active
+                    self._mark_queue_item_active(session_id, shot_index, GenerationType.MEETING_VIDEO)
 
-                # Generate
-                result_path = await asyncio.to_thread(
-                    self._generate_flfi2v_video,
-                    session_id,
-                    shot,
-                    "meeting",
-                    video_mode,
-                    video_workflow,
-                    session_title,
-                    video_filename,
-                    meeting_seed
-                )
+                    # Broadcast progress
+                    manager.broadcast_sync(session_id, {
+                        "type": "progress",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "meeting_video",
+                        "progress": 0
+                    })
 
-                shots[shot_index - 1]['meeting_video_rendered'] = True
-                shots[shot_index - 1]['meeting_video_path'] = self._get_relative_path(result_path)
-                results['meeting'] = shots[shot_index - 1]['meeting_video_path']
+                    # Generate
+                    result_path = await asyncio.to_thread(
+                        self._generate_flfi2v_video,
+                        session_id,
+                        shot,
+                        "meeting",
+                        video_mode,
+                        video_workflow,
+                        session_title,
+                        video_filename,
+                        meeting_seed,
+                        None,  # last_frame_image_path
+                        GenerationType.MEETING_VIDEO  # generation_type for queue tracking
+                    )
+
+                    shots[shot_index - 1]['meeting_video_rendered'] = True
+                    shots[shot_index - 1]['meeting_video_path'] = self._get_relative_path(result_path)
+                    results['meeting'] = shots[shot_index - 1]['meeting_video_path']
+
+                    # Mark MEETING_VIDEO queue item as completed
+                    self._mark_queue_item_completed(session_id, shot_index, GenerationType.MEETING_VIDEO)
+
+                    # Broadcast completion
+                    manager.broadcast_sync(session_id, {
+                        "type": "completed",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "meeting_video"
+                    })
+                except Exception as e:
+                    logger.error(f"Error generating meeting video for shot {shot_index}: {e}")
+                    # Mark MEETING_VIDEO queue item as failed
+                    self._mark_queue_item_failed(session_id, shot_index, GenerationType.MEETING_VIDEO, str(e))
+
+                    # Broadcast error
+                    manager.broadcast_sync(session_id, {
+                        "type": "cancelled",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "meeting_video",
+                        "error": str(e)
+                    })
+                    # Continue to departure video if "both" was requested
+                    if video_variant == "meeting":
+                        raise
 
         # Generate departure video
         if video_variant in ["departure", "both"]:
             if shot.get('departure_video_prompt') and (not shots[shot_index - 1].get('departure_video_rendered') or force):
-                next_version = self._get_next_video_version(
-                    self.session_manager.get_videos_dir(session_id), shot_index, "departure"
-                )
-                video_filename = f"shot_{shot_index:03d}_departure_{next_version:03d}.mp4"
+                try:
+                    next_version = self._get_next_video_version(
+                        self.session_manager.get_videos_dir(session_id), shot_index, "departure"
+                    )
+                    video_filename = f"shot_{shot_index:03d}_departure_{next_version:03d}.mp4"
 
-                # Use seed=1 for first departure video
-                departure_seed = 1 if next_version == 1 else None
-                if next_version == 1:
-                    logger.info(f"FLFI2V shot {shot_index} departure video using fixed seed: 1")
+                    # Use seed=1 for first departure video
+                    departure_seed = 1 if next_version == 1 else None
+                    if next_version == 1:
+                        logger.info(f"FLFI2V shot {shot_index} departure video using fixed seed: 1")
 
-                # Find next shot for departure video using intelligent transition algorithm
-                story = self.session_manager.get_story(session_id)
-                transition_result = self._find_next_shot_for_departure(shot, shots, story)
-                last_frame_image = transition_result['last_frame_image']
+                    # Find next shot for departure video using intelligent transition algorithm
+                    story = self.session_manager.get_story(session_id)
+                    transition_result = self._find_next_shot_for_departure(shot, shots, story)
+                    last_frame_image = transition_result['last_frame_image']
 
-                logger.info(f"Departure transition: {transition_result['transition_type']}")
-                logger.info(f"  -> {transition_result.get('description', '')}")
+                    logger.info(f"Departure transition: {transition_result['transition_type']}")
+                    logger.info(f"  -> {transition_result.get('description', '')}")
 
-                # Broadcast progress
-                manager.broadcast_sync(session_id, {
-                    "type": "progress",
-                    "session_id": session_id,
-                    "shot_index": shot_index,
-                    "shot_id": shot.get('id'),
-                    "progress": 50 if video_variant == "both" else 0
-                })
+                    # Mark DEPARTURE_VIDEO queue item as active
+                    self._mark_queue_item_active(session_id, shot_index, GenerationType.DEPARTURE_VIDEO)
 
-                # Generate with last_frame_image
-                result_path = await asyncio.to_thread(
-                    self._generate_flfi2v_video,
-                    session_id,
-                    shot,
-                    "departure",
-                    video_mode,
-                    video_workflow,
-                    session_title,
-                    video_filename,
-                    departure_seed,
-                    last_frame_image
-                )
+                    # Broadcast progress
+                    manager.broadcast_sync(session_id, {
+                        "type": "progress",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "departure_video",
+                        "progress": 50 if video_variant == "both" else 0
+                    })
 
-                shots[shot_index - 1]['departure_video_rendered'] = True
-                shots[shot_index - 1]['departure_video_path'] = self._get_relative_path(result_path)
-                results['departure'] = shots[shot_index - 1]['departure_video_path']
+                    # Generate with last_frame_image
+                    result_path = await asyncio.to_thread(
+                        self._generate_flfi2v_video,
+                        session_id,
+                        shot,
+                        "departure",
+                        video_mode,
+                        video_workflow,
+                        session_title,
+                        video_filename,
+                        departure_seed,
+                        last_frame_image,
+                        GenerationType.DEPARTURE_VIDEO  # generation_type for queue tracking
+                    )
+
+                    shots[shot_index - 1]['departure_video_rendered'] = True
+                    shots[shot_index - 1]['departure_video_path'] = self._get_relative_path(result_path)
+                    results['departure'] = shots[shot_index - 1]['departure_video_path']
+
+                    # Mark DEPARTURE_VIDEO queue item as completed
+                    self._mark_queue_item_completed(session_id, shot_index, GenerationType.DEPARTURE_VIDEO)
+
+                    # Broadcast completion
+                    manager.broadcast_sync(session_id, {
+                        "type": "completed",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "departure_video"
+                    })
+                except Exception as e:
+                    logger.error(f"Error generating departure video for shot {shot_index}: {e}")
+                    # Mark DEPARTURE_VIDEO queue item as failed
+                    self._mark_queue_item_failed(session_id, shot_index, GenerationType.DEPARTURE_VIDEO, str(e))
+
+                    # Broadcast error
+                    manager.broadcast_sync(session_id, {
+                        "type": "cancelled",
+                        "session_id": session_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "departure_video",
+                        "error": str(e)
+                    })
+                    # Only raise if this was the only variant requested
+                    if video_variant == "departure":
+                        raise
 
         # Update standard video_path to meeting (for backward compatibility)
         if shots[shot_index - 1].get('meeting_video_path'):
@@ -959,14 +1441,6 @@ class GenerationService:
 
         # Save shots
         self.session_manager._save_shots(session_id, shots)
-
-        # Broadcast completion
-        manager.broadcast_sync(session_id, {
-            "type": "completed",
-            "session_id": session_id,
-            "shot_index": shot_index,
-            "shot_id": shot.get('id')
-        })
 
         logger.info(f"FLFI2V shot {shot_index} videos regenerated: {results}")
         return results
@@ -1363,13 +1837,14 @@ class GenerationService:
                                prompt_override: Optional[str] = None,
                                session_title: Optional[str] = None,
                                variant: str = None,
-                               reference_image_path: str = None) -> str:
+                               reference_image_path: str = None,
+                               generation_type: GenerationType = None) -> str:
         """Generate image for a single shot (synchronous)
 
         Args:
-            variant: Optional variant name for FLFI2V ("then", "now", etc.)
-            reference_image_path: Optional path to reference image for IP-Adapter
         """
+        print(f"[DEBUG] entering _generate_single_image for item {session_id}")
+        logger.info(f"entering _generate_single_image for item {session_id}")
         from core.image_generator import generate_image
         import config
 
@@ -1397,8 +1872,11 @@ class GenerationService:
         if seed is None:
             seed = 1 if next_version == 1 else random.randint(0, 2**32 - 1)
 
+        last_reported_progress = -1
+
         # Progress callback to bridge ComfyUI steps to our WebSocket
         def on_step_progress(current, total):
+            nonlocal last_reported_progress
             # Check for cancellation
             if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
                 raise InterruptedError(f"Shot {shot_index} was cancelled")
@@ -1406,11 +1884,21 @@ class GenerationService:
                 raise InterruptedError(f"Session {session_id} was cancelled")
 
             progress = int((current / total) * 100) if total > 0 else 0
+            
+            if progress == last_reported_progress:
+                return
+            last_reported_progress = progress
+
+            # Update queue item progress for the correct generation type
+            queue_gen_type = generation_type or GenerationType.IMAGE
+            self._update_queue_item_progress(session_id, shot_index, queue_gen_type, progress)
+
             manager.broadcast_sync(session_id, {
                 "type": "progress",
                 "session_id": session_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
+                "generation_type": queue_gen_type.value,
                 "progress": progress
             })
 
@@ -1517,8 +2005,11 @@ class GenerationService:
 
             logger.info(f"Video submitted for shot {shot_index}: prompt_id={prompt_id}")
 
+            last_reported_progress = -1
+
             # Progress callback to bridge ComfyUI steps to our WebSocket
             def on_step_progress(current, total):
+                nonlocal last_reported_progress
                 # Check for cancellation
                 if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
                     raise InterruptedError(f"Shot {shot_index} was cancelled")
@@ -1526,11 +2017,20 @@ class GenerationService:
                     raise InterruptedError(f"Session {session_id} was cancelled")
 
                 progress = int((current / total) * 100) if total > 0 else 0
+                
+                if progress == last_reported_progress:
+                    return
+                last_reported_progress = progress
+
+                # Update queue item progress
+                self._update_queue_item_progress(session_id, shot_index, GenerationType.VIDEO, progress)
+
                 manager.broadcast_sync(session_id, {
                     "type": "progress",
                     "session_id": session_id,
                     "shot_index": shot_index,
                     "shot_id": shot.get('id'),
+                    "generation_type": "video",
                     "progress": progress
                 })
 
@@ -1571,7 +2071,8 @@ class GenerationService:
         variant: str, video_mode: Optional[str],
         workflow_name: Optional[str], session_title: Optional[str],
         video_filename: str, seed: Optional[int] = None,
-        last_frame_image_path: Optional[str] = None
+        last_frame_image_path: Optional[str] = None,
+        generation_type: GenerationType = None
     ) -> str:
         """Generate FLFI2V video for a single shot (synchronous)
 
@@ -1580,6 +2081,7 @@ class GenerationService:
             video_filename: The filename to save the video as
             seed: Optional seed for deterministic generation (use 1 for first video)
             last_frame_image_path: For departure videos, the next character's NOW image or scene image
+            generation_type: The generation type (MEETING_VIDEO, DEPARTURE_VIDEO) for queue tracking
 
         Video logic:
         - Meeting: THEN image (first frame) + NOW image (last frame)
@@ -1682,19 +2184,32 @@ class GenerationService:
 
         logger.info(f"FLFI2V video submitted for shot {shot_index} ({variant}): prompt_id={prompt_id}")
 
+        last_reported_progress = -1
+
         # Progress callback
         def on_step_progress(current, total):
+            nonlocal last_reported_progress
             if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
                 raise InterruptedError(f"Shot {shot_index} was cancelled")
             if session_id in self.cancelled_sessions:
                 raise InterruptedError(f"Session {session_id} was cancelled")
 
             progress = int((current / total) * 100) if total > 0 else 0
+            
+            if progress == last_reported_progress:
+                return
+            last_reported_progress = progress
+
+            # Update queue item progress for the correct generation type
+            queue_gen_type = generation_type or GenerationType.VIDEO
+            self._update_queue_item_progress(session_id, shot_index, queue_gen_type, progress)
+
             manager.broadcast_sync(session_id, {
                 "type": "progress",
                 "session_id": session_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
+                "generation_type": queue_gen_type.value,
                 "progress": progress
             })
 
@@ -1725,3 +2240,15 @@ class GenerationService:
             return video_save_path
         else:
             raise RuntimeError(f"FLFI2V video source file not found: {source_path}")
+
+
+# Global singleton instance
+_generation_service = None
+
+
+def get_generation_service() -> GenerationService:
+    """Get global GenerationService instance"""
+    global _generation_service
+    if _generation_service is None:
+        _generation_service = GenerationService()
+    return _generation_service

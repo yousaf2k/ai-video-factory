@@ -243,3 +243,60 @@ export interface AgentsByType {
   shots: Agent[];
   narration: Agent[];
 }
+
+// Queue types
+export enum GenerationType {
+  IMAGE = "image",
+  VIDEO = "video",
+  THEN_IMAGE = "then_image",
+  NOW_IMAGE = "now_image",
+  MEETING_VIDEO = "meeting_video",
+  DEPARTURE_VIDEO = "departure_video",
+  NARRATION = "narration",
+  BACKGROUND = "background"
+}
+
+export enum QueueItemStatus {
+  QUEUED = "queued",
+  ACTIVE = "active",
+  COMPLETED = "completed",
+  CANCELLED = "cancelled",
+  FAILED = "failed"
+}
+
+export interface QueueItem {
+  item_id: string;
+  session_id: string;
+  shot_index?: number;
+  scene_id?: number;
+  generation_type: GenerationType;
+  status: QueueItemStatus;
+  progress: number;
+  priority: number;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  error_message?: string;
+  is_flfi2v: boolean;
+  character_name?: string;
+  session_title?: string;
+  scene_name?: string;
+  shot_id?: string;
+}
+
+export interface QueueStatistics {
+  total: number;
+  queued: number;
+  active: number;
+  completed: number;
+  cancelled: number;
+  failed: number;
+  images: number;
+  videos: number;
+  flfi2v: number;
+  narrations: number;
+  backgrounds: number;
+  total_sessions: number;
+}
+
+export type ViewMode = 'flat' | 'grouped';

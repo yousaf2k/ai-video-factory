@@ -20,7 +20,7 @@ from web_ui.backend.models.story import (
     SelectSceneNarrationRequest
 )
 from web_ui.backend.services.session_service import SessionService
-from web_ui.backend.services.generation_service import GenerationService
+from web_ui.backend.services.generation_service import get_generation_service
 from core.story_engine import build_story
 from core.session_manager import SessionManager
 
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api/sessions/{session_id}/story", tags=["stories"])
 # Initialize services
 session_service = SessionService()
 session_manager = SessionManager()
-generation_service = GenerationService()
+generation_service = get_generation_service()
 
 
 @router.post("/scenes/{scene_id}/generate-narration")

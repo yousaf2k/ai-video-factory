@@ -126,7 +126,6 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
         # Inject reference image for IP-Adapter if provided
         if reference_image_path and load_reference_node_id and load_reference_node_id in api_format:
             # Convert to absolute path and normalize
-            import config
             ref_path = config.resolve_path(reference_image_path).replace('\\', '/')
             api_format[load_reference_node_id]["inputs"]["image"] = ref_path
             logger.debug(f"Injected reference image into node {load_reference_node_id}: {ref_path}")

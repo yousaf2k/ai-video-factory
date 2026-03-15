@@ -403,6 +403,23 @@ class ApiClient {
     const response = await this.client.post<{ status: string, message: string }>('/api/config/launch-browser');
     return response.data;
   }
+
+  // Generic HTTP methods for queue operations
+  async get<T = any>(url: string, params?: any): Promise<{ data: T }> {
+    return await this.client.get<T>(url, { params });
+  }
+
+  async post<T = any>(url: string, data?: any): Promise<{ data: T }> {
+    return await this.client.post<T>(url, data);
+  }
+
+  async put<T = any>(url: string, data?: any): Promise<{ data: T }> {
+    return await this.client.put<T>(url, data);
+  }
+
+  async delete<T = any>(url: string, params?: any): Promise<{ data: T }> {
+    return await this.client.delete<T>(url, { params });
+  }
 }
 
 // Export singleton instance

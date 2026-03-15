@@ -20,7 +20,7 @@ from web_ui.backend.models.shot import (
     SelectImageRequest, SelectVideoRequest, RemoveWatermarkRequest
 )
 from web_ui.backend.services.session_service import SessionService
-from web_ui.backend.services.generation_service import GenerationService
+from web_ui.backend.services.generation_service import get_generation_service
 from web_ui.backend.models.shot import Shot
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/sessions/{session_id}/shots", tags=["shots"])
 
 # Initialize services
 session_service = SessionService()
-generation_service = GenerationService()
+generation_service = get_generation_service()
 
 
 @router.get("")
@@ -52,16 +52,75 @@ async def get_shots(session_id: str):
 
 @router.get("/queue-status")
 async def get_queue_status(session_id: str):
-    """Get the current queue of shots waiting to be generated"""
+    """Get the current queue of shots waiting to be generation with full details"""
     try:
-        # Get the queued shots from the generation service
-        queued = generation_service.queued_shots.get(session_id, set())
-        return {"queued_indices": list(queued)}
+        from web_ui.backend.services.queue_service import get_queue_service
+        from web_ui.backend.models.queue import QueueItemStatus
+
+        queue_service = get_queue_service()
+        queue_items = queue_service.get_queue(session_id=session_id)
+
+        # Organize by status
+        queued = []
+        active = []
+        completed = []
+        failed = []
+
+        for item in queue_items:
+            item_data = {
+                "shot_index": item.shot_index,
+                "scene_id": item.scene_id,
+                "generation_type": item.generation_type.value,
+                "status": item.status.value,
+                "progress": item.progress,
+                "item_id": item.item_id,
+                "is_flfi2v": item.is_flfi2v,
+                "created_at": item.created_at.isoformat()
+            }
+
+            if item.status == QueueItemStatus.QUEUED:
+                queued.append(item_data)
+            elif item.status == QueueItemStatus.ACTIVE:
+                active.append(item_data)
+            elif item.status == QueueItemStatus.COMPLETED:
+                completed.append(item_data)
+            elif item.status == QueueItemStatus.FAILED:
+                failed.append(item_data)
+
+        return {
+            "queued_items": queued,
+            "active_items": active,
+            "completed_items": completed,
+            "failed_items": failed,
+            "total_items": len(queue_items)
+        }
     except Exception as e:
         logger.error(f"Error getting queue status: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get queue status: {str(e)}"
+        )
+
+
+@router.get("/queue-items")
+async def get_session_queue_items(session_id: str):
+    """Get all queue items for this session with full details"""
+    try:
+        from web_ui.backend.services.queue_service import get_queue_service
+
+        queue_service = get_queue_service()
+        queue_items = queue_service.get_queue(session_id=session_id)
+
+        # Return full queue items
+        return {
+            "items": [item.model_dump(mode='json') for item in queue_items],
+            "total": len(queue_items)
+        }
+    except Exception as e:
+        logger.error(f"Error getting session queue items: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get queue items: {str(e)}"
         )
 
 
