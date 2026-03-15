@@ -4,20 +4,20 @@
 
 Your AI Film Studio now has **FOUR major features**:
 
-1. ✅ **Session Management & Crash Recovery**
+1. ✅ **Project Management & Crash Recovery**
 2. ✅ **Video Length Control**
 3. ✅ **Video Regeneration**
 4. ✅ **Dual Image Generation** (Gemini + ComfyUI)
 
 ---
 
-## Feature 1: Session Management & Crash Recovery
+## Feature 1: Project Management & Crash Recovery
 
 **What it does:**
 - Saves all progress automatically
-- Auto-detects interrupted sessions
+- Auto-detects interrupted projects
 - One-command recovery
-- Complete session history
+- Complete project history
 
 **How to use:**
 ```bash
@@ -55,7 +55,7 @@ Shot length: 5                  # 5 seconds per shot
 ## Feature 3: Video Regeneration
 
 **What it does:**
-- Re-render videos from sessions
+- Re-render videos from projects
 - Change video length
 - Fix failed renders
 - Try different settings
@@ -67,8 +67,8 @@ Shot length: 5                  # 5 seconds per shot
 python regenerate.py
 
 # Command line
-python regenerate.py --session session_XXX --length 10
-python regenerate.py --session session_XXX --force
+python regenerate.py --project project_XXX --length 10
+python regenerate.py --project project_XXX --force
 ```
 
 **Documentation:** `VIDEO_REGENERATION_GUIDE.md`
@@ -112,7 +112,7 @@ python core/main.py
 
 # You'll be prompted:
 
-1. Continue session? (if crash detected)
+1. Continue project? (if crash detected)
 
 2. Image generation mode:
    [1] Gemini (default)
@@ -130,7 +130,7 @@ python core/main.py
 
 ```bash
 python core/main.py
-# → Detects incomplete session
+# → Detects incomplete project
 # → Continue? (y/n): y
 # → Resumes from where you stopped
 ```
@@ -138,8 +138,8 @@ python core/main.py
 ### Want Different Video Length
 
 ```bash
-# Regenerate existing session with new length
-python regenerate.py --session session_XXX --length 10
+# Regenerate existing project with new length
+python regenerate.py --project project_XXX --length 10
 ```
 
 ### Want to Switch Image Generation
@@ -162,18 +162,18 @@ IMAGE_GENERATION_MODE = "comfyui"
 python core/main.py              # Full pipeline with all features
 ```
 
-### Session Management
+### Project Management
 ```bash
-python sessions.py list          # List all sessions
-python sessions.py view <id>     # View session details
+python projects.py list          # List all projects
+python projects.py view <id>     # View project details
 ```
 
 ### Video Regeneration
 ```bash
 python regenerate.py              # Interactive mode
-python regenerate.py --list       # List sessions
-python regenerate.py --session <id> --length <sec>    # Change length
-python regenerate.py --session <id> --force           # Re-render all
+python regenerate.py --list       # List projects
+python regenerate.py --project <id> --length <sec>    # Change length
+python regenerate.py --project <id> --force           # Re-render all
 ```
 
 ---
@@ -289,7 +289,7 @@ Shot length: 10                # 10 seconds each
 
 ```bash
 # Original: 5s shots, want 10s
-python regenerate.py --session session_XXX --length 10
+python regenerate.py --project project_XXX --length 10
 
 # Uses existing images (free!)
 # Only re-renders videos
@@ -303,11 +303,11 @@ python regenerate.py --session session_XXX --length 10
 C:\AI\ai_video_factory\
 ├── config.py                        # All configuration
 ├── regenerate.py                    # Video regeneration CLI
-├── sessions.py                      # Session viewer CLI
+├── projects.py                      # Project viewer CLI
 │
 ├── core\
 │   ├── main.py                      # Main pipeline (all 4 features)
-│   ├── session_manager.py           # Session tracking
+│   ├── project_manager.py           # Project tracking
 │   ├── video_regenerator.py         # Regeneration engine
 │   ├── comfyui_image_generator.py   # ComfyUI image gen (NEW)
 │   ├── image_generator.py           # Dual-mode support (updated)
@@ -335,7 +335,7 @@ C:\AI\ai_video_factory\
 3. `README_GEMINI_SETUP.md` - Detailed setup
 
 ### Features
-1. `SESSION_GUIDE.md` - Session management
+1. `SESSION_GUIDE.md` - Project management
 2. `VIDEO_LENGTH_GUIDE.md` - Video length control
 3. `VIDEO_REGENERATION_GUIDE.md` - Video regeneration
 4. `COMFYUI_IMAGE_GUIDE.md` - ComfyUI image generation (NEW!)
@@ -346,7 +346,7 @@ C:\AI\ai_video_factory\
 3. `COMFYUI_IMAGE_QUICKREF.md` - ComfyUI images quick reference (NEW!)
 
 ### Visual Guides
-1. `SESSION_VISUAL_GUIDE.md` - Session diagrams
+1. `SESSION_VISUAL_GUIDE.md` - Project diagrams
 2. `VIDEO_LENGTH_DIAGRAM.md` - Video length diagrams
 
 ### Summaries
@@ -360,7 +360,7 @@ C:\AI\ai_video_factory\
 
 | Feature | Benefit | Cost | Command |
 |---------|---------|------|---------|
-| **Session Management** | Never lose work | Free | Built-in |
+| **Project Management** | Never lose work | Free | Built-in |
 | **Video Length Control** | Exact duration | Free | Built-in |
 | **Video Regeneration** | Re-render anytime | Free | `python regenerate.py` |
 | **ComfyUI Images** | Save money | Free | Select mode 2 |
@@ -395,7 +395,7 @@ C:\AI\ai_video_factory\
 ✅ **Regeneration capability**
 ✅ **Dual image generation**
 ✅ **Free local alternative**
-✅ **Full session management**
+✅ **Full project management**
 ✅ **Complete documentation**
 
 **Your AI Film Studio is production-ready and feature-complete!** 🎬🚀🎉

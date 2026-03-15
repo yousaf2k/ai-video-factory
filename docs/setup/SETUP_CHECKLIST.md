@@ -122,12 +122,12 @@ STEP 4.5: Image Generation
 
 Generating X images...
 [1/X] Generating image for: ...
-✓ Generated: output/generated_images/session_XXX/shot_001.png
+✓ Generated: output/generated_images/project_XXX/shot_001.png
 [2/X] Generating image for: ...
-✓ Generated: output/generated_images/session_XXX/shot_002.png
+✓ Generated: output/generated_images/project_XXX/shot_002.png
 ...
 
-Image generation complete. Images saved to: output/generated_images/session_XXX
+Image generation complete. Images saved to: output/generated_images/project_XXX
 
 STEP 5: Rendering X shots
 ALL RENDERS COMPLETE
@@ -136,7 +136,7 @@ ALL RENDERS COMPLETE
 Verify:
 - [ ] Story generated successfully
 - [ ] Shots planned successfully
-- [ ] Images generated in `output/generated_images/session_XXX/`
+- [ ] Images generated in `output/generated_images/project_XXX/`
 - [ ] Image files exist (shot_001.png, shot_002.png, etc.)
 - [ ] Workflows submitted to ComfyUI
 - [ ] ComfyUI queue shows jobs
@@ -147,7 +147,7 @@ Verify:
 ## ✅ Output Verification
 
 ### Check Generated Images
-- [ ] Navigate to `output/generated_images/session_XXX/`
+- [ ] Navigate to `output/generated_images/project_XXX/`
 - [ ] Verify all shot images are present
 - [ ] Open images to check quality
 - [ ] Verify images match the prompts

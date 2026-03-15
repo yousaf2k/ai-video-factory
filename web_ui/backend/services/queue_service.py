@@ -29,7 +29,7 @@ class QueueService:
     Centralized queue management service.
 
     Replaces GenerationService's in-memory queue with a persistent,
-    cross-session queue system with real-time updates.
+    cross-project queue system with real-time updates.
     """
 
     def __init__(self, persistence_path: str = None):
@@ -258,12 +258,12 @@ class QueueService:
             logger.info(f"Reordered queue with {len(request.item_ids)} items")
             return True
 
-    def get_queue(self, session_id: str = None, status: QueueItemStatus = None) -> List[QueueItem]:
+    def get_queue(self, project_id: str = None, status: QueueItemStatus = None) -> List[QueueItem]:
         """
         Retrieve queue items, optionally filtered.
 
         Args:
-            session_id: Optional session filter
+            project_id: Optional project filter
             status: Optional status filter
 
         Returns:
@@ -272,8 +272,8 @@ class QueueService:
         with self._queue_lock:
             items = self._queue.copy()
 
-            if session_id:
-                items = [item for item in items if item.session_id == session_id]
+            if project_id:
+                items = [item for item in items if item.project_id == project_id]
 
             if status:
                 items = [item for item in items if item.status == status]
@@ -428,6 +428,34 @@ class QueueService:
                     return True
             return False
 
+    def requeue_item(self, item_id: str) -> bool:
+        """
+        Requeue a failed or cancelled item.
+
+        Args:
+            item_id: Item identifier
+
+        Returns:
+            True if item was found and requeued
+        """
+        with self._queue_lock:
+            for item in self._queue:
+                if item.item_id == item_id and item.status in [QueueItemStatus.FAILED, QueueItemStatus.CANCELLED]:
+                    item.status = QueueItemStatus.QUEUED
+                    item.progress = 0
+                    item.error_message = None
+                    item.started_at = None
+                    item.completed_at = None
+
+                    manager.broadcast_sync('global', {
+                        'type': 'queue.item_requeued',
+                        'data': item.model_dump(mode='json')
+                    })
+                    self._broadcast_statistics()
+                    logger.info(f"Requeued item {item_id}")
+                    return True
+            return False
+
     def pause_queue(self) -> bool:
         """
         Pause queue processing (no new items will start).
@@ -571,8 +599,8 @@ class QueueService:
                 'backgrounds': 0
             }
 
-            # Track unique sessions
-            sessions: Set[str] = set()
+            # Track unique projects
+            projects: Set[str] = set()
 
             for item in self._queue:
                 # Status counts
@@ -592,11 +620,11 @@ class QueueService:
                 if item.is_flfi2v:
                     type_counts['flfi2v'] += 1
 
-                # Unique sessions
-                sessions.add(item.session_id)
+                # Unique projects
+                projects.add(item.project_id)
 
             stats.update(type_counts)
-            stats['total_sessions'] = len(sessions)
+            stats['total_projects'] = len(projects)
 
             return QueueStatistics(**stats)
 

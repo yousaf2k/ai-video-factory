@@ -6,70 +6,70 @@ import { api } from '@/services/api';
 import type { Shot, UpdateShotRequest } from '@/types';
 
 // Hook to get shots
-export function useShots(sessionId: string) {
+export function useShots(projectId: string) {
   return useQuery({
-    queryKey: ['shots', sessionId],
-    queryFn: () => api.getShots(sessionId),
-    enabled: !!sessionId,
+    queryKey: ['shots', projectId],
+    queryFn: () => api.getShots(projectId),
+    enabled: !!projectId,
   });
 }
 
 // Hook to update a shot
-export function useUpdateShot(sessionId: string, shotIndex: number) {
+export function useUpdateShot(projectId: string, shotIndex: number) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (request: UpdateShotRequest) => api.updateShot(sessionId, shotIndex, request),
+    mutationFn: (request: UpdateShotRequest) => api.updateShot(projectId, shotIndex, request),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to bulk update/reorder all shots
-export function useUpdateShots(sessionId: string) {
+export function useUpdateShots(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (shots: Shot[]) => api.updateShots(sessionId, shots),
+    mutationFn: (shots: Shot[]) => api.updateShots(projectId, shots),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to regenerate shot image
-export function useRegenerateImage(sessionId: string) {
+export function useRegenerateImage(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ shotIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant }: { shotIndex: number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number; promptOverride?: string; imageVariant?: string }) =>
-      api.regenerateShotImage(sessionId, shotIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant),
+      api.regenerateShotImage(projectId, shotIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to regenerate shot video
-export function useRegenerateVideo(sessionId: string) {
+export function useRegenerateVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ shotIndex, force, videoMode, videoWorkflow, videoVariant }: { shotIndex: number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string }) =>
-      api.regenerateShotVideo(sessionId, shotIndex, force, videoMode, videoWorkflow, videoVariant),
+      api.regenerateShotVideo(projectId, shotIndex, force, videoMode, videoWorkflow, videoVariant),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook for batch regeneration
-export function useBatchRegenerate(sessionId: string) {
+export function useBatchRegenerate(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -81,174 +81,174 @@ export function useBatchRegenerate(sessionId: string) {
       image_mode?: string;
       image_workflow?: string;
       video_workflow?: string;
-    }) => api.batchRegenerate(sessionId, data),
+    }) => api.batchRegenerate(projectId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to select a specific image as the active one
-export function useSelectImage(sessionId: string) {
+export function useSelectImage(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ shotIndex, imagePath }: { shotIndex: number; imagePath: string }) =>
-      api.selectShotImage(sessionId, shotIndex, imagePath),
+      api.selectShotImage(projectId, shotIndex, imagePath),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to replan shots
-export function useReplanShots(sessionId: string) {
+export function useReplanShots(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (data: { max_shots?: number; shots_agent: string; }) =>
-      api.replanShots(sessionId, data),
+      api.replanShots(projectId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to remove watermark from a shot
-export function useRemoveWatermark(sessionId: string) {
+export function useRemoveWatermark(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ shotIndex, variant }: { shotIndex: number; variant?: string }) =>
-      api.removeWatermark(sessionId, shotIndex, variant),
+      api.removeWatermark(projectId, shotIndex, variant),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to upload a custom image from disk for a shot
-export function useUploadShotImage(sessionId: string) {
+export function useUploadShotImage(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ shotIndex, file, variant }: { shotIndex: number; file: File; variant?: string }) =>
-      api.uploadShotImage(sessionId, shotIndex, file, variant),
+      api.uploadShotImage(projectId, shotIndex, file, variant),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to upload a custom video from disk for a shot
-export function useUploadShotVideo(sessionId: string) {
+export function useUploadShotVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ shotIndex, file, variant }: { shotIndex: number; file: File; variant?: string }) =>
-      api.uploadShotVideo(sessionId, shotIndex, file, variant),
+      api.uploadShotVideo(projectId, shotIndex, file, variant),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to delete a specific image variation for a shot
-export function useDeleteVariationImage(sessionId: string) {
+export function useDeleteVariationImage(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ shotIndex, imagePath }: { shotIndex: number; imagePath: string }) =>
-      api.deleteVariationImage(sessionId, shotIndex, imagePath),
+      api.deleteVariationImage(projectId, shotIndex, imagePath),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to select a specific video variation for a shot
-export function useSelectVideo(sessionId: string) {
+export function useSelectVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ shotIndex, videoPath }: { shotIndex: number; videoPath: string }) =>
-      api.selectShotVideo(sessionId, shotIndex, videoPath),
+      api.selectShotVideo(projectId, shotIndex, videoPath),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Hook to delete a specific video variation for a shot
-export function useDeleteVariationVideo(sessionId: string) {
+export function useDeleteVariationVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ shotIndex, videoPath }: { shotIndex: number; videoPath: string }) =>
-      api.deleteVariationVideo(sessionId, shotIndex, videoPath),
+      api.deleteVariationVideo(projectId, shotIndex, videoPath),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
 // Narration Hooks
-export function useGenerateSceneNarration(sessionId: string) {
+export function useGenerateSceneNarration(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ sceneIndex, config }: { sceneIndex: number; config: { tts_method?: string, tts_workflow?: string, voice?: string } }) =>
-      api.generateSceneNarration(sessionId, sceneIndex, config),
+      api.generateSceneNarration(projectId, sceneIndex, config),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
-export function useCancelSceneNarration(sessionId: string) {
+export function useCancelSceneNarration(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (sceneIndex: number) => api.cancelSceneNarration(sessionId, sceneIndex),
+    mutationFn: (sceneIndex: number) => api.cancelSceneNarration(projectId, sceneIndex),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
-export function useBatchGenerateNarration(sessionId: string) {
+export function useBatchGenerateNarration(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ sceneIndices, config }: { sceneIndices: number[]; config?: { tts_method?: string, tts_workflow?: string, voice?: string } }) =>
-      api.batchGenerateNarration(sessionId, sceneIndices, config),
+      api.batchGenerateNarration(projectId, sceneIndices, config),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }
 
-export function useSelectSceneNarration(sessionId: string) {
+export function useSelectSceneNarration(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ sceneIndex, narrationPath }: { sceneIndex: number; narrationPath: string }) =>
-      api.selectSceneNarration(sessionId, sceneIndex, narrationPath),
+      api.selectSceneNarration(projectId, sceneIndex, narrationPath),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
   });
 }

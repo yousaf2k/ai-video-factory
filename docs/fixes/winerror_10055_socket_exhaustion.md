@@ -18,8 +18,8 @@ Because Windows holds closed sockets in a `TIME_WAIT` state for minutes to ensur
 
 Implemented an application-wide connection pooling mechanism:
 
-1. Initialized a shared `http_session = requests.Session()` in `core.comfy_client`.
-2. Replaced raw `requests.*()` calls throughout `core.comfy_client`, `core.comfyui_image_generator`, and `core.llm_engine` with `http_session`.
+1. Initialized a shared `http_project = requests.Project()` in `core.comfy_client`.
+2. Replaced raw `requests.*()` calls throughout `core.comfy_client`, `core.comfyui_image_generator`, and `core.llm_engine` with `http_project`.
 3. The underlying `urllib3` connection pool automatically handles connection reuse and keeps TLS handshakes alive, drastically lowering network overhead and preventing socket leaks.
 
 ## Affected Files

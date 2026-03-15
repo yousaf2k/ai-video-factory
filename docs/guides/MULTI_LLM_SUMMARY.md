@@ -348,7 +348,7 @@ Legend:
 1. **Command-line support** - Add `--llm-provider` argument to main.py
 2. **Provider list** - Add `--list-providers` command
 3. **Fallback mechanism** - Auto-switch on provider failure
-4. **Cost tracking** - Log API costs per session
+4. **Cost tracking** - Log API costs per project
 5. **Performance benchmarks** - Track speed/cost tradeoffs
 6. **Streaming support** - For faster response times
 

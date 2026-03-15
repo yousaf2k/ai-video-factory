@@ -30,7 +30,7 @@ Since departure videos search for the **next character in the same scene**, this
 
 ## Solution
 
-### Fix 1: Updated Shot Generation (For New Sessions)
+### Fix 1: Updated Shot Generation (For New Projects)
 
 **File:** `core/story_engine.py` (line 280)
 
@@ -51,23 +51,23 @@ for char_idx, character in enumerate(characters):
 
 **Why:** For ThenVsNow reunion videos, all characters should be in the same scene (the movie set). This allows departure videos to properly find the "next character in the same scene" and use their NOW image as the last frame.
 
-### Fix 2: Migration Script (For Existing Sessions)
+### Fix 2: Migration Script (For Existing Projects)
 
-Created `fix_scene_ids.py` to update existing sessions:
+Created `fix_scene_ids.py` to update existing projects:
 
 ```bash
-# List all sessions and their scene_id status
+# List all projects and their scene_id status
 python fix_scene_ids.py --list
 
-# Fix a specific session (dry run first)
-python fix_scene_ids.py --session session_20260312_230034
+# Fix a specific project (dry run first)
+python fix_scene_ids.py --project project_20260312_230034
 
 # Actually apply the fix
-python fix_scene_ids.py --session session_20260312_230034 --live
+python fix_scene_ids.py --project project_20260312_230034 --live
 ```
 
 **What the script does:**
-1. Loads shots.json for the session
+1. Loads shots.json for the project
 2. Checks which shots have scene_id != 0
 3. Updates all shots to have scene_id = 0
 4. Saves the updated shots.json
@@ -104,16 +104,16 @@ Result:      Video shows Character N transitioning to scene set
 
 ## Verification Steps
 
-### 1. Check Session Status
+### 1. Check Project Status
 
 ```bash
-# List all sessions to see which need fixing
+# List all projects to see which need fixing
 python fix_scene_ids.py --list
 ```
 
 Expected output after fix:
 ```
-session_20260312_230034
+project_20260312_230034
   Title: Titanic: The Reunion
   Shots: 10
   Scene IDs (first 10): 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -124,7 +124,7 @@ session_20260312_230034
 
 ```bash
 # Check which images will be used for departure video
-python debug_departure_frames.py --session session_20260312_230034 --shot 1
+python debug_departure_frames.py --project project_20260312_230034 --shot 1
 ```
 
 Expected output (after images generated):
@@ -148,14 +148,14 @@ File status: OK
 After generating all THEN/NOW images:
 
 **Option A: Web UI**
-1. Navigate to session page
+1. Navigate to project page
 2. Select shots for departure video generation
 3. Click "Regenerate Videos"
 4. Select "Departure" variant
 
 **Option B: API**
 ```bash
-curl -X POST "http://localhost:8000/api/sessions/session_20260312_230034/shots/1/regenerate-video" \
+curl -X POST "http://localhost:8000/api/projects/project_20260312_230034/shots/1/regenerate-video" \
   -H "Content-Type: application/json" \
   -d '{
     "force": true,
@@ -174,16 +174,16 @@ The departure video should show:
 
 ---
 
-## Sessions Fixed
+## Projects Fixed
 
-All existing ThenVsNow sessions were fixed:
+All existing ThenVsNow projects were fixed:
 
-| Session | Title | Shots | Scene IDs Before | Scene IDs After |
+| Project | Title | Shots | Scene IDs Before | Scene IDs After |
 |---------|-------|-------|------------------|-----------------|
-| session_20260312_230034 | Titanic: The Reunion | 10 | 0,1,2,3,4,5,6,7,8,9 | All 0 |
-| session_20260312_214022 | The Matrix: The Reunion | 8 | 0,0,1,1,2,2,3,3 | All 0 |
-| session_20260312_202555 | Minority Report: Reunion | 16 | 0,0,1,1,2,2,3,3,4,4... | All 0 |
-| session_20260312_192053 | From Dusk Till Dawn: Reunion | 20 | 0,0,1,1,2,2,3,3,4,4... | All 0 |
+| project_20260312_230034 | Titanic: The Reunion | 10 | 0,1,2,3,4,5,6,7,8,9 | All 0 |
+| project_20260312_214022 | The Matrix: The Reunion | 8 | 0,0,1,1,2,2,3,3 | All 0 |
+| project_20260312_202555 | Minority Report: Reunion | 16 | 0,0,1,1,2,2,3,3,4,4... | All 0 |
+| project_20260312_192053 | From Dusk Till Dawn: Reunion | 20 | 0,0,1,1,2,2,3,3,4,4... | All 0 |
 
 ---
 
@@ -199,8 +199,8 @@ All existing ThenVsNow sessions were fixed:
 ### New Tools
 
 1. **`fix_scene_ids.py`**
-   - Lists all sessions and their scene_id status
-   - Fixes existing sessions by setting all scene_ids to 0
+   - Lists all projects and their scene_id status
+   - Fixes existing projects by setting all scene_ids to 0
    - Dry-run mode for safe testing
 
 2. **`debug_departure_frames.py`**
@@ -261,8 +261,8 @@ if not last_frame_image:
 ✅ **Fixed and Deployed**
 
 - Root cause identified and fixed
-- All existing sessions migrated
-- New sessions will have correct scene_ids
+- All existing projects migrated
+- New projects will have correct scene_ids
 - Departure videos now properly transition between characters
 
 ---

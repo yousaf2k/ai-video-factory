@@ -270,7 +270,7 @@ python core/main.py --story-agent youtube_documentary \
    python core/main.py --story-agent youtube_documentary \
      --idea "Your topic here"
    ```
-3. **Review Output** in `output/sessions/{session_id}/story.json`
+3. **Review Output** in `output/projects/{project_id}/story.json`
 4. **Proceed with Production** (images, videos, narration)
 5. **Upload to YouTube** using the generated metadata
 

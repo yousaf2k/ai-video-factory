@@ -63,10 +63,10 @@ python core/main.py
 
 ## Files Generated
 
-Each video generation creates a session:
+Each video generation creates a project:
 ```
-output/sessions/session_YYYYMMDD_HHMMSS/
-├── session_YYYYMMDD_HHMMSS_meta.json  # Progress tracking
+output/projects/project_YYYYMMDD_HHMMSS/
+├── project_YYYYMMDD_HHMMSS_meta.json  # Progress tracking
 ├── story.json                          # Generated story
 ├── shots.json                          # All shot prompts
 └── images/
@@ -79,24 +79,24 @@ output/sessions/session_YYYYMMDD_HHMMSS/
 
 If the system stops or crashes:
 ```bash
-# Just run again - it will detect incomplete session
+# Just run again - it will detect incomplete project
 python core/main.py
 
 # You'll see:
 # INCOMPLETE SESSION FOUND
-# Do you want to continue this session? (y/n): y
+# Do you want to continue this project? (y/n): y
 
 # Type 'y' to continue from where you left off!
 ```
 
-## View All Sessions
+## View All Projects
 
 ```bash
-# List all sessions
-python sessions.py list
+# List all projects
+python projects.py list
 
-# View detailed session info
-python sessions.py view session_20250208_002238
+# View detailed project info
+python projects.py view project_20250208_002238
 ```
 
 ## Cost Estimate
@@ -122,5 +122,5 @@ python sessions.py view session_20250208_002238
 ## Need Help?
 
 - **Detailed Setup**: `README_GEMINI_SETUP.md`
-- **Session Management**: `SESSION_GUIDE.md`
+- **Project Management**: `SESSION_GUIDE.md`
 - **Troubleshooting**: `SETUP_CHECKLIST.md`

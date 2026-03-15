@@ -1,12 +1,12 @@
 /**
- * Session editor page - Story and shot editing
+ * Project editor page - Story and shot editing
  */
 "use client";
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useSession } from "@/hooks/useSessions";
+import { useProject } from "@/hooks/useProjects";
 import { useUpdateStory, useRegenerateStory } from "@/hooks/useStory";
 import { useShots, useReplanShots } from "@/hooks/useShots";
 import { useAgents } from "@/hooks/useAgents";
@@ -28,16 +28,16 @@ import {
 import { useConfirmDialog, ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
 
-export default function SessionEditPage() {
+export default function ProjectEditPage() {
   const params = useParams();
-  const sessionId = params.id as string;
-  const { data: session, isLoading, error } = useSession(sessionId);
-  const { data: shots } = useShots(sessionId);
+  const projectId = params.id as string;
+  const { data: project, isLoading, error } = useProject(projectId);
+  const { data: shots } = useShots(projectId);
   const { data: agents } = useAgents();
 
-  const updateStoryMutation = useUpdateStory(sessionId);
-  const regenerateStoryMutation = useRegenerateStory(sessionId);
-  const replanShotsMutation = useReplanShots(sessionId);
+  const updateStoryMutation = useUpdateStory(projectId);
+  const regenerateStoryMutation = useRegenerateStory(projectId);
+  const replanShotsMutation = useReplanShots(projectId);
   const confirmDialog = useConfirmDialog();
 
   // Local state for story editing
@@ -54,9 +54,9 @@ export default function SessionEditPage() {
   const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
   const [maxShots, setMaxShots] = useState(0);
 
-  // Initialize story when session loads
-  if (session && session.story && !story) {
-    setStory(session.story);
+  // Initialize story when project loads
+  if (project && project.story && !story) {
+    setStory(project.story);
   }
 
   // Load backend config for replan shots dialog default values
@@ -281,15 +281,15 @@ export default function SessionEditPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading session...</div>
+        <div className="text-lg">Loading project...</div>
       </div>
     );
   }
 
-  if (error || !session) {
+  if (error || !project) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-500">Error loading session</div>
+        <div className="text-red-500">Error loading project</div>
       </div>
     );
   }
@@ -300,13 +300,13 @@ export default function SessionEditPage() {
         <div className="text-center py-12">
           <h2 className="text-xl font-semibold mb-4">No Story Found</h2>
           <p className="text-muted-foreground mb-6">
-            This session doesn't have a story yet. Generate a story first.
+            This project doesn't have a story yet. Generate a story first.
           </p>
           <Link
-            href={`/sessions/${sessionId}`}
+            href={`/projects/${projectId}`}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >
-            Back to Session
+            Back to Project
           </Link>
         </div>
       </div>
@@ -324,14 +324,14 @@ export default function SessionEditPage() {
       {/* Header */}
       <div className="mb-8">
         <Link
-          href={`/sessions/${sessionId}`}
+          href={`/projects/${projectId}`}
           className="text-primary hover:underline mb-4 inline-block"
         >
-          ← Back to Session
+          ← Back to Project
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Edit Session</h1>
+            <h1 className="text-3xl font-bold">Edit Project</h1>
             <p className="text-muted-foreground">
               Edit story structure and shot prompts
             </p>
@@ -368,7 +368,7 @@ export default function SessionEditPage() {
             {activeTab === "story" && hasChanges && (
               <>
                 <Link
-                  href={`/sessions/${sessionId}/settings`}
+                  href={`/projects/${projectId}/settings`}
                   className="px-4 py-2 border rounded-md hover:bg-muted transition-colors flex items-center gap-2"
                 >
                   Settings
@@ -482,8 +482,8 @@ export default function SessionEditPage() {
             </div>
             <ShotGrid
               shots={shots || []}
-              sessionId={sessionId}
-              scenes={session?.story?.scenes}
+              projectId={projectId}
+              scenes={project?.story?.scenes}
             />
           </div>
 

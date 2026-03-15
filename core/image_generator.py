@@ -112,7 +112,7 @@ def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = Non
         return None
 
 
-def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None, workflow_name: str = None, step_progress_callback=None, session_title: str = None, reference_image_path: str = None) -> str:
+def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None, workflow_name: str = None, step_progress_callback=None, project_title: str = None, reference_image_path: str = None) -> str:
     """
     Generate a single image using the configured mode (Gemini or ComfyUI).
 
@@ -125,7 +125,7 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         seed: Optional random seed for reproducibility
         workflow_name: Optional ComfyUI workflow name from IMAGE_WORKFLOWS (only for comfyui mode)
         step_progress_callback: Optional callback for progress updates
-        session_title: Optional title for Gemini Web chat persistence
+        project_title: Optional title for Gemini Web chat persistence
         reference_image_path: Optional path to reference image for IP-Adapter (ComfyUI only)
 
     Returns:
@@ -136,7 +136,7 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         mode = config.IMAGE_GENERATION_MODE
 
     # Auto-switch to ComfyUI if reference image provided with non-ComfyUI mode
-    if reference_image_path and mode != "comfyui":
+    if reference_image_path and mode != "comfyui" and mode != "geminiweb":
         logger.warning("Reference images require ComfyUI mode. Auto-switching from '%s' to 'comfyui'", mode)
         mode = "comfyui"
 
@@ -145,7 +145,7 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         return generate_image_comfyui(prompt, output_path, seed=seed, workflow_name=workflow_name, progress_callback=step_progress_callback, reference_image_path=reference_image_path)
     elif mode == "geminiweb":
         from core.geminiweb_image_generator import generate_image_geminiweb
-        return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio, session_title=session_title)
+        return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio, project_title=project_title)
     else:
         return generate_image_gemini(prompt, output_path, aspect_ratio, resolution, seed)
 

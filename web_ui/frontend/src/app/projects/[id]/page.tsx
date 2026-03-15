@@ -1,11 +1,11 @@
 /**
- * Session detail page
+ * Project detail page
  */
 "use client";
 
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useSession } from "@/hooks/useSessions";
+import { useProject } from "@/hooks/useProjects";
 import { formatDistanceToNow } from "date-fns";
 import { getMediaUrl } from "@/lib/utils";
 import { useState } from "react";
@@ -22,10 +22,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function SessionDetailPage() {
+export default function ProjectDetailPage() {
   const params = useParams();
-  const sessionId = params.id as string;
-  const { data: session, isLoading, error } = useSession(sessionId);
+  const projectId = params.id as string;
+  const { data: project, isLoading, error } = useProject(projectId);
   const queryClient = useQueryClient();
   const [generatingThumbnails, setGeneratingThumbnails] = useState<
     Record<string, boolean>
@@ -45,11 +45,11 @@ export default function SessionDetailPage() {
   const handleUpdateAspectRatio = async (newAspectRatio: "16:9" | "9:16") => {
     try {
       setIsUpdatingAspectRatio(true);
-      await api.updateSession(sessionId, {
+      await api.updateProject(projectId, {
         aspect_ratio: newAspectRatio
       });
-      queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     } catch (error) {
       console.error("Failed to update aspect ratio:", error);
       alert("Failed to update aspect ratio. Please try again.");
@@ -63,7 +63,7 @@ export default function SessionDetailPage() {
       setGeneratingThumbnails((prev) => ({ ...prev, [aspectRatio]: true }));
       setShowRegenModal(null);
       await api.generateThumbnail(
-        sessionId,
+        projectId,
         aspectRatio,
         regenForce,
         regenImageMode,
@@ -71,8 +71,8 @@ export default function SessionDetailPage() {
         regenSeed === "" ? undefined : regenSeed,
       );
       setImageVersion(Date.now());
-      queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     } catch (error) {
       console.error(`Failed to generate ${aspectRatio} thumbnail:`, error);
       alert("Failed to generate thumbnail. Please check the logs.");
@@ -84,27 +84,27 @@ export default function SessionDetailPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading session...</div>
+        <div className="text-lg">Loading project...</div>
       </div>
     );
   }
 
-  if (error || !session) {
+  if (error || !project) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-500">Error loading session</div>
+        <div className="text-red-500">Error loading project</div>
       </div>
     );
   }
 
   // Calculate progress percentages
   const imageProgress =
-    session.stats.total_shots > 0
-      ? (session.stats.images_generated / session.stats.total_shots) * 100
+    project.stats.total_shots > 0
+      ? (project.stats.images_generated / project.stats.total_shots) * 100
       : 0;
   const videoProgress =
-    session.stats.total_shots > 0
-      ? (session.stats.videos_rendered / session.stats.total_shots) * 100
+    project.stats.total_shots > 0
+      ? (project.stats.videos_rendered / project.stats.total_shots) * 100
       : 0;
 
   return (
@@ -112,30 +112,30 @@ export default function SessionDetailPage() {
       {/* Header */}
       <div className="mb-8">
         <Link
-          href="/sessions"
+          href="/projects"
           className="text-primary hover:underline mb-4 inline-block"
         >
-          ← Back to Sessions
+          ← Back to Projects
         </Link>
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold">{session.session_id}</h1>
+              <h1 className="text-3xl font-bold">{project.project_id}</h1>
               <span
-                className={`px-3 py-1 text-sm rounded-full ${session.completed
+                className={`px-3 py-1 text-sm rounded-full ${project.completed
                     ? "bg-green-100 text-green-800"
                     : "bg-yellow-100 text-yellow-800"
                   }`}
               >
-                {session.completed ? "Completed" : "In Progress"}
+                {project.completed ? "Completed" : "In Progress"}
               </span>
             </div>
             <p className="text-muted-foreground">
               Started{" "}
-              {session.started_at
+              {project.started_at
                 ? (() => {
                   try {
-                    return formatDistanceToNow(new Date(session.started_at), {
+                    return formatDistanceToNow(new Date(project.started_at), {
                       addSuffix: true,
                     });
                   } catch (e) {
@@ -147,16 +147,16 @@ export default function SessionDetailPage() {
           </div>
           <div className="flex gap-2">
             <Link
-              href={`/sessions/${sessionId}/settings`}
+              href={`/projects/${projectId}/settings`}
               className="px-4 py-2 border rounded-md hover:bg-muted transition-colors"
             >
               Settings
             </Link>
             <Link
-              href={`/sessions/${sessionId}/edit`}
+              href={`/projects/${projectId}/edit`}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
             >
-              Edit Session
+              Edit Project
             </Link>
           </div>
         </div>
@@ -175,7 +175,7 @@ export default function SessionDetailPage() {
             </h2>
             <div className="bg-input/50 border border-border/50 rounded-lg p-3 min-h-[120px]">
               <p className="text-sm text-foreground/90 whitespace-pre-wrap">
-                {session.idea}
+                {project.idea}
               </p>
             </div>
 
@@ -188,7 +188,7 @@ export default function SessionDetailPage() {
               </h2>
               <div className="bg-background/50 rounded-lg p-4 border border-border/30">
                 <Select
-                  value={session.aspect_ratio || "16:9"}
+                  value={project.aspect_ratio || "16:9"}
                   onValueChange={(val) => handleUpdateAspectRatio(val as "16:9" | "9:16")}
                   disabled={isUpdatingAspectRatio}
                 >
@@ -211,7 +211,7 @@ export default function SessionDetailPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-2">
-                  Current: <span className="font-semibold">{session.aspect_ratio || "16:9"}</span>
+                  Current: <span className="font-semibold">{project.aspect_ratio || "16:9"}</span>
                   {isUpdatingAspectRatio && " (Updating...)"}
                 </p>
               </div>
@@ -234,13 +234,13 @@ export default function SessionDetailPage() {
                       Story Generation
                     </span>
                     <span className="text-foreground">
-                      {session.steps.story ? "Complete" : "Pending"}
+                      {project.steps.story ? "Complete" : "Pending"}
                     </span>
                   </div>
                   <div className="w-full bg-input rounded-full h-1.5 overflow-hidden">
                     <div
-                      className={`h-full transition-all ${session.steps.story ? "bg-primary" : "bg-transparent"}`}
-                      style={{ width: session.steps.story ? "100%" : "0%" }}
+                      className={`h-full transition-all ${project.steps.story ? "bg-primary" : "bg-transparent"}`}
+                      style={{ width: project.steps.story ? "100%" : "0%" }}
                     />
                   </div>
                 </div>
@@ -249,8 +249,8 @@ export default function SessionDetailPage() {
                 <div>
                   <div className="flex justify-between text-xs mb-2">
                     <span className="text-muted-foreground">
-                      Images ({session.stats.images_generated}/
-                      {session.stats.total_shots || "-"})
+                      Images ({project.stats.images_generated}/
+                      {project.stats.total_shots || "-"})
                     </span>
                     <span className="text-foreground">
                       {Math.round(imageProgress)}%
@@ -268,8 +268,8 @@ export default function SessionDetailPage() {
                 <div>
                   <div className="flex justify-between text-xs mb-2">
                     <span className="text-muted-foreground">
-                      Videos ({session.stats.videos_rendered}/
-                      {session.stats.total_shots || "-"})
+                      Videos ({project.stats.videos_rendered}/
+                      {project.stats.total_shots || "-"})
                     </span>
                     <span className="text-foreground">
                       {Math.round(videoProgress)}%
@@ -292,25 +292,25 @@ export default function SessionDetailPage() {
         {/* Right Main Canvas (LumeFlow Style "Output" area) */}
         <div className="w-full lg:w-2/3 space-y-6">
           {/* Main Thumbnail Banner */}
-          {(session.thumbnail_url || session.thumbnail_url_9_16) && (
+          {(project.thumbnail_url || project.thumbnail_url_9_16) && (
             <div className="flex flex-col sm:flex-row shadow-lg mb-6 gap-2">
-              {session.thumbnail_url_9_16 && (
+              {project.thumbnail_url_9_16 && (
                 <div
-                  className={`bg-card border border-border rounded-xl relative ${session.thumbnail_url ? "sm:w-1/4" : "w-full max-w-sm mx-auto"} aspect-[9/16] overflow-hidden`}
+                  className={`bg-card border border-border rounded-xl relative ${project.thumbnail_url ? "sm:w-1/4" : "w-full max-w-sm mx-auto"} aspect-[9/16] overflow-hidden`}
                 >
                   <img
-                    src={getMediaUrl(session.thumbnail_url_9_16, imageVersion)}
+                    src={getMediaUrl(project.thumbnail_url_9_16, imageVersion)}
                     alt="9:16 Thumbnail"
                     className="w-full h-full object-contain bg-black"
                   />
                 </div>
               )}
-              {session.thumbnail_url && (
+              {project.thumbnail_url && (
                 <div
-                  className={`bg-card border border-border rounded-xl overflow-hidden relative ${session.thumbnail_url_9_16 ? "sm:w-3/4" : "w-full"} aspect-video`}
+                  className={`bg-card border border-border rounded-xl overflow-hidden relative ${project.thumbnail_url_9_16 ? "sm:w-3/4" : "w-full"} aspect-video`}
                 >
                   <img
-                    src={getMediaUrl(session.thumbnail_url, imageVersion)}
+                    src={getMediaUrl(project.thumbnail_url, imageVersion)}
                     alt="16:9 Thumbnail"
                     className="w-full h-full object-cover"
                   />
@@ -319,17 +319,17 @@ export default function SessionDetailPage() {
             </div>
           )}
 
-          {session.story && (
+          {project.story && (
             <div className="bg-card border border-border rounded-xl p-6 shadow-lg">
               <div className="mb-6 pb-4 border-b border-border/50">
                 <h3 className="text-xl font-bold text-foreground mb-1">
-                  {session.story.title}
+                  {project.story.title}
                 </h3>
                 <div className="flex flex-wrap gap-2 mt-2">
                   <span className="inline-block px-2.5 py-0.5 rounded text-xs font-medium bg-secondary text-secondary-foreground">
-                    {session.story.style}
+                    {project.story.style}
                   </span>
-                  {session.story.tags?.map((tag, idx) => (
+                  {project.story.tags?.map((tag, idx) => (
                     <span
                       key={idx}
                       className="inline-block px-2.5 py-0.5 rounded text-xs font-medium bg-primary/20 text-primary"
@@ -338,27 +338,27 @@ export default function SessionDetailPage() {
                     </span>
                   ))}
                 </div>
-                {session.story.description && (
+                {project.story.description && (
                   <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
-                    {session.story.description}
+                    {project.story.description}
                   </p>
                 )}
               </div>
 
-              {session.story.master_script && (
+              {project.story.master_script && (
                 <div className="bg-background/80 p-5 rounded-lg border border-border/50 mb-6">
                   <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
                     Master Script
                   </h4>
                   <p className="text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                    {session.story.master_script}
+                    {project.story.master_script}
                   </p>
                 </div>
               )}
 
               {/* Thumbnails Section */}
-              {(session.story.thumbnail_prompt_16_9 ||
-                session.story.thumbnail_prompt_9_16) && (
+              {(project.story.thumbnail_prompt_16_9 ||
+                project.story.thumbnail_prompt_9_16) && (
                   <div className="bg-background/80 p-5 rounded-lg border border-border/50 mb-6">
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0">
@@ -370,10 +370,10 @@ export default function SessionDetailPage() {
                       {/* 16:9 Youtube-Style Card */}
                       <div className="flex flex-col gap-3 group">
                         <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
-                          {session.thumbnail_url ? (
+                          {project.thumbnail_url ? (
                             <img
                               src={getMediaUrl(
-                                session.thumbnail_url,
+                                project.thumbnail_url,
                                 imageVersion,
                               )}
                               alt="16:9 Thumbnail"
@@ -401,7 +401,7 @@ export default function SessionDetailPage() {
                               ) : (
                                 <ImageIcon className="w-4 h-4" />
                               )}
-                              {session.thumbnail_url ? "Regenerate" : "Generate"}
+                              {project.thumbnail_url ? "Regenerate" : "Generate"}
                             </Button>
                           </div>
                         </div>
@@ -415,9 +415,9 @@ export default function SessionDetailPage() {
                           </div>
                           <p
                             className="text-xs text-muted-foreground line-clamp-3 leading-relaxed"
-                            title={session.story.thumbnail_prompt_16_9 || ""}
+                            title={project.story.thumbnail_prompt_16_9 || ""}
                           >
-                            {session.story.thumbnail_prompt_16_9 ||
+                            {project.story.thumbnail_prompt_16_9 ||
                               "No prompt available"}
                           </p>
                         </div>
@@ -426,10 +426,10 @@ export default function SessionDetailPage() {
                       {/* 9:16 Youtube-Style Card (forced into 16:9 container scale) */}
                       <div className="flex flex-col gap-3 group">
                         <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted/80 border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex justify-center items-center">
-                          {session.thumbnail_url_9_16 ? (
+                          {project.thumbnail_url_9_16 ? (
                             <img
                               src={getMediaUrl(
-                                session.thumbnail_url_9_16,
+                                project.thumbnail_url_9_16,
                                 imageVersion,
                               )}
                               alt="9:16 Thumbnail"
@@ -457,7 +457,7 @@ export default function SessionDetailPage() {
                               ) : (
                                 <ImageIcon className="w-4 h-4" />
                               )}
-                              {session.thumbnail_url_9_16
+                              {project.thumbnail_url_9_16
                                 ? "Regenerate"
                                 : "Generate"}
                             </Button>
@@ -473,9 +473,9 @@ export default function SessionDetailPage() {
                           </div>
                           <p
                             className="text-xs text-muted-foreground line-clamp-3 leading-relaxed"
-                            title={session.story.thumbnail_prompt_9_16 || ""}
+                            title={project.story.thumbnail_prompt_9_16 || ""}
                           >
-                            {session.story.thumbnail_prompt_9_16 ||
+                            {project.story.thumbnail_prompt_9_16 ||
                               "No prompt available"}
                           </p>
                         </div>
@@ -484,13 +484,13 @@ export default function SessionDetailPage() {
                   </div>
                 )}
 
-              {session.story.scenes && session.story.scenes.length > 0 && (
+              {project.story.scenes && project.story.scenes.length > 0 && (
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold text-foreground mb-4">
                     Scene Breakdown
                   </h3>
                   <div className="grid grid-cols-1 gap-3">
-                    {session.story.scenes.map((scene, idx) => (
+                    {project.story.scenes.map((scene, idx) => (
                       <div
                         key={idx}
                         className="bg-input/30 border border-border/50 rounded-lg p-4 hover:border-primary/50 transition-colors"
@@ -527,13 +527,13 @@ export default function SessionDetailPage() {
       </div>
 
       {/* Shots Section */}
-      {session.shots && session.shots.length > 0 && (
+      {project.shots && project.shots.length > 0 && (
         <div className="border rounded-lg p-6">
           <h2 className="text-lg font-semibold mb-4">
-            Shots ({session.shots.length})
+            Shots ({project.shots.length})
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {session.shots.slice(0, 12).map((shot) => (
+            {project.shots.slice(0, 12).map((shot) => (
               <div key={shot.index} className="border rounded p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium">Shot {shot.index}</span>
@@ -590,9 +590,9 @@ export default function SessionDetailPage() {
             ))}
           </div>
 
-          {session.shots.length > 12 && (
+          {project.shots.length > 12 && (
             <div className="text-center mt-4 text-muted-foreground">
-              And {session.shots.length - 12} more shots...
+              And {project.shots.length - 12} more shots...
             </div>
           )}
         </div>

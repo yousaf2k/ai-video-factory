@@ -1,6 +1,6 @@
 # Walkthrough: Scene Grouping and Filtering
 
-I have enhanced the Edit Session page with powerful new tools for organizing and filtering your shots by scene.
+I have enhanced the Edit Project page with powerful new tools for organizing and filtering your shots by scene.
 
 ## New Features
 
@@ -15,7 +15,7 @@ When grouping is enabled, each scene now has a dedicated header showing:
 
 ### 3. Scene Navigation Tabs
 When grouping is enabled, a horizontal list of **Scene Tabs** appears.
-- **All Scenes**: Shows the entire session grouped by scene.
+- **All Scenes**: Shows the entire project grouped by scene.
 - **Scene X**: Filters the view to show ONLY that specific scene, including its header and shots.
 
 ## Benefits
@@ -24,7 +24,7 @@ When grouping is enabled, a horizontal list of **Scene Tabs** appears.
 - **Narrative Context**: The inclusion of scene headers provides immediate context for the shots you are editing.
 
 ## How to use
-1. Navigate to the **Edit Session** page.
+1. Navigate to the **Edit Project** page.
 2. Select the **Shots** tab.
 3. Click the **Group by Scene** button in the header.
 4. Use the newly appeared tabs to filter by specific scenes or stay on **All Scenes** for a grouped overview.

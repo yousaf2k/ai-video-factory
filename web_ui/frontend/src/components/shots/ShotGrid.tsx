@@ -59,11 +59,11 @@ import { restrictToParentElement } from "@dnd-kit/modifiers";
 
 interface ShotGridProps {
   shots: Shot[];
-  sessionId: string;
+  projectId: string;
   scenes?: Scene[];
 }
 
-export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
+export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<
     "image" | "video" | "both" | "narration" | null
@@ -76,7 +76,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   const [queuedIndices, setQueuedIndices] = useState<Set<number>>(new Set());
   const [generatingScenes, setGeneratingScenes] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
-  const updateShotsMutation = useUpdateShots(sessionId);
+  const updateShotsMutation = useUpdateShots(projectId);
   const [viewModeOverride, setViewModeOverride] = useState<
     "image" | "video" | null
   >(null);
@@ -108,14 +108,14 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   });
 
   const { shotProgress, sceneProgress } = useProgress(
-    sessionId,
+    projectId,
     useCallback(
       (id: string | number, type: 'shot' | 'scene') => {
-        // Whenever a WebSocket progress message broadcasts 'completed', refresh this session's UI!
-        queryClient.invalidateQueries({ queryKey: ["shots", sessionId] });
-        queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+        // Whenever a WebSocket progress message broadcasts 'completed', refresh this project's UI!
+        queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
       },
-      [queryClient, sessionId],
+      [queryClient, projectId],
     ),
   );
 
@@ -315,7 +315,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
 
     if (type === "both") {
       try {
-        await api.batchRegenerate(sessionId, {
+        await api.batchRegenerate(projectId, {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: true,
@@ -334,7 +334,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
       }
     } else if (type === "image") {
       try {
-        await api.batchRegenerate(sessionId, {
+        await api.batchRegenerate(projectId, {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: false,
@@ -347,7 +347,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
       }
     } else if (type === "video") {
       try {
-        await api.batchRegenerate(sessionId, {
+        await api.batchRegenerate(projectId, {
           shot_indices: indicesToProcess,
           regenerate_images: false,
           regenerate_videos: true,
@@ -367,7 +367,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
             .map(s => s.scene_id || 0)
         ));
 
-        await api.batchGenerateNarration(sessionId, sceneIndices, {
+        await api.batchGenerateNarration(projectId, sceneIndices, {
           tts_method: ttsMethod,
           voice: ttsVoice,
         });
@@ -386,12 +386,12 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
     setQueuedIndices(new Set(indicesToProcess));
 
     // We optionally fetch the latest data just in case
-    queryClient.invalidateQueries({ queryKey: ["shots", sessionId] });
-    queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+    queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+    queryClient.invalidateQueries({ queryKey: ["project", projectId] });
   }, [
     selectedIndices,
     showBatchModal,
-    sessionId,
+    projectId,
     imageMode,
     imageWorkflow,
     videoWorkflow,
@@ -422,7 +422,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   useEffect(() => {
     const fetchQueueStatus = async () => {
       try {
-        const data = await api.getQueueStatus(sessionId);
+        const data = await api.getQueueStatus(projectId);
         if (data.queued_indices && data.queued_indices.length > 0) {
           setQueuedIndices(
             (prev) => new Set([...prev, ...data.queued_indices]),
@@ -433,24 +433,24 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
       }
     };
     fetchQueueStatus();
-  }, [sessionId]);
+  }, [projectId]);
 
   const handleCancelAll = useCallback(async () => {
     try {
-      await api.cancelGeneration(sessionId);
+      await api.cancelGeneration(projectId);
       setGeneratingIndices(new Set());
       setQueuedIndices(new Set());
-      queryClient.invalidateQueries({ queryKey: ["shots", sessionId] });
-      queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
     } catch (error) {
       console.error("Failed to cancel generation:", error);
     }
-  }, [sessionId, queryClient]);
+  }, [projectId, queryClient]);
 
   const handleCancelShot = useCallback(
     async (shotIndex: number) => {
       try {
-        await api.cancelShotGeneration(sessionId, shotIndex);
+        await api.cancelShotGeneration(projectId, shotIndex);
 
         // Remove just this one shot from local sets
         setGeneratingIndices((prev) => {
@@ -464,12 +464,12 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
           return next;
         });
 
-        queryClient.invalidateQueries({ queryKey: ["shots", sessionId] });
+        queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
       } catch (error) {
         console.error(`Failed to cancel shot ${shotIndex}:`, error);
       }
     },
-    [sessionId, queryClient],
+    [projectId, queryClient],
   );
 
   const handleBatchMoveToScene = async () => {
@@ -529,8 +529,8 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
   const handleInsertShot = async () => {
     if (!insertModalConfig) return;
 
-    // Check if this is an FLFI2V session
-    const isFlfi2vSession = shots.length > 0 && shots.some(s => s.is_flfi2v);
+    // Check if this is an FLFI2V project
+    const isFlfi2vProject = shots.length > 0 && shots.some(s => s.is_flfi2v);
 
     // Build a clean default shot
     const defaultShot: Shot = {
@@ -545,8 +545,8 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
       image_path: null,
       image_paths: [],
       video_path: null,
-      // FLFI2V fields - include if this is an FLFI2V session
-      ...(isFlfi2vSession ? {
+      // FLFI2V fields - include if this is an FLFI2V project
+      ...(isFlfi2vProject ? {
         is_flfi2v: true,
         character_id: newShotData.character_id || undefined,
         then_image_prompt: newShotData.then_image_prompt || undefined,
@@ -963,7 +963,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                         <ShotCard
                           key={`${progressKey}-${shot.image_path}`}
                           shot={shot}
-                          sessionId={sessionId}
+                          projectId={projectId}
                           selectable={true}
                           selected={selectedIndices.includes(shot.index)}
                           onSelectChange={(selected: boolean) =>
@@ -1030,7 +1030,7 @@ export function ShotGrid({ shots, sessionId, scenes }: ShotGridProps) {
                         FLFI2V MODE
                       </span>
                       <span className="text-sm text-purple-700 dark:text-purple-300">
-                        This is a ThenVsNow session - FLFI2V fields will be included
+                        This is a ThenVsNow project - FLFI2V fields will be included
                       </span>
                     </div>
                   </div>

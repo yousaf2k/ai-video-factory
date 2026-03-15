@@ -1,7 +1,7 @@
 # Code Review Fixes - Complete Summary
 
 **Date**: 2026-02-15
-**Session**: Automated code review and fixes
+**Project**: Automated code review and fixes
 **Status**: ✅ CRITICAL FIXES COMPLETED
 
 ---
@@ -484,8 +484,8 @@ except ValueError as e:
 ### Immediate (Ready Now)
 1. ✅ Test the application: `python core/main.py --idea "Your test idea"`
 2. ✅ Check logs in `logs/` directory
-3. ✅ Verify shot generation: Check `session_*/shots.json`
-4. ✅ Monitor image generation: Check output in `session_*/images/`
+3. ✅ Verify shot generation: Check `project_*/shots.json`
+4. ✅ Monitor image generation: Check output in `project_*/images/`
 
 ### Future Enhancements (Optional)
 1. Add remaining type hints (Priority 6)
@@ -548,5 +548,5 @@ Your codebase has been transformed from **broken/unsecure** to **production-read
 
 **Review Completed By**: Claude Sonnet 4.5
 **Date**: 2026-02-15
-**Session Duration**: ~2.5 hours
+**Project Duration**: ~2.5 hours
 **Status**: ✅ SUCCESS - Critical fixes complete!

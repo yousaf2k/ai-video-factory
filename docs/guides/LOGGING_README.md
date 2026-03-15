@@ -148,7 +148,7 @@ def risky_operation(value):
 ✅ **core/image_generator.py** - Image generation logging
 ✅ **core/narration_generator.py** - TTS operations logging
 ✅ **core/comfy_client.py** - ComfyUI API interactions logging
-✅ **core/session_manager.py** - Session state and file operations logging
+✅ **core/project_manager.py** - Project state and file operations logging
 ✅ **core/main.py** - Pipeline orchestration logging
 
 ### What Gets Logged
@@ -168,7 +168,7 @@ def risky_operation(value):
 - Loading status
 
 #### Application Logs (app.log)
-- Session lifecycle (creation, updates, completion)
+- Project lifecycle (creation, updates, completion)
 - Workflow step progression
 - Image/video generation parameters
 - TTS operations

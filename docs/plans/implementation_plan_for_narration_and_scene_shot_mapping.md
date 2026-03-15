@@ -29,7 +29,7 @@ We should generate narration proportionally to `scene_duration`.
 
 ### Phase 4: Web UI Updates
 
-- **Session Dashboard**: Extract `story` content during session loading so the generated `master_script` preview can be displayed directly on the front page of the web UI.
+- **Project Dashboard**: Extract `story` content during project loading so the generated `master_script` preview can be displayed directly on the front page of the web UI.
 - **Dynamic Config Initialization**: Enable the backend `/api/config` endpoint to deliver the `default_max_shots` value based on `config.py`. Update the `shots planner dialog` initialization hook to default the `Max Shots` explicitly to `0` (Auto) out-of-the-box instead of `15`.
 
 ## Verification

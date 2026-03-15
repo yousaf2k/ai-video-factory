@@ -269,7 +269,7 @@ After workflows are set up:
 1. **Test with actual reference photos**
 2. **Adjust IP-Adapter weights** for optimal results
 3. **Integrate with story editor UI**
-4. **Run end-to-end test** with complete ThenVsNow session
+4. **Run end-to-end test** with complete ThenVsNow project
 
 ## API Integration Notes
 

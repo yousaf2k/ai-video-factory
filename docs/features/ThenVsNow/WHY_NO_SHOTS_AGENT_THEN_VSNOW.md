@@ -27,7 +27,7 @@ User Idea
 └─────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────┐
-│ Session Service (Save story.json)    │
+│ Project Service (Save story.json)    │
 └─────────────────────────────────────┘
     ↓
 ┌─────────────────────────────────────┐
@@ -221,9 +221,9 @@ def build_story_then_vs_now(movie_name, target_length=None):
 
 ---
 
-## Session Creation Flow
+## Project Creation Flow
 
-### Standard Documentary Session
+### Standard Documentary Project
 
 ```bash
 python main.py --idea "The Roman Empire" --story-agent default
@@ -236,7 +236,7 @@ python main.py --idea "The Roman Empire" --story-agent default
 Done! Total time: 45 seconds
 ```
 
-### ThenVsNow Session
+### ThenVsNow Project
 
 ```bash
 python main.py --idea "The Godfather" --story-agent then_vs_now
@@ -321,14 +321,14 @@ No sub-calls needed because:
 
 ## How to Verify
 
-### Check Your Session's Creation Log
+### Check Your Project's Creation Log
 
 ```bash
-# Check the session creation logs
-cat output/sessions/session_XXXXXX_XXXXXX/session.log | grep -E "(STORY|SHOTS|LLM)"
+# Check the project creation logs
+cat output/projects/project_XXXXXX_XXXXXX/project.log | grep -E "(STORY|SHOTS|LLM)"
 ```
 
-### ThenVsNow Session Log
+### ThenVsNow Project Log
 
 ```
 [INFO] Generating ThenVsNow story for movie: The Godfather
@@ -337,7 +337,7 @@ cat output/sessions/session_XXXXXX_XXXXXX/session.log | grep -E "(STORY|SHOTS|LL
 
 **Only ONE story generation call** - no shots agent, no sub-LLM calls!
 
-### Standard Documentary Session Log
+### Standard Documentary Project Log
 
 ```
 [STORY] Pass 1: Generating Master Script...

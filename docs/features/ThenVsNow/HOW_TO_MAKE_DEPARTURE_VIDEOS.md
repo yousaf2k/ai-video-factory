@@ -19,7 +19,7 @@ Departure videos are the second video segment for each character in a ThenVsNow 
 
 Before making departure videos, you need:
 
-1. ✅ **A ThenVsNow session** with the `then_vs_now` story agent
+1. ✅ **A ThenVsNow project** with the `then_vs_now` story agent
 2. ✅ **THEN images generated** for all characters (younger versions)
 3. ✅ **NOW images generated** for all characters (older versions with selfie composition)
 4. ✅ **Meeting video prompts** defined in story/shots data
@@ -34,14 +34,14 @@ Before making departure videos, you need:
 Departure videos require NOW images to exist first.
 
 **Via Web UI:**
-1. Open your session in the web interface
+1. Open your project in the web interface
 2. Navigate to the Shots tab
 3. Click "Regenerate All Images" or regenerate individual shots
 4. Wait for all THEN and NOW images to complete
 
 **Via API:**
 ```bash
-curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/batch-regenerate" \
+curl -X POST "http://localhost:8000/api/projects/{project_id}/shots/batch-regenerate" \
   -H "Content-Type: application/json" \
   -d '{
     "shot_indices": [1, 2, 3, 4],
@@ -60,7 +60,7 @@ curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/batch-regene
 
 **Via API:**
 ```bash
-curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/batch-regenerate" \
+curl -X POST "http://localhost:8000/api/projects/{project_id}/shots/batch-regenerate" \
   -H "Content-Type: application/json" \
   -d '{
     "shot_indices": [1, 2, 3, 4],
@@ -94,7 +94,7 @@ Currently, the web UI generates both Meeting and Departure videos together. To r
 
 **Regenerate departure video for a single shot:**
 ```bash
-curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/1/regenerate-video" \
+curl -X POST "http://localhost:8000/api/projects/{project_id}/shots/1/regenerate-video" \
   -H "Content-Type: application/json" \
   -d '{
     "force": true,
@@ -106,12 +106,12 @@ curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/1/regenerate
 ```python
 import requests
 
-session_id = "your_session_id"
+project_id = "your_project_id"
 shot_indices = [1, 3, 5]  # Shots to regenerate
 
 for shot_index in shot_indices:
     response = requests.post(
-        f"http://localhost:8000/api/sessions/{session_id}/shots/{shot_index}/regenerate-video",
+        f"http://localhost:8000/api/projects/{project_id}/shots/{shot_index}/regenerate-video",
         json={
             "force": True,
             "video_variant": "departure"
@@ -128,7 +128,7 @@ If you want to customize the departure video prompt:
 
 ### Step 1: Edit Shots JSON
 
-Open `shots.json` in your session folder:
+Open `shots.json` in your project folder:
 
 ```json
 [
@@ -146,7 +146,7 @@ Open `shots.json` in your session folder:
 Use the API to regenerate with your custom prompt:
 
 ```bash
-curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/1/regenerate-video" \
+curl -X POST "http://localhost:8000/api/projects/{project_id}/shots/1/regenerate-video" \
   -H "Content-Type: application/json" \
   -d '{
     "force": true,
@@ -257,7 +257,7 @@ working naturally in background.
 
 ```bash
 # Generate images
-curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/batch-regenerate" \
+curl -X POST "http://localhost:8000/api/projects/{project_id}/shots/batch-regenerate" \
   -H "Content-Type: application/json" \
   -d '{"shot_indices": [1,2,3], "regenerate_images": true, "regenerate_videos": false}'
 ```
@@ -270,10 +270,10 @@ curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/batch-regene
 
 ```python
 # 1. Add scene_image_path to your story's last scene
-story = session_manager.get_story(session_id)
+story = project_manager.get_story(project_id)
 last_scene = story['scenes'][-1]
-last_scene['scene_image_path'] = 'output/sessions/{session_id}/scenes/scene_{scene_id}.png'
-session_manager.save_story(session_id, story)
+last_scene['scene_image_path'] = 'output/projects/{project_id}/scenes/scene_{scene_id}.png'
+project_manager.save_story(project_id, story)
 
 # 2. Generate scene image (you'll need to implement this or do it manually)
 ```
@@ -291,7 +291,7 @@ VIDEO_WORKFLOW = "wan22_flfi2v_fix_slowmotion"
 
 Or specify via API:
 ```bash
-curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/1/regenerate-video" \
+curl -X POST "http://localhost:8000/api/projects/{project_id}/shots/1/regenerate-video" \
   -H "Content-Type: application/json" \
   -d '{
     "force": true,
@@ -307,7 +307,7 @@ curl -X POST "http://localhost:8000/api/sessions/{session_id}/shots/1/regenerate
 **Solution:** Verify your shots have correct scene_id assignments:
 
 ```python
-shots = session_manager.get_shots(session_id)
+shots = project_manager.get_shots(project_id)
 for shot in shots:
     print(f"Shot {shot['index']}: scene_id={shot.get('scene_id')}")
 ```
@@ -366,7 +366,7 @@ Before finalizing your departure videos, verify:
 After generation, departure videos are stored as:
 
 ```
-output/sessions/{session_id}/videos/
+output/projects/{project_id}/videos/
 ├── shot_001_meeting_001.mp4
 ├── shot_001_departure_001.mp4  ← Departure video
 ├── shot_002_meeting_001.mp4
@@ -379,7 +379,7 @@ output/sessions/{session_id}/videos/
 {
   "index": 1,
   "departure_video_rendered": true,
-  "departure_video_path": "output/sessions/session_xxx/videos/shot_001_departure_001.mp4"
+  "departure_video_path": "output/projects/project_xxx/videos/shot_001_departure_001.mp4"
 }
 ```
 
@@ -393,7 +393,7 @@ To generate custom scene/set images for the last frame:
 
 1. Use the scene's `set_prompt` from your story
 2. Generate an image manually using ComfyUI or Gemini
-3. Save it to the session's scenes folder
+3. Save it to the project's scenes folder
 4. Update `story.json`:
    ```json
    {
@@ -401,7 +401,7 @@ To generate custom scene/set images for the last frame:
        {
          "scene_id": 0,
          "set_prompt": "Dark office with mahogany desk...",
-         "scene_image_path": "output/sessions/session_xxx/scenes/scene_0.png"
+         "scene_image_path": "output/projects/project_xxx/scenes/scene_0.png"
        }
      ]
    }
@@ -412,7 +412,7 @@ To generate custom scene/set images for the last frame:
 The system may include a feature to automatically generate scene images from set prompts. This would:
 1. Extract `set_prompt` from each scene
 2. Generate a high-quality scene image
-3. Save it to the session folder
+3. Save it to the project folder
 4. Update `scene_image_path` automatically
 
 ---

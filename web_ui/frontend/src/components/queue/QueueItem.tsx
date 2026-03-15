@@ -10,7 +10,8 @@ import {
   X,
   GripVertical,
   MoreVertical,
-  StopCircle
+  StopCircle,
+  RotateCw
 } from 'lucide-react';
 
 interface QueueItemProps {
@@ -18,11 +19,12 @@ interface QueueItemProps {
   isSelected?: boolean;
   onSelect?: (itemId: string) => void;
   onCancel?: (itemId: string) => void;
+  onRequeue?: (itemId: string) => void;
   dragListeners?: Record<string, any>;
   dragAttributes?: Record<string, any>;
 }
 
-export function QueueItem({ item, isSelected, onSelect, onCancel, dragListeners, dragAttributes }: QueueItemProps) {
+export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, dragListeners, dragAttributes }: QueueItemProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const getStatusIcon = () => {
@@ -100,6 +102,7 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, dragListeners,
   };
 
   const canCancel = item.status === QueueItemStatus.QUEUED || item.status === QueueItemStatus.ACTIVE;
+  const canRequeue = item.status === QueueItemStatus.FAILED || item.status === QueueItemStatus.CANCELLED;
 
   return (
     <div
@@ -111,7 +114,7 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, dragListeners,
     >
       <div className="flex items-center gap-3 p-4">
         {/* Drag handle */}
-        <div 
+        <div
           className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
           {...dragAttributes}
           {...dragListeners}
@@ -135,10 +138,10 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, dragListeners,
         </div>
 
         {/* Thumbnail (if available) */}
-        {item.shot_index && item.session_id && (
+        {item.shot_index && item.project_id && (
           <div className="flex-shrink-0 w-12 h-12 rounded bg-gray-200 overflow-hidden">
             <img
-              src={`/api/sessions/${item.session_id}/images/shot_${String(item.shot_index).padStart(3, '0')}_001.png`}
+              src={`/api/projects/${item.project_id}/images/shot_${String(item.shot_index).padStart(3, '0')}_001.png`}
               alt={`Shot ${item.shot_index}`}
               className="w-full h-full object-cover"
               onError={(e) => {
@@ -151,9 +154,9 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, dragListeners,
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            {/* Session title */}
+            {/* Project title */}
             <span className="font-medium text-sm text-gray-900 truncate">
-              {item.session_title || item.session_id}
+              {item.project_title || item.project_id}
             </span>
 
             {/* Shot index */}
@@ -216,6 +219,17 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, dragListeners,
             title="Cancel generation"
           >
             <StopCircle className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* Requeue button */}
+        {canRequeue && onRequeue && (
+          <button
+            onClick={() => onRequeue(item.item_id)}
+            className="flex-shrink-0 p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+            title="Requeue generation"
+          >
+            <RotateCw className="w-5 h-5" />
           </button>
         )}
       </div>

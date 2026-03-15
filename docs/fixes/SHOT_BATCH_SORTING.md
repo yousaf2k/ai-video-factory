@@ -7,7 +7,7 @@ When shots are generated in parallel batches, the `shots.json` file had shots in
 - Confusion when processing shots sequentially
 
 ## Solution
-Modified `SessionManager.save_shots()` in `core/session_manager.py` to:
+Modified `ProjectManager.save_shots()` in `core/project_manager.py` to:
 
 1. **Sort shots by batch_number** before saving
 2. **Maintain order within each batch** (preserve original order)
@@ -18,10 +18,10 @@ Modified `SessionManager.save_shots()` in `core/session_manager.py` to:
 ### Modified Function: `save_shots()`
 
 ```python
-def save_shots(self, session_id, shots):
+def save_shots(self, project_id, shots):
     """Save shot data (image prompts, motion prompts) and initialize status fields"""
-    session_dir = os.path.join(self.sessions_dir, session_id)
-    shots_path = os.path.join(session_dir, "shots.json")
+    project_dir = os.path.join(self.projects_dir, project_id)
+    shots_path = os.path.join(project_dir, "shots.json")
 
     # Sort shots by batch_number, then preserve original order within each batch
     # If batch_number is not present, use the original index
@@ -60,10 +60,10 @@ def save_shots(self, session_id, shots):
         json.dump(shots_with_status, f, indent=2, ensure_ascii=False)
 
     # Update metadata
-    meta = self.load_session(session_id)
+    meta = self.load_project(project_id)
     meta['stats']['total_shots'] = len(shots)
     meta['steps']['shots'] = True
-    self._save_meta(session_id, meta)
+    self._save_meta(project_id, meta)
 ```
 
 ## Key Features
@@ -131,13 +131,13 @@ logger.info(f"Shots sorted by batch_number: {batch_counts}")
 
 ## Files Modified
 
-- `core/session_manager.py` - `save_shots()` method
+- `core/project_manager.py` - `save_shots()` method
 
 ## Testing
 
 To verify the fix works:
 
-1. Generate a session with multiple batches (scene_count > SHOT_GENERATION_BATCH_SIZE)
+1. Generate a project with multiple batches (scene_count > SHOT_GENERATION_BATCH_SIZE)
 2. Check `shots.json` - shots should be ordered by batch_number
 3. Verify index field is sequential (1, 2, 3, ...)
 4. Check logs for batch distribution message

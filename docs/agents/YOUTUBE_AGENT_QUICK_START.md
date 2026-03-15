@@ -129,7 +129,7 @@ Each scene should:
 
 Generated stories are saved to:
 ```
-output/sessions/{session_id}/story.json
+output/projects/{project_id}/story.json
 ```
 
 ## Comparison: When to Use Which Agent?
@@ -160,7 +160,7 @@ Make sure your LLM backend is running (LM Studio, OpenAI, etc.)
 The agent outputs strict JSON. If you get errors:
 1. Check LLM is following the prompt instructions
 2. Try adjusting the temperature setting
-3. Review the story generation in the session logs
+3. Review the story generation in the project logs
 
 ## Examples
 
@@ -187,11 +187,11 @@ python core/main.py --story-agent youtube_documentary \
 
 ## Advanced Usage
 
-### Custom Session ID
+### Custom Project ID
 ```bash
 python core/main.py --story-agent youtube_documentary \
   --idea "Your topic" \
-  --session-id my_custom_session
+  --project-id my_custom_project
 ```
 
 ### Combine with Other Agents
@@ -203,9 +203,9 @@ python core/main.py \
   --idea "Your topic"
 ```
 
-### Resume Previous Session
+### Resume Previous Project
 ```bash
-# The system will prompt to resume if a session exists
+# The system will prompt to resume if a project exists
 python core/main.py --story-agent youtube_documentary
 ```
 

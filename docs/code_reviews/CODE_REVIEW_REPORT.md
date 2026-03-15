@@ -391,7 +391,7 @@ def generate_image_gemini(...) -> Optional[str]:
 output_path = os.path.join("ComfyUI", "output", subfolder, filename)  # ❌ Windows-only
 output_path = os.path.join("ComfyUI", "output", filename)  # ❌
 
-# session_manager.py:179-180
+# project_manager.py:179-180
 print(f"[WARN] mark_video_rendered: Video file doesn't exist: {video_path}")  # ❌ Typo
 ```
 
@@ -443,7 +443,7 @@ def plan_shots(scene_graph: str | Dict, max_shots: int | None, ...) -> List[Dict
 with open(output_path, 'wb') as f:  # ✅ Good
     f.write(image_bytes)
 
-# session_manager.py:35, 100, 113, 126, 231, 239
+# project_manager.py:35, 100, 113, 126, 231, 239
 with open(meta_path, 'r', encoding='utf-8') as f:  # ✅ Good
     ...
 
@@ -455,11 +455,11 @@ if r.status_code != 200:  # ❌ Connection not closed
 
 **Fix**:
 ```python
-# Use sessions library for HTTP
-import requests as req_session
+# Use projects library for HTTP
+import requests as req_project
 
-with req_session.Session() as session:
-    response = session.post(...)
+with req_project.Project() as project:
+    response = project.post(...)
     # Connection automatically cleaned up
 ```
 
@@ -476,7 +476,7 @@ print(f"[ERROR] Could not extract image data from response")  # ❌ Debug in pro
 print(f"[PASS] Generated (Gemini): {output_path}")  # ❌
 print(f"[FAIL] Failed to generate image: {e}")  # ❌
 
-# session_manager.py:179-180
+# project_manager.py:179-180
 print(f"[WARN] mark_video_rendered: Video file doesn't exist: {video_path}")  # ❌ Typo
 ```
 
@@ -664,7 +664,7 @@ r = requests.post(
 **Location**: Multiple files
 
 ```python
-# session_manager.py:36, 100, etc.
+# project_manager.py:36, 100, etc.
 with open(meta_path, 'r', encoding='utf-8') as f:
     meta = json.load(f)  # ❌ No validation
 ```
@@ -680,7 +680,7 @@ import jsonschema
 SCHEMA = {
     "type": "object",
     "properties": {
-        "session_id": {"type": "string"},
+        "project_id": {"type": "string"},
         ...
     }
 }
@@ -717,18 +717,18 @@ max_shots_instruction = f"""
 
 ### PERF-002: Redundant File Reads
 **Severity**: 🟡 MEDIUM
-**Location**: `session_manager.py:117, 130`
+**Location**: `project_manager.py:117, 130`
 
 ```python
-# session_manager.py:117-119
-meta = self.load_session(session_id)  # Read file
+# project_manager.py:117-119
+meta = self.load_project(project_id)  # Read file
 meta['steps']['story'] = True
-self._save_meta(session_id, meta)  # Write file
+self._save_meta(project_id, meta)  # Write file
 
 # Line 130-132
-meta = self.load_session(session_id)  # Read file AGAIN
+meta = self.load_project(project_id)  # Read file AGAIN
 meta['shots'] = []
-self._save_meta(session_id, meta)  # Write file AGAIN
+self._save_meta(project_id, meta)  # Write file AGAIN
 ```
 
 **Impact**: Each update loads and saves entire metadata file
@@ -738,11 +738,11 @@ self._save_meta(session_id, meta)  # Write file AGAIN
 def __init__(self, ...):
     self._metadata_cache = {}
 
-def load_session(self, session_id):
-    if session_id not in self._metadata_cache:
+def load_project(self, project_id):
+    if project_id not in self._metadata_cache:
         with open(...) as f:
-            self._metadata_cache[session_id] = json.load(f)
-    return self._metadata_cache[session_id]
+            self._metadata_cache[project_id] = json.load(f)
+    return self._metadata_cache[project_id]
 ```
 
 ---
@@ -800,7 +800,7 @@ self.timeout = 60  # 1 minute is more reasonable
 ## Best Practices ✅
 
 ### GOOD-001: Context Managers for File I/O
-**Location**: `session_manager.py`, `image_generator.py`
+**Location**: `project_manager.py`, `image_generator.py`
 
 ```python
 # ✅ GOOD:
@@ -844,13 +844,13 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 ---
 
-### GOOD-004: Session Management
-**Location**: `session_manager.py`
+### GOOD-004: Project Management
+**Location**: `project_manager.py`
 
 ```python
 # ✅ GOOD: Crash recovery support
-def get_latest_session(self):
-    """Get most recent incomplete session, or None if all complete"""
+def get_latest_project(self):
+    """Get most recent incomplete project, or None if all complete"""
 ```
 
 **Keep this up** - excellent feature for long-running workflows.
@@ -1032,7 +1032,7 @@ async def generate_images_async(shots, output_dir, ...):
 - 🔴 2 dictionary key typos
 - 🔴 1 variable name typo
 - 🟡 No timeout on requests
-- 🟡 Resource leaks (no session management)
+- 🟡 Resource leaks (no project management)
 - 🟡 No retry logic
 
 **Priority**: HIGH
@@ -1050,7 +1050,7 @@ async def generate_images_async(shots, output_dir, ...):
 
 ---
 
-### core/session_manager.py
+### core/project_manager.py
 - ✅ Excellent crash recovery
 - ✅ Good file I/O with context managers
 - ✅ Good type hints in most places
@@ -1092,7 +1092,7 @@ Before deploying to production, ensure:
 - [ ] All providers tested with valid API keys
 - [ ] Error handling tested with invalid inputs
 - [ ] File operations tested on Windows and Linux
-- [ ] Session resumption tested
+- [ ] Project resumption tested
 - [ ] Image generation tested with multiple variations
 - [ ] Video rendering tested to completion
 - [ ] Unit tests added for critical functions

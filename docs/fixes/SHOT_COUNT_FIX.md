@@ -125,7 +125,7 @@ After fix:
 To test the fix:
 
 ```bash
-# Create a new session with the fixed code
+# Create a new project with the fixed code
 python core/main.py \
   --story-agent prehistoric_pov \
   --image-agent prehistoric_pov \

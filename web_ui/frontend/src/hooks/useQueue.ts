@@ -16,11 +16,11 @@ interface QueueData {
 }
 
 interface UseQueueOptions {
-  sessionId?: string;
+  projectId?: string;
   enabled?: boolean;
 }
 
-export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
+export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
@@ -28,12 +28,12 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
 
   // Initial data fetch with 5-second polling
   const { data, isLoading, error, refetch } = useQuery<QueueData>({
-    queryKey: ['queue', sessionId],
+    queryKey: ['queue', projectId],
     queryFn: async () => {
       console.log('[useQueue] Fetching queue data...');
       try {
         const [itemsRes, statsRes, pausedRes] = await Promise.all([
-          api.get(`/api/queue/items${sessionId ? `?session_id=${sessionId}` : ''}`),
+          api.get(`/api/queue/items${projectId ? `?project_id=${projectId}` : ''}`),
           api.get('/api/queue/statistics'),
           api.get('/api/queue/paused')
         ]);
@@ -116,7 +116,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [enabled, sessionId]);
+  }, [enabled, projectId]);
 
   const handleWebSocketMessage = useCallback((message: any) => {
     // Only handle queue-related messages
@@ -125,16 +125,16 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
     console.log('[useQueue] WebSocket message:', message.type);
 
     // Invalidate queries for major state changes
-    if (['queue.item_added', 'queue.item_removed', 'queue.item_cancelled',
+    if (['queue.item_added', 'queue.item_removed', 'queue.item_cancelled', 'queue.item_requeued',
          'queue.reordered', 'queue.paused', 'queue.resumed',
          'queue.cleared_completed', 'queue.statistics_updated'].includes(message.type)) {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
     }
 
     // Update individual items for progress updates (more efficient)
     if (message.type === 'queue.item_progress') {
       const { item_id, progress } = message.data;
-      queryClient.setQueryData<QueueData>(['queue', sessionId], (old) => {
+      queryClient.setQueryData<QueueData>(['queue', projectId], (old) => {
         if (!old) return old;
         return {
           ...old,
@@ -149,7 +149,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
 
     // Update item status
     if (['queue.item_started', 'queue.item_completed', 'queue.item_failed'].includes(message.type)) {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
     }
 
     // Show toast notifications for important events
@@ -164,7 +164,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
         toast.info('Queue resumed');
         break;
     }
-  }, [queryClient, sessionId]);
+  }, [queryClient, projectId]);
 
   // Mutations
   const pauseQueue = useMutation({
@@ -173,7 +173,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
       toast.success('Queue paused');
     },
     onError: (error: any) => {
@@ -187,7 +187,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
       toast.success('Queue resumed');
     },
     onError: (error: any) => {
@@ -201,7 +201,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
       toast.success('Item cancelled');
     },
     onError: (error: any) => {
@@ -217,11 +217,25 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       return itemsToCancel;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
       toast.success(`${data.length} item(s) cancelled`);
     },
     onError: (error: any) => {
       toast.error(`Failed to cancel items: ${error.message}`);
+    }
+  });
+
+  const requeueItem = useMutation({
+    mutationFn: async (itemId: string) => {
+      const response = await api.post(`/api/queue/items/${itemId}/requeue`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
+      toast.success('Item requeued');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to requeue item: ${error.message}`);
     }
   });
 
@@ -231,7 +245,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
       toast.success(`Cleared ${data.count} completed items`);
     },
     onError: (error: any) => {
@@ -245,7 +259,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
       toast.success(`Cleared ${data.count} failed items`);
     },
     onError: (error: any) => {
@@ -259,7 +273,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       return response.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
       toast.success(`Cleared ${data.count} cancelled items`);
     },
     onError: (error: any) => {
@@ -273,7 +287,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
     },
     onError: (error: any) => {
       toast.error(`Failed to reorder: ${error.message}`);
@@ -286,7 +300,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['queue', sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
     },
     onError: (error: any) => {
       toast.error(`Failed to update priority: ${error.message}`);
@@ -308,7 +322,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
       flfi2v: 0,
       narrations: 0,
       backgrounds: 0,
-      total_sessions: 0
+      total_projects: 0
     },
     isPaused: data?.isPaused || false,
     isLoading,
@@ -320,6 +334,7 @@ export function useQueue({ sessionId, enabled = true }: UseQueueOptions = {}) {
     resumeQueue: resumeQueue.mutate,
     cancelItem: cancelItem.mutate,
     cancelMultipleItems: cancelMultipleItems.mutate,
+    requeueItem: requeueItem.mutate,
     clearCompleted: clearCompleted.mutate,
     clearFailed: clearFailed.mutate,
     clearCancelled: clearCancelled.mutate,

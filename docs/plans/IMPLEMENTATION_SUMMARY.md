@@ -26,7 +26,7 @@ All components of the AI Film Studio system have been successfully upgraded to i
 
 - **`core/image_generator.py`** - Image generation module
   - Generates images using Gemini NanoBanana Pro
-  - Saves images to timestamped session directories
+  - Saves images to timestamped project directories
   - Batch processing for multiple shots
   - Error handling for failed generations
 
@@ -109,7 +109,7 @@ C:\AI\ai_video_factory\
 │   └── video_idea.txt
 └── output\
     └── generated_images\           ⭐ NEW
-        └── session_YYYYMMDD_HHMMSS\
+        └── project_YYYYMMDD_HHMMSS\
             ├── shot_001.png
             ├── shot_002.png
             └── ...
@@ -134,7 +134,7 @@ All settings in one place (`config.py`):
 
 ### 3. Image Generation Pipeline
 - Pre-generates images before video rendering
-- Saves to organized session directories
+- Saves to organized project directories
 - Handles failures gracefully
 - Progress tracking for each shot
 
@@ -212,7 +212,7 @@ Tests:
    STEP 4: Shot Planning
    STEP 4.5: Image Generation
    [1/5] Generating image for: A cyberpunk street...
-   ✓ Generated: output/generated_images/session_20250207_143000/shot_001.png
+   ✓ Generated: output/generated_images/project_20250207_143000/shot_001.png
    ...
    STEP 5: Rendering 5 shots
    ALL RENDERS COMPLETE

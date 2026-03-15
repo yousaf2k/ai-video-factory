@@ -65,9 +65,9 @@ The application will:
 2. Use the `glm-4.7` model
 3. Handle SSL certificate verification issues
 
-### Resume Your Session
+### Resume Your Project
 
-You can now resume your failed session:
+You can now resume your failed project:
 ```bash
 python core/main.py
 ```

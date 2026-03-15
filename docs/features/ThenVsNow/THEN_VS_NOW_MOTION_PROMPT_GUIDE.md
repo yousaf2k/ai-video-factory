@@ -522,7 +522,7 @@ When the ThenVsNow agent generates a story, it automatically creates motion prom
 
 Users can manually edit motion prompts in shots.json before generation:
 
-1. Navigate to session folder
+1. Navigate to project folder
 2. Open `shots.json`
 3. Edit `meeting_video_prompt` and `departure_video_prompt`
 4. Save and regenerate videos
@@ -554,7 +554,7 @@ Users can manually edit motion prompts in shots.json before generation:
 **Status:** ✅ Updated and ready for use
 
 **Next Steps:**
-1. Create a new ThenVsNow session
+1. Create a new ThenVsNow project
 2. Generate story with new motion prompts
 3. Verify motion prompts follow animation guidelines
 4. Generate videos and test animation quality

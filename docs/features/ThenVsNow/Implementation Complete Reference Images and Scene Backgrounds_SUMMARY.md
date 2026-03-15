@@ -119,7 +119,7 @@ import SceneBackgroundManager from '@/components/scenes/SceneBackgroundManager';
     <CharacterReferenceUpload
       character={character}
       characterIndex={index}
-      sessionId={sessionId}
+      projectId={projectId}
       onUpdate={() => refetchStory()}  // Reload story after upload
     />
   </div>
@@ -131,7 +131,7 @@ import SceneBackgroundManager from '@/components/scenes/SceneBackgroundManager';
     {/* Your existing scene fields */}
     <SceneBackgroundManager
       scene={scene}
-      sessionId={sessionId}
+      projectId={projectId}
       onUpdate={() => refetchStory()}  // Reload story after generate
     />
   </div>
@@ -140,7 +140,7 @@ import SceneBackgroundManager from '@/components/scenes/SceneBackgroundManager';
 
 ### Step 4: End-to-End Test (30 minutes)
 
-1. Create new ThenVsNow session
+1. Create new ThenVsNow project
 2. Upload THEN reference photo for character 0
 3. Upload NOW reference photo for character 0
 4. Generate background for scene 0
@@ -229,7 +229,7 @@ if reference_image_path and load_reference_node_id:
 ### Progress Broadcasting
 ```python
 # generation_service.py
-manager.broadcast_sync(session_id, {
+manager.broadcast_sync(project_id, {
     "type": "progress",
     "scene_id": scene_id,
     "step": "background_generation",

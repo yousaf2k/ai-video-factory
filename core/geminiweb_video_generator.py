@@ -23,7 +23,7 @@ def generate_video_geminiweb(
     image_path: str,
     motion_prompt: str,
     output_path: str,
-    session_title: str = None,
+    project_title: str = None,
 ) -> Optional[str]:
     """
     Generate a single video using Gemini web UI via browser automation.
@@ -36,7 +36,7 @@ def generate_video_geminiweb(
         image_path: Path to the reference image
         motion_prompt: The prompt describing the video motion/content
         output_path: Where to save the generated video file
-        session_title: Optional title for Gemini Web chat persistence
+        project_title: Optional title for Gemini Web chat persistence
         
     Returns:
         Path to the generated video file, or None if failed
@@ -70,8 +70,8 @@ def generate_video_geminiweb(
             abs_output_path
         ]
         
-        if session_title:
-            args.append(session_title)
+        if project_title:
+            args.append(project_title)
         
         try:
             # We use subprocess.run with capture_output=True to cleanly harvest

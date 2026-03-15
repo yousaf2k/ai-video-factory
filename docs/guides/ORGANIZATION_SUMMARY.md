@@ -43,7 +43,7 @@ ai_video_factory/
 │   └── Implementation Summaries
 ├── input/            # Example ideas
 ├── workflow/          # ComfyUI workflows
-└── sessions/          # Generated sessions
+└── projects/          # Generated projects
 ```
 
 ---

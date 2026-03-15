@@ -28,12 +28,12 @@ export default function RootLayout({
           <div className="min-h-screen bg-background">
             <header className="border-b bg-card">
               <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-                <Link href="/sessions" className="text-xl font-bold text-primary">
+                <Link href="/projects" className="text-xl font-bold text-primary">
                   AI Video Factory
                 </Link>
                 <nav className="flex items-center gap-6">
-                  <Link href="/sessions" className="text-sm font-medium hover:text-primary transition-colors">
-                    Sessions
+                  <Link href="/projects" className="text-sm font-medium hover:text-primary transition-colors">
+                    Projects
                   </Link>
                   <Link href="/queue" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
                     <List className="w-4 h-4" />

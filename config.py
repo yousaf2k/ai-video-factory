@@ -107,8 +107,8 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 # Global output directory
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
 
-# Sessions directory (where project data is stored)
-SESSIONS_DIR = os.path.join(OUTPUT_DIR, "sessions")
+# Projects directory (where project data is stored)
+PROJECTS_DIR = os.path.join(OUTPUT_DIR, "projects")
 
 # Helper to resolve relative paths to project root or output dir
 def resolve_path(relative_path):
@@ -126,7 +126,7 @@ def resolve_path(relative_path):
         if os.path.isabs(OUTPUT_DIR):
             # Resolve relative to the parent of OUTPUT_DIR
             # e.g., if OUTPUT_DIR is E:/output, parent is E:/
-            # joining E:/ with output/sessions/xxx/shot.png correctly resolves it
+            # joining E:/ with output/projects/xxx/shot.png correctly resolves it
             output_parent = os.path.dirname(OUTPUT_DIR)
             return os.path.join(output_parent, relative_path)
             
@@ -134,7 +134,7 @@ def resolve_path(relative_path):
 
 # Absolute versions of directories
 ABS_OUTPUT_DIR = resolve_path(OUTPUT_DIR)
-ABS_SESSIONS_DIR = resolve_path(SESSIONS_DIR)
+ABS_PROJECTS_DIR = resolve_path(PROJECTS_DIR)
 
 # ==========================================
 # CONFIGURATION UTILITY WRAPPERS
@@ -874,7 +874,7 @@ if not os.path.isabs(GEMINIWEB_CHROME_PROFILE):
     GEMINIWEB_CHROME_PROFILE = resolve_path(GEMINIWEB_CHROME_PROFILE)
 
 # Timeout for waiting for image generation (seconds)
-GEMINIWEB_TIMEOUT = 120
+GEMINIWEB_TIMEOUT = 300
 
 # Gemini web URL
 GEMINIWEB_URL = "https://gemini.google.com/app"

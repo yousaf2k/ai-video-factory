@@ -1,5 +1,5 @@
 """
-Video Regenerator - Re-render videos from existing sessions
+Video Regenerator - Re-render videos from existing projects
 Allows changing video length or re-rendering with different settings
 """
 import sys
@@ -9,7 +9,7 @@ import shutil
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.session_manager import SessionManager
+from core.project_manager import ProjectManager
 from core.prompt_compiler import load_workflow, compile_workflow
 from core.comfy_client import submit, wait_for_prompt_completion, get_output_file_path
 from core.render_monitor import wait_until_idle
@@ -61,30 +61,30 @@ def generate_unique_video_filename(videos_dir, shot_idx):
     return video_filename, video_save_path
 
 
-def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=False):
+def regenerate_videos(project_id, new_shot_length=None, force_regenerate_all=False):
     """
-    Regenerate videos for a session
+    Regenerate videos for a project
 
     Args:
-        session_id: Session to regenerate
+        project_id: Project to regenerate
         new_shot_length: New shot length in seconds (None to use existing)
         force_regenerate_all: If True, re-render all shots. If False, skip already rendered
     """
-    session_mgr = SessionManager()
+    project_mgr = ProjectManager()
 
     print("\n" + "="*70)
-    print(f"VIDEO REGENERATION: {session_id}")
+    print(f"VIDEO REGENERATION: {project_id}")
     print("="*70)
 
-    # Load session
+    # Load project
     try:
-        session_meta = session_mgr.load_session(session_id)
+        project_meta = project_mgr.load_project(project_id)
     except Exception as e:
-        print(f"[ERROR] Could not load session: {e}")
+        print(f"[ERROR] Could not load project: {e}")
         return False
 
     # Load shots data
-    shots_dir = session_mgr.get_session_dir(session_id)
+    shots_dir = project_mgr.get_project_dir(project_id)
     shots_path = os.path.join(shots_dir, "shots.json")
 
     if not os.path.exists(shots_path):
@@ -96,7 +96,7 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
         shots = json.load(f)
 
     # Get current video config
-    video_config = session_meta.get('video_config', {})
+    video_config = project_meta.get('video_config', {})
     current_shot_length = video_config.get('shot_length', config.DEFAULT_SHOT_LENGTH)
 
     # Determine shot length to use
@@ -137,7 +137,7 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
     print(f"\n[INFO] Found {len(valid_shots)} shots with images")
 
     # Load shots status from shots.json
-    shots_status = session_mgr.get_shots(session_id)
+    shots_status = project_mgr.get_shots(project_id)
     shots_status_dict = {s['index']: s for s in shots_status}
 
     # Determine which shots to render
@@ -212,7 +212,7 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
         try:
             if video_mode == 'geminiweb':
                 from core.geminiweb_video_generator import generate_video_geminiweb
-                videos_dir = session_mgr.get_videos_dir(session_id)
+                videos_dir = project_mgr.get_videos_dir(project_id)
                 os.makedirs(videos_dir, exist_ok=True)
                 
                 video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_idx)
@@ -225,7 +225,7 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
                 )
                 
                 if video_res:
-                    session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    project_mgr.mark_video_rendered(project_id, shot_idx, video_save_path)
                     print(f"[PASS] Shot {shot_idx}: Generated video via GeminiWeb")
                     successful_renders += 1
                 else:
@@ -234,7 +234,7 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
                     errors.append(f"Shot {shot_idx}: GeminiWeb generation failed")
             elif video_mode == 'flowweb':
                 from core.flowweb_video_generator import generate_video_flowweb
-                videos_dir = session_mgr.get_videos_dir(session_id)
+                videos_dir = project_mgr.get_videos_dir(project_id)
                 os.makedirs(videos_dir, exist_ok=True)
                 
                 video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_idx)
@@ -250,7 +250,7 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
                 )
                 
                 if video_res:
-                    session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    project_mgr.mark_video_rendered(project_id, shot_idx, video_save_path)
                     print(f"[PASS] Shot {shot_idx}: Generated video via FlowWeb")
                     successful_renders += 1
                 else:
@@ -289,15 +289,15 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
                     errors.append(f"Shot {shot_idx}: No output files generated")
                     continue
 
-                # Log outputs and copy to session folder
+                # Log outputs and copy to project folder
                 video_outputs = [o for o in outputs if o['type'] == 'video']
                 image_outputs = [o for o in outputs if o['type'] == 'image']
 
                 if video_outputs:
                     print(f"[PASS] Shot {shot_idx}: Generated {len(video_outputs)} video(s)")
 
-                    # Create session videos directory
-                    videos_dir = session_mgr.get_videos_dir(session_id)
+                    # Create project videos directory
+                    videos_dir = project_mgr.get_videos_dir(project_id)
                     os.makedirs(videos_dir, exist_ok=True)
 
                     # Generate unique filename to avoid overwriting existing videos
@@ -308,15 +308,15 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
                     if os.path.exists(source_path):
                         shutil.copy2(source_path, video_save_path)
                         file_size = os.path.getsize(video_save_path)
-                        print(f"[COPY] Shot {shot_idx}: {video_filename} -> session/videos/")
+                        print(f"[COPY] Shot {shot_idx}: {video_filename} -> project/videos/")
                         print(f"       Size: {file_size:,} bytes")
 
                         # Mark as rendered with video path
-                        session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                        project_mgr.mark_video_rendered(project_id, shot_idx, video_save_path)
                     else:
                         print(f"[WARN] Source video not found: {source_path}")
                         # Mark as rendered anyway
-                        session_mgr.mark_video_rendered(session_id, shot_idx)
+                        project_mgr.mark_video_rendered(project_id, shot_idx)
 
                     successful_renders += 1
 
@@ -328,7 +328,7 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
                         print(f"       ... and {len(image_outputs) - 3} more")
 
                     # Mark as rendered (no video file, just frames)
-                    session_mgr.mark_video_rendered(session_id, shot_idx)
+                    project_mgr.mark_video_rendered(project_id, shot_idx)
                     successful_renders += 1
 
         except Exception as e:
@@ -356,8 +356,8 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
 
     # If changing video length, update config
     if new_shot_length:
-        session_meta['video_config']['shot_length'] = new_shot_length
-        session_mgr._save_meta(session_id, session_meta)
+        project_meta['video_config']['shot_length'] = new_shot_length
+        project_mgr._save_meta(project_id, project_meta)
 
     if successful_renders > 0:
         print(f"\n[SUCCESS] {successful_renders} video(s) regenerated successfully!")
@@ -371,49 +371,49 @@ def regenerate_videos(session_id, new_shot_length=None, force_regenerate_all=Fal
 
 def interactive_regenerate():
     """Interactive menu for regenerating videos"""
-    session_mgr = SessionManager()
+    project_mgr = ProjectManager()
 
     print("\n" + "="*70)
     print("VIDEO REGENERATION WIZARD")
     print("="*70)
 
-    # List sessions
-    sessions = session_mgr.list_all_sessions()
+    # List projects
+    projects = project_mgr.list_all_projects()
 
-    if not sessions:
-        print("\n[INFO] No sessions found.")
+    if not projects:
+        print("\n[INFO] No projects found.")
         return
 
-    print("\nAvailable Sessions:")
-    for i, session in enumerate(sessions, 1):
-        status = "✓" if session['completed'] else "⏳"
-        shots_count = session['stats']['total_shots']
-        videos_count = session['stats']['videos_rendered']
-        print(f"  {i}. {status} {session['session_id']}")
-        print(f"     Idea: {session['idea'][:60]}...")
+    print("\nAvailable Projects:")
+    for i, project in enumerate(projects, 1):
+        status = "✓" if project['completed'] else "⏳"
+        shots_count = project['stats']['total_shots']
+        videos_count = project['stats']['videos_rendered']
+        print(f"  {i}. {status} {project['project_id']}")
+        print(f"     Idea: {project['idea'][:60]}...")
         print(f"     Shots: {shots_count}, Videos: {videos_count}")
         print()
 
-    # Select session
+    # Select project
     try:
-        choice = input("Select session number (or 'q' to quit): ").strip()
+        choice = input("Select project number (or 'q' to quit): ").strip()
         if choice.lower() == 'q':
             return
 
-        session_idx = int(choice) - 1
-        if session_idx < 0 or session_idx >= len(sessions):
+        project_idx = int(choice) - 1
+        if project_idx < 0 or project_idx >= len(projects):
             print("[ERROR] Invalid selection")
             return
 
-        session_id = sessions[session_idx]['session_id']
+        project_id = projects[project_idx]['project_id']
 
     except ValueError:
         print("[ERROR] Invalid input")
         return
 
     # Get shot length
-    current_session = sessions[session_idx]
-    current_length = current_session.get('video_config', {}).get('shot_length', config.DEFAULT_SHOT_LENGTH)
+    current_project = projects[project_idx]
+    current_length = current_project.get('video_config', {}).get('shot_length', config.DEFAULT_SHOT_LENGTH)
 
     print(f"\n[INFO] Current shot length: {current_length}s")
 
@@ -436,20 +436,20 @@ def interactive_regenerate():
     print("\n" + "="*70)
     print("REGENERATION SUMMARY")
     print("="*70)
-    print(f"Session: {session_id}")
+    print(f"Project: {project_id}")
     print(f"Shot length: {new_length if new_length else current_length}s")
     print(f"Force regenerate all: {'Yes' if force_all else 'No (only missing)'}")
     print("="*70)
 
     # Do it
-    regenerate_videos(session_id, new_shot_length=new_length, force_regenerate_all=force_all)
+    regenerate_videos(project_id, new_shot_length=new_length, force_regenerate_all=force_all)
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Regenerate videos from sessions")
-    parser.add_argument('--session', type=str, help='Session ID to regenerate')
+    parser = argparse.ArgumentParser(description="Regenerate videos from projects")
+    parser.add_argument('--project', type=str, help='Project ID to regenerate')
     parser.add_argument('--length', type=float, help='New shot length in seconds')
     parser.add_argument('--force', action='store_true', help='Regenerate all videos (including already rendered)')
     parser.add_argument('--interactive', action='store_true', help='Interactive mode')
@@ -473,7 +473,7 @@ if __name__ == "__main__":
         print(f"[INFO] Video resolution: {args.video_resolution}")
         print(f"[INFO] Video dimensions: {config.VIDEO_WIDTH}x{config.VIDEO_HEIGHT}")
 
-    if args.interactive or not args.session:
+    if args.interactive or not args.project:
         interactive_regenerate()
     else:
-        regenerate_videos(args.session, new_shot_length=args.length, force_regenerate_all=args.force)
+        regenerate_videos(args.project, new_shot_length=args.length, force_regenerate_all=args.force)

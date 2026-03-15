@@ -3,10 +3,10 @@
  */
 import axios, { AxiosInstance } from 'axios';
 import type {
-  Session,
-  SessionListItem,
-  CreateSessionRequest,
-  UpdateSessionRequest,
+  Project,
+  ProjectListItem,
+  CreateProjectRequest,
+  UpdateProjectRequest,
   Story,
   UpdateStoryRequest,
   Shot,
@@ -39,41 +39,41 @@ class ApiClient {
     );
   }
 
-  // Sessions
-  async listSessions(): Promise<SessionListItem[]> {
-    const response = await this.client.get<SessionListItem[]>('/api/sessions');
+  // Projects
+  async listProjects(): Promise<ProjectListItem[]> {
+    const response = await this.client.get<ProjectListItem[]>('/api/projects');
     return response.data;
   }
 
-  async createSession(request: CreateSessionRequest): Promise<Session> {
-    const response = await this.client.post<Session>('/api/sessions', request);
+  async createProject(request: CreateProjectRequest): Promise<Project> {
+    const response = await this.client.post<Project>('/api/projects', request);
     return response.data;
   }
 
-  async getSession(sessionId: string): Promise<Session> {
-    const response = await this.client.get<Session>(`/api/sessions/${sessionId}`);
+  async getProject(projectId: string): Promise<Project> {
+    const response = await this.client.get<Project>(`/api/projects/${projectId}`);
     return response.data;
   }
 
-  async updateSession(sessionId: string, request: UpdateSessionRequest): Promise<Session> {
-    const response = await this.client.put<Session>(`/api/sessions/${sessionId}`, request);
+  async updateProject(projectId: string, request: UpdateProjectRequest): Promise<Project> {
+    const response = await this.client.put<Project>(`/api/projects/${projectId}`, request);
     return response.data;
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
-    await this.client.delete(`/api/sessions/${sessionId}`);
+  async deleteProject(projectId: string): Promise<void> {
+    await this.client.delete(`/api/projects/${projectId}`);
   }
 
-  async duplicateSession(sessionId: string, newSessionId?: string): Promise<Session> {
-    const response = await this.client.post<Session>(
-      `/api/sessions/${sessionId}/duplicate`,
-      newSessionId ? { new_session_id: newSessionId } : {}
+  async duplicateProject(projectId: string, newProjectId?: string): Promise<Project> {
+    const response = await this.client.post<Project>(
+      `/api/projects/${projectId}/duplicate`,
+      newProjectId ? { new_project_id: newProjectId } : {}
     );
     return response.data;
   }
 
   async generateThumbnail(
-    sessionId: string,
+    projectId: string,
     aspectRatio: string = '16:9',
     force: boolean = false,
     imageMode?: string,
@@ -81,7 +81,7 @@ class ApiClient {
     seed?: number
   ): Promise<string> {
     const response = await this.client.post<{ status: string, thumbnail_url: string }>(
-      `/api/sessions/${sessionId}/thumbnail`,
+      `/api/projects/${projectId}/thumbnail`,
       {
         aspect_ratio: aspectRatio,
         force,
@@ -94,49 +94,49 @@ class ApiClient {
   }
 
   // Story
-  async getStory(sessionId: string): Promise<Story> {
-    const session = await this.getSession(sessionId);
-    if (!session.story) {
+  async getStory(projectId: string): Promise<Story> {
+    const project = await this.getProject(projectId);
+    if (!project.story) {
       throw new Error('Story not found');
     }
-    return session.story;
+    return project.story;
   }
 
-  async updateStory(sessionId: string, request: UpdateStoryRequest): Promise<Story> {
-    const response = await this.client.put<Story>(`/api/sessions/${sessionId}/story`, request);
+  async updateStory(projectId: string, request: UpdateStoryRequest): Promise<Story> {
+    const response = await this.client.put<Story>(`/api/projects/${projectId}/story`, request);
     return response.data;
   }
 
-  async regenerateStory(sessionId: string, agent: string = 'default'): Promise<Story> {
-    const response = await this.client.post<Story>(`/api/sessions/${sessionId}/story/regenerate`, {
+  async regenerateStory(projectId: string, agent: string = 'default'): Promise<Story> {
+    const response = await this.client.post<Story>(`/api/projects/${projectId}/story/regenerate`, {
       agent,
     });
     return response.data;
   }
 
   // Shots
-  async getShots(sessionId: string): Promise<Shot[]> {
-    const session = await this.getSession(sessionId);
-    return session.shots || [];
+  async getShots(projectId: string): Promise<Shot[]> {
+    const project = await this.getProject(projectId);
+    return project.shots || [];
   }
 
-  async updateShots(sessionId: string, shots: Shot[]): Promise<Shot[]> {
-    const response = await this.client.put<Shot[]>(`/api/sessions/${sessionId}/shots`, {
+  async updateShots(projectId: string, shots: Shot[]): Promise<Shot[]> {
+    const response = await this.client.put<Shot[]>(`/api/projects/${projectId}/shots`, {
       shots,
     });
     return response.data;
   }
 
-  async updateShot(sessionId: string, shotIndex: number, request: UpdateShotRequest): Promise<Shot> {
+  async updateShot(projectId: string, shotIndex: number, request: UpdateShotRequest): Promise<Shot> {
     const response = await this.client.put<Shot>(
-      `/api/sessions/${sessionId}/shots/${shotIndex}`,
+      `/api/projects/${projectId}/shots/${shotIndex}`,
       request
     );
     return response.data;
   }
 
   async regenerateShotImage(
-    sessionId: string,
+    projectId: string,
     shotIndex: number,
     force: boolean = false,
     imageMode?: string,
@@ -145,7 +145,7 @@ class ApiClient {
     promptOverride?: string,
     imageVariant?: string
   ): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-image`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/regenerate-image`, {
       force,
       image_mode: imageMode,
       image_workflow: imageWorkflow,
@@ -156,14 +156,14 @@ class ApiClient {
   }
 
   async regenerateShotVideo(
-    sessionId: string,
+    projectId: string,
     shotIndex: number,
     force: boolean = false,
     videoMode?: string,
     videoWorkflow?: string,
     videoVariant?: string
   ): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/regenerate-video`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/regenerate-video`, {
       force,
       video_mode: videoMode,
       video_workflow: videoWorkflow,
@@ -173,64 +173,64 @@ class ApiClient {
 
 
 
-  async cancelGeneration(sessionId: string): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/shots/cancel-generation`);
+  async cancelGeneration(projectId: string): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/cancel-generation`);
   }
 
-  async cancelShotGeneration(sessionId: string, shotIndex: number): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/cancel-generation`);
+  async cancelShotGeneration(projectId: string, shotIndex: number): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/cancel-generation`);
   }
 
-  async removeWatermark(sessionId: string, shotIndex: number, variant?: string): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/remove-watermark`, {
+  async removeWatermark(projectId: string, shotIndex: number, variant?: string): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/remove-watermark`, {
       variant: variant || null,
     });
   }
 
-  async getQueueStatus(sessionId: string): Promise<{ queued_indices: number[] }> {
-    const response = await this.client.get<{ queued_indices: number[] }>(`/api/sessions/${sessionId}/shots/queue-status`);
+  async getQueueStatus(projectId: string): Promise<{ queued_indices: number[] }> {
+    const response = await this.client.get<{ queued_indices: number[] }>(`/api/projects/${projectId}/shots/queue-status`);
     return response.data;
   }
 
   async selectShotImage(
-    sessionId: string,
+    projectId: string,
     shotIndex: number,
     imagePath: string
   ): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/select-image`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/select-image`, {
       image_path: imagePath,
     });
   }
 
   async deleteVariationImage(
-    sessionId: string,
+    projectId: string,
     shotIndex: number,
     imagePath: string
   ): Promise<{ remaining: number; active_image_path: string | null }> {
     const response = await this.client.delete<{ status: string; remaining: number; active_image_path: string | null }>(
-      `/api/sessions/${sessionId}/shots/${shotIndex}/images`,
+      `/api/projects/${projectId}/shots/${shotIndex}/images`,
       { params: { image_path: imagePath } }
     );
     return response.data;
   }
 
   async selectShotVideo(
-    sessionId: string,
+    projectId: string,
     shotIndex: number,
     videoPath: string
   ): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/shots/${shotIndex}/select-video`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/select-video`, {
       video_path: videoPath,
     });
   }
 
   async deleteVariationVideo(
-    sessionId: string,
+    projectId: string,
     shotIndex: number,
     videoPath: string
   ): Promise<{ remaining: number; active_video_path: string | null }> {
     const response = await this.client.delete<{ status: string; remaining: number; active_video_path: string | null }>(
-      `/api/sessions/${sessionId}/shots/${shotIndex}/videos`,
+      `/api/projects/${projectId}/shots/${shotIndex}/videos`,
       { params: { video_path: videoPath } }
     );
     return response.data;
@@ -238,40 +238,40 @@ class ApiClient {
 
   // Narration API
   async generateSceneNarration(
-    sessionId: string,
+    projectId: string,
     sceneIndex: number,
     request: { tts_method?: string, tts_workflow?: string, voice?: string }
   ): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/story/scenes/${sceneIndex}/generate-narration`, request);
+    await this.client.post(`/api/projects/${projectId}/story/scenes/${sceneIndex}/generate-narration`, request);
   }
 
-  async cancelSceneNarration(sessionId: string, sceneIndex: number): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/story/scenes/${sceneIndex}/cancel-narration`);
+  async cancelSceneNarration(projectId: string, sceneIndex: number): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/story/scenes/${sceneIndex}/cancel-narration`);
   }
 
   async batchGenerateNarration(
-    sessionId: string,
+    projectId: string,
     sceneIndices: number[],
     config?: { tts_method?: string, tts_workflow?: string, voice?: string }
   ): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/story/batch-generate-narration`, {
+    await this.client.post(`/api/projects/${projectId}/story/batch-generate-narration`, {
       scene_indices: sceneIndices,
       ...config
     });
   }
 
   async selectSceneNarration(
-    sessionId: string,
+    projectId: string,
     sceneIndex: number,
     narrationPath: string
   ): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/story/scenes/${sceneIndex}/select-narration`, {
+    await this.client.post(`/api/projects/${projectId}/story/scenes/${sceneIndex}/select-narration`, {
       narration_path: narrationPath
     });
   }
 
   async uploadShotImage(
-    sessionId: string,
+    projectId: string,
     shotIndex: number,
     file: File,
     variant?: string
@@ -279,7 +279,7 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
     const response = await this.client.post<{ status: string; image_path: string; filename: string }>(
-      `/api/sessions/${sessionId}/shots/${shotIndex}/upload-image`,
+      `/api/projects/${projectId}/shots/${shotIndex}/upload-image`,
       formData,
       { 
         params: { variant },
@@ -290,7 +290,7 @@ class ApiClient {
   }
 
   async uploadShotVideo(
-    sessionId: string,
+    projectId: string,
     shotIndex: number,
     file: File,
     variant?: string
@@ -298,7 +298,7 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
     const response = await this.client.post<{ status: string; video_path: string; filename: string }>(
-      `/api/sessions/${sessionId}/shots/${shotIndex}/upload-video`,
+      `/api/projects/${projectId}/shots/${shotIndex}/upload-video`,
       formData,
       { 
         params: { variant },
@@ -309,7 +309,7 @@ class ApiClient {
   }
 
   async batchRegenerate(
-    sessionId: string,
+    projectId: string,
     data: {
       shot_indices: number[];
       regenerate_images: boolean;
@@ -323,38 +323,38 @@ class ApiClient {
       video_workflow?: string;
     }
   ): Promise<any> {
-    const response = await this.client.post(`/api/sessions/${sessionId}/shots/batch-regenerate`, data);
+    const response = await this.client.post(`/api/projects/${projectId}/shots/batch-regenerate`, data);
     return response.data;
   }
 
   async replanShots(
-    sessionId: string,
+    projectId: string,
     data: {
       max_shots?: number;
       shots_agent: string;
     }
   ): Promise<any> {
-    const response = await this.client.post(`/api/sessions/${sessionId}/shots/replan`, data);
+    const response = await this.client.post(`/api/projects/${projectId}/shots/replan`, data);
     return response.data;
   }
 
   // Generation
-  async startGeneration(sessionId: string): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/generation/start`);
+  async startGeneration(projectId: string): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/generation/start`);
   }
 
-  async stopGeneration(sessionId: string): Promise<void> {
-    await this.client.post(`/api/sessions/${sessionId}/generation/stop`);
+  async stopGeneration(projectId: string): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/generation/stop`);
   }
 
-  async getGenerationStatus(sessionId: string): Promise<any> {
-    const response = await this.client.get(`/api/sessions/${sessionId}/generation/status`);
+  async getGenerationStatus(projectId: string): Promise<any> {
+    const response = await this.client.get(`/api/projects/${projectId}/generation/status`);
     return response.data;
   }
 
   // Assets
-  getAssetUrl(sessionId: string, assetType: 'images' | 'videos', filename: string): string {
-    return `${API_BASE_URL}/api/sessions/${sessionId}/${assetType}/${filename}`;
+  getAssetUrl(projectId: string, assetType: 'images' | 'videos', filename: string): string {
+    return `${API_BASE_URL}/api/projects/${projectId}/${assetType}/${filename}`;
   }
 
   // Config

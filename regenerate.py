@@ -1,6 +1,6 @@
 """
 Video Regeneration CLI Tool
-Re-render videos from existing sessions with optional length changes
+Re-render videos from existing projects with optional length changes
 Also supports regenerating failed images
 """
 import sys
@@ -12,22 +12,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.video_regenerator import regenerate_videos, interactive_regenerate
 
 
-def regenerate_images(session_id):
-    """Regenerate failed images for a session"""
-    from core.session_manager import SessionManager
+def regenerate_images(project_id):
+    """Regenerate failed images for a project"""
+    from core.project_manager import ProjectManager
 
-    session_mgr = SessionManager()
-    session = session_mgr.load_session(session_id)
+    project_mgr = ProjectManager()
+    project = project_mgr.load_project(project_id)
 
-    if not session:
-        print(f"[ERROR] Session {session_id} not found")
+    if not project:
+        print(f"[ERROR] Project {project_id} not found")
         return False
 
-    print(f"\n[REGENERATE] Session: {session_id}")
-    print(f"Idea: {session['idea'][:80]}...")
+    print(f"\n[REGENERATE] Project: {project_id}")
+    print(f"Idea: {project['idea'][:80]}...")
 
     # Load shots
-    shots_dir = session_mgr.get_session_dir(session_id)
+    shots_dir = project_mgr.get_project_dir(project_id)
     shots_path = os.path.join(shots_dir, "shots.json")
 
     if not os.path.exists(shots_path):
@@ -39,7 +39,7 @@ def regenerate_images(session_id):
         shots = json.load(f)
 
     # Get image config
-    image_config = session.get('image_config', {})
+    image_config = project.get('image_config', {})
     image_mode = image_config.get('mode', 'gemini')
     negative_prompt = image_config.get('negative_prompt', "")
 
@@ -47,10 +47,10 @@ def regenerate_images(session_id):
 
     # Find failed images (both not generated and generated but missing file)
     failed_images = []
-    images_dir = session_mgr.get_images_dir(session_id)
+    images_dir = project_mgr.get_images_dir(project_id)
 
     # Check for failed images
-    for idx, shot_meta in enumerate(session['shots']):
+    for idx, shot_meta in enumerate(project['shots']):
         # Use the shot's stored index field for consistency
         shot_idx = shot_meta.get('index', idx + 1)
         expected_filename = f"shot_{shot_idx:03d}.png"
@@ -69,7 +69,7 @@ def regenerate_images(session_id):
         elif not shot_meta['image_generated']:
             # File exists but metadata not updated - fix it
             print(f"[INFO] Fixing metadata for shot {shot_idx} (image exists but not marked)")
-            session_mgr.mark_image_generated(session_id, shot_idx, expected_path)
+            project_mgr.mark_image_generated(project_id, shot_idx, expected_path)
 
     if not failed_images:
         print("[INFO] No failed images found. All images are intact.")
@@ -86,7 +86,7 @@ def regenerate_images(session_id):
             shots_with_paths.append(shot)
 
         # Save the updated shots array with proper paths
-        shots_path = os.path.join(session_mgr.get_session_dir(session_id), "shots.json")
+        shots_path = os.path.join(project_mgr.get_project_dir(project_id), "shots.json")
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots_with_paths, f, indent=2, ensure_ascii=False)
         return True
@@ -94,7 +94,7 @@ def regenerate_images(session_id):
     print(f"[INFO] Found {len(failed_images)} failed image(s)")
 
     # Regenerate
-    images_dir = session_mgr.get_images_dir(session_id)
+    images_dir = project_mgr.get_images_dir(project_id)
     os.makedirs(images_dir, exist_ok=True)
 
     regenerated_count = 0
@@ -124,8 +124,8 @@ def regenerate_images(session_id):
             # Update local shots array
             shot['image_path'] = image_path
 
-            # Update session metadata
-            session_mgr.mark_image_generated(session_id, shot_idx, image_path)
+            # Update project metadata
+            project_mgr.mark_image_generated(project_id, shot_idx, image_path)
             regenerated_count += 1
             print(f"[PASS] Regenerated shot {shot_idx}")
         else:
@@ -152,11 +152,11 @@ def regenerate_images(session_id):
         shots_with_paths.append(shot_with_path)
 
     # Save updated shots to file
-    shots_path = os.path.join(session_mgr.get_session_dir(session_id), "shots.json")
+    shots_path = os.path.join(project_mgr.get_project_dir(project_id), "shots.json")
     with open(shots_path, 'w', encoding='utf-8') as f:
         json.dump(shots_with_paths, f, indent=2, ensure_ascii=False)
 
-    print(f"[INFO] Updated shots.json and session metadata")
+    print(f"[INFO] Updated shots.json and project metadata")
     print(f"[INFO] Shots now have image_path field for video regeneration")
     return True
 
@@ -166,44 +166,44 @@ def show_help():
     print("""
 AI Film Studio - Video & Image Regeneration Tool
 
-Regenerate videos or images from existing sessions. Change video length,
+Regenerate videos or images from existing projects. Change video length,
 re-render with different settings, or regenerate failed images.
 
 Usage:
   python regenerate.py                    # Interactive mode
   python regenerate.py --interactive       # Interactive mode
-  python regenerate.py --list             # List all sessions
-  python regenerate.py --session <id>      # Regenerate specific session
-  python regenerate.py --session <id> --length 10    # Change to 10s shots
-  python regenerate.py --session <id> --force       # Re-render all videos
-  python regenerate.py --session <id> --images      # Regenerate failed images
+  python regenerate.py --list             # List all projects
+  python regenerate.py --project <id>      # Regenerate specific project
+  python regenerate.py --project <id> --length 10    # Change to 10s shots
+  python regenerate.py --project <id> --force       # Re-render all videos
+  python regenerate.py --project <id> --images      # Regenerate failed images
 
 Options:
   --interactive     Interactive mode with menus
-  --session <id>    Session ID to regenerate
+  --project <id>    Project ID to regenerate
   --length <secs>   New shot length in seconds
   --force           Regenerate all videos (including already rendered)
-  --list            List all sessions
+  --list            List all projects
   --images          Regenerate failed images only
 
 Examples:
   # Interactive mode - easiest way
   python regenerate.py
 
-  # List all sessions first
+  # List all projects first
   python regenerate.py --list
 
-  # Regenerate session with new shot length
-  python regenerate.py --session session_20250208_002238 --length 10
+  # Regenerate project with new shot length
+  python regenerate.py --project project_20250208_002238 --length 10
 
-  # Force re-render all videos in a session
-  python regenerate.py --session session_20250208_002238 --force
+  # Force re-render all videos in a project
+  python regenerate.py --project project_20250208_002238 --force
 
   # Regenerate only failed images
-  python regenerate.py --session session_20250208_002238 --images
+  python regenerate.py --project project_20250208_002238 --images
 
   # Change length and re-render all
-  python regenerate.py --session session_20250208_002238 --length 8 --force
+  python regenerate.py --project project_20250208_002238 --length 8 --force
 
 Use Cases:
   - Want longer/shorter shots: Use --length
@@ -216,39 +216,39 @@ For more details, see VIDEO_REGENERATION_GUIDE.md
 """)
 
 
-def list_sessions():
-    """List all sessions"""
-    from core.session_manager import SessionManager
+def list_projects():
+    """List all projects"""
+    from core.project_manager import ProjectManager
 
-    session_mgr = SessionManager()
-    sessions = session_mgr.list_all_sessions()
+    project_mgr = ProjectManager()
+    projects = project_mgr.list_all_projects()
 
-    if not sessions:
-        print("\n[INFO] No sessions found.")
+    if not projects:
+        print("\n[INFO] No projects found.")
         return
 
     print("\n" + "="*80)
     print("AI FILM STUDIO - SESSIONS")
     print("="*80)
 
-    for session in sessions:
-        status = "[COMPLETE]" if session['completed'] else "[IN PROGRESS]"
-        video_config = session.get('video_config', {})
+    for project in projects:
+        status = "[COMPLETE]" if project['completed'] else "[IN PROGRESS]"
+        video_config = project.get('video_config', {})
         shot_length = video_config.get('shot_length', 5.0)
 
-        print(f"\n{status} | {session['session_id']}")
-        print(f"  Idea: {session['idea'][:80]}...")
-        print(f"  Started: {session['started_at']}")
+        print(f"\n{status} | {project['project_id']}")
+        print(f"  Idea: {project['idea'][:80]}...")
+        print(f"  Started: {project['started_at']}")
         print(f"  Shot length: {shot_length}s")
-        print(f"  Progress: {session['stats']['images_generated']}/{session['stats']['total_shots']} images, "
-              f"{session['stats']['videos_rendered']} videos")
+        print(f"  Progress: {project['stats']['images_generated']}/{project['stats']['total_shots']} images, "
+              f"{project['stats']['videos_rendered']} videos")
 
     print("\n" + "="*80)
     print("\nTo regenerate, use:")
-    print("  python regenerate.py --session <session_id>")
-    print("  python regenerate.py --session <session_id> --length <seconds>")
-    print("  python regenerate.py --session <session_id> --force")
-    print("  python regenerate.py --session <session_id> --images")
+    print("  python regenerate.py --project <project_id>")
+    print("  python regenerate.py --project <project_id> --length <seconds>")
+    print("  python regenerate.py --project <project_id> --force")
+    print("  python regenerate.py --project <project_id> --images")
 
 
 if __name__ == "__main__":
@@ -259,14 +259,14 @@ if __name__ == "__main__":
         sys.exit(0)
 
     parser = argparse.ArgumentParser(
-        description="Regenerate videos/images from AI Film Studio sessions",
+        description="Regenerate videos/images from AI Film Studio projects",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
     parser.add_argument('--interactive', '-i', action='store_true',
                         help='Interactive mode with menus')
-    parser.add_argument('--session', '-s', type=str, metavar='ID',
-                        help='Session ID to regenerate')
+    parser.add_argument('--project', '-s', type=str, metavar='ID',
+                        help='Project ID to regenerate')
     parser.add_argument('--length', '-l', type=float, metavar='SECONDS',
                         help='New shot length in seconds (for videos)')
     parser.add_argument('--force', '-f', action='store_true',
@@ -274,19 +274,19 @@ if __name__ == "__main__":
     parser.add_argument('--images', action='store_true',
                         help='Regenerate failed images only')
     parser.add_argument('--list', action='store_true',
-                        help='List all sessions')
+                        help='List all projects')
 
     args = parser.parse_args()
 
     if args.list:
-        list_sessions()
+        list_projects()
     elif args.images:
-        if not args.session:
-            print("[ERROR] --images requires --session <id>")
-            print("\nExample: python regenerate.py --session session_XXX --images")
+        if not args.project:
+            print("[ERROR] --images requires --project <id>")
+            print("\nExample: python regenerate.py --project project_XXX --images")
             sys.exit(1)
-        regenerate_images(args.session)
-    elif args.interactive or not args.session:
+        regenerate_images(args.project)
+    elif args.interactive or not args.project:
         interactive_regenerate()
     else:
-        regenerate_videos(args.session, new_shot_length=args.length, force_regenerate_all=args.force)
+        regenerate_videos(args.project, new_shot_length=args.length, force_regenerate_all=args.force)

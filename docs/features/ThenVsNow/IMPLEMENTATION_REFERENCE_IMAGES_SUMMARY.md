@@ -22,18 +22,18 @@ This implementation adds support for reference images (for facial consistency) a
 
 **New Endpoints in `web_ui/backend/api/stories.py`:**
 
-1. **POST** `/api/sessions/{session_id}/story/characters/{index}/upload-reference?variant={then|now}`
+1. **POST** `/api/projects/{project_id}/story/characters/{index}/upload-reference?variant={then|now}`
    - Upload character reference photos
    - Supports drag-drop or file picker
-   - Saves to `session/references/` directory
+   - Saves to `project/references/` directory
    - Updates story.json with relative paths
 
-2. **POST** `/api/sessions/{session_id}/story/scenes/{id}/upload-background`
+2. **POST** `/api/projects/{project_id}/story/scenes/{id}/upload-background`
    - Upload scene background image
-   - Saves to `session/backgrounds/` directory
+   - Saves to `project/backgrounds/` directory
    - Marks as uploaded (not AI-generated)
 
-3. **POST** `/api/sessions/{session_id}/story/scenes/{id}/generate-background`
+3. **POST** `/api/projects/{project_id}/story/scenes/{id}/generate-background`
    - Generate background using AI
    - Queues background generation task
    - Broadcasts progress via WebSocket
@@ -96,7 +96,7 @@ This implementation adds support for reference images (for facial consistency) a
 ### Character Reference Images Flow
 
 1. **User uploads reference photos** via CharacterReferenceUpload component
-2. **Images saved** to `session/references/` directory
+2. **Images saved** to `project/references/` directory
 3. **Story updated** with `then_reference_image_path` and `now_reference_image_path`
 4. **Generation time**:
    - `_regenerate_flfi2v_images()` retrieves references from story
@@ -108,7 +108,7 @@ This implementation adds support for reference images (for facial consistency) a
 
 **Option 1: Upload**
 1. User uploads background image via SceneBackgroundManager
-2. Image saved to `session/backgrounds/`
+2. Image saved to `project/backgrounds/`
 3. Scene updated with `background_image_path` and `background_is_generated=false`
 
 **Option 2: Generate**
@@ -135,7 +135,7 @@ import SceneBackgroundManager from '@/components/scenes/SceneBackgroundManager';
     <CharacterReferenceUpload
       character={character}
       characterIndex={index}
-      sessionId={sessionId}
+      projectId={projectId}
       onUpdate={() => {/* reload story */}}
     />
   </div>
@@ -147,7 +147,7 @@ import SceneBackgroundManager from '@/components/scenes/SceneBackgroundManager';
     {/* Existing scene fields */}
     <SceneBackgroundManager
       scene={scene}
-      sessionId={sessionId}
+      projectId={projectId}
       onUpdate={() => {/* reload story */}}
     />
   </div>
@@ -189,7 +189,7 @@ LoadImage (reference) → IP-Adapter → KSampler → VAE Decode → Save
 ## Testing
 
 ### Test Case 1: Upload Reference Images
-1. Create ThenVsNow session
+1. Create ThenVsNow project
 2. Upload THEN reference photo for character 0
 3. Upload NOW reference photo for character 0
 4. Verify paths saved in story.json
@@ -197,7 +197,7 @@ LoadImage (reference) → IP-Adapter → KSampler → VAE Decode → Save
 
 ### Test Case 2: Scene Background Generation
 1. Generate background for scene 0
-2. Verify image saved in session/backgrounds/
+2. Verify image saved in project/backgrounds/
 3. Check scene model updated
 4. Verify `background_is_generated=true`
 
@@ -253,28 +253,28 @@ workflow/image/
 ### Upload THEN Reference
 ```bash
 curl -X POST \
-  "http://localhost:8000/api/sessions/{session_id}/story/characters/0/upload-reference?variant=then" \
+  "http://localhost:8000/api/projects/{project_id}/story/characters/0/upload-reference?variant=then" \
   -F "file=@then_photo.jpg"
 ```
 
 ### Upload NOW Reference
 ```bash
 curl -X POST \
-  "http://localhost:8000/api/sessions/{session_id}/story/characters/0/upload-reference?variant=now" \
+  "http://localhost:8000/api/projects/{project_id}/story/characters/0/upload-reference?variant=now" \
   -F "file=@now_photo.jpg"
 ```
 
 ### Upload Background
 ```bash
 curl -X POST \
-  "http://localhost:8000/api/sessions/{session_id}/story/scenes/0/upload-background" \
+  "http://localhost:8000/api/projects/{project_id}/story/scenes/0/upload-background" \
   -F "file=@background.jpg"
 ```
 
 ### Generate Background
 ```bash
 curl -X POST \
-  "http://localhost:8000/api/sessions/{session_id}/story/scenes/0/generate-background"
+  "http://localhost:8000/api/projects/{project_id}/story/scenes/0/generate-background"
 ```
 
 ## Summary

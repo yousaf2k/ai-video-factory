@@ -69,7 +69,7 @@ After recharging your account:
 # Test the API
 python test_zhipu.py
 
-# Resume your session
+# Resume your project
 python core/main.py
 ```
 

@@ -10,19 +10,19 @@ The Interactive Story Editor Web UI has been implemented through Phase 3 of the 
 
 **Files Created:**
 - ✅ `web_ui/backend/main.py` - FastAPI application entry point
-- ✅ `web_ui/backend/api/sessions.py` - Session CRUD endpoints
-- ✅ `web_ui/backend/services/session_service.py` - Wrapper for session_manager
-- ✅ `web_ui/backend/models/session.py` - Pydantic session models
+- ✅ `web_ui/backend/api/projects.py` - Project CRUD endpoints
+- ✅ `web_ui/backend/services/project_service.py` - Wrapper for project_manager
+- ✅ `web_ui/backend/models/project.py` - Pydantic project models
 - ✅ `web_ui/backend/models/story.py` - Pydantic story models
 - ✅ `web_ui/backend/models/shot.py` - Pydantic shot models
 
 **Features Implemented:**
-- ✅ List all sessions
-- ✅ Create new session from idea
-- ✅ Get session details with story/shots
-- ✅ Update session metadata
-- ✅ Delete session
-- ✅ Duplicate session
+- ✅ List all projects
+- ✅ Create new project from idea
+- ✅ Get project details with story/shots
+- ✅ Update project metadata
+- ✅ Delete project
+- ✅ Duplicate project
 - ✅ Serve images/videos as static files
 - ✅ CORS support for frontend communication
 
@@ -52,23 +52,23 @@ pydantic>=2.5.0
 - ✅ `web_ui/frontend/src/app/layout.tsx` - Root layout
 - ✅ `web_ui/frontend/src/app/page.tsx` - Home page (redirects)
 - ✅ `web_ui/frontend/src/app/globals.css` - Global styles
-- ✅ `web_ui/frontend/src/app/sessions/page.tsx` - Session list
-- ✅ `web_ui/frontend/src/app/sessions/[id]/page.tsx` - Session detail
-- ✅ `web_ui/frontend/src/app/sessions/[id]/edit/page.tsx` - Editor placeholder
+- ✅ `web_ui/frontend/src/app/projects/page.tsx` - Project list
+- ✅ `web_ui/frontend/src/app/projects/[id]/page.tsx` - Project detail
+- ✅ `web_ui/frontend/src/app/projects/[id]/edit/page.tsx` - Editor placeholder
 - ✅ `web_ui/frontend/src/services/api.ts` - API client
-- ✅ `web_ui/frontend/src/hooks/useSessions.ts` - Session hooks
+- ✅ `web_ui/frontend/src/hooks/useProjects.ts` - Project hooks
 - ✅ `web_ui/frontend/src/types/index.ts` - TypeScript types
 - ✅ `web_ui/frontend/src/lib/utils.ts` - Utility functions
 
 **Features Implemented:**
-- ✅ Display session cards with status
+- ✅ Display project cards with status
 - ✅ Show story and shot structure
-- ✅ View session progress with visual indicators
+- ✅ View project progress with visual indicators
 - ✅ Basic navigation between pages
-- ✅ Auto-refresh for active sessions
-- ✅ Create new session dialog
-- ✅ Delete session functionality
-- ✅ Duplicate session functionality
+- ✅ Auto-refresh for active projects
+- ✅ Create new project dialog
+- ✅ Delete project functionality
+- ✅ Duplicate project functionality
 
 ### Phase 3: Story Editing (100% Complete)
 
@@ -91,9 +91,9 @@ pydantic>=2.5.0
 - ✅ Scene count tracking
 
 **API Endpoints:**
-- ✅ `GET /api/sessions/{id}/story` - Get story JSON
-- ✅ `PUT /api/sessions/{id}/story` - Update story
-- ✅ `POST /api/sessions/{id}/story/regenerate` - Regenerate story with new agent
+- ✅ `GET /api/projects/{id}/story` - Get story JSON
+- ✅ `PUT /api/projects/{id}/story` - Update story
+- ✅ `POST /api/projects/{id}/story/regenerate` - Regenerate story with new agent
 
 ## 🚧 Pending Features
 
@@ -142,7 +142,7 @@ pydantic>=2.5.0
 **Planned Features:**
 - ⏳ Edit all config.py settings
 - ⏳ Agent selector per stage
-- ⏳ Export/download sessions
+- ⏳ Export/download projects
 - ⏳ Error handling & toasts
 - ⏳ Loading states
 - ⏳ Dark mode support
@@ -163,8 +163,8 @@ pydantic>=2.5.0
 
 With the implementation through Phase 3, users can now:
 
-1. **Create Sessions**: Generate new video sessions from text ideas
-2. **Browse Sessions**: View all sessions with progress tracking
+1. **Create Projects**: Generate new video projects from text ideas
+2. **Browse Projects**: View all projects with progress tracking
 3. **View Details**: Inspect story structure and shot layout
 4. **Edit Stories**: Modify scenes with drag-and-drop reordering
 5. **Track Progress**: Monitor completion status across all pipeline stages
@@ -173,7 +173,7 @@ With the implementation through Phase 3, users can now:
 
 **Important**: The existing CLI workflow remains fully functional. All core modules are unchanged:
 - `core/main.py` - CLI entry point
-- `core/session_manager.py` - Session operations
+- `core/project_manager.py` - Project operations
 - `core/story_engine.py` - Story generation
 - `core/shot_planner.py` - Shot planning
 - `core/image_generator.py` - Image generation
@@ -224,7 +224,7 @@ To complete the remaining phases, the implementation should proceed in this orde
 ### Design Patterns Used
 
 - **Wrapper Pattern**: Backend services wrap existing core modules
-- **Repository Pattern**: SessionService abstracts data access
+- **Repository Pattern**: ProjectService abstracts data access
 - **React Query**: Server state management with caching
 - **Type Safety**: Pydantic + TypeScript ensure end-to-end type safety
 
@@ -255,9 +255,9 @@ To verify the implementation works correctly:
 
 - [x] Backend starts without errors
 - [x] Frontend compiles and runs
-- [x] Can create a new session
-- [x] Can view session list
-- [x] Can view session details
+- [x] Can create a new project
+- [x] Can view project list
+- [x] Can view project details
 - [x] Can edit story scenes
 - [x] Can reorder scenes with drag-and-drop
 - [x] Can add/delete scenes
@@ -271,6 +271,6 @@ To verify the implementation works correctly:
 
 ## 🎉 Summary
 
-The Web UI implementation through Phase 3 provides a solid foundation for visual interaction with the AI Video Factory. Users can now create, browse, and edit sessions through a modern web interface while maintaining full compatibility with the existing CLI workflow.
+The Web UI implementation through Phase 3 provides a solid foundation for visual interaction with the AI Video Factory. Users can now create, browse, and edit projects through a modern web interface while maintaining full compatibility with the existing CLI workflow.
 
 The remaining phases will add shot management, real-time progress tracking, and configuration UI, completing the vision outlined in the original implementation plan.

@@ -80,7 +80,7 @@ python core/main.py --story-agent prehistoric_pov --idea "Time traveler encounte
 
 ```bash
 # After story generation, use the POV image agent
-python core/main.py --image-agent prehistoric_pov --resume [session_id]
+python core/main.py --image-agent prehistoric_pov --resume [project_id]
 ```
 
 **Expected Output**:
@@ -493,7 +493,7 @@ python core/main.py \
 ```bash
 python core/main.py \
   --image-agent prehistoric_pov \
-  --resume [session_id]
+  --resume [project_id]
 ```
 
 **Output Check**:
@@ -506,7 +506,7 @@ python core/main.py \
 
 ```bash
 python core/main.py \
-  --resume [session_id] \
+  --resume [project_id] \
   --render
 ```
 

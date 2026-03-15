@@ -19,28 +19,28 @@ from web_ui.backend.models.shot import (
     RegenerateVideoRequest, BatchRegenerateRequest, ReplanShotsRequest,
     SelectImageRequest, SelectVideoRequest, RemoveWatermarkRequest
 )
-from web_ui.backend.services.session_service import SessionService
+from web_ui.backend.services.project_service import ProjectService
 from web_ui.backend.services.generation_service import get_generation_service
 from web_ui.backend.models.shot import Shot
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/sessions/{session_id}/shots", tags=["shots"])
+router = APIRouter(prefix="/api/projects/{project_id}/shots", tags=["shots"])
 
 # Initialize services
-session_service = SessionService()
+project_service = ProjectService()
 generation_service = get_generation_service()
 
 
 @router.get("")
-async def get_shots(session_id: str):
-    """Get all shots for a session"""
+async def get_shots(project_id: str):
+    """Get all shots for a project"""
     try:
-        session = session_service.get_session(session_id)
-        return session.shots or []
+        project = project_service.get_project(project_id)
+        return project.shots or []
     except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Project {project_id} not found"
         )
     except Exception as e:
         logger.error(f"Error getting shots: {e}")
@@ -51,14 +51,14 @@ async def get_shots(session_id: str):
 
 
 @router.get("/queue-status")
-async def get_queue_status(session_id: str):
+async def get_queue_status(project_id: str):
     """Get the current queue of shots waiting to be generation with full details"""
     try:
         from web_ui.backend.services.queue_service import get_queue_service
         from web_ui.backend.models.queue import QueueItemStatus
 
         queue_service = get_queue_service()
-        queue_items = queue_service.get_queue(session_id=session_id)
+        queue_items = queue_service.get_queue(project_id=project_id)
 
         # Organize by status
         queued = []
@@ -103,13 +103,13 @@ async def get_queue_status(session_id: str):
 
 
 @router.get("/queue-items")
-async def get_session_queue_items(session_id: str):
-    """Get all queue items for this session with full details"""
+async def get_project_queue_items(project_id: str):
+    """Get all queue items for this project with full details"""
     try:
         from web_ui.backend.services.queue_service import get_queue_service
 
         queue_service = get_queue_service()
-        queue_items = queue_service.get_queue(session_id=session_id)
+        queue_items = queue_service.get_queue(project_id=project_id)
 
         # Return full queue items
         return {
@@ -117,7 +117,7 @@ async def get_session_queue_items(session_id: str):
             "total": len(queue_items)
         }
     except Exception as e:
-        logger.error(f"Error getting session queue items: {e}")
+        logger.error(f"Error getting project queue items: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get queue items: {str(e)}"
@@ -125,10 +125,10 @@ async def get_session_queue_items(session_id: str):
 
 
 @router.get("/{shot_index}")
-async def get_shot(session_id: str, shot_index: int):
+async def get_shot(project_id: str, shot_index: int):
     """Get a single shot by index"""
     try:
-        shots = await get_shots(session_id)
+        shots = await get_shots(project_id)
 
         # shot_index is 1-based in the API, 0-based in the list
         if shot_index < 1 or shot_index > len(shots):
@@ -149,22 +149,22 @@ async def get_shot(session_id: str, shot_index: int):
 
 
 @router.put("")
-async def update_shots(session_id: str, request: UpdateShotsRequest):
+async def update_shots(project_id: str, request: UpdateShotsRequest):
     """Update shots (reorder, edit prompts)"""
     try:
         # We take the raw dicts directly because we will manually update string paths inside them later without fighting the immutable pydantic models
         shots_dicts = request.shots
 
-        # Ensure all incoming shots have an ID (for backwards compatibility with old sessions or newly inserted UI blank shots)
+        # Ensure all incoming shots have an ID (for backwards compatibility with old projects or newly inserted UI blank shots)
         for shot in shots_dicts:
             if 'id' not in shot or not shot.get('id'):
                 shot['id'] = str(uuid.uuid4())[:8]
 
         # Update shots.json and perform safe renaming of associated media
-        session_dir = os.path.join(config.ABS_SESSIONS_DIR, session_id)
-        shots_path = os.path.join(session_dir, "shots.json")
-        images_dir = os.path.join(session_dir, "images")
-        videos_dir = os.path.join(session_dir, "videos")
+        project_dir = os.path.join(config.ABS_PROJECTS_DIR, project_id)
+        shots_path = os.path.join(project_dir, "shots.json")
+        images_dir = os.path.join(project_dir, "images")
+        videos_dir = os.path.join(project_dir, "videos")
 
         # Create dirs if they don't exist yet (e.g., if inserting a shot very early on)
         os.makedirs(images_dir, exist_ok=True)
@@ -217,7 +217,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         
                         rename_operations.append((src, tmp, dst))
                         # Update the dict path explicitly with proper prefix
-                        shot['image_path'] = os.path.join("output", "sessions", session_id, "images", new_basename).replace('\\', '/')
+                        shot['image_path'] = os.path.join("output", "projects", project_id, "images", new_basename).replace('\\', '/')
 
             # Check alternative image_paths
             current_image_paths = shot.get('image_paths', [])
@@ -236,7 +236,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         dst = os.path.join(images_dir, new_basename)
 
                         rename_operations.append((src, tmp, dst))
-                        new_image_paths.append(os.path.join("output", "sessions", session_id, "images", new_basename).replace('\\', '/'))
+                        new_image_paths.append(os.path.join("output", "projects", project_id, "images", new_basename).replace('\\', '/'))
                     else:
                         new_image_paths.append(img_path) # unchanged
                 else:
@@ -259,7 +259,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         dst = os.path.join(videos_dir, new_basename)
 
                         rename_operations.append((src, tmp, dst))
-                        shot['video_path'] = os.path.join("output", "sessions", session_id, "videos", new_basename).replace('\\', '/')
+                        shot['video_path'] = os.path.join("output", "projects", project_id, "videos", new_basename).replace('\\', '/')
 
             # Check alternative video_paths
             current_video_paths = shot.get('video_paths', [])
@@ -278,7 +278,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         dst = os.path.join(videos_dir, new_basename)
 
                         rename_operations.append((src, tmp, dst))
-                        new_video_paths.append(os.path.join("output", "sessions", session_id, "videos", new_basename).replace('\\', '/'))
+                        new_video_paths.append(os.path.join("output", "projects", project_id, "videos", new_basename).replace('\\', '/'))
                     else:
                         new_video_paths.append(vid_path) # unchanged
                 else:
@@ -305,7 +305,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         dst = os.path.join(images_dir, new_basename)
 
                         rename_operations.append((src, tmp, dst))
-                        shot['then_image_path'] = os.path.join("output", "sessions", session_id, "images", new_basename).replace('\\', '/')
+                        shot['then_image_path'] = os.path.join("output", "projects", project_id, "images", new_basename).replace('\\', '/')
 
             # NOW image path
             now_image_path = shot.get('now_image_path')
@@ -323,7 +323,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         dst = os.path.join(images_dir, new_basename)
 
                         rename_operations.append((src, tmp, dst))
-                        shot['now_image_path'] = os.path.join("output", "sessions", session_id, "images", new_basename).replace('\\', '/')
+                        shot['now_image_path'] = os.path.join("output", "projects", project_id, "images", new_basename).replace('\\', '/')
 
             # Meeting video path
             meeting_video_path = shot.get('meeting_video_path')
@@ -341,7 +341,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         dst = os.path.join(videos_dir, new_basename)
 
                         rename_operations.append((src, tmp, dst))
-                        shot['meeting_video_path'] = os.path.join("output", "sessions", session_id, "videos", new_basename).replace('\\', '/')
+                        shot['meeting_video_path'] = os.path.join("output", "projects", project_id, "videos", new_basename).replace('\\', '/')
 
             # Departure video path
             departure_video_path = shot.get('departure_video_path')
@@ -359,7 +359,7 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
                         dst = os.path.join(videos_dir, new_basename)
 
                         rename_operations.append((src, tmp, dst))
-                        shot['departure_video_path'] = os.path.join("output", "sessions", session_id, "videos", new_basename).replace('\\', '/')
+                        shot['departure_video_path'] = os.path.join("output", "projects", project_id, "videos", new_basename).replace('\\', '/')
 
         # Execute Pass 1: Move to temporary files (prevents filename collisions during shifting)
         for src, tmp, dst in rename_operations:
@@ -385,12 +385,12 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots_dicts, f, indent=2, ensure_ascii=False)
 
-        # Return updated session
-        return session_service.get_session(session_id)
+        # Return updated project
+        return project_service.get_project(project_id)
     except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Session {session_id} not found"
+            detail=f"Project {project_id} not found"
         )
     except Exception as e:
         logger.error(f"Error updating shots: {e}")
@@ -401,10 +401,10 @@ async def update_shots(session_id: str, request: UpdateShotsRequest):
 
 
 @router.put("/{shot_index}")
-async def update_shot(session_id: str, shot_index: int, request: UpdateShotRequest):
+async def update_shot(project_id: str, shot_index: int, request: UpdateShotRequest):
     """Update a single shot's prompts"""
     try:
-        shots = await get_shots(session_id)
+        shots = await get_shots(project_id)
 
         if shot_index < 1 or shot_index > len(shots):
             raise HTTPException(
@@ -435,8 +435,8 @@ async def update_shot(session_id: str, shot_index: int, request: UpdateShotReque
             shot['departure_video_prompt'] = request.departure_video_prompt
 
         # Save updated shots
-        session_dir = session_service.get_session_dir(session_id)
-        shots_path = os.path.join(session_dir, "shots.json")
+        project_dir = project_service.get_project_dir(project_id)
+        shots_path = os.path.join(project_dir, "shots.json")
 
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots, f, indent=2, ensure_ascii=False)
@@ -453,12 +453,12 @@ async def update_shot(session_id: str, shot_index: int, request: UpdateShotReque
 
 
 @router.post("/{shot_index}/remove-watermark")
-async def remove_shot_watermark(session_id: str, shot_index: int, request: RemoveWatermarkRequest):
+async def remove_shot_watermark(project_id: str, shot_index: int, request: RemoveWatermarkRequest):
     """Remove watermark from the currently active image of this shot"""
     from core.geminiweb_subprocess import _remove_watermark
 
     try:
-        shots = await get_shots(session_id)
+        shots = await get_shots(project_id)
         if shot_index < 1 or shot_index > len(shots):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -489,9 +489,9 @@ async def remove_shot_watermark(session_id: str, shot_index: int, request: Remov
         if not os.path.exists(abs_image_path):
             logger.error(f"Image file not found: {abs_image_path}")
             logger.error(f"Original path: {image_path}")
-            # Try listing files in the session directory for debugging
-            session_dir = os.path.join(getattr(config, 'ABS_SESSIONS_DIR', 'output/sessions'), session_id)
-            images_dir = os.path.join(session_dir, 'images')
+            # Try listing files in the project directory for debugging
+            project_dir = os.path.join(getattr(config, 'ABS_PROJECTS_DIR', 'output/projects'), project_id)
+            images_dir = os.path.join(project_dir, 'images')
             if os.path.exists(images_dir):
                 logger.error(f"Files in images directory: {os.listdir(images_dir)}")
             raise HTTPException(
@@ -513,16 +513,18 @@ async def remove_shot_watermark(session_id: str, shot_index: int, request: Remov
             detail=f"Failed to remove watermark: {str(e)}"
         )
 @router.post("/{shot_index}/regenerate-image")
-async def regenerate_shot_image(session_id: str, shot_index: int, request: RegenerateImageRequest):
-    """Regenerate image for a single shot"""
+async def regenerate_shot_image(project_id: str, shot_index: int, request: RegenerateImageRequest):
+    """Regenerate image for a single shot with background queue execution"""
     try:
-        result = await generation_service.regenerate_shot_image(
-            session_id, shot_index, force=request.force,
-            image_mode=request.image_mode, image_workflow=request.image_workflow,
-            seed=request.seed, prompt_override=request.prompt_override,
-            image_variant=request.image_variant or "both"
+        from web_ui.backend.models.queue import GenerationType
+        result_items = generation_service.add_single_shot_to_queue(
+            project_id, shot_index, GenerationType.IMAGE, request
         )
-        return {"status": "success", "image_path": result}
+        return {
+            "status": "queued", 
+            "message": f"Queued image generation for shot {shot_index}",
+            "item_count": len(result_items)
+        }
     except Exception as e:
         logger.error(f"Error regenerating image: {e}")
         raise HTTPException(
@@ -532,15 +534,18 @@ async def regenerate_shot_image(session_id: str, shot_index: int, request: Regen
 
 
 @router.post("/{shot_index}/regenerate-video")
-async def regenerate_shot_video(session_id: str, shot_index: int, request: RegenerateVideoRequest):
-    """Regenerate video for a single shot"""
+async def regenerate_shot_video(project_id: str, shot_index: int, request: RegenerateVideoRequest):
+    """Regenerate video for a single shot with background queue execution"""
     try:
-        result = await generation_service.regenerate_shot_video(
-            session_id, shot_index, force=request.force,
-            video_mode=request.video_mode, video_workflow=request.video_workflow,
-            video_variant=request.video_variant or "both"
+        from web_ui.backend.models.queue import GenerationType
+        result_items = generation_service.add_single_shot_to_queue(
+            project_id, shot_index, GenerationType.VIDEO, request
         )
-        return {"status": "success", "video_path": result}
+        return {
+            "status": "queued", 
+            "message": f"Queued video generation for shot {shot_index}",
+            "item_count": len(result_items)
+        }
     except Exception as e:
         logger.error(f"Error regenerating video: {e}")
         raise HTTPException(
@@ -552,13 +557,13 @@ async def regenerate_shot_video(session_id: str, shot_index: int, request: Regen
 from fastapi import BackgroundTasks
 
 @router.post("/batch-regenerate")
-async def batch_regenerate(session_id: str, request: BatchRegenerateRequest, background_tasks: BackgroundTasks):
+async def batch_regenerate(project_id: str, request: BatchRegenerateRequest, background_tasks: BackgroundTasks):
     """Queue multiple shots for regeneration using a background task"""
     try:
         # Schedule the batch string on the backend
         background_tasks.add_task(
             generation_service.run_batch_generation,
-            session_id,
+            project_id,
             request
         )
         
@@ -575,10 +580,10 @@ async def batch_regenerate(session_id: str, request: BatchRegenerateRequest, bac
         )
 
 @router.post("/{shot_index}/select-image")
-async def select_shot_image(session_id: str, shot_index: int, request: SelectImageRequest):
+async def select_shot_image(project_id: str, shot_index: int, request: SelectImageRequest):
     """Select a specific image as the active one for a shot"""
     try:
-        shots = await get_shots(session_id)
+        shots = await get_shots(project_id)
 
         if shot_index < 1 or shot_index > len(shots):
             raise HTTPException(
@@ -600,8 +605,8 @@ async def select_shot_image(session_id: str, shot_index: int, request: SelectIma
         shot['image_path'] = request.image_path
 
         # Save updated shots
-        session_dir = session_service.get_session_dir(session_id)
-        shots_path = os.path.join(session_dir, "shots.json")
+        project_dir = project_service.get_project_dir(project_id)
+        shots_path = os.path.join(project_dir, "shots.json")
 
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots, f, indent=2, ensure_ascii=False)
@@ -618,14 +623,14 @@ async def select_shot_image(session_id: str, shot_index: int, request: SelectIma
 
 
 @router.delete("/{shot_index}/images")
-async def delete_shot_image_variation(session_id: str, shot_index: int, image_path: str):
+async def delete_shot_image_variation(project_id: str, shot_index: int, image_path: str):
     """Delete a specific image variation from disk and from the shot record.
 
     Query param: image_path — the relative path of the image to delete.
     If the deleted image was the active one, the next available variation is promoted.
     """
     try:
-        shots = await get_shots(session_id)
+        shots = await get_shots(project_id)
 
         if shot_index < 1 or shot_index > len(shots):
             raise HTTPException(
@@ -659,9 +664,9 @@ async def delete_shot_image_variation(session_id: str, shot_index: int, image_pa
                 if os.path.exists(candidate):
                     abs_path = candidate
                     break
-        # Fallback: treat image_path as relative to ABS_SESSIONS_DIR parent
+        # Fallback: treat image_path as relative to ABS_PROJECTS_DIR parent
         if abs_path is None:
-            candidate = os.path.join(os.path.dirname(config.ABS_SESSIONS_DIR), image_path.replace("/", os.sep))
+            candidate = os.path.join(os.path.dirname(config.ABS_PROJECTS_DIR), image_path.replace("/", os.sep))
             if os.path.exists(candidate):
                 abs_path = candidate
 
@@ -675,8 +680,8 @@ async def delete_shot_image_variation(session_id: str, shot_index: int, image_pa
             logger.warning(f"Image file not found on disk for deletion: {image_path}")
 
         # Persist updated shots.json
-        session_dir = session_service.get_session_dir(session_id)
-        shots_path = os.path.join(session_dir, "shots.json")
+        project_dir = project_service.get_project_dir(project_id)
+        shots_path = os.path.join(project_dir, "shots.json")
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots, f, indent=2, ensure_ascii=False)
 
@@ -693,10 +698,10 @@ async def delete_shot_image_variation(session_id: str, shot_index: int, image_pa
 
 
 @router.post("/{shot_index}/select-video")
-async def select_shot_video(session_id: str, shot_index: int, request: SelectVideoRequest):
+async def select_shot_video(project_id: str, shot_index: int, request: SelectVideoRequest):
     """Select a specific video as the active one for a shot"""
     try:
-        shots = await get_shots(session_id)
+        shots = await get_shots(project_id)
 
         if shot_index < 1 or shot_index > len(shots):
             raise HTTPException(
@@ -718,8 +723,8 @@ async def select_shot_video(session_id: str, shot_index: int, request: SelectVid
         shot['video_path'] = request.video_path
 
         # Save updated shots
-        session_dir = session_service.get_session_dir(session_id)
-        shots_path = os.path.join(session_dir, "shots.json")
+        project_dir = project_service.get_project_dir(project_id)
+        shots_path = os.path.join(project_dir, "shots.json")
 
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots, f, indent=2, ensure_ascii=False)
@@ -736,14 +741,14 @@ async def select_shot_video(session_id: str, shot_index: int, request: SelectVid
 
 
 @router.delete("/{shot_index}/videos")
-async def delete_shot_video_variation(session_id: str, shot_index: int, video_path: str):
+async def delete_shot_video_variation(project_id: str, shot_index: int, video_path: str):
     """Delete a specific video variation from disk and from the shot record.
 
     Query param: video_path — the relative path of the video to delete.
     If the deleted video was the active one, the next available variation is promoted.
     """
     try:
-        shots = await get_shots(session_id)
+        shots = await get_shots(project_id)
 
         if shot_index < 1 or shot_index > len(shots):
             raise HTTPException(
@@ -777,9 +782,9 @@ async def delete_shot_video_variation(session_id: str, shot_index: int, video_pa
                 if os.path.exists(candidate):
                     abs_path = candidate
                     break
-        # Fallback: treat video_path as relative to ABS_SESSIONS_DIR parent
+        # Fallback: treat video_path as relative to ABS_PROJECTS_DIR parent
         if abs_path is None:
-            candidate = os.path.join(os.path.dirname(config.ABS_SESSIONS_DIR), video_path.replace("/", os.sep))
+            candidate = os.path.join(os.path.dirname(config.ABS_PROJECTS_DIR), video_path.replace("/", os.sep))
             if os.path.exists(candidate):
                 abs_path = candidate
 
@@ -793,8 +798,8 @@ async def delete_shot_video_variation(session_id: str, shot_index: int, video_pa
             logger.warning(f"Video file not found on disk for deletion: {video_path}")
 
         # Persist updated shots.json
-        session_dir = session_service.get_session_dir(session_id)
-        shots_path = os.path.join(session_dir, "shots.json")
+        project_dir = project_service.get_project_dir(project_id)
+        shots_path = os.path.join(project_dir, "shots.json")
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots, f, indent=2, ensure_ascii=False)
 
@@ -811,10 +816,10 @@ async def delete_shot_video_variation(session_id: str, shot_index: int, video_pa
 
 
 @router.post("/{shot_index}/upload-image")
-async def upload_shot_image(session_id: str, shot_index: int, variant: str = None, file: UploadFile = File(...)):
+async def upload_shot_image(project_id: str, shot_index: int, variant: str = None, file: UploadFile = File(...)):
     """Upload a custom image from disk for a shot (bypasses AI generation)"""
     try:
-        shots = await get_shots(session_id)
+        shots = await get_shots(project_id)
 
         if shot_index < 1 or shot_index > len(shots):
             raise HTTPException(
@@ -839,8 +844,8 @@ async def upload_shot_image(session_id: str, shot_index: int, variant: str = Non
         # shot_001_001.png, shot_001_002.jpg, etc.
         # Scan all existing files for this shot index across all extensions so that
         # uploaded and AI-generated images share the same version counter.
-        session_dir = os.path.join(config.ABS_SESSIONS_DIR, session_id)
-        images_dir = os.path.join(session_dir, "images")
+        project_dir = os.path.join(config.ABS_PROJECTS_DIR, project_id)
+        images_dir = os.path.join(project_dir, "images")
         os.makedirs(images_dir, exist_ok=True)
 
         version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.[^.]+$")
@@ -865,7 +870,7 @@ async def upload_shot_image(session_id: str, shot_index: int, variant: str = Non
 
         # Build the relative path using the same logic as mark_image_generated
         # so the stored format is always consistent with AI-generated images.
-        rel_path = session_service.session_manager._relativize_path(abs_dest)
+        rel_path = project_service.project_manager._relativize_path(abs_dest)
 
         # Update the shot record
         shot['image_path'] = rel_path
@@ -888,8 +893,8 @@ async def upload_shot_image(session_id: str, shot_index: int, variant: str = Non
         shot['image_paths'] = image_paths
 
         # Persist to shots.json
-        session_dir2 = session_service.get_session_dir(session_id)
-        shots_path = os.path.join(session_dir2, "shots.json")
+        project_dir2 = project_service.get_project_dir(project_id)
+        shots_path = os.path.join(project_dir2, "shots.json")
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots, f, indent=2, ensure_ascii=False)
 
@@ -906,10 +911,10 @@ async def upload_shot_image(session_id: str, shot_index: int, variant: str = Non
 
 
 @router.post("/{shot_index}/upload-video")
-async def upload_shot_video(session_id: str, shot_index: int, variant: str = None, file: UploadFile = File(...)):
+async def upload_shot_video(project_id: str, shot_index: int, variant: str = None, file: UploadFile = File(...)):
     """Upload a custom video from disk for a shot (bypasses AI generation)"""
     try:
-        shots = await get_shots(session_id)
+        shots = await get_shots(project_id)
 
         if shot_index < 1 or shot_index > len(shots):
             raise HTTPException(
@@ -932,8 +937,8 @@ async def upload_shot_video(session_id: str, shot_index: int, variant: str = Non
 
         # Build target path using the same versioned naming convention as AI-generated videos:
         # shot_001_001.mp4, shot_001_002.mp4, etc.
-        session_dir = os.path.join(config.ABS_SESSIONS_DIR, session_id)
-        videos_dir = os.path.join(session_dir, "videos")
+        project_dir = os.path.join(config.ABS_PROJECTS_DIR, project_id)
+        videos_dir = os.path.join(project_dir, "videos")
         os.makedirs(videos_dir, exist_ok=True)
 
         version_re = re.compile(rf"shot_{shot_index:03d}_(\d+)\.[^.]+$")
@@ -957,7 +962,7 @@ async def upload_shot_video(session_id: str, shot_index: int, variant: str = Non
         logger.info(f"Uploaded video for shot {shot_index} saved to {abs_dest}")
 
         # Build the relative path
-        rel_path = session_service.session_manager._relativize_path(abs_dest)
+        rel_path = project_service.project_manager._relativize_path(abs_dest)
 
         # Update the shot record
         shot['video_path'] = rel_path
@@ -980,8 +985,8 @@ async def upload_shot_video(session_id: str, shot_index: int, variant: str = Non
         shot['video_paths'] = video_paths
 
         # Persist to shots.json
-        session_dir2 = session_service.get_session_dir(session_id)
-        shots_path = os.path.join(session_dir2, "shots.json")
+        project_dir2 = project_service.get_project_dir(project_id)
+        shots_path = os.path.join(project_dir2, "shots.json")
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots, f, indent=2, ensure_ascii=False)
 
@@ -998,11 +1003,11 @@ async def upload_shot_video(session_id: str, shot_index: int, variant: str = Non
 
 
 @router.post("/replan")
-async def replan_shots(session_id: str, request: ReplanShotsRequest):
+async def replan_shots(project_id: str, request: ReplanShotsRequest):
     """Re-plan shots from story"""
     try:
         shots = await generation_service.replan_shots(
-            session_id,
+            project_id,
             max_shots=request.max_shots,
             shots_agent=request.shots_agent
         )
@@ -1016,21 +1021,21 @@ async def replan_shots(session_id: str, request: ReplanShotsRequest):
 
 
 @router.post("/cancel-generation")
-async def cancel_generation(session_id: str):
-    """Cancel all pending and running image/video generation for this session"""
+async def cancel_generation(project_id: str):
+    """Cancel all pending and running image/video generation for this project"""
     from core.comfy_client import cancel_all
     from web_ui.backend.websocket.manager import manager
 
     try:
-        logger.info(f"Cancel generation requested for session {session_id}")
+        logger.info(f"Cancel generation requested for project {project_id}")
         result = cancel_all()
-        generation_service.cancel_session(session_id)
+        generation_service.cancel_project(project_id)
         logger.info(f"ComfyUI cancel result: {result}")
 
         # Broadcast cancellation to frontend (use async since this handler is async)
-        await manager.broadcast_to_session(session_id, {
+        await manager.broadcast_to_project(project_id, {
             "type": "cancelled",
-            "session_id": session_id
+            "project_id": project_id
         })
 
         return {"status": "success", "cancelled": result}
@@ -1042,20 +1047,20 @@ async def cancel_generation(session_id: str):
         )
 
 @router.post("/{shot_index}/cancel-generation")
-async def cancel_single_shot_generation(session_id: str, shot_index: int):
-    """Cancel pending generation for a specific shot in this session"""
+async def cancel_single_shot_generation(project_id: str, shot_index: int):
+    """Cancel pending generation for a specific shot in this project"""
     from web_ui.backend.websocket.manager import manager
 
     try:
-        logger.info(f"Cancel generation requested for session {session_id}, shot {shot_index}")
+        logger.info(f"Cancel generation requested for project {project_id}, shot {shot_index}")
         
         # Mark the specific shot as cancelled so the backend loop skips it
-        generation_service.cancel_single_shot(session_id, shot_index)
+        generation_service.cancel_single_shot(project_id, shot_index)
 
         # Broadcast cancellation for this specific shot to the frontend
-        await manager.broadcast_to_session(session_id, {
+        await manager.broadcast_to_project(project_id, {
             "type": "cancelled",
-            "session_id": session_id,
+            "project_id": project_id,
             "shot_index": shot_index
         })
 

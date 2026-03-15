@@ -254,7 +254,7 @@ all: $(VIDEOS:ideas/%.txt=output/%.mp4)
 	done
 
 clean:
-	rm -rf output/sessions/
+	rm -rf output/projects/
 ```
 
 ## Troubleshooting

@@ -69,7 +69,7 @@ The image agent `agents/image/prehistoric_pov.md` contains multiple violations:
 
 ## Issues Found in Actual Generated Prompts
 
-From `output/sessions/session_20260226_142319/shots.json`:
+From `output/projects/project_20260226_142319/shots.json`:
 
 ### Shot 16 (index 16):
 ```

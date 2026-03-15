@@ -67,10 +67,10 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 
 ---
 
-### Phase 4: Session Service ✅
+### Phase 4: Project Service ✅
 
 **Files Modified:**
-- `web_ui/backend/services/session_service.py`
+- `web_ui/backend/services/project_service.py`
 
 **Changes:**
 - ThenVsNow agent detection
@@ -161,10 +161,10 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 
 ---
 
-### Phase 11: Session Manager Updates ✅
+### Phase 11: Project Manager Updates ✅
 
 **Files Modified:**
-- `core/session_manager.py`
+- `core/project_manager.py`
 
 **Changes:**
 - Added `get_story()` method
@@ -180,7 +180,7 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 ### Phase 12: Backward Compatibility ✅
 
 **Status:** Verified
-- All existing sessions default to `project_type: 1` (Documentary)
+- All existing projects default to `project_type: 1` (Documentary)
 - New fields are optional with sensible defaults
 - No migration needed
 
@@ -189,9 +189,9 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 ## Bug Fixes Applied
 
 ### Fix 1: Missing get_story() Method
-**Error:** `'SessionManager' object has no attribute 'get_story'`
-**Solution:** Added `get_story()` and `_load_story()` methods to SessionManager
-**File:** `core/session_manager.py`
+**Error:** `'ProjectManager' object has no attribute 'get_story'`
+**Solution:** Added `get_story()` and `_load_story()` methods to ProjectManager
+**File:** `core/project_manager.py`
 
 ### Fix 2: Images Not Visible in UI
 **Error:** Images created but not showing on UI
@@ -235,7 +235,7 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 
 ## Verification Steps
 
-### ✅ Create a ThenVsNow Session
+### ✅ Create a ThenVsNow Project
 1. Select "then_vs_now" story agent
 2. Enter a movie name (e.g., "The Godfather")
 3. Verify story.json has `project_type: 2`, characters array, movie metadata
@@ -261,7 +261,7 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 5. Copy button copies active mode's prompt
 
 ### ✅ Backward Compatibility
-1. Existing Documentary sessions still work
+1. Existing Documentary projects still work
 2. Shots without `is_flfi2v` use standard generation flow
 
 ---
@@ -346,14 +346,14 @@ docs/verification/THEN_VS_NOW_IMPLEMENTATION_COMPLETE.md
 ### Modified Files
 ```
 config.py
-core/session_manager.py
+core/project_manager.py
 core/story_engine.py
 web_ui/backend/api/config.py
 web_ui/backend/api/shots.py
 web_ui/backend/models/shot.py
 web_ui/backend/models/story.py
 web_ui/backend/services/generation_service.py
-web_ui/backend/services/session_service.py
+web_ui/backend/services/project_service.py
 web_ui/frontend/src/app/config/page.tsx
 web_ui/frontend/src/components/shots/ShotCard.tsx
 web_ui/frontend/src/components/shots/ShotGrid.tsx
@@ -370,12 +370,12 @@ All 12 phases of the implementation plan have been successfully completed. The f
 
 ## Next Steps for Users
 
-1. **Create a ThenVsNow Session:**
-   - Navigate to Create Session page
+1. **Create a ThenVsNow Project:**
+   - Navigate to Create Project page
    - Select "then_vs_now" from Story Agent dropdown
    - Enter a movie name (e.g., "The Godfather", "Titanic", "Back to the Future")
    - Set desired video length
-   - Click "Create Session"
+   - Click "Create Project"
 
 2. **Generate Content:**
    - Review generated story with characters and scenes

@@ -13,7 +13,7 @@ import logging
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from core.session_manager import SessionManager
+from core.project_manager import ProjectManager
 from core.image_generator import generate_images_for_shots
 from core.shot_planner import plan_shots
 from core.logger_config import get_logger
@@ -34,18 +34,18 @@ class GenerationService:
     """Service for async generation operations"""
 
     def __init__(self):
-        # Default to configured sessions directory
+        # Default to configured projects directory
         import config
-        sessions_dir = getattr(config, 'ABS_SESSIONS_DIR', None)
+        projects_dir = getattr(config, 'ABS_PROJECTS_DIR', None)
         
-        if sessions_dir is None:
+        if projects_dir is None:
             # Fallback
             current_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-            sessions_dir = os.path.join(project_root, "output", "sessions")
+            projects_dir = os.path.join(project_root, "output", "projects")
         
-        self.session_manager = SessionManager(sessions_dir)
-        self.cancelled_sessions = set()
+        self.project_manager = ProjectManager(projects_dir)
+        self.cancelled_projects = set()
         self.cancelled_shots: dict[str, set[int]] = {}
         self.cancelled_scenes: dict[str, set[int]] = {}
         self.queued_shots: dict[str, set[int]] = {}
@@ -54,7 +54,7 @@ class GenerationService:
         self.active_scenes: dict[str, int] = {}
 
         # Track active queue items for progress updates
-        # Maps (session_id, shot_index, generation_type) -> item_id
+        # Maps (project_id, shot_index, generation_type) -> item_id
         self.active_queue_items: dict[str, str] = {}
 
         # Queue processor state
@@ -194,23 +194,24 @@ class GenerationService:
             else:
                 image_variant = None
 
-            # Get session title
-            session_meta = self.session_manager.get_session(item.session_id)
-            session_title = session_meta.get('title', item.session_id) if session_meta else item.session_id
+            # Get project title
+            project_meta = self.project_manager.get_project(item.project_id)
+            project_title = project_meta.get('title', item.project_id) if project_meta else item.project_id
 
             logger.info(f"ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}")
             print(f"[DEBUG] ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}", flush=True)
             
-            # Call regenerate_shot_image
+            # Call regenerate_shot_image with overrides from the queue item
             await self.regenerate_shot_image(
-                item.session_id,
+                item.project_id,
                 item.shot_index,
                 force=True,
-                image_mode=None,
-                image_workflow=None,
-                prompt_override=None,
-                session_title=session_title,
-                image_variant=image_variant
+                image_mode=item.image_mode,
+                image_workflow=item.image_workflow,
+                prompt_override=item.prompt_override,
+                project_title=project_title,
+                image_variant=image_variant,
+                seed=item.seed
             )
 
             logger.info(f"Completed image generation for queue item {item.item_id}")
@@ -231,18 +232,18 @@ class GenerationService:
             else:
                 video_variant = None
 
-            # Get session title
-            session_meta = self.session_manager.get_session(item.session_id)
-            session_title = session_meta.get('title', item.session_id) if session_meta else item.session_id
+            # Get project title
+            project_meta = self.project_manager.get_project(item.project_id)
+            project_title = project_meta.get('title', item.project_id) if project_meta else item.project_id
 
-            # Call regenerate_shot_video
+            # Call regenerate_shot_video with overrides from the queue item
             await self.regenerate_shot_video(
-                item.session_id,
+                item.project_id,
                 item.shot_index,
                 force=True,
-                video_mode=None,
-                video_workflow=None,
-                session_title=session_title,
+                video_mode=item.video_mode,
+                video_workflow=item.video_workflow,
+                project_title=project_title,
                 video_variant=video_variant
             )
 
@@ -263,73 +264,74 @@ class GenerationService:
         logger.warning(f"Background generation not yet implemented for item {item.item_id}")
         raise NotImplementedError("Background generation not yet implemented")
 
-    def cancel_session(self, session_id: str):
-        """Mark a session as cancelled to halt background queue processing."""
-        self.cancelled_sessions.add(session_id)
-        if session_id in self.queued_shots:
-            self.queued_shots.pop(session_id)
+    def cancel_project(self, project_id: str):
+        """Mark a project as cancelled to halt background queue processing."""
+        self.cancelled_projects.add(project_id)
+        if project_id in self.queued_shots:
+            self.queued_shots.pop(project_id)
 
         # Also cancel all queued items in QueueService
         queue_service = get_queue_service()
-        queued_items = queue_service.get_queue(session_id=session_id)
+        queued_items = queue_service.get_queue(project_id=project_id)
         for item in queued_items:
             if item.status == QueueItemStatus.QUEUED:
                 queue_service.mark_cancelled(item.item_id)
 
-        logger.info(f"Marked session {session_id} as cancelled. Future queued items will be skipped.")
+        logger.info(f"Marked project {project_id} as cancelled. Future queued items will be skipped.")
 
-    def cancel_single_shot(self, session_id: str, shot_index: int):
+    def cancel_single_shot(self, project_id: str, shot_index: int):
         """Mark a single shot as cancelled to halt it from entering the queue."""
-        if session_id not in self.cancelled_shots:
-            self.cancelled_shots[session_id] = set()
-        self.cancelled_shots[session_id].add(shot_index)
-        if session_id in self.queued_shots and shot_index in self.queued_shots[session_id]:
-            self.queued_shots[session_id].remove(shot_index)
+        if project_id not in self.cancelled_shots:
+            self.cancelled_shots[project_id] = set()
+        self.cancelled_shots[project_id].add(shot_index)
+        if project_id in self.queued_shots and shot_index in self.queued_shots[project_id]:
+            self.queued_shots[project_id].remove(shot_index)
 
         # Also cancel queued items in QueueService for this shot
         queue_service = get_queue_service()
-        queued_items = queue_service.get_queue(session_id=session_id)
+        queued_items = queue_service.get_queue(project_id=project_id)
         for item in queued_items:
             if item.shot_index == shot_index and item.status == QueueItemStatus.QUEUED:
                 queue_service.mark_cancelled(item.item_id)
 
         # If this is the currently actively generating shot, tell ComfyUI to stop
-        if self.active_shots.get(session_id) == shot_index:
+        if self.active_shots.get(project_id) == shot_index:
             from core.comfy_client import interrupt_generation
             logger.info(f"Shot {shot_index} is currently active. Sending interrupt to ComfyUI.")
             interrupt_generation()
 
-        logger.info(f"Marked shot {shot_index} in session {session_id} as cancelled.")
+        logger.info(f"Marked shot {shot_index} in project {project_id} as cancelled.")
 
-    def cancel_scene_narration(self, session_id: str, scene_id: int):
+    def cancel_scene_narration(self, project_id: str, scene_id: int):
         """Mark a scene narration as cancelled."""
-        if session_id not in self.cancelled_scenes:
-            self.cancelled_scenes[session_id] = set()
-        self.cancelled_scenes[session_id].add(scene_id)
-        if session_id in self.queued_scenes and scene_id in self.queued_scenes[session_id]:
-            self.queued_scenes[session_id].remove(scene_id)
+        if project_id not in self.cancelled_scenes:
+            self.cancelled_scenes[project_id] = set()
+        self.cancelled_scenes[project_id].add(scene_id)
+        if project_id in self.queued_scenes and scene_id in self.queued_scenes[project_id]:
+            self.queued_scenes[project_id].remove(scene_id)
             
         # If this is the currently actively generating scene, tell ComfyUI to stop
-        if self.active_scenes.get(session_id) == scene_id:
+        if self.active_scenes.get(project_id) == scene_id:
             from core.comfy_client import interrupt_generation
             logger.info(f"Scene {scene_id} is currently active. Sending interrupt to ComfyUI.")
             interrupt_generation()
             
-        logger.info(f"Marked scene {scene_id} narration in session {session_id} as cancelled.")
+        logger.info(f"Marked scene {scene_id} narration in project {project_id} as cancelled.")
 
     def _create_queue_item(
         self,
-        session_id: str,
+        project_id: str,
         shot_index: Optional[int],
         generation_type: GenerationType,
         shot: dict = None,
-        story: dict = None
+        story: dict = None,
+        request: Any = None
     ) -> QueueItem:
         """
         Create a QueueItem for tracking generation in the unified queue.
 
         Args:
-            session_id: Session identifier
+            project_id: Project identifier
             shot_index: Shot index (1-based)
             generation_type: Type of generation
             shot: Shot data dictionary
@@ -338,9 +340,9 @@ class GenerationService:
         Returns:
             QueueItem object
         """
-        # Get session metadata for display
-        session_meta = self.session_manager.get_session(session_id)
-        session_title = session_meta.get('title', session_id) if session_meta else session_id
+        # Get project metadata for display
+        project_meta = self.project_manager.get_project(project_id)
+        project_title = project_meta.get('title', project_id) if project_meta else project_id
 
         # Extract shot details if available
         shot_id = shot.get('id') if shot else None
@@ -352,7 +354,7 @@ class GenerationService:
 
         return QueueItem(
             item_id="",  # Will be assigned by QueueService
-            session_id=session_id,
+            project_id=project_id,
             shot_index=shot_index,
             scene_id=shot.get('scene_id') if shot else None,
             generation_type=generation_type,
@@ -361,14 +363,22 @@ class GenerationService:
             priority=100,  # Default priority
             is_flfi2v=is_flfi2v,
             character_name=character_name,
-            session_title=session_title,
+            project_title=project_title,
             scene_name=scene_name,
-            shot_id=shot_id
+            shot_id=shot_id,
+            prompt_override=getattr(request, 'prompt_override', None) if request else None,
+            seed=getattr(request, 'seed', None) if request else None,
+            image_mode=getattr(request, 'image_mode', None) if request else None,
+            image_workflow=getattr(request, 'image_workflow', None) if request else None,
+            video_mode=getattr(request, 'video_mode', None) if request else None,
+            video_workflow=getattr(request, 'video_workflow', None) if request else None,
+            image_variant=getattr(request, 'image_variant', None) if request else None,
+            video_variant=getattr(request, 'video_variant', None) if request else None
         )
 
     def _get_queue_item_id(
         self,
-        session_id: str,
+        project_id: str,
         shot_index: int,
         generation_type: GenerationType
     ) -> Optional[str]:
@@ -376,7 +386,7 @@ class GenerationService:
         Get the queue item_id for a specific shot and generation type.
 
         Args:
-            session_id: Session identifier
+            project_id: Project identifier
             shot_index: Shot index (1-based)
             generation_type: Type of generation
 
@@ -384,7 +394,7 @@ class GenerationService:
             Queue item ID or None if not found
         """
         queue_service = get_queue_service()
-        queue_items = queue_service.get_queue(session_id=session_id)
+        queue_items = queue_service.get_queue(project_id=project_id)
 
         # Find matching queue item
         for item in queue_items:
@@ -397,29 +407,29 @@ class GenerationService:
 
     def _mark_queue_item_active(
         self,
-        session_id: str,
+        project_id: str,
         shot_index: int,
         generation_type: GenerationType
     ):
         """Mark a queue item as active (started processing)."""
-        item_id = self._get_queue_item_id(session_id, shot_index, generation_type)
+        item_id = self._get_queue_item_id(project_id, shot_index, generation_type)
         if item_id:
             queue_service = get_queue_service()
             queue_service.mark_active(item_id)
             # Store active mapping for progress updates
-            key = f"{session_id}:{shot_index}:{generation_type.value}"
+            key = f"{project_id}:{shot_index}:{generation_type.value}"
             self.active_queue_items[key] = item_id
             logger.info(f"Marked queue item {item_id} as active ({generation_type.value}, shot {shot_index})")
 
     def _update_queue_item_progress(
         self,
-        session_id: str,
+        project_id: str,
         shot_index: int,
         generation_type: GenerationType,
         progress: int
     ):
         """Update progress for an active queue item."""
-        item_id = self._get_queue_item_id(session_id, shot_index, generation_type)
+        item_id = self._get_queue_item_id(project_id, shot_index, generation_type)
         if item_id:
             queue_service = get_queue_service()
             queue_service.update_progress(item_id, progress)
@@ -427,39 +437,76 @@ class GenerationService:
 
     def _mark_queue_item_completed(
         self,
-        session_id: str,
+        project_id: str,
         shot_index: int,
         generation_type: GenerationType,
         progress: int = 100
     ):
         """Mark a queue item as completed."""
-        item_id = self._get_queue_item_id(session_id, shot_index, generation_type)
+        item_id = self._get_queue_item_id(project_id, shot_index, generation_type)
         if item_id:
             queue_service = get_queue_service()
             queue_service.mark_completed(item_id, progress)
             # Remove from active tracking
-            key = f"{session_id}:{shot_index}:{generation_type.value}"
+            key = f"{project_id}:{shot_index}:{generation_type.value}"
             self.active_queue_items.pop(key, None)
             logger.info(f"Marked queue item {item_id} as completed ({generation_type.value}, shot {shot_index})")
 
     def _mark_queue_item_failed(
         self,
-        session_id: str,
+        project_id: str,
         shot_index: int,
         generation_type: GenerationType,
         error_message: str
     ):
         """Mark a queue item as failed."""
-        item_id = self._get_queue_item_id(session_id, shot_index, generation_type)
+        item_id = self._get_queue_item_id(project_id, shot_index, generation_type)
         if item_id:
             queue_service = get_queue_service()
             queue_service.mark_failed(item_id, error_message)
             # Remove from active tracking
-            key = f"{session_id}:{shot_index}:{generation_type.value}"
+            key = f"{project_id}:{shot_index}:{generation_type.value}"
             self.active_queue_items.pop(key, None)
             logger.warning(f"Marked queue item {item_id} as failed: {error_message}")
 
-    async def run_batch_generation(self, session_id: str, request: Any):
+    def add_single_shot_to_queue(
+        self,
+        project_id: str,
+        shot_index: int,
+        generation_type: GenerationType,
+        request: Any
+    ) -> list:
+        """Add a single shot generation item to the background queue with overrides"""
+        from web_ui.backend.services.queue_service import get_queue_service
+        # Ensure queue processor is running
+        self._ensure_queue_processor_started()
+
+        shots = self.project_manager.get_shots(project_id)
+        story = self.project_manager.get_story(project_id)
+        shot = shots[shot_index - 1] if shot_index <= len(shots) else None
+
+        items_to_add = []
+        project_type = story.get('project_type', 1) if story else 1
+
+        # Replicate batch FLFI2V splits
+        if shot and shot.get('is_flfi2v') and project_type == 2:
+            if generation_type == GenerationType.IMAGE:
+                # Add THEN and NOW images
+                items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.THEN_IMAGE, shot, story, request))
+                items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.NOW_IMAGE, shot, story, request))
+            elif generation_type == GenerationType.VIDEO:
+                items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.MEETING_VIDEO, shot, story, request))
+                items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.DEPARTURE_VIDEO, shot, story, request))
+            else:
+                items_to_add.append(self._create_queue_item(project_id, shot_index, generation_type, shot, story, request))
+        else:
+            items_to_add.append(self._create_queue_item(project_id, shot_index, generation_type, shot, story, request))
+        
+        queue_service = get_queue_service()
+        added_items = queue_service.add_items(items_to_add)
+        return added_items
+
+    async def run_batch_generation(self, project_id: str, request: Any):
         """
         Add items to queue for batch generation.
         Actual processing is handled by the background queue processor.
@@ -471,15 +518,15 @@ class GenerationService:
         self._ensure_queue_processor_started()
 
         # Clear any old cancellation flags from previous runs
-        if session_id in self.cancelled_sessions:
-            self.cancelled_sessions.remove(session_id)
-        if session_id in self.cancelled_shots:
-            self.cancelled_shots.pop(session_id)
+        if project_id in self.cancelled_projects:
+            self.cancelled_projects.remove(project_id)
+        if project_id in self.cancelled_shots:
+            self.cancelled_shots.pop(project_id)
 
         # Create QueueItems and add to QueueService
         queue_service = get_queue_service()
-        shots = self.session_manager.get_shots(session_id)
-        story = self.session_manager.get_story(session_id)
+        shots = self.project_manager.get_shots(project_id)
+        story = self.project_manager.get_story(project_id)
 
         queue_items = []
         for idx in request.shot_indices:
@@ -491,18 +538,18 @@ class GenerationService:
                 if shot and shot.get('is_flfi2v') and story.get('project_type') == 2:
                     # THEN image item
                     then_item = self._create_queue_item(
-                        session_id, idx, GenerationType.THEN_IMAGE, shot, story
+                        project_id, idx, GenerationType.THEN_IMAGE, shot, story
                     )
                     queue_items.append(then_item)
                     # NOW image item
                     now_item = self._create_queue_item(
-                        session_id, idx, GenerationType.NOW_IMAGE, shot, story
+                        project_id, idx, GenerationType.NOW_IMAGE, shot, story
                     )
                     queue_items.append(now_item)
                 else:
                     # Standard image item
                     image_item = self._create_queue_item(
-                        session_id, idx, GenerationType.IMAGE, shot, story
+                        project_id, idx, GenerationType.IMAGE, shot, story
                     )
                     queue_items.append(image_item)
 
@@ -512,32 +559,32 @@ class GenerationService:
                 if shot and shot.get('is_flfi2v') and story.get('project_type') == 2:
                     # Meeting video item
                     meeting_item = self._create_queue_item(
-                        session_id, idx, GenerationType.MEETING_VIDEO, shot, story
+                        project_id, idx, GenerationType.MEETING_VIDEO, shot, story
                     )
                     queue_items.append(meeting_item)
                     # Departure video item
                     departure_item = self._create_queue_item(
-                        session_id, idx, GenerationType.DEPARTURE_VIDEO, shot, story
+                        project_id, idx, GenerationType.DEPARTURE_VIDEO, shot, story
                     )
                     queue_items.append(departure_item)
                 else:
                     # Standard video item
                     video_item = self._create_queue_item(
-                        session_id, idx, GenerationType.VIDEO, shot, story
+                        project_id, idx, GenerationType.VIDEO, shot, story
                     )
                     queue_items.append(video_item)
 
         # Add all items to queue
         if queue_items:
             added_items = queue_service.add_items(queue_items)
-            logger.info(f"Added {len(added_items)} items to queue for session {session_id}")
+            logger.info(f"Added {len(added_items)} items to queue for project {project_id}")
 
         # Also keep the old tracking for backward compatibility
-        self.queued_shots[session_id] = set(request.shot_indices)
+        self.queued_shots[project_id] = set(request.shot_indices)
 
-        logger.info(f"Added {len(queue_items)} items to queue for session {session_id}. Queue processor will handle generation.")
+        logger.info(f"Added {len(queue_items)} items to queue for project {project_id}. Queue processor will handle generation.")
 
-    async def run_batch_narration_generation(self, session_id: str, request: Any):
+    async def run_batch_narration_generation(self, project_id: str, request: Any):
         """
         Background task to process a batch of scene narrations with a concurrency limit.
         """
@@ -545,51 +592,51 @@ class GenerationService:
         import config
         
         # Clear any old cancellation flags
-        if session_id in self.cancelled_sessions:
-            self.cancelled_sessions.remove(session_id)
-        if session_id in self.cancelled_scenes:
-            self.cancelled_scenes.pop(session_id)
+        if project_id in self.cancelled_projects:
+            self.cancelled_projects.remove(project_id)
+        if project_id in self.cancelled_scenes:
+            self.cancelled_scenes.pop(project_id)
             
         limit = getattr(config, 'CONCURRENT_GENERATION_LIMIT', 2)
         logger.info(f"Using concurrency limit of {limit} for batch narration")
         semaphore = asyncio.Semaphore(limit)
         
         # Tracking for UI
-        self.queued_scenes[session_id] = set(request.scene_indices)
+        self.queued_scenes[project_id] = set(request.scene_indices)
         
         async def process_scene(scene_index: int):
-            if session_id in self.cancelled_sessions:
-                logger.info(f"Session {session_id} cancelled. Skipping scene {scene_index} narration.")
+            if project_id in self.cancelled_projects:
+                logger.info(f"Project {project_id} cancelled. Skipping scene {scene_index} narration.")
                 return
-            if session_id in self.cancelled_scenes and scene_index in self.cancelled_scenes[session_id]:
+            if project_id in self.cancelled_scenes and scene_index in self.cancelled_scenes[project_id]:
                 logger.info(f"Scene {scene_index} narration cancelled. Skipping.")
                 return
                 
             async with semaphore:
                 try:
-                    if session_id in self.cancelled_sessions:
+                    if project_id in self.cancelled_projects:
                         return
-                    if session_id in self.cancelled_scenes and scene_index in self.cancelled_scenes[session_id]:
+                    if project_id in self.cancelled_scenes and scene_index in self.cancelled_scenes[project_id]:
                         return
 
-                    if session_id in self.queued_scenes and scene_index in self.queued_scenes[session_id]:
-                        self.queued_scenes[session_id].remove(scene_index)
+                    if project_id in self.queued_scenes and scene_index in self.queued_scenes[project_id]:
+                        self.queued_scenes[project_id].remove(scene_index)
 
-                    self.active_scenes[session_id] = scene_index
+                    self.active_scenes[project_id] = scene_index
                     try:
                         await self.regenerate_scene_narration(
-                            session_id, scene_index,
+                            project_id, scene_index,
                             tts_method=request.tts_method,
                             tts_workflow=request.tts_workflow,
                             voice=request.voice
                         )
                     finally:
-                        self.active_scenes.pop(session_id, None)
+                        self.active_scenes.pop(project_id, None)
                 except Exception as e:
                     logger.error(f"Batch narration error on scene {scene_index}: {str(e)}")
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "error",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "scene_index": scene_index,
                         "step": "narration",
                         "message": str(e)
@@ -598,35 +645,35 @@ class GenerationService:
         logger.info(f"Starting batch narration generation for {len(request.scene_indices)} scenes")
         tasks = [process_scene(idx) for idx in request.scene_indices]
         await asyncio.gather(*tasks, return_exceptions=True)
-        logger.info(f"Completed batch narration generation for session {session_id}")
+        logger.info(f"Completed batch narration generation for project {project_id}")
 
     async def regenerate_shot_image(
-        self, session_id: str, shot_index: int, force: bool = False,
+        self, project_id: str, shot_index: int, force: bool = False,
         image_mode: Optional[str] = None, image_workflow: Optional[str] = None,
         seed: Optional[int] = None, prompt_override: Optional[str] = None,
-        session_title: Optional[str] = None, image_variant: str = None
+        project_title: Optional[str] = None, image_variant: str = None
     ) -> str:
         """
         Regenerate image for a single shot
 
         Args:
-            session_id: Session identifier
+            project_id: Project identifier
             shot_index: Shot number (1-based)
             force: Force regeneration even if image exists
             image_mode: Override generation mode
             image_workflow: Override ComfyUI workflow
-            session_title: Optional title for Gemini Web chat persistence
+            project_title: Optional title for Gemini Web chat persistence
             image_variant: For FLFI2V shots, which variant to generate ("then", "now", or "both")
 
         Returns:
             Path to generated image (or dict with "then"/"now" keys for FLFI2V)
         """
         try:
-            print(f"[DEBUG] entering regenerate_shot_image for item {session_id} shot {shot_index} force={force}")
-            logger.info(f"entering regenerate_shot_image for item {session_id} shot {shot_index} force={force}")
+            print(f"[DEBUG] entering regenerate_shot_image for item {project_id} shot {shot_index} force={force}")
+            logger.info(f"entering regenerate_shot_image for item {project_id} shot {shot_index} force={force}")
             # Load shots and story
-            shots = self.session_manager.get_shots(session_id)
-            story = self.session_manager.get_story(session_id)
+            shots = self.project_manager.get_shots(project_id)
+            story = self.project_manager.get_story(project_id)
 
             if shot_index < 1 or shot_index > len(shots):
                 raise ValueError(f"Shot {shot_index} not found")
@@ -637,8 +684,8 @@ class GenerationService:
             # Handle FLFI2V shots
             if shot.get('is_flfi2v') and project_type == 2:
                 results = await self._regenerate_flfi2v_images(
-                    session_id, shot_index, shot, story, force,
-                    image_mode, image_workflow, seed, session_title, image_variant
+                    project_id, shot_index, shot, story, force,
+                    image_mode, image_workflow, seed, project_title, image_variant
                 )
                 # Return the NOW image path for backward compatibility
                 # (UI will use then_image_path/now_image_path for FLFI2V shots)
@@ -658,18 +705,18 @@ class GenerationService:
                 if old_image_path not in shot['image_paths']:
                     shot['image_paths'].append(old_image_path)
                     # Save updated image_paths immediately
-                    self.session_manager._save_shots(session_id, shots)
+                    self.project_manager._save_shots(project_id, shots)
 
             # Generate image for single shot
             logger.info(f"Regenerating image for shot {shot_index}")
 
             # Mark queue item as active
-            self._mark_queue_item_active(session_id, shot_index, GenerationType.IMAGE)
+            self._mark_queue_item_active(project_id, shot_index, GenerationType.IMAGE)
 
             # Broadcast initial 0% so UI resets from any stale progress
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "progress",
-                "session_id": session_id,
+                "project_id": project_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
                 "generation_type": "image",
@@ -679,26 +726,26 @@ class GenerationService:
             # Run in thread pool to avoid blocking
             image_path = await asyncio.to_thread(
                 self._generate_single_image,
-                session_id,
+                project_id,
                 shot,
                 image_mode,
                 image_workflow,
                 seed,
                 prompt_override,
-                session_title,
+                project_title,
                 None  # No variant for standard shots
             )
 
             # Mark as generated
-            self.session_manager.mark_image_generated(session_id, shot_index, image_path)
+            self.project_manager.mark_image_generated(project_id, shot_index, image_path)
 
             # Mark queue item as completed
-            self._mark_queue_item_completed(session_id, shot_index, GenerationType.IMAGE)
+            self._mark_queue_item_completed(project_id, shot_index, GenerationType.IMAGE)
 
             # Broadcast completion to clear progress on frontend
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "completed",
-                "session_id": session_id,
+                "project_id": project_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
                 "generation_type": "image"
@@ -710,12 +757,12 @@ class GenerationService:
         except Exception as e:
             logger.error(f"Error regenerating shot {shot_index} image: {e}")
             # Mark queue item as failed
-            self._mark_queue_item_failed(session_id, shot_index, GenerationType.IMAGE, str(e))
+            self._mark_queue_item_failed(project_id, shot_index, GenerationType.IMAGE, str(e))
 
             # Broadcast cancelled event to clear loading state in UI
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "cancelled",
-                "session_id": session_id,
+                "project_id": project_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
                 "generation_type": "image",
@@ -724,14 +771,14 @@ class GenerationService:
             raise
 
     async def _regenerate_flfi2v_images(
-        self, session_id: str, shot_index: int, shot: dict, story: dict,
+        self, project_id: str, shot_index: int, shot: dict, story: dict,
         force: bool, image_mode: Optional[str], image_workflow: Optional[str],
-        seed: Optional[int], session_title: Optional[str], image_variant: str
+        seed: Optional[int], project_title: Optional[str], image_variant: str
     ) -> dict:
         """Regenerate THEN and/or NOW images for FLFI2V shot"""
         from web_ui.backend.models.story import ProjectType
 
-        images_dir = self.session_manager.get_images_dir(session_id)
+        images_dir = self.project_manager.get_images_dir(project_id)
         os.makedirs(images_dir, exist_ok=True)
 
         scene_id = shot.get('scene_id', 0)
@@ -739,7 +786,7 @@ class GenerationService:
         set_prompt = scene.get('set_prompt', '') if scene else ''
 
         results = {}
-        shots = self.session_manager.get_shots(session_id)
+        shots = self.project_manager.get_shots(project_id)
 
         # Get character reference images if available
         character_id = shot.get('character_id')
@@ -783,12 +830,12 @@ class GenerationService:
                         logger.info(f"FLFI2V shot {shot_index} THEN image using fixed seed: 1")
 
                     # Mark THEN_IMAGE queue item as active
-                    self._mark_queue_item_active(session_id, shot_index, GenerationType.THEN_IMAGE)
+                    self._mark_queue_item_active(project_id, shot_index, GenerationType.THEN_IMAGE)
 
                     # Broadcast progress
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "progress",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "then_image",
@@ -797,8 +844,9 @@ class GenerationService:
 
                     # Determine workflow and reference for THEN
                     then_workflow = image_workflow
-                    if then_reference:
-                        # Auto-switch to IP-Adapter workflow when reference available
+                    # Auto-switch to IP-Adapter workflow ONLY for ComfyUI mode with reference
+                    actual_mode = image_mode or config.IMAGE_GENERATION_MODE
+                    if then_reference and actual_mode == "comfyui":
                         if not then_workflow or then_workflow == "flux":
                             then_workflow = "flux_ipadapter_then"
                             logger.info(f"Using IP-Adapter workflow for THEN with reference: {then_reference}")
@@ -806,13 +854,13 @@ class GenerationService:
                     # Generate
                     result_path = await asyncio.to_thread(
                         self._generate_single_image,
-                        session_id,
+                        project_id,
                         {**shot, 'image_prompt': then_prompt},
                         image_mode,
                         then_workflow,
                         then_seed,
                         None,  # No prompt override for FLFI2V
-                        session_title,
+                        project_title,
                         "then",
                         then_reference,  # Pass THEN reference image
                         GenerationType.THEN_IMAGE  # Pass generation type for queue tracking
@@ -823,12 +871,12 @@ class GenerationService:
                     results['then'] = shots[shot_index - 1]['then_image_path']
 
                     # Mark THEN_IMAGE queue item as completed
-                    self._mark_queue_item_completed(session_id, shot_index, GenerationType.THEN_IMAGE)
+                    self._mark_queue_item_completed(project_id, shot_index, GenerationType.THEN_IMAGE)
 
                     # Broadcast completion
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "completed",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "then_image"
@@ -836,12 +884,12 @@ class GenerationService:
                 except Exception as e:
                     logger.error(f"Error generating THEN image for shot {shot_index}: {e}")
                     # Mark THEN_IMAGE queue item as failed
-                    self._mark_queue_item_failed(session_id, shot_index, GenerationType.THEN_IMAGE, str(e))
+                    self._mark_queue_item_failed(project_id, shot_index, GenerationType.THEN_IMAGE, str(e))
 
                     # Broadcast error
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "cancelled",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "then_image",
@@ -869,12 +917,12 @@ class GenerationService:
                         logger.info(f"FLFI2V shot {shot_index} NOW image using fixed seed: 1")
 
                     # Mark NOW_IMAGE queue item as active
-                    self._mark_queue_item_active(session_id, shot_index, GenerationType.NOW_IMAGE)
+                    self._mark_queue_item_active(project_id, shot_index, GenerationType.NOW_IMAGE)
 
                     # Broadcast progress
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "progress",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "now_image",
@@ -883,8 +931,9 @@ class GenerationService:
 
                     # Determine workflow and reference for NOW
                     now_workflow = image_workflow
-                    if now_reference:
-                        # Auto-switch to IP-Adapter workflow when reference available
+                    # Auto-switch to IP-Adapter workflow ONLY for ComfyUI mode with reference
+                    actual_mode = image_mode or config.IMAGE_GENERATION_MODE
+                    if now_reference and actual_mode == "comfyui":
                         if not now_workflow or now_workflow == "flux":
                             now_workflow = "flux_ipadapter_now"
                             logger.info(f"Using IP-Adapter workflow for NOW with reference: {now_reference}")
@@ -892,13 +941,13 @@ class GenerationService:
                     # Generate
                     result_path = await asyncio.to_thread(
                         self._generate_single_image,
-                        session_id,
+                        project_id,
                         {**shot, 'image_prompt': now_prompt},
                         image_mode,
                         now_workflow,
                         now_seed,
                         None,  # No prompt override for FLFI2V
-                        session_title,
+                        project_title,
                         "now",
                         now_reference,  # Pass NOW reference image
                         GenerationType.NOW_IMAGE  # Pass generation type for queue tracking
@@ -909,12 +958,12 @@ class GenerationService:
                     results['now'] = shots[shot_index - 1]['now_image_path']
 
                     # Mark NOW_IMAGE queue item as completed
-                    self._mark_queue_item_completed(session_id, shot_index, GenerationType.NOW_IMAGE)
+                    self._mark_queue_item_completed(project_id, shot_index, GenerationType.NOW_IMAGE)
 
                     # Broadcast completion
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "completed",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "now_image"
@@ -922,12 +971,12 @@ class GenerationService:
                 except Exception as e:
                     logger.error(f"Error generating NOW image for shot {shot_index}: {e}")
                     # Mark NOW_IMAGE queue item as failed
-                    self._mark_queue_item_failed(session_id, shot_index, GenerationType.NOW_IMAGE, str(e))
+                    self._mark_queue_item_failed(project_id, shot_index, GenerationType.NOW_IMAGE, str(e))
 
                     # Broadcast error
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "cancelled",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "now_image",
@@ -943,7 +992,7 @@ class GenerationService:
             shots[shot_index - 1]['image_generated'] = True
 
         # Save shots
-        self.session_manager._save_shots(session_id, shots)
+        self.project_manager._save_shots(project_id, shots)
 
         logger.info(f"FLFI2V shot {shot_index} images regenerated: {results}")
         return results
@@ -964,20 +1013,20 @@ class GenerationService:
         return absolute_path
 
     async def regenerate_shot_video(
-        self, session_id: str, shot_index: int, force: bool = False,
+        self, project_id: str, shot_index: int, force: bool = False,
         video_mode: Optional[str] = None, video_workflow: Optional[str] = None,
-        session_title: Optional[str] = None, video_variant: str = None
+        project_title: Optional[str] = None, video_variant: str = None
     ) -> str:
         """
         Regenerate video for a single shot
 
         Args:
-            session_id: Session identifier
+            project_id: Project identifier
             shot_index: Shot number (1-based)
             force: Force regeneration even if video exists
             video_mode: Override generation mode
             video_workflow: Override workflow
-            session_title: Optional title for Gemini Web chat persistence
+            project_title: Optional title for Gemini Web chat persistence
             video_variant: For FLFI2V shots, which variant to generate ("meeting", "departure", or "both")
 
         Returns:
@@ -985,8 +1034,8 @@ class GenerationService:
         """
         try:
             # Load shots and story
-            shots = self.session_manager.get_shots(session_id)
-            story = self.session_manager.get_story(session_id)
+            shots = self.project_manager.get_shots(project_id)
+            story = self.project_manager.get_story(project_id)
 
             if shot_index < 1 or shot_index > len(shots):
                 raise ValueError(f"Shot {shot_index} not found")
@@ -997,8 +1046,8 @@ class GenerationService:
             # Handle FLFI2V shots
             if shot.get('is_flfi2v') and project_type == 2:
                 results = await self._regenerate_flfi2v_videos(
-                    session_id, shot_index, shot, force,
-                    video_mode, video_workflow, session_title, video_variant
+                    project_id, shot_index, shot, force,
+                    video_mode, video_workflow, project_title, video_variant
                 )
                 # Return the meeting video path for backward compatibility
                 # (UI will use meeting_video_path/departure_video_path for FLFI2V shots)
@@ -1022,15 +1071,15 @@ class GenerationService:
                 if old_video_path not in shot['video_paths']:
                     shot['video_paths'].append(old_video_path)
                     # Save updated video_paths immediately
-                    self.session_manager._save_shots(session_id, shots)
+                    self.project_manager._save_shots(project_id, shots)
 
             # Generate video for single shot
             logger.info(f"Regenerating video for shot {shot_index} using mode {video_mode or 'default'}")
 
             # Broadcast initial 0% so UI resets from any stale progress
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "progress",
-                "session_id": session_id,
+                "project_id": project_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
                 "progress": 0
@@ -1039,23 +1088,23 @@ class GenerationService:
             # Run in thread pool to avoid blocking
             video_path = await asyncio.to_thread(
                 self._generate_single_video,
-                session_id,
+                project_id,
                 shot,
                 video_mode,
                 video_workflow,
-                session_title
+                project_title
             )
 
             # Mark as rendered
-            self.session_manager.mark_video_rendered(session_id, shot_index, video_path)
+            self.project_manager.mark_video_rendered(project_id, shot_index, video_path)
 
             # Mark queue item as completed
-            self._mark_queue_item_completed(session_id, shot_index, GenerationType.VIDEO)
+            self._mark_queue_item_completed(project_id, shot_index, GenerationType.VIDEO)
 
             # Broadcast completion to clear progress on frontend
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "completed",
-                "session_id": session_id,
+                "project_id": project_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
                 "generation_type": "video"
@@ -1067,9 +1116,9 @@ class GenerationService:
         except Exception as e:
             logger.error(f"Error regenerating shot {shot_index} video: {e}")
             # Broadcast cancelled event to clear loading state in UI
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "cancelled",
-                "session_id": session_id,
+                "project_id": project_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id')
             })
@@ -1256,12 +1305,12 @@ class GenerationService:
         }
 
     async def _regenerate_flfi2v_videos(
-        self, session_id: str, shot_index: int, shot: dict,
+        self, project_id: str, shot_index: int, shot: dict,
         force: bool, video_mode: Optional[str], video_workflow: Optional[str],
-        session_title: Optional[str], video_variant: str
+        project_title: Optional[str], video_variant: str
     ) -> dict:
         """Regenerate meeting and/or departure videos for FLFI2V shot"""
-        shots = self.session_manager.get_shots(session_id)
+        shots = self.project_manager.get_shots(project_id)
         results = {}
 
         # Default to both if not specified
@@ -1281,7 +1330,7 @@ class GenerationService:
             if shot.get('meeting_video_prompt') and (not shots[shot_index - 1].get('meeting_video_rendered') or force):
                 try:
                     next_version = self._get_next_video_version(
-                        self.session_manager.get_videos_dir(session_id), shot_index, "meeting"
+                        self.project_manager.get_videos_dir(project_id), shot_index, "meeting"
                     )
                     video_filename = f"shot_{shot_index:03d}_meeting_{next_version:03d}.mp4"
 
@@ -1291,12 +1340,12 @@ class GenerationService:
                         logger.info(f"FLFI2V shot {shot_index} meeting video using fixed seed: 1")
 
                     # Mark MEETING_VIDEO queue item as active
-                    self._mark_queue_item_active(session_id, shot_index, GenerationType.MEETING_VIDEO)
+                    self._mark_queue_item_active(project_id, shot_index, GenerationType.MEETING_VIDEO)
 
                     # Broadcast progress
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "progress",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "meeting_video",
@@ -1306,12 +1355,12 @@ class GenerationService:
                     # Generate
                     result_path = await asyncio.to_thread(
                         self._generate_flfi2v_video,
-                        session_id,
+                        project_id,
                         shot,
                         "meeting",
                         video_mode,
                         video_workflow,
-                        session_title,
+                        project_title,
                         video_filename,
                         meeting_seed,
                         None,  # last_frame_image_path
@@ -1323,12 +1372,12 @@ class GenerationService:
                     results['meeting'] = shots[shot_index - 1]['meeting_video_path']
 
                     # Mark MEETING_VIDEO queue item as completed
-                    self._mark_queue_item_completed(session_id, shot_index, GenerationType.MEETING_VIDEO)
+                    self._mark_queue_item_completed(project_id, shot_index, GenerationType.MEETING_VIDEO)
 
                     # Broadcast completion
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "completed",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "meeting_video"
@@ -1336,12 +1385,12 @@ class GenerationService:
                 except Exception as e:
                     logger.error(f"Error generating meeting video for shot {shot_index}: {e}")
                     # Mark MEETING_VIDEO queue item as failed
-                    self._mark_queue_item_failed(session_id, shot_index, GenerationType.MEETING_VIDEO, str(e))
+                    self._mark_queue_item_failed(project_id, shot_index, GenerationType.MEETING_VIDEO, str(e))
 
                     # Broadcast error
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "cancelled",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "meeting_video",
@@ -1356,7 +1405,7 @@ class GenerationService:
             if shot.get('departure_video_prompt') and (not shots[shot_index - 1].get('departure_video_rendered') or force):
                 try:
                     next_version = self._get_next_video_version(
-                        self.session_manager.get_videos_dir(session_id), shot_index, "departure"
+                        self.project_manager.get_videos_dir(project_id), shot_index, "departure"
                     )
                     video_filename = f"shot_{shot_index:03d}_departure_{next_version:03d}.mp4"
 
@@ -1366,7 +1415,7 @@ class GenerationService:
                         logger.info(f"FLFI2V shot {shot_index} departure video using fixed seed: 1")
 
                     # Find next shot for departure video using intelligent transition algorithm
-                    story = self.session_manager.get_story(session_id)
+                    story = self.project_manager.get_story(project_id)
                     transition_result = self._find_next_shot_for_departure(shot, shots, story)
                     last_frame_image = transition_result['last_frame_image']
 
@@ -1374,12 +1423,12 @@ class GenerationService:
                     logger.info(f"  -> {transition_result.get('description', '')}")
 
                     # Mark DEPARTURE_VIDEO queue item as active
-                    self._mark_queue_item_active(session_id, shot_index, GenerationType.DEPARTURE_VIDEO)
+                    self._mark_queue_item_active(project_id, shot_index, GenerationType.DEPARTURE_VIDEO)
 
                     # Broadcast progress
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "progress",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "departure_video",
@@ -1389,12 +1438,12 @@ class GenerationService:
                     # Generate with last_frame_image
                     result_path = await asyncio.to_thread(
                         self._generate_flfi2v_video,
-                        session_id,
+                        project_id,
                         shot,
                         "departure",
                         video_mode,
                         video_workflow,
-                        session_title,
+                        project_title,
                         video_filename,
                         departure_seed,
                         last_frame_image,
@@ -1406,12 +1455,12 @@ class GenerationService:
                     results['departure'] = shots[shot_index - 1]['departure_video_path']
 
                     # Mark DEPARTURE_VIDEO queue item as completed
-                    self._mark_queue_item_completed(session_id, shot_index, GenerationType.DEPARTURE_VIDEO)
+                    self._mark_queue_item_completed(project_id, shot_index, GenerationType.DEPARTURE_VIDEO)
 
                     # Broadcast completion
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "completed",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "departure_video"
@@ -1419,12 +1468,12 @@ class GenerationService:
                 except Exception as e:
                     logger.error(f"Error generating departure video for shot {shot_index}: {e}")
                     # Mark DEPARTURE_VIDEO queue item as failed
-                    self._mark_queue_item_failed(session_id, shot_index, GenerationType.DEPARTURE_VIDEO, str(e))
+                    self._mark_queue_item_failed(project_id, shot_index, GenerationType.DEPARTURE_VIDEO, str(e))
 
                     # Broadcast error
-                    manager.broadcast_sync(session_id, {
+                    manager.broadcast_sync(project_id, {
                         "type": "cancelled",
-                        "session_id": session_id,
+                        "project_id": project_id,
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "departure_video",
@@ -1440,19 +1489,19 @@ class GenerationService:
             shots[shot_index - 1]['video_rendered'] = True
 
         # Save shots
-        self.session_manager._save_shots(session_id, shots)
+        self.project_manager._save_shots(project_id, shots)
 
         logger.info(f"FLFI2V shot {shot_index} videos regenerated: {results}")
         return results
 
     async def generate_scene_background(
-        self, session_id: str, scene_id: int, set_prompt: str
+        self, project_id: str, scene_id: int, set_prompt: str
     ) -> str:
         """
         Generate background image for a scene using AI
 
         Args:
-            session_id: Session identifier
+            project_id: Project identifier
             scene_id: Scene ID in the story
             set_prompt: Background description prompt
 
@@ -1463,8 +1512,8 @@ class GenerationService:
             import config
 
             # Create backgrounds directory
-            session_dir = self.session_manager.get_session_dir(session_id)
-            backgrounds_dir = os.path.join(session_dir, "backgrounds")
+            project_dir = self.project_manager.get_project_dir(project_id)
+            backgrounds_dir = os.path.join(project_dir, "backgrounds")
             os.makedirs(backgrounds_dir, exist_ok=True)
 
             # Generate filename
@@ -1472,9 +1521,9 @@ class GenerationService:
             background_path = os.path.join(backgrounds_dir, background_filename)
 
             # Broadcast 0% progress
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "progress",
-                "session_id": session_id,
+                "project_id": project_id,
                 "scene_id": scene_id,
                 "step": "background_generation",
                 "progress": 0
@@ -1483,9 +1532,9 @@ class GenerationService:
             # Progress callback
             def on_step_progress(current, total):
                 progress = int((current / total) * 100) if total > 0 else 0
-                manager.broadcast_sync(session_id, {
+                manager.broadcast_sync(project_id, {
                     "type": "progress",
-                    "session_id": session_id,
+                    "project_id": project_id,
                     "scene_id": scene_id,
                     "step": "background_generation",
                     "progress": progress
@@ -1496,13 +1545,13 @@ class GenerationService:
 
             result_path = await asyncio.to_thread(
                 self._generate_single_image,
-                session_id,
+                project_id,
                 {'image_prompt': set_prompt, 'index': 0},
                 "comfyui",  # Always use ComfyUI for backgrounds
                 "flux",  # Use standard Flux workflow
                 1,  # Fixed seed for consistency
                 set_prompt,  # Use set_prompt directly
-                None,  # No session title for backgrounds
+                None,  # No project title for backgrounds
                 None,  # No variant
                 None  # No reference image for backgrounds
             )
@@ -1514,7 +1563,7 @@ class GenerationService:
             relative_path = self._get_relative_path(result_path)
 
             # Load and update story
-            story_path = os.path.join(session_dir, "story.json")
+            story_path = os.path.join(project_dir, "story.json")
             with open(story_path, 'r', encoding='utf-8') as f:
                 story_data = json.load(f)
 
@@ -1533,9 +1582,9 @@ class GenerationService:
                 json.dump(story_data, f, indent=4, ensure_ascii=False)
 
             # Broadcast completion
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "completed",
-                "session_id": session_id,
+                "project_id": project_id,
                 "scene_id": scene_id,
                 "step": "background_generation",
                 "background_image_path": relative_path
@@ -1546,9 +1595,9 @@ class GenerationService:
 
         except Exception as e:
             logger.error(f"Error generating background for scene {scene_id}: {e}")
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "error",
-                "session_id": session_id,
+                "project_id": project_id,
                 "scene_id": scene_id,
                 "step": "background_generation",
                 "message": str(e)
@@ -1556,7 +1605,7 @@ class GenerationService:
             raise
 
     async def regenerate_scene_narration(
-        self, session_id: str, scene_id: int,
+        self, project_id: str, scene_id: int,
         tts_method: Optional[str] = None,
         tts_workflow: Optional[str] = None,
         voice: Optional[str] = None
@@ -1569,12 +1618,12 @@ class GenerationService:
 
         try:
             # Clear cancellation for this scene
-            if session_id in self.cancelled_scenes and scene_id in self.cancelled_scenes[session_id]:
-                self.cancelled_scenes[session_id].remove(scene_id)
+            if project_id in self.cancelled_scenes and scene_id in self.cancelled_scenes[project_id]:
+                self.cancelled_scenes[project_id].remove(scene_id)
 
             # Load story to get narration text
-            session_dir = self.session_manager.get_session_dir(session_id)
-            story_path = os.path.join(session_dir, "story.json")
+            project_dir = self.project_manager.get_project_dir(project_id)
+            story_path = os.path.join(project_dir, "story.json")
             with open(story_path, 'r', encoding='utf-8') as f:
                 story_data = json.load(f)
             
@@ -1588,9 +1637,9 @@ class GenerationService:
                 raise ValueError(f"Scene {scene_id} has no narration text")
 
             # Broadcast 0%
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "progress",
-                "session_id": session_id,
+                "project_id": project_id,
                 "scene_id": scene_id,
                 "step": "narration",
                 "progress": 0
@@ -1604,7 +1653,7 @@ class GenerationService:
             
             result = await asyncio.to_thread(
                 generate_scene_narration,
-                session_id, scene_id, text, 
+                project_id, scene_id, text, 
                 tts_method, tts_workflow, voice
             )
             
@@ -1621,9 +1670,9 @@ class GenerationService:
                     json.dump(story_data, f, indent=4)
                 
                 # Broadcast completion
-                manager.broadcast_sync(session_id, {
+                manager.broadcast_sync(project_id, {
                     "type": "completed",
-                    "session_id": session_id,
+                    "project_id": project_id,
                     "scene_id": scene_id,
                     "step": "narration",
                     "narration_path": rel_path
@@ -1635,9 +1684,9 @@ class GenerationService:
 
         except Exception as e:
             logger.error(f"Error generating narration for scene {scene_id}: {e}")
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "error",
-                "session_id": session_id,
+                "project_id": project_id,
                 "scene_id": scene_id,
                 "step": "narration",
                 "message": str(e)
@@ -1647,7 +1696,7 @@ class GenerationService:
 
     async def replan_shots(
         self,
-        session_id: str,
+        project_id: str,
         max_shots: Optional[int] = None,
         shots_agent: str = "default"
     ) -> List[Dict[str, Any]]:
@@ -1655,7 +1704,7 @@ class GenerationService:
         Re-plan shots from story
 
         Args:
-            session_id: Session identifier
+            project_id: Project identifier
             max_shots: Maximum shots to generate
             shots_agent: Shots agent to use
 
@@ -1664,17 +1713,17 @@ class GenerationService:
         """
         try:
             # Load story
-            session_dir = self.session_manager.get_session_dir(session_id)
-            story_path = os.path.join(session_dir, "story.json")
+            project_dir = self.project_manager.get_project_dir(project_id)
+            story_path = os.path.join(project_dir, "story.json")
 
             if not os.path.exists(story_path):
-                raise ValueError("Story not found for this session")
+                raise ValueError("Story not found for this project")
 
             with open(story_path, 'r', encoding='utf-8') as f:
                 story_json = f.read()
 
             # Plan shots
-            logger.info(f"Re-planning shots for session {session_id}")
+            logger.info(f"Re-planning shots for project {project_id}")
 
             # Run in thread pool to avoid blocking
             shots = await asyncio.to_thread(
@@ -1685,7 +1734,7 @@ class GenerationService:
             )
 
             # Save shots
-            self.session_manager.save_shots(session_id, shots)
+            self.project_manager.save_shots(project_id, shots)
 
             logger.info(f"Re-planned {len(shots)} shots")
             return shots
@@ -1695,21 +1744,21 @@ class GenerationService:
             raise
 
     async def generate_thumbnail(
-        self, session_id: str, aspect_ratio: str = "16:9", force: bool = False,
+        self, project_id: str, aspect_ratio: str = "16:9", force: bool = False,
         image_mode: str = None, image_workflow: str = None, seed: int = None
     ) -> str:
-        """Generate a thumbnail image for the session"""
+        """Generate a thumbnail image for the project"""
         try:
-            logger.info(f"Generating {aspect_ratio} thumbnail for session {session_id}")
+            logger.info(f"Generating {aspect_ratio} thumbnail for project {project_id}")
             
-            # Load session to get story and thumbnail prompt
-            session_meta = self.session_manager.get_session(session_id)
-            if not session_meta:
-                raise ValueError(f"Session {session_id} not found")
+            # Load project to get story and thumbnail prompt
+            project_meta = self.project_manager.get_project(project_id)
+            if not project_meta:
+                raise ValueError(f"Project {project_id} not found")
                 
-            story_path = os.path.join(self.session_manager.get_session_dir(session_id), "story.json")
+            story_path = os.path.join(self.project_manager.get_project_dir(project_id), "story.json")
             if not os.path.exists(story_path):
-                raise ValueError(f"Story not found for session {session_id}")
+                raise ValueError(f"Story not found for project {project_id}")
                 
             with open(story_path, 'r', encoding='utf-8') as f:
                 import json
@@ -1717,29 +1766,29 @@ class GenerationService:
                 
             prompt = story.get(f'thumbnail_prompt_{aspect_ratio.replace(":", "_")}')
             if not prompt:
-                prompt = story.get('title', session_meta.get('idea', 'A cinematic thumbnail'))
+                prompt = story.get('title', project_meta.get('idea', 'A cinematic thumbnail'))
                 
-            images_dir = self.session_manager.get_images_dir(session_id)
+            images_dir = self.project_manager.get_images_dir(project_id)
             os.makedirs(images_dir, exist_ok=True)
             
             filename = f"thumbnail_{aspect_ratio.replace(':', '_')}.png"
             image_path = os.path.join(images_dir, filename)
             
             if not force and os.path.exists(image_path):
-                if aspect_ratio == "16:9" and "thumbnail_url" not in session_meta:
-                    session_meta['thumbnail_url'] = f"/api/sessions/{session_id}/images/{filename}"
-                    self.session_manager._save_meta(session_id, session_meta)
-                elif aspect_ratio == "9:16" and "thumbnail_url_9_16" not in session_meta:
-                    session_meta['thumbnail_url_9_16'] = f"/api/sessions/{session_id}/images/{filename}"
-                    self.session_manager._save_meta(session_id, session_meta)
+                if aspect_ratio == "16:9" and "thumbnail_url" not in project_meta:
+                    project_meta['thumbnail_url'] = f"/api/projects/{project_id}/images/{filename}"
+                    self.project_manager._save_meta(project_id, project_meta)
+                elif aspect_ratio == "9:16" and "thumbnail_url_9_16" not in project_meta:
+                    project_meta['thumbnail_url_9_16'] = f"/api/projects/{project_id}/images/{filename}"
+                    self.project_manager._save_meta(project_id, project_meta)
                 return image_path
                 
             # Progress callback
             def on_step_progress(current, total):
                 progress = int((current / total) * 100) if total > 0 else 0
-                manager.broadcast_sync(session_id, {
+                manager.broadcast_sync(project_id, {
                     "type": "progress",
-                    "session_id": session_id,
+                    "project_id": project_id,
                     "step": "thumbnail",
                     "progress": progress
                 })
@@ -1758,22 +1807,22 @@ class GenerationService:
             )
             
             if aspect_ratio == "16:9":
-                session_meta['thumbnail_url'] = f"/api/sessions/{session_id}/images/{filename}"
-                self.session_manager._save_meta(session_id, session_meta)
+                project_meta['thumbnail_url'] = f"/api/projects/{project_id}/images/{filename}"
+                self.project_manager._save_meta(project_id, project_meta)
             elif aspect_ratio == "9:16":
-                session_meta['thumbnail_url_9_16'] = f"/api/sessions/{session_id}/images/{filename}"
-                self.session_manager._save_meta(session_id, session_meta)
+                project_meta['thumbnail_url_9_16'] = f"/api/projects/{project_id}/images/{filename}"
+                self.project_manager._save_meta(project_id, project_meta)
 
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "completed",
-                "session_id": session_id,
+                "project_id": project_id,
                 "step": "thumbnail"
             })
             
             return result_path
             
         except Exception as e:
-            logger.error(f"Error generating thumbnail for session {session_id}: {e}")
+            logger.error(f"Error generating thumbnail for project {project_id}: {e}")
             raise
 
     def _get_next_image_version(self, images_dir: str, shot_index: int, variant: str = None) -> int:
@@ -1830,12 +1879,12 @@ class GenerationService:
 
         return max_version + 1
 
-    def _generate_single_image(self, session_id: str, shot: Dict[str, Any],
+    def _generate_single_image(self, project_id: str, shot: Dict[str, Any],
                                mode: Optional[str] = None,
                                workflow_name: Optional[str] = None,
                                seed: Optional[int] = None,
                                prompt_override: Optional[str] = None,
-                               session_title: Optional[str] = None,
+                               project_title: Optional[str] = None,
                                variant: str = None,
                                reference_image_path: str = None,
                                generation_type: GenerationType = None) -> str:
@@ -1843,21 +1892,21 @@ class GenerationService:
 
         Args:
         """
-        print(f"[DEBUG] entering _generate_single_image for item {session_id}")
-        logger.info(f"entering _generate_single_image for item {session_id}")
+        print(f"[DEBUG] entering _generate_single_image for item {project_id}")
+        logger.info(f"entering _generate_single_image for item {project_id}")
         from core.image_generator import generate_image
         import config
 
-        images_dir = self.session_manager.get_images_dir(session_id)
+        images_dir = self.project_manager.get_images_dir(project_id)
         os.makedirs(images_dir, exist_ok=True)
 
         shot_index = shot['index']
         # Use override prompt if provided, otherwise fall back to saved shot prompt
         prompt = prompt_override.strip() if prompt_override and prompt_override.strip() else shot['image_prompt']
 
-        # Load session to get aspect_ratio
-        session_meta = self.session_manager.load_session(session_id)
-        aspect_ratio = session_meta.get('aspect_ratio', '16:9')
+        # Load project to get aspect_ratio
+        project_meta = self.project_manager.load_project(project_id)
+        aspect_ratio = project_meta.get('aspect_ratio', '16:9')
 
         # Generate versioned filename with optional variant suffix
         next_version = self._get_next_image_version(images_dir, shot_index, variant)
@@ -1878,10 +1927,10 @@ class GenerationService:
         def on_step_progress(current, total):
             nonlocal last_reported_progress
             # Check for cancellation
-            if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
+            if project_id in self.cancelled_shots and shot_index in self.cancelled_shots[project_id]:
                 raise InterruptedError(f"Shot {shot_index} was cancelled")
-            if session_id in self.cancelled_sessions:
-                raise InterruptedError(f"Session {session_id} was cancelled")
+            if project_id in self.cancelled_projects:
+                raise InterruptedError(f"Project {project_id} was cancelled")
 
             progress = int((current / total) * 100) if total > 0 else 0
             
@@ -1891,11 +1940,11 @@ class GenerationService:
 
             # Update queue item progress for the correct generation type
             queue_gen_type = generation_type or GenerationType.IMAGE
-            self._update_queue_item_progress(session_id, shot_index, queue_gen_type, progress)
+            self._update_queue_item_progress(project_id, shot_index, queue_gen_type, progress)
 
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "progress",
-                "session_id": session_id,
+                "project_id": project_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
                 "generation_type": queue_gen_type.value,
@@ -1907,12 +1956,12 @@ class GenerationService:
         result_path = generate_image(
             prompt=prompt,
             output_path=image_path,
-            aspect_ratio=aspect_ratio,  # Use session's aspect ratio
+            aspect_ratio=aspect_ratio,  # Use project's aspect ratio
             mode=mode, # If None, uses config.IMAGE_GENERATION_MODE
             seed=seed,
             workflow_name=workflow_name, # If None, uses config.IMAGE_WORKFLOW
             step_progress_callback=on_step_progress,
-            session_title=session_title,
+            project_title=project_title,
             reference_image_path=reference_image_path  # Pass reference image for IP-Adapter
         )
 
@@ -1921,16 +1970,16 @@ class GenerationService:
 
         return result_path
 
-    def _generate_single_video(self, session_id: str, shot: Dict[str, Any],
+    def _generate_single_video(self, project_id: str, shot: Dict[str, Any],
                                video_mode: Optional[str] = None,
                                workflow_path: Optional[str] = None,
-                               session_title: Optional[str] = None) -> str:
+                               project_title: Optional[str] = None) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
         from core.video_regenerator import generate_unique_video_filename
 
-        videos_dir = self.session_manager.get_videos_dir(session_id)
+        videos_dir = self.project_manager.get_videos_dir(project_id)
         os.makedirs(videos_dir, exist_ok=True)
 
         shot_index = shot['index']
@@ -1949,9 +1998,9 @@ class GenerationService:
                  abs_image_path = os.path.join(getattr(config, 'ABS_OUTPUT_DIR', ''), rel_image_path.replace("/", os.sep))
             
             # Broadcast 50% for Gemini Web (linear isn't possible)
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "progress",
-                "session_id": session_id,
+                "project_id": project_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
                 "progress": 50
@@ -1961,21 +2010,21 @@ class GenerationService:
                 image_path=abs_image_path,
                 motion_prompt=motion_prompt,
                 output_path=video_save_path,
-                session_title=session_title
+                project_title=project_title
             )
             
             if not video_res:
                 raise RuntimeError(f"Gemini Web video generation failed for shot {shot_index}")
                 
-            self.session_manager.mark_video_rendered(session_id, shot_index, video_save_path)
+            self.project_manager.mark_video_rendered(project_id, shot_index, video_save_path)
             return video_save_path
         else:
             from core.prompt_compiler import load_workflow, compile_workflow
             from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
 
-            # Load session to get aspect_ratio
-            session_meta = self.session_manager.load_session(session_id)
-            aspect_ratio = session_meta.get('aspect_ratio', '16:9')
+            # Load project to get aspect_ratio
+            project_meta = self.project_manager.load_project(project_id)
+            aspect_ratio = project_meta.get('aspect_ratio', '16:9')
 
             # Determine workflow path and resolve alias if needed
             if not workflow_path:
@@ -2011,10 +2060,10 @@ class GenerationService:
             def on_step_progress(current, total):
                 nonlocal last_reported_progress
                 # Check for cancellation
-                if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
+                if project_id in self.cancelled_shots and shot_index in self.cancelled_shots[project_id]:
                     raise InterruptedError(f"Shot {shot_index} was cancelled")
-                if session_id in self.cancelled_sessions:
-                    raise InterruptedError(f"Session {session_id} was cancelled")
+                if project_id in self.cancelled_projects:
+                    raise InterruptedError(f"Project {project_id} was cancelled")
 
                 progress = int((current / total) * 100) if total > 0 else 0
                 
@@ -2023,11 +2072,11 @@ class GenerationService:
                 last_reported_progress = progress
 
                 # Update queue item progress
-                self._update_queue_item_progress(session_id, shot_index, GenerationType.VIDEO, progress)
+                self._update_queue_item_progress(project_id, shot_index, GenerationType.VIDEO, progress)
 
-                manager.broadcast_sync(session_id, {
+                manager.broadcast_sync(project_id, {
                     "type": "progress",
-                    "session_id": session_id,
+                    "project_id": project_id,
                     "shot_index": shot_index,
                     "shot_id": shot.get('id'),
                     "generation_type": "video",
@@ -2051,7 +2100,7 @@ class GenerationService:
             if not video_outputs:
                 raise RuntimeError(f"No video output for shot {shot_index}")
 
-            # Copy video to session folder
+            # Copy video to project folder
             video_info = video_outputs[0]
             video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_index)
 
@@ -2061,15 +2110,15 @@ class GenerationService:
                 logger.info(f"Video copied: {video_filename} ({os.path.getsize(video_save_path):,} bytes)")
 
                 # Mark as rendered
-                self.session_manager.mark_video_rendered(session_id, shot_index, video_save_path)
+                self.project_manager.mark_video_rendered(project_id, shot_index, video_save_path)
                 return video_save_path
             else:
                 raise RuntimeError(f"Video source file not found: {source_path}")
 
     def _generate_flfi2v_video(
-        self, session_id: str, shot: Dict[str, Any],
+        self, project_id: str, shot: Dict[str, Any],
         variant: str, video_mode: Optional[str],
-        workflow_name: Optional[str], session_title: Optional[str],
+        workflow_name: Optional[str], project_title: Optional[str],
         video_filename: str, seed: Optional[int] = None,
         last_frame_image_path: Optional[str] = None,
         generation_type: GenerationType = None
@@ -2093,15 +2142,15 @@ class GenerationService:
         from core.prompt_compiler import load_workflow
         from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
 
-        videos_dir = self.session_manager.get_videos_dir(session_id)
+        videos_dir = self.project_manager.get_videos_dir(project_id)
         os.makedirs(videos_dir, exist_ok=True)
         video_save_path = os.path.join(videos_dir, video_filename)
 
         shot_index = shot['index']
 
-        # Load session to get aspect_ratio
-        session_meta = self.session_manager.load_session(session_id)
-        aspect_ratio = session_meta.get('aspect_ratio', '16:9')
+        # Load project to get aspect_ratio
+        project_meta = self.project_manager.load_project(project_id)
+        aspect_ratio = project_meta.get('aspect_ratio', '16:9')
 
         # Load FLFI2V workflow
         workflow_config = config.VIDEO_WORKFLOWS.get(workflow_name, {})
@@ -2189,10 +2238,10 @@ class GenerationService:
         # Progress callback
         def on_step_progress(current, total):
             nonlocal last_reported_progress
-            if session_id in self.cancelled_shots and shot_index in self.cancelled_shots[session_id]:
+            if project_id in self.cancelled_shots and shot_index in self.cancelled_shots[project_id]:
                 raise InterruptedError(f"Shot {shot_index} was cancelled")
-            if session_id in self.cancelled_sessions:
-                raise InterruptedError(f"Session {session_id} was cancelled")
+            if project_id in self.cancelled_projects:
+                raise InterruptedError(f"Project {project_id} was cancelled")
 
             progress = int((current / total) * 100) if total > 0 else 0
             
@@ -2202,11 +2251,11 @@ class GenerationService:
 
             # Update queue item progress for the correct generation type
             queue_gen_type = generation_type or GenerationType.VIDEO
-            self._update_queue_item_progress(session_id, shot_index, queue_gen_type, progress)
+            self._update_queue_item_progress(project_id, shot_index, queue_gen_type, progress)
 
-            manager.broadcast_sync(session_id, {
+            manager.broadcast_sync(project_id, {
                 "type": "progress",
-                "session_id": session_id,
+                "project_id": project_id,
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
                 "generation_type": queue_gen_type.value,
@@ -2230,7 +2279,7 @@ class GenerationService:
         if not video_outputs:
             raise RuntimeError(f"No video output for FLFI2V shot {shot_index}")
 
-        # Copy video to session folder
+        # Copy video to project folder
         video_info = video_outputs[0]
         source_path = get_output_file_path(video_info)
 

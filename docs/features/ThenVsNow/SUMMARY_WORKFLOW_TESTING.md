@@ -139,7 +139,7 @@ result = generate_image(
 ### How to Use Reference Images (After IP-Adapter Installation)
 ```python
 # Upload reference via API
-curl -X POST "http://localhost:8000/api/sessions/{id}/story/characters/0/upload-reference?variant=then" \
+curl -X POST "http://localhost:8000/api/projects/{id}/story/characters/0/upload-reference?variant=then" \
   -F "file=@young_photo.jpg"
 
 # Generate with reference
@@ -148,7 +148,7 @@ result = generate_image(
     output_path="output/test/then.png",
     mode="comfyui",
     workflow_name="flux_ipadapter_then",  # Auto-selected when reference available
-    reference_image_path="output/sessions/{id}/references/then_ref.jpg"
+    reference_image_path="output/projects/{id}/references/then_ref.jpg"
 )
 ```
 
@@ -215,7 +215,7 @@ You can already:
 
 ### Phase 4: Production (30 min)
 1. Integrate UI components
-2. Test end-to-end with real session
+2. Test end-to-end with real project
 3. Verify facial consistency
 4. Deploy to production
 

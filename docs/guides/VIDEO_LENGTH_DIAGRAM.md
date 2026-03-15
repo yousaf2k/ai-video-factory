@@ -9,7 +9,7 @@
                         │
                         ▼
          ┌──────────────────────────────┐
-         │ Check for Incomplete Session │
+         │ Check for Incomplete Project │
          └──────────┬───────────────────┘
                     │
        ┌────────────┴────────────┐
@@ -269,7 +269,7 @@ STEP 5: Rendering
 [INFO] Final video: 60 seconds (12 shots × 5 seconds)
 
 ==================================================================
-To view all sessions, check: output/sessions/
+To view all projects, check: output/projects/
 ==================================================================
 ```
 

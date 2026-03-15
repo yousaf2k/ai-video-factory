@@ -62,7 +62,7 @@ The story is expanded into a full narrative including:
 - **Story Arc**: Beginning, middle, end structure
 - **Themes**: Key themes and motifs
 
-**Output file:** `output/sessions/{session}/story.json`
+**Output file:** `output/projects/{project}/story.json`
 
 ### Step 3: Scene Graph
 
@@ -80,7 +80,7 @@ The scene graph organizes the story into visual scenes:
 - **Time of Day**: Lighting conditions
 - **Action Summary**: What happens visually
 
-**Output file:** `output/sessions/{session}/scene_graph.json`
+**Output file:** `output/projects/{project}/scene_graph.json`
 
 ### Step 4: Shot Planning
 
@@ -100,7 +100,7 @@ Shots are planned with complete specifications:
 
 **Camera types include:** static, pan, dolly, zoom, orbit, tracking, drone, arc, walk (and combinations)
 
-**Output file:** `output/sessions/{session}/shots.json`
+**Output file:** `output/projects/{project}/shots.json`
 
 ### Step 4.5: Image Generation
 
@@ -115,7 +115,7 @@ Images are generated from the image prompts:
 - **Consistent style**: All images use same model and settings
 - **Organized output**: Named as `shot_001_001.png`, `shot_001_002.png`, etc.
 
-**Output directory:** `output/sessions/{session}/images/`
+**Output directory:** `output/projects/{project}/images/`
 
 **Configuration:**
 
@@ -142,7 +142,7 @@ Videos are rendered by:
 4. Rendering with Wan 2.2 video model
 5. Saving output video
 
-**Output directory:** `output/sessions/{session}/videos/`
+**Output directory:** `output/projects/{project}/videos/`
 
 **Configuration:**
 
@@ -174,7 +174,7 @@ Narration is generated from the story:
 - **Voice synthesis**: Convert script to audio using TTS
 - **Timing**: Sync narration with video timing
 
-**Output directory:** `output/sessions/{session}/narration/`
+**Output directory:** `output/projects/{project}/narration/`
 
 **Configuration:**
 
@@ -185,14 +185,14 @@ TTS_METHOD = "local"           # "local", "comfyui", or "elevenlabs"
 TTS_VOICE = "en-US-AriaNeural"
 ```
 
-## Session Management
+## Project Management
 
-### Session Structure
+### Project Structure
 
-Each video generation creates a session:
+Each video generation creates a project:
 
 ```
-output/sessions/session_YYYYMMDD_HHMMSS/
+output/projects/project_YYYYMMDD_HHMMSS/
 ├── story.json
 ├── scene_graph.json
 ├── shots.json
@@ -207,16 +207,16 @@ output/sessions/session_YYYYMMDD_HHMMSS/
 ├── narration/
 │   ├── narration.txt
 │   └── narration.mp3
-└── session.json
+└── project.json
 ```
 
-### Session Tracking
+### Project Tracking
 
-The `session.json` file tracks progress:
+The `project.json` file tracks progress:
 
 ```json
 {
-  "session_id": "session_20260210_174844",
+  "project_id": "project_20260210_174844",
   "idea": "A beautiful sunset over the ocean",
   "status": "completed",
   "steps_completed": ["story", "scene_graph", "shots", "images", "videos"],
@@ -251,7 +251,7 @@ AUTO_STEP_MODE = False
 Resume from specific step:
 
 ```bash
-python main.py --session session_20260210_174844 --step 4
+python main.py --project project_20260210_174844 --step 4
 ```
 
 ## Regeneration
@@ -260,13 +260,13 @@ Regenerate specific components:
 
 ```bash
 # Regenerate images only
-python regenerate.py --session session_20260210_174844 --images
+python regenerate.py --project project_20260210_174844 --images
 
 # Regenerate videos only
-python regenerate.py --session session_20260210_174844 --videos
+python regenerate.py --project project_20260210_174844 --videos
 
 # Regenerate specific shots
-python regenerate.py --session session_20260210_174844 --shots 1,2,3
+python regenerate.py --project project_20260210_174844 --shots 1,2,3
 ```
 
 ## Customization
@@ -320,11 +320,11 @@ python main.py --idea "Your idea" --max-shots 3
 # Specify shot length
 python main.py --idea "Your idea" --shot-length 10
 
-# Continue from session
-python main.py --session session_20260210_174844
+# Continue from project
+python main.py --project project_20260210_174844
 
 # Start from specific step
-python main.py --session session_20260210_174844 --step 4
+python main.py --project project_20260210_174844 --step 4
 
 # Use custom agents
 python main.py --story-agent dramatic --shots-agent artistic
@@ -340,11 +340,11 @@ python main.py --generate-narration --tts-voice en-GB-SoniaNeural
 If the pipeline crashes, it can resume:
 
 ```bash
-# Automatically resume last session
+# Automatically resume last project
 python main.py
 
-# Or specify session
-python main.py --session session_20260210_174844
+# Or specify project
+python main.py --project project_20260210_174844
 ```
 
 ### Failed Shots
@@ -352,11 +352,11 @@ python main.py --session session_20260210_174844
 Failed video renders are tracked and can be regenerated:
 
 ```bash
-# View failed shots in session summary
-python main.py --session session_20260210_174844
+# View failed shots in project summary
+python main.py --project project_20260210_174844
 
 # Regenerate failed shots only
-python regenerate.py --session session_20260210_174844 --videos --failed-only
+python regenerate.py --project project_20260210_174844 --videos --failed-only
 ```
 
 ## Performance Optimization
@@ -391,7 +391,7 @@ Check the error message and:
 1. Verify API keys are set correctly
 2. Ensure ComfyUI is running (for video rendering)
 3. Check file permissions in `output/`
-4. Review logs in session directory
+4. Review logs in project directory
 
 ### Video Rendering Hangs
 

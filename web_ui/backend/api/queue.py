@@ -22,16 +22,16 @@ queue_service = get_queue_service()
 
 @router.get("/items", response_model=List[QueueItem])
 async def get_queue_items(
-    session_id: Optional[str] = Query(None, description="Filter by session ID"),
+    project_id: Optional[str] = Query(None, description="Filter by project ID"),
     status: Optional[QueueItemStatus] = Query(None, description="Filter by status")
 ):
     """
-    Get queue items, optionally filtered by session or status.
+    Get queue items, optionally filtered by project or status.
 
-    Returns all items across all sessions by default.
+    Returns all items across all projects by default.
     """
     try:
-        items = queue_service.get_queue(session_id=session_id, status=status)
+        items = queue_service.get_queue(project_id=project_id, status=status)
         return items
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -145,6 +145,31 @@ async def cancel_queue_item(item_id: str):
             interrupt_generation()
 
         return {"message": "Item cancelled successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/{item_id}/requeue")
+async def requeue_queue_item(item_id: str):
+    """
+    Requeue a failed or cancelled queue item.
+    """
+    try:
+        success = queue_service.requeue_item(item_id)
+        if not success:
+            raise HTTPException(status_code=400, detail=f"Item {item_id} not found or not in a requeueable state")
+        
+        # Ensure queue processor is running
+        try:
+            from web_ui.backend.services.generation_service import get_generation_service
+            get_generation_service()._ensure_queue_processor_started()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+
+        return {"message": "Item requeued successfully"}
     except HTTPException:
         raise
     except Exception as e:

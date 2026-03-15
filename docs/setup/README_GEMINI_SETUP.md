@@ -94,7 +94,7 @@ C:\AI\ai_video_factory\
 │   └── video_idea.txt          # Your video idea
 └── output\
     └── generated_images\       # Generated images stored here
-        └── session_YYYYMMDD_HHMMSS\
+        └── project_YYYYMMDD_HHMMSS\
             ├── shot_001.png
             ├── shot_002.png
             └── ...

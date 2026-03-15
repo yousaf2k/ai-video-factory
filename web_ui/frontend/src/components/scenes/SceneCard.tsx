@@ -46,7 +46,7 @@ export function SceneCard({
   progress,
 }: SceneCardProps) {
   const params = useParams();
-  const sessionId = params.id as string;
+  const projectId = params.id as string;
   const [isEditing, setIsEditing] = useState(false);
   const [editedScene, setEditedScene] = useState<Scene>(scene);
   const [isGenDialogOpen, setIsGenDialogOpen] = useState(false);
@@ -56,9 +56,9 @@ export function SceneCard({
   const [ttsWorkflow, setTtsWorkflow] = useState("default");
   const [voice, setVoice] = useState("en-US-AriaNeural");
 
-  const generateNarration = useGenerateSceneNarration(sessionId!);
-  const selectNarration = useSelectSceneNarration(sessionId!);
-  const cancelNarration = useCancelSceneNarration(sessionId!);
+  const generateNarration = useGenerateSceneNarration(projectId!);
+  const selectNarration = useSelectSceneNarration(projectId!);
+  const cancelNarration = useCancelSceneNarration(projectId!);
 
   const handleSave = () => {
     onUpdate?.(index, editedScene);
@@ -356,7 +356,7 @@ export function SceneCard({
                     {scene.narration_path.split('/').pop()}
                   </span>
                   <audio
-                    src={`/api/sessions/${sessionId}/narration/${scene.narration_path.split('/').pop()}`}
+                    src={`/api/projects/${projectId}/narration/${scene.narration_path.split('/').pop()}`}
                     controls
                     className="hidden"
                     id={`audio-scene-${index}`}

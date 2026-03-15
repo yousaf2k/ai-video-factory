@@ -18,7 +18,7 @@ This document summarizes the implementation of the "Then Vs Now" feature, a new 
 - **Set Prompt Integration**: Movie set backgrounds are appended to character image prompts
 - **Dual Video Segments**: Meeting and Departure videos per character
 - **YouTube Metadata**: SEO-optimized titles, keywords, and chapters
-- **Backward Compatibility**: Existing Documentary sessions continue to work unchanged
+- **Backward Compatibility**: Existing Documentary projects continue to work unchanged
 
 ---
 
@@ -93,13 +93,13 @@ Each FLFI2V shot contains:
 - Shots have `is_flfi2v: true`
 - Character IDs assigned for tracking
 
-### Phase 4: Session Service Modification ✅
+### Phase 4: Project Service Modification ✅
 
 **Files Modified:**
-- `web_ui/backend/services/session_service.py`
+- `web_ui/backend/services/project_service.py`
 
 **Changes:**
-- Updated `create_session()` to detect `then_vs_now` agent
+- Updated `create_project()` to detect `then_vs_now` agent
 - Special flow that calls `build_story_then_vs_now()`
 - Extracts shots from story (already generated)
 - Saves story.json and shots.json directly (bypasses shot planner)
@@ -185,16 +185,16 @@ Each FLFI2V shot contains:
 - Updated `regenerate_shot_image` endpoint to pass `image_variant` to service
 - Updated `regenerate_shot_video` endpoint to pass `video_variant` to service
 
-### Phase 11: Session Manager Updates ✅
+### Phase 11: Project Manager Updates ✅
 
 **Files Modified:**
-- `core/session_manager.py`
+- `core/project_manager.py`
 
 **Changes:**
-- Added `mark_then_image_generated(session_id, shot_index, image_path)`
-- Added `mark_now_image_generated(session_id, shot_index, image_path)`
-- Added `mark_meeting_video_rendered(session_id, shot_index, video_path)`
-- Added `mark_departure_video_rendered(session_id, shot_index, video_path)`
+- Added `mark_then_image_generated(project_id, shot_index, image_path)`
+- Added `mark_now_image_generated(project_id, shot_index, image_path)`
+- Added `mark_meeting_video_rendered(project_id, shot_index, video_path)`
+- Added `mark_departure_video_rendered(project_id, shot_index, video_path)`
 
 ### Phase 12: Verification ✅
 
@@ -218,13 +218,13 @@ web_ui/backend/models/
 ```
 core/
 ├── story_engine.py   # build_story_then_vs_now(), generate_shots_from_then_vs_now_story()
-└── session_manager.py # FLFI2V marker methods
+└── project_manager.py # FLFI2V marker methods
 ```
 
 ### Services
 ```
 web_ui/backend/services/
-├── session_service.py # ThenVsNow agent detection
+├── project_service.py # ThenVsNow agent detection
 └── generation_service.py # FLFI2V image/video generation
 ```
 
@@ -245,7 +245,7 @@ web_ui/frontend/src/
 
 ## Usage Guide
 
-### Creating a ThenVsNow Session
+### Creating a ThenVsNow Project
 
 1. **Select Agent**: Choose "then_vs_now" as the story agent
 2. **Enter Movie Name**: Provide a movie name (e.g., "The Godfather")
@@ -254,7 +254,7 @@ web_ui/frontend/src/
 ### API Example
 
 ```python
-POST /api/sessions
+POST /api/projects
 {
     "idea": "The Godfather",
     "story_agent": "then_vs_now",
@@ -311,7 +311,7 @@ POST /api/sessions
 ### Generating Images
 
 ```python
-POST /api/sessions/{session_id}/shots/{shot_index}/regenerate-image
+POST /api/projects/{project_id}/shots/{shot_index}/regenerate-image
 {
     "force": true,
     "image_variant": "both"  # "then", "now", or "both"
@@ -325,7 +325,7 @@ POST /api/sessions/{session_id}/shots/{shot_index}/regenerate-image
 ### Generating Videos
 
 ```python
-POST /api/sessions/{session_id}/shots/{shot_index}/regenerate-video
+POST /api/projects/{project_id}/shots/{shot_index}/regenerate-video
 {
     "force": true,
     "video_variant": "both",  # "meeting", "departure", or "both"
@@ -341,7 +341,7 @@ POST /api/sessions/{session_id}/shots/{shot_index}/regenerate-video
 
 ## Verification Steps
 
-### 1. Create ThenVsNow Session
+### 1. Create ThenVsNow Project
 - [ ] Select "then_vs_now" story agent
 - [ ] Enter a movie name (e.g., "The Godfather")
 - [ ] Verify story.json has project_type: 2
@@ -371,7 +371,7 @@ POST /api/sessions/{session_id}/shots/{shot_index}/regenerate-video
 - [ ] Verify "THEN VS NOW" text appears in thumbnails
 
 ### 5. Backward Compatibility
-- [ ] Create a standard Documentary session
+- [ ] Create a standard Documentary project
 - [ ] Verify existing functionality works unchanged
 - [ ] Verify shots without is_flfi2v use standard generation flow
 
@@ -489,6 +489,6 @@ Potential improvements for future iterations:
 
 ## Conclusion
 
-The "Then Vs Now" feature with FLFI2V support has been successfully implemented across all 12 phases. The implementation maintains backward compatibility with existing Documentary sessions while providing a new, immersive way to create cinematic reunion videos.
+The "Then Vs Now" feature with FLFI2V support has been successfully implemented across all 12 phases. The implementation maintains backward compatibility with existing Documentary projects while providing a new, immersive way to create cinematic reunion videos.
 
 The feature is ready for testing and deployment. All code changes have been syntactically validated and follow the existing code patterns in the project.

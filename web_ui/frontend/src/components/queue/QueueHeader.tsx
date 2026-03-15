@@ -144,10 +144,10 @@ export function QueueHeader({
           </div>
         )}
 
-        {/* Sessions count */}
-        {statistics.total_sessions > 0 && (
+        {/* Projects count */}
+        {statistics.total_projects > 0 && (
           <div className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-full text-sm font-medium">
-            Sessions: {statistics.total_sessions}
+            Projects: {statistics.total_projects}
           </div>
         )}
       </div>

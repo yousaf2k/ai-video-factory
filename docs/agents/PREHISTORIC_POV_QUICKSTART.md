@@ -13,10 +13,10 @@ The `prehistoric_pov` agents create immersive **first-person dinosaur documentar
 python core/main.py --story-agent prehistoric_pov --idea "Time traveler encounters T-Rex in Cretaceous forest"
 
 # 2. Generate POV images (hands visible in every shot)
-python core/main.py --image-agent prehistoric_pov --resume [session_id]
+python core/main.py --image-agent prehistoric_pov --resume [project_id]
 
 # 3. Render video
-python core/main.py --resume [session_id] --render
+python core/main.py --resume [project_id] --render
 ```
 
 ## Key Features

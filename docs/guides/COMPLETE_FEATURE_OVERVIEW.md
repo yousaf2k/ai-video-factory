@@ -4,19 +4,19 @@
 
 Your AI Film Studio now has **THREE major features**:
 
-1. ✅ **Session Management & Crash Recovery**
+1. ✅ **Project Management & Crash Recovery**
 2. ✅ **Video Length Control**
 3. ✅ **Video Regeneration**
 
 ---
 
-## Feature 1: Session Management & Crash Recovery
+## Feature 1: Project Management & Crash Recovery
 
 ### What It Does
 - Saves all progress automatically
-- Detects interrupted sessions
+- Detects interrupted projects
 - One-command recovery
-- Complete session history
+- Complete project history
 
 ### How to Use
 
@@ -28,20 +28,20 @@ python core/main.py
 **After Crash:**
 ```bash
 python core/main.py
-# Prompts: "Continue session? (y/n)"
+# Prompts: "Continue project? (y/n)"
 # Type 'y' to resume
 ```
 
-**View Sessions:**
+**View Projects:**
 ```bash
-python sessions.py list
-python sessions.py view <session_id>
+python projects.py list
+python projects.py view <project_id>
 ```
 
-### Files Created Per Session
+### Files Created Per Project
 ```
-output/sessions/session_YYYYMMDD_HHMMSS/
-├── session_YYYYMMDD_HHMMSS_meta.json  # Progress tracking
+output/projects/project_YYYYMMDD_HHMMSS/
+├── project_YYYYMMDD_HHMMSS_meta.json  # Progress tracking
 ├── story.json                          # Generated story
 ├── shots.json                          # All prompts
 └── images/                             # Generated images
@@ -102,7 +102,7 @@ Story-based:      Total=[Enter], Shot=5 → Story determines
 ## Feature 3: Video Regeneration
 
 ### What It Does
-- Re-render videos from sessions
+- Re-render videos from projects
 - Change video length
 - Fix failed renders
 - Try different settings
@@ -118,20 +118,20 @@ python regenerate.py
 
 **Command-Line Mode:**
 ```bash
-# List sessions
+# List projects
 python regenerate.py --list
 
 # Change video length
-python regenerate.py --session session_XXX --length 10
+python regenerate.py --project project_XXX --length 10
 
 # Re-render failed videos only
-python regenerate.py --session session_XXX
+python regenerate.py --project project_XXX
 
 # Re-render everything
-python regenerate.py --session session_XXX --force
+python regenerate.py --project project_XXX --force
 
 # Change length + re-render all
-python regenerate.py --session session_XXX --length 8 --force
+python regenerate.py --project project_XXX --length 8 --force
 ```
 
 ### When to Use
@@ -166,8 +166,8 @@ Shot length: 5 (or Enter)
 # → Story → Shots → Images → Videos
 
 # 4. View result
-python sessions.py list
-python sessions.py view session_XXX
+python projects.py list
+python projects.py view project_XXX
 ```
 
 ### If System Crashes
@@ -176,7 +176,7 @@ python sessions.py view session_XXX
 # Just run again
 python core/main.py
 
-# Detected incomplete session
+# Detected incomplete project
 Continue? (y/n): y
 
 # → Resumes from where it stopped
@@ -187,10 +187,10 @@ Continue? (y/n): y
 ### Want Different Video Length
 
 ```bash
-# Option 1: Regenerate existing session
-python regenerate.py --session session_XXX --length 10
+# Option 1: Regenerate existing project
+python regenerate.py --project project_XXX --length 10
 
-# Option 2: Start new session
+# Option 2: Start new project
 python core/main.py
 # Enter new length when prompted
 ```
@@ -202,10 +202,10 @@ python core/main.py
 python regenerate.py
 
 # Quick: Re-render failed videos only
-python regenerate.py --session session_XXX
+python regenerate.py --project project_XXX
 
 # Full: Re-render everything
-python regenerate.py --session session_XXX --force
+python regenerate.py --project project_XXX --force
 ```
 
 ---
@@ -217,19 +217,19 @@ python regenerate.py --session session_XXX --force
 python core/main.py              # Run with crash recovery
 ```
 
-### Session Management
+### Project Management
 ```bash
-python sessions.py list          # List all sessions
-python sessions.py view <id>     # View session details
+python projects.py list          # List all projects
+python projects.py view <id>     # View project details
 ```
 
 ### Video Regeneration
 ```bash
 python regenerate.py              # Interactive mode
-python regenerate.py --list       # List sessions
-python regenerate.py --session <id> --length <sec>    # Change length
-python regenerate.py --session <id> --force           # Re-render all
-python regenerate.py --session <id> --length <sec> --force  # Both
+python regenerate.py --list       # List projects
+python regenerate.py --project <id> --length <sec>    # Change length
+python regenerate.py --project <id> --force           # Re-render all
+python regenerate.py --project <id> --length <sec> --force  # Both
 ```
 
 ### Testing
@@ -246,12 +246,12 @@ C:\AI\ai_video_factory\
 ├── config.py                        # All configuration
 ├── requirements.txt                 # Dependencies
 ├── regenerate.py                    # Video regeneration CLI
-├── sessions.py                      # Session viewer CLI
+├── projects.py                      # Project viewer CLI
 ├── test_setup.py                    # Test suite
 │
 ├── core\
 │   ├── main.py                      # Main pipeline (all 3 features)
-│   ├── session_manager.py           # Session tracking
+│   ├── project_manager.py           # Project tracking
 │   ├── video_regenerator.py         # Regeneration engine
 │   ├── gemini_engine.py             # Text generation
 │   ├── image_generator.py           # Image generation
@@ -260,9 +260,9 @@ C:\AI\ai_video_factory\
 │   └── ... (other modules)
 │
 ├── output\
-│   └── sessions\                    # All session data
-│       └── session_YYYYMMDD_HHMMSS\
-│           ├── session_XXX_meta.json
+│   └── projects\                    # All project data
+│       └── project_YYYYMMDD_HHMMSS\
+│           ├── project_XXX_meta.json
 │           ├── story.json
 │           ├── shots.json
 │           └── images\
@@ -297,8 +297,8 @@ python core/main.py
 
 ### Change Video Length
 ```bash
-# From existing session
-python regenerate.py --session session_XXX --length 10
+# From existing project
+python regenerate.py --project project_XXX --length 10
 
 # Or start new
 python core/main.py
@@ -311,13 +311,13 @@ python core/main.py
 python regenerate.py
 
 # Or command-line
-python regenerate.py --session session_XXX --force
+python regenerate.py --project project_XXX --force
 ```
 
-### View Sessions
+### View Projects
 ```bash
-python sessions.py list
-python sessions.py view session_XXX
+python projects.py list
+python projects.py view project_XXX
 ```
 
 ---
@@ -345,10 +345,10 @@ Uses existing images, only ComfyUI rendering time
 
 ## Tips & Tricks
 
-### Session Management
-💡 Always check sessions after running
-💡 Use `python sessions.py list` to track progress
-💡 Can export prompts from any session's `shots.json`
+### Project Management
+💡 Always check projects after running
+💡 Use `python projects.py list` to track progress
+💡 Can export prompts from any project's `shots.json`
 
 ### Video Length
 💡 3-5s shots = trailers, fast-paced
@@ -358,7 +358,7 @@ Uses existing images, only ComfyUI rendering time
 
 ### Regeneration
 💡 Use interactive mode first time
-💡 `--list` before choosing session
+💡 `--list` before choosing project
 💡 `--force` only when needed
 💡 Change length without regenerating images!
 
@@ -372,7 +372,7 @@ Uses existing images, only ComfyUI rendering time
 3. `README_GEMINI_SETUP.md` - Detailed setup
 
 ### Features
-1. `SESSION_GUIDE.md` - Session management complete guide
+1. `SESSION_GUIDE.md` - Project management complete guide
 2. `VIDEO_LENGTH_GUIDE.md` - Video length complete guide
 3. `VIDEO_REGENERATION_GUIDE.md` - Regeneration complete guide
 
@@ -381,13 +381,13 @@ Uses existing images, only ComfyUI rendering time
 2. `VIDEO_REGEN_QUICKREF.md` - Regeneration quick reference
 
 ### Visual Guides
-1. `SESSION_VISUAL_GUIDE.md` - Session diagrams
+1. `SESSION_VISUAL_GUIDE.md` - Project diagrams
 2. `VIDEO_LENGTH_DIAGRAM.md` - Video length diagrams
 
 ### Summaries
 1. `PROJECT_OVERVIEW.md` - Complete project overview
 2. `FEATURES_SUMMARY.md` - Previous feature summary
-3. `NEW_FEATURES_SUMMARY.md` - Session + video length summary
+3. `NEW_FEATURES_SUMMARY.md` - Project + video length summary
 4. `DOCS_INDEX.md` - Documentation navigation
 5. `IMPLEMENTATION_SUMMARY.md` - Technical details
 
@@ -401,7 +401,7 @@ You now have a **production-ready AI video generation system** with:
 ✅ **Precise Control** - Exact video duration
 ✅ **Flexible** - Regenerate, adjust, experiment
 ✅ **Cost-Effective** - Reuse existing content
-✅ **Professional** - Full session management
+✅ **Professional** - Full project management
 ✅ **Documented** - 18 comprehensive guides
 
 **You're ready to create professional AI videos!** 🎬🚀

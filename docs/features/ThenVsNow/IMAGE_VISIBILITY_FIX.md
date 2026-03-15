@@ -8,10 +8,10 @@
 
 ## Problem Description
 
-When generating FLFI2V images for ThenVsNow projects, the images were being successfully created and saved to disk, but they were not visible in the web UI. The shot cards showed no images even though the files existed in the session's `images/` directory.
+When generating FLFI2V images for ThenVsNow projects, the images were being successfully created and saved to disk, but they were not visible in the web UI. The shot cards showed no images even though the files existed in the project's `images/` directory.
 
 **Symptoms:**
-- Images created in `sessions/{id}/images/` directory ✅
+- Images created in `projects/{id}/images/` directory ✅
 - `shots.json` updated with image paths ✅
 - UI showing blank image areas ❌
 - No error messages in console ❌
@@ -36,17 +36,17 @@ When generating FLFI2V images for ThenVsNow projects, the images were being succ
 
 ### Issue 2: Incorrect Path Format
 
-**Problem:** The `_get_relative_path()` function returned paths like `/sessions/test/images/shot.png`, but the frontend's `getMediaUrl()` function expected paths starting with `output/sessions/`.
+**Problem:** The `_get_relative_path()` function returned paths like `/projects/test/images/shot.png`, but the frontend's `getMediaUrl()` function expected paths starting with `output/projects/`.
 
 ```python
 # Returned (incorrect):
-'/sessions/test/images/shot.png'
+'/projects/test/images/shot.png'
 
 # Frontend expected:
-'output/sessions/test/images/shot.png'
+'output/projects/test/images/shot.png'
 ```
 
-**Impact:** Frontend couldn't convert the path to an API URL (`/api/sessions/...`), so images couldn't be loaded.
+**Impact:** Frontend couldn't convert the path to an API URL (`/api/projects/...`), so images couldn't be loaded.
 
 ---
 
@@ -113,20 +113,20 @@ def _get_relative_path(self, absolute_path: str) -> str:
 
 **Before Fix:**
 ```
-Absolute Path: E:/output/sessions/test/images/shot.png
+Absolute Path: E:/output/projects/test/images/shot.png
                      ↓ _get_relative_path()
-Relative Path: /sessions/test/images/shot.png
+Relative Path: /projects/test/images/shot.png
                      ↓ getMediaUrl() in frontend
-API URL: /sessions/test/images/shot.png  ❌ (Doesn't work!)
+API URL: /projects/test/images/shot.png  ❌ (Doesn't work!)
 ```
 
 **After Fix:**
 ```
-Absolute Path: E:/output/sessions/test/images/shot.png
+Absolute Path: E:/output/projects/test/images/shot.png
                      ↓ _get_relative_path()
-Relative Path: output/sessions/test/images/shot.png
+Relative Path: output/projects/test/images/shot.png
                      ↓ getMediaUrl() in frontend
-API URL: /api/sessions/test/images/shot.png  ✅ (Works!)
+API URL: /api/projects/test/images/shot.png  ✅ (Works!)
 ```
 
 ### Frontend getMediaUrl Logic
@@ -135,13 +135,13 @@ The frontend's `getMediaUrl()` function (in `web_ui/frontend/src/lib/utils.ts`):
 
 1. Checks if path starts with `/api/` or `http://` → returns as-is
 2. Normalizes backslashes to forward slashes
-3. Finds `output/sessions/` in the path
-4. Replaces `output/sessions/` with `/api/sessions/`
+3. Finds `output/projects/` in the path
+4. Replaces `output/projects/` with `/api/projects/`
 
 **Example:**
 ```typescript
-Input:  'output/sessions/test/images/shot_001_now_001.png'
-Output: '/api/sessions/test/images/shot_001_now_001.png'
+Input:  'output/projects/test/images/shot_001_now_001.png'
+Output: '/api/projects/test/images/shot_001_now_001.png'
 ```
 
 ---
@@ -167,7 +167,7 @@ print('✅ Return type fix works')
 python -c "
 from web_ui.backend.services.generation_service import GenerationService
 gs = GenerationService()
-abs_path = 'E:/output/sessions/test/images/shot.png'
+abs_path = 'E:/output/projects/test/images/shot.png'
 rel_path = gs._get_relative_path(abs_path)
 assert rel_path.startswith('output/')
 assert '//' not in rel_path
@@ -182,9 +182,9 @@ print('✅ Path format fix works')
 ```bash
 python -c "
 # Simulate getMediaUrl
-path = 'output/sessions/test/images/shot.png'
-api_url = path.replace('output/sessions/', '/api/sessions/')
-assert api_url == '/api/sessions/test/images/shot.png'
+path = 'output/projects/test/images/shot.png'
+api_url = path.replace('output/projects/', '/api/projects/')
+assert api_url == '/api/projects/test/images/shot.png'
 print('✅ Frontend compatibility verified')
 "
 ```
@@ -204,7 +204,7 @@ print('✅ Frontend compatibility verified')
 ### No Breaking Changes
 - ✅ Return type is still `str` (dict handled internally)
 - ✅ Path format is backward compatible
-- ✅ Existing sessions continue to work
+- ✅ Existing projects continue to work
 - ✅ Standard image generation unchanged
 
 ---
@@ -233,7 +233,7 @@ print('✅ Frontend compatibility verified')
 
 ## How to Verify Fix
 
-1. **Create a ThenVsNow session:**
+1. **Create a ThenVsNow project:**
    ```bash
    # Via Web UI
    - Story Agent: then_vs_now
@@ -251,8 +251,8 @@ print('✅ Frontend compatibility verified')
 
 4. **Check paths in shots.json:**
    ```bash
-   cat output/sessions/{session_id}/shots.json | grep image_path
-   # Should see: "image_path": "output/sessions/.../shot_001_now_001.png"
+   cat output/projects/{project_id}/shots.json | grep image_path
+   # Should see: "image_path": "output/projects/.../shot_001_now_001.png"
    ```
 
 ---
@@ -270,7 +270,7 @@ To prevent similar issues:
 
 ## Related Issues
 
-- **Session Manager Fix:** Added missing `get_story()` method (see `docs/fixes/FLFI2V_SESSION_MANAGER_FIX.md`)
+- **Project Manager Fix:** Added missing `get_story()` method (see `docs/fixes/FLFI2V_SESSION_MANAGER_FIX.md`)
 - Both fixes are required for FLFI2V to work correctly
 
 ---

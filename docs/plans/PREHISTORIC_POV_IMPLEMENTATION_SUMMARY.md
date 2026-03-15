@@ -121,7 +121,7 @@ python core/main.py --story-agent prehistoric_pov --idea "Time traveler encounte
 ### Generate POV Images
 
 ```bash
-python core/main.py --image-agent prehistoric_pov --resume [session_id]
+python core/main.py --image-agent prehistoric_pov --resume [project_id]
 ```
 
 ### Generate Full POV Video
@@ -189,7 +189,7 @@ python core/main.py --story-agent prehistoric_pov --idea "T-Rex encounter"
 ### Test 2: Image Generation
 
 ```bash
-python core/main.py --image-agent prehistoric_pov --resume [session_id]
+python core/main.py --image-agent prehistoric_pov --resume [project_id]
 # Check: "hands visible" in prompts, "First person POV", Sony Venice 2
 ```
 

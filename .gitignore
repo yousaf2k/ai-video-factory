@@ -5,7 +5,7 @@
 __pycache__/
 core/__pycache__/
 
-output/sessions/
+output/projects/
 output/
 input/
 workflow/image/

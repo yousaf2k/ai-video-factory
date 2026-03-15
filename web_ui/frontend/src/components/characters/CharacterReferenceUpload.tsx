@@ -6,14 +6,14 @@ import { Character } from '@/types';
 interface CharacterReferenceUploadProps {
   character: Character;
   characterIndex: number;
-  sessionId: string;
+  projectId: string;
   onUpdate?: () => void;
 }
 
 export default function CharacterReferenceUpload({
   character,
   characterIndex,
-  sessionId,
+  projectId,
   onUpdate
 }: CharacterReferenceUploadProps) {
   const [uploading, setUploading] = useState<{ then: boolean; now: boolean }>({
@@ -31,7 +31,7 @@ export default function CharacterReferenceUpload({
   const getMediaUrl = (path: string) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
-    return `/api/sessions/${sessionId}/media/${path.replace(/^output\//, '')}`;
+    return `/api/projects/${projectId}/media/${path.replace(/^output\//, '')}`;
   };
 
   const handleUpload = useCallback(async (
@@ -45,7 +45,7 @@ export default function CharacterReferenceUpload({
 
     try {
       const response = await fetch(
-        `/api/sessions/${sessionId}/story/characters/${characterIndex}/upload-reference?variant=${variant}`,
+        `/api/projects/${projectId}/story/characters/${characterIndex}/upload-reference?variant=${variant}`,
         {
           method: 'POST',
           body: formData
@@ -77,7 +77,7 @@ export default function CharacterReferenceUpload({
     } finally {
       setUploading(prev => ({ ...prev, [variant]: false }));
     }
-  }, [sessionId, characterIndex, onUpdate]);
+  }, [projectId, characterIndex, onUpdate]);
 
   const handleDrop = useCallback((
     e: React.DragEvent<HTMLDivElement>,

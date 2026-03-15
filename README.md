@@ -11,7 +11,7 @@
 - 🎥 **Advanced Video Generation**: Wan 2.2 model with ComfyUI integration
 - 🚁 **Multi-Camera LoRA System**: Combine multiple camera movements (drone, orbit, dolly, zoom, etc.)
 - 🎤 **Narration Support**: Optional TTS with multiple voice options
-- 💾 **Session Management**: Crash recovery and selective regeneration
+- 💾 **Project Management**: Crash recovery and selective regeneration
 - 🔧 **Highly Configurable**: Customize every aspect of generation
 - 🌐 **Web UI**: Modern Next.js frontend and FastAPI backend for visual story editing
 - 📚 **Comprehensive Documentation**: Extensive guides and API references in `docs/`
@@ -46,7 +46,7 @@ python core/main.py --idea "A beautiful sunset over the ocean"
 python web_ui/start.py
 ```
 
-Open your browser to `http://localhost:3000` to access the visual story editor and session manager. The backend API runs on `http://127.0.0.1:8000`.
+Open your browser to `http://localhost:3000` to access the visual story editor and project manager. The backend API runs on `http://127.0.0.1:8000`.
 
 ## Project Structure
 
@@ -54,16 +54,16 @@ Open your browser to `http://localhost:3000` to access the visual story editor a
 ai_video_factory/
 ├── core/              # Core pipeline orchestration and generators
 ├── web_ui/            # Visual interface
-│   ├── backend/       # FastAPI backend for session and story APIs
+│   ├── backend/       # FastAPI backend for project and story APIs
 │   └── frontend/      # Next.js frontend for visual story editing
 ├── agents/            # Prompts for LLM agents (story, narration, image, etc.)
 ├── workflow/          # ComfyUI JSON workflows (images, videos, TTS)
 ├── docs/              # Comprehensive documentation and guides
 ├── tests/             # Automated test suite
-├── output/            # Generated sessions, images, videos, and metadata
+├── output/            # Generated projects, images, videos, and metadata
 ├── config.py          # Centralized configuration settings
 ├── core/main.py       # Main CLI entry point
-├── sessions.py        # CLI for session management
+├── projects.py        # CLI for project management
 ├── regenerate.py      # CLI for regenerating specific shots
 └── batch_videos.py    # Batch video generation utility
 ```

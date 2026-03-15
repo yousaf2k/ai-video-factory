@@ -160,9 +160,9 @@ Example:
 
 **Frames = Length (seconds) × FPS**
 
-## Session Management
+## Project Management
 
-Video configuration is saved in each session:
+Video configuration is saved in each project:
 
 ```json
 {
@@ -174,7 +174,7 @@ Video configuration is saved in each session:
 }
 ```
 
-When resuming a session, the same video length is used automatically.
+When resuming a project, the same video length is used automatically.
 
 ## Tips
 
@@ -241,7 +241,7 @@ Examples:
 
 - Verify `VIDEO_FPS` in `config.py`
 - Check workflow is using the correct node
-- Review session metadata for actual settings
+- Review project metadata for actual settings
 
 ## Advanced: Presets
 
@@ -268,7 +268,7 @@ total_length = preset["total_length"]
 
 ✅ **Flexible Length Control** - Set total or per-shot length
 ✅ **Automatic Calculation** - System determines shot count
-✅ **Session Persistence** - Settings saved per session
+✅ **Project Persistence** - Settings saved per project
 ✅ **Frame Accurate** - Precise frame count for each shot
 ✅ **Cost Predictable** - Know cost before generating
 

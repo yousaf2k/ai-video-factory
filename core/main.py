@@ -1,5 +1,5 @@
 """
-AI Film Studio - Main Pipeline with Session Management and Crash Recovery
+AI Film Studio - Main Pipeline with Project Management and Crash Recovery
 """
 import json
 import os
@@ -42,7 +42,7 @@ WORKFLOW_STEPS = {
 }
 
 STEP_NAMES = {
-    1: 'idea',          # Not tracked in session steps
+    1: 'idea',          # Not tracked in project steps
     2: 'story',         # Includes narration text per scene
     3: 'scene_graph',
     4: 'shots',         # Includes narration from story scenes
@@ -58,7 +58,7 @@ from core.prompt_compiler import load_workflow, compile_workflow
 from core.comfy_client import submit, wait_for_prompt_completion
 from core.render_monitor import wait_until_idle
 from core.image_generator import generate_image_gemini
-from core.session_manager import SessionManager
+from core.project_manager import ProjectManager
 
 
 def generate_unique_video_filename(videos_dir, shot_idx):
@@ -273,14 +273,14 @@ def read_idea():
     raise FileNotFoundError("input/video_idea.txt not found and no --idea parameter provided")
 
 
-def prompt_step_action(current_step, session_id, session_mgr):
+def prompt_step_action(current_step, project_id, project_mgr):
     """
     Prompt user for action after completing a step in manual mode.
 
     Args:
         current_step: The step that just completed (2-7)
-        session_id: Current session ID
-        session_mgr: SessionManager instance
+        project_id: Current project ID
+        project_mgr: ProjectManager instance
 
     Returns:
         str: User's choice - 'continue', 'retry', or 'quit'
@@ -298,7 +298,7 @@ def prompt_step_action(current_step, session_id, session_mgr):
     step_title = step_map.get(step_name, step_name.title())
 
     # Get current progress
-    meta = session_mgr.get_session(session_id)
+    meta = project_mgr.get_project(project_id)
     steps = meta.get('steps', {})
 
     print("\n" + "="*70)
@@ -356,13 +356,13 @@ def prompt_step_action(current_step, session_id, session_mgr):
             print("[WARN] Invalid choice. Please enter 1, 2, 3, or 4")
 
 
-def get_start_step(args, session_meta=None):
+def get_start_step(args, project_meta=None):
     """
     Determine which step to start from.
 
     Args:
         args: Command line arguments
-        session_meta: Session metadata (for resume)
+        project_meta: Project metadata (for resume)
 
     Returns:
         int: Starting step number (1-6)
@@ -378,9 +378,9 @@ def get_start_step(args, session_meta=None):
                 return step_num
         print(f"[WARN] Invalid step '{args.step}', using default")
 
-    # For existing sessions, find first incomplete step
-    if session_meta:
-        steps = session_meta.get('steps', {})
+    # For existing projects, find first incomplete step
+    if project_meta:
+        steps = project_meta.get('steps', {})
         for step_num, step_key in STEP_NAMES.items():
             if step_num == 1:  # Skip 'idea' step
                 continue
@@ -420,29 +420,29 @@ def get_image_generation_mode():
     return mode, negative_prompt
 
 
-def check_continue_session(session_mgr):
-    """Check for incomplete session and ask user if they want to continue"""
-    latest_session = session_mgr.get_latest_session()
+def check_continue_project(project_mgr):
+    """Check for incomplete project and ask user if they want to continue"""
+    latest_project = project_mgr.get_latest_project()
 
-    if not latest_session:
+    if not latest_project:
         return None, None
 
     print("\n" + "="*70)
     print("INCOMPLETE SESSION FOUND")
     print("="*70)
-    print(f"Session ID: {latest_session['session_id']}")
-    print(f"Started: {latest_session.get('started_at', 'N/A')}")
-    print(f"Idea: {latest_session.get('idea', 'N/A')[:100]}...")
+    print(f"Project ID: {latest_project['project_id']}")
+    print(f"Started: {latest_project.get('started_at', 'N/A')}")
+    print(f"Idea: {latest_project.get('idea', 'N/A')[:100]}...")
     print(f"\nProgress:")
-    print(f"  Total shots: {latest_session['stats']['total_shots']}")
-    print(f"  Images generated: {latest_session['stats']['images_generated']}")
-    print(f"  Videos rendered: {latest_session['stats']['videos_rendered']}")
+    print(f"  Total shots: {latest_project['stats']['total_shots']}")
+    print(f"  Images generated: {latest_project['stats']['images_generated']}")
+    print(f"  Videos rendered: {latest_project['stats']['videos_rendered']}")
 
     # Check for failed images
     failed_images = []
-    if latest_session.get('shots'):
+    if latest_project.get('shots'):
         print(f"\nShot Status:")
-        for shot in latest_session['shots']:
+        for shot in latest_project['shots']:
             has_image = shot.get('image_path') and os.path.exists(shot.get('image_path', ''))
             if shot['image_generated'] and not has_image:
                 failed_images.append(shot)
@@ -458,31 +458,31 @@ def check_continue_session(session_mgr):
     print("="*70)
 
     # Ask user
-    response = input("\nDo you want to continue this session? (y/n): ").lower().strip()
+    response = input("\nDo you want to continue this project? (y/n): ").lower().strip()
 
     if response == 'y' or response == 'yes':
-        session_id = latest_session['session_id']
-        print(f"\n[INFO] Resuming session: {session_id}")
-        return session_id, latest_session
+        project_id = latest_project['project_id']
+        print(f"\n[INFO] Resuming project: {project_id}")
+        return project_id, latest_project
     else:
-        print("\n[INFO] Starting a new session...")
+        print("\n[INFO] Starting a new project...")
         return None, None
 
 
-def regenerate_failed_images(session_id, session_meta, shots, session_mgr):
+def regenerate_failed_images(project_id, project_meta, shots, project_mgr):
     """Regenerate images that failed previously"""
-    # Get image config from session
-    image_config = session_meta.get('image_config', {})
+    # Get image config from project
+    image_config = project_meta.get('image_config', {})
     image_mode = image_config.get('mode', config.IMAGE_GENERATION_MODE)
     negative_prompt = image_config.get('negative_prompt', "")
 
     print(f"\n[REGENERATE] Using {image_mode} for image generation")
 
-    images_dir = session_mgr.get_images_dir(session_id)
+    images_dir = project_mgr.get_images_dir(project_id)
     os.makedirs(images_dir, exist_ok=True)
 
     # Load shots status from shots.json
-    shots_status = session_mgr.get_shots(session_id)
+    shots_status = project_mgr.get_shots(project_id)
     shots_status_dict = {s['index']: s for s in shots_status}
 
     regenerated_count = 0
@@ -525,7 +525,7 @@ def regenerate_failed_images(session_id, session_meta, shots, session_mgr):
         if image_path:
             # Normalize path for JSON
             normalized_path = image_path.replace('\\', '/')
-            session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+            project_mgr.mark_image_generated(project_id, shot_idx, normalized_path)
             
             # Double-verify file existence on disk
             if os.path.exists(image_path):
@@ -539,7 +539,7 @@ def regenerate_failed_images(session_id, session_meta, shots, session_mgr):
     return regenerated_count
 
 
-def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, session_mgr,
+def submit_and_verify_video(template, shot, shot_length, project_id, shot_idx, project_mgr,
                              image_path=None, variation_idx=1):
     """
     Submit a video to ComfyUI and wait for verification before marking as rendered.
@@ -548,9 +548,9 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
         template: ComfyUI workflow template
         shot: Shot data dictionary
         shot_length: Length of each shot in seconds
-        session_id: Current session ID
+        project_id: Current project ID
         shot_idx: Shot index (1-based)
-        session_mgr: SessionManager instance
+        project_mgr: ProjectManager instance
         image_path: Specific image path to use (overrides shot['image_path'])
         variation_idx: Variation index for naming (1 = first, 2 = second, etc.)
 
@@ -560,8 +560,8 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
     import shutil
     from core.comfy_client import get_output_file_path
 
-    # Create session videos directory
-    videos_dir = session_mgr.get_videos_dir(session_id)
+    # Create project videos directory
+    videos_dir = project_mgr.get_videos_dir(project_id)
     os.makedirs(videos_dir, exist_ok=True)
 
     # Expected video filename with uniqueness check
@@ -606,7 +606,7 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
             if video_res:
                 print(f"[PASS] Shot {shot_idx}{variation_label}: Generated video via GeminiWeb")
                 if variation_idx == 1:
-                    session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    project_mgr.mark_video_rendered(project_id, shot_idx, video_save_path)
                 return True, None, video_save_path
             else:
                 return False, "GeminiWeb generation failed", None
@@ -631,7 +631,7 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
             if video_res:
                 print(f"[PASS] Shot {shot_idx}{variation_label}: Generated video via FlowWeb")
                 if variation_idx == 1:
-                    session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    project_mgr.mark_video_rendered(project_id, shot_idx, video_save_path)
                 return True, None, video_save_path
             else:
                 return False, "FlowWeb generation failed", None
@@ -672,7 +672,7 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
         if video_outputs:
             print(f"[PASS] Shot {shot_idx}{variation_label}: Generated {len(video_outputs)} video(s)")
 
-            # Copy first video to session folder
+            # Copy first video to project folder
             video_info = video_outputs[0]
             source_path = get_output_file_path(video_info)
 
@@ -716,7 +716,7 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
 
             if file_found:
                 shutil.copy2(source_path, video_save_path)
-                print(f"[COPY] Shot {shot_idx}{variation_label}: {video_filename} -> session/videos/")
+                print(f"[COPY] Shot {shot_idx}{variation_label}: {video_filename} -> project/videos/")
                 print(f"       Source: {source_path}")
                 print(f"       Target: {video_save_path}")
 
@@ -726,9 +726,9 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
                     print(f"[INFO] Video saved: {video_filename} ({file_size:,} bytes)")
 
                     # Mark as rendered with video path
-                    # Only mark primary variation (1) in session metadata
+                    # Only mark primary variation (1) in project metadata
                     if variation_idx == 1:
-                        session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                        project_mgr.mark_video_rendered(project_id, shot_idx, video_save_path)
                     return True, None, video_save_path
                 else:
                     print(f"[WARN] Copy verification failed")
@@ -763,8 +763,8 @@ def submit_and_verify_video(template, shot, shot_length, session_id, shot_idx, s
         return False, error_msg, None
 
 
-def continue_session(session_id, session_meta, session_mgr, args=None):
-    """Continue from an existing session"""
+def continue_project(project_id, project_meta, project_mgr, args=None):
+    """Continue from an existing project"""
     if args is None:
         args = argparse.Namespace()
 
@@ -774,11 +774,11 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
     print(f"[INFO] Execution mode: {mode_str}")
 
     # Check if user specified a step to start from
-    start_step = get_start_step(args, session_meta)
+    start_step = get_start_step(args, project_meta)
     if hasattr(args, 'step') and args.step:
         print(f"[INFO] Starting from step {start_step} (--step override)")
 
-    shots_dir = session_mgr.get_session_dir(session_id)
+    shots_dir = project_mgr.get_project_dir(project_id)
     shots_path = os.path.join(shots_dir, "shots.json")
 
     # Load shots data
@@ -786,11 +786,11 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
         with open(shots_path, 'r', encoding='utf-8') as f:
             shots = json.load(f)
     else:
-        print("[ERROR] Cannot find shots data for session. Starting fresh.")
+        print("[ERROR] Cannot find shots data for project. Starting fresh.")
         return None
 
-    # Get video config from session
-    video_config = session_meta.get('video_config', {})
+    # Get video config from project
+    video_config = project_meta.get('video_config', {})
     shot_length = video_config.get('shot_length', config.DEFAULT_SHOT_LENGTH)
     total_length = video_config.get('total_length')
 
@@ -801,7 +801,7 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
 
     # Check for failed images
     failed_images = []
-    shots_status = session_mgr.get_shots(session_id)
+    shots_status = project_mgr.get_shots(project_id)
     if shots_status:
         for shot_meta in shots_status:
             if shot_meta.get('image_generated', False):
@@ -814,34 +814,34 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
         print(f"\n[WARNING] Found {len(failed_images)} failed image(s)")
         response = input("Do you want to regenerate failed images? (y/n): ").lower().strip()
         if response == 'y' or response == 'yes':
-            count = regenerate_failed_images(session_id, session_meta, shots, session_mgr)
+            count = regenerate_failed_images(project_id, project_meta, shots, project_mgr)
             print(f"[INFO] Regenerated {count} image(s)")
-            # Reload session metadata to get updated state
-            session_meta = session_mgr.get_session(session_id)
+            # Reload project metadata to get updated state
+            project_meta = project_mgr.get_project(project_id)
 
     # Check which steps are already done
-    story_done = session_meta['steps'].get('story', False)
-    scene_graph_done = session_meta['steps'].get('scene_graph', False)
-    shots_done = session_meta['steps'].get('shots', False)
-    images_done = session_meta['steps'].get('images', False)
-    videos_done = session_meta['steps'].get('videos', False)
+    story_done = project_meta['steps'].get('story', False)
+    scene_graph_done = project_meta['steps'].get('scene_graph', False)
+    shots_done = project_meta['steps'].get('shots', False)
+    images_done = project_meta['steps'].get('images', False)
+    videos_done = project_meta['steps'].get('videos', False)
 
     # Resume from appropriate step
     if not images_done:
         print("\n[RESUME] STEP 4.5: Image Generation")
 
-        # Get image config from session
-        image_config = session_meta.get('image_config', {})
+        # Get image config from project
+        image_config = project_meta.get('image_config', {})
         image_mode = image_config.get('mode', config.IMAGE_GENERATION_MODE)
         negative_prompt = image_config.get('negative_prompt', "")
 
         print(f"[INFO] Using {image_mode} for image generation")
 
-        images_dir = session_mgr.get_images_dir(session_id)
+        images_dir = project_mgr.get_images_dir(project_id)
         os.makedirs(images_dir, exist_ok=True)
 
         # Load shots status from shots.json
-        shots_status = session_mgr.get_shots(session_id)
+        shots_status = project_mgr.get_shots(project_id)
         shots_status_dict = {s['index']: s for s in shots_status}
 
         for shot in shots:
@@ -877,7 +877,7 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
             if image_path:
                 # Normalize path for JSON
                 normalized_path = image_path.replace('\\', '/')
-                session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+                project_mgr.mark_image_generated(project_id, shot_idx, normalized_path)
                 
                 # Double-verify file existence on disk
                 if not os.path.exists(image_path):
@@ -888,7 +888,7 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
         # Only mark images step as complete if ALL shots have at least one image
         shots_with_images = [s for s in shots if s.get('image_path')]
         if len(shots_with_images) == len(shots):
-            session_mgr.mark_step_complete(session_id, 'images')
+            project_mgr.mark_step_complete(project_id, 'images')
             print(f"\n[INFO] All {len(shots)} shots have images generated.")
         else:
             shots_without_images = len(shots) - len(shots_with_images)
@@ -896,14 +896,14 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
             print(f"[INFO] Images step NOT marked as complete. You can regenerate images when resuming.")
             # Don't proceed to video generation if images are missing
             print("\n[STOP] Cannot proceed to video generation without all images.")
-            print("[HINT] Resume the session to regenerate missing images, or use 'python regenerate.py --images'")
+            print("[HINT] Resume the project to regenerate missing images, or use 'python regenerate.py --images'")
             return None
 
         # Prompt for next action in manual mode
         if not auto_mode:
-            action = prompt_step_action(5, session_id, session_mgr)
+            action = prompt_step_action(5, project_id, project_mgr)
             if action == 'quit':
-                print("\n[INFO] Session saved. You can continue later with:")
+                print("\n[INFO] Project saved. You can continue later with:")
                 print(f"       python core/main.py --step videos")
                 return None
             elif action.startswith('restart:'):
@@ -916,7 +916,7 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
 
     else:
         print("\n[INFO] All steps completed!")
-        session_mgr.print_session_summary(session_id)
+        project_mgr.print_project_summary(project_id)
         return shots
 
     # Filter to shots with images
@@ -947,7 +947,7 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
         print(f"[INFO] Using {video_mode} backend for video generation")
 
     # Load shots status from shots.json
-    shots_status = session_mgr.get_shots(session_id)
+    shots_status = project_mgr.get_shots(project_id)
     shots_status_dict = {s['index']: s for s in shots_status}
 
     # Track results
@@ -993,7 +993,7 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
             variation_label = f" (variation {variation_idx}/{len(image_paths)})" if len(image_paths) > 1 else ""
 
             success, error, video_path = submit_and_verify_video(
-                template, shot, shot_length, session_id, shot_idx, session_mgr,
+                template, shot, shot_length, project_id, shot_idx, project_mgr,
                 image_path=img_path, variation_idx=variation_idx
             )
 
@@ -1015,54 +1015,54 @@ def continue_session(session_id, session_meta, session_mgr, args=None):
         for error in errors:
             print(f"  - {error}")
         print("\n[HINT] You can regenerate failed videos with:")
-        print(f"       python regenerate.py --session {session_id} --videos")
+        print(f"       python regenerate.py --project {project_id} --videos")
 
     print("="*70)
 
     # Mark step complete
-    session_mgr.mark_step_complete(session_id, 'videos')
+    project_mgr.mark_step_complete(project_id, 'videos')
 
-    # Only mark session complete if all renders succeeded
+    # Only mark project complete if all renders succeeded
     if failed_renders == 0:
-        session_mgr.mark_session_complete(session_id)
+        project_mgr.mark_project_complete(project_id)
         print("\n[SUCCESS] SESSION COMPLETE!")
     else:
-        print("\n[WARNING] Session completed with errors. Some videos failed to render.")
+        print("\n[WARNING] Project completed with errors. Some videos failed to render.")
 
-    session_mgr.print_session_summary(session_id)
+    project_mgr.print_project_summary(project_id)
 
     return shots
 
 
-def _continue_existing_session(session_id, session_meta, session_mgr, args=None):
+def _continue_existing_project(project_id, project_meta, project_mgr, args=None):
     """
-    Continue an existing session from where it left off.
+    Continue an existing project from where it left off.
 
     Args:
-        session_id: Existing session ID
-        session_meta: Session metadata
-        session_mgr: SessionManager instance
+        project_id: Existing project ID
+        project_meta: Project metadata
+        project_mgr: ProjectManager instance
         args: Optional argparse namespace with command line arguments
     """
-    logger.info(f"Resuming session: {session_id}")
+    logger.info(f"Resuming project: {project_id}")
     if args is None:
         args = argparse.Namespace()
 
-    # Get idea from session metadata
-    idea = session_meta.get('idea', '')
+    # Get idea from project metadata
+    idea = project_meta.get('idea', '')
     logger.debug(f"  Resuming with idea: {idea[:200]}...")
 
     # Get execution mode
     auto_mode = get_step_mode(args)
-    start_step = get_start_step(args, session_meta)
+    start_step = get_start_step(args, project_meta)
     mode_str = "AUTO" if auto_mode else "MANUAL"
 
-    print(f"\n[RESUME] Session: {session_id}")
+    print(f"\n[RESUME] Project: {project_id}")
     print(f"[RESUME] Execution mode: {mode_str}")
     print(f"[RESUME] Starting from step {start_step}")
 
-    # Get and apply LLM config from session metadata
-    llm_config = session_meta.get('llm_config', {})
+    # Get and apply LLM config from project metadata
+    llm_config = project_meta.get('llm_config', {})
     if llm_config:
         config.LLM_PROVIDER = llm_config.get('provider', config.LLM_PROVIDER)
         config.LLM_MAX_TOKENS = llm_config.get('max_tokens', config.LLM_MAX_TOKENS)
@@ -1073,14 +1073,14 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
             else:
                 setattr(config, f"{config.LLM_PROVIDER.upper()}_MODEL", model)
 
-    # Get and apply workflow config from session metadata
-    workflow_config = session_meta.get('workflow_config', {})
+    # Get and apply workflow config from project metadata
+    workflow_config = project_meta.get('workflow_config', {})
     if workflow_config:
         config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE = workflow_config.get('continue_on_partial_failure', config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE)
         # auto_step_mode is evaluated per run below so we don't necessarily override it globally
 
-    # Get config from session metadata
-    image_config = session_meta.get('image_config', {})
+    # Get config from project metadata
+    image_config = project_meta.get('image_config', {})
     image_mode = image_config.get('mode', config.IMAGE_GENERATION_MODE)
     negative_prompt = image_config.get('negative_prompt', config.DEFAULT_NEGATIVE_PROMPT)
     images_per_shot = image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
@@ -1090,7 +1090,7 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
     config.IMAGE_WIDTH = image_config.get('width', config.IMAGE_WIDTH)
     config.IMAGE_HEIGHT = image_config.get('height', config.IMAGE_HEIGHT)
 
-    video_config = session_meta.get('video_config', {})
+    video_config = project_meta.get('video_config', {})
     shot_length = video_config.get('shot_length', config.DEFAULT_SHOT_LENGTH)
     total_length = video_config.get('total_length')
     shots_per_scene = video_config.get('shots_per_scene', config.DEFAULT_SHOTS_PER_SCENE)
@@ -1116,19 +1116,19 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
     else:
         max_shots = None
 
-    # Get agent config from session
-    agent_config = session_meta.get('agent_config', {})
+    # Get agent config from project
+    agent_config = project_meta.get('agent_config', {})
     story_agent = agent_config.get('story', config.STORY_AGENT)
     shots_agent = agent_config.get('shots', config.SHOTS_AGENT)
 
     # Get narration config
-    narration_config = session_meta.get('narration_config', {})
+    narration_config = project_meta.get('narration_config', {})
     generate_narration = narration_config.get('enabled', False)
     tts_method = narration_config.get('tts_method', config.TTS_METHOD)
     tts_workflow = narration_config.get('tts_workflow', config.TTS_WORKFLOW_PATH)
     tts_voice = narration_config.get('tts_voice', config.TTS_VOICE)
 
-    # Update config with session values for display
+    # Update config with project values for display
     config.IMAGE_GENERATION_MODE = image_mode
     config.IMAGES_PER_SHOT = images_per_shot
     config.STORY_AGENT = story_agent
@@ -1137,7 +1137,7 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
     config.TTS_METHOD = tts_method
     config.TTS_VOICE = tts_voice
 
-    # Print configuration summary for resumed session
+    # Print configuration summary for resumed project
     print_configuration_summary()
 
     print(f"[INFO] Image generation: {image_mode}")
@@ -1145,34 +1145,34 @@ def _continue_existing_session(session_id, session_meta, session_mgr, args=None)
 
     # Execute workflow based on mode
     if auto_mode:
-        _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
+        _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
                       story_agent=story_agent, shots_agent=shots_agent,
                       generate_narration=generate_narration,
                       tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                       images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
     else:
-        _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
+        _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
                         story_agent=story_agent, shots_agent=shots_agent,
                         generate_narration=generate_narration,
                         tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                         images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
 
 
-def run_new_session(session_mgr, args=None):
+def run_new_project(project_mgr, args=None):
     """
-    Run a complete new session
+    Run a complete new project
 
     Args:
-        session_mgr: SessionManager instance
+        project_mgr: ProjectManager instance
         args: Optional argparse namespace with command line arguments
     """
-    logger.info("Starting new session workflow")
+    logger.info("Starting new project workflow")
     if args is None:
         args = argparse.Namespace()
 
     # Check if using prompts file workflow
     if hasattr(args, 'prompts_file') and args.prompts_file:
-        return _run_with_prompts_file(session_mgr, args)
+        return _run_with_prompts_file(project_mgr, args)
 
     logger.debug("Starting STEP 1: Idea Input")
     print("\nSTEP 1: Idea")
@@ -1258,11 +1258,11 @@ def run_new_session(session_mgr, args=None):
 
     print("="*70)
 
-    # Create new session
-    session_id, session_meta = session_mgr.create_session(idea)
+    # Create new project
+    project_id, project_meta = project_mgr.create_project(idea)
 
-    logger.info(f"Session created: {session_id}")
-    # Store LLM config in session
+    logger.info(f"Project created: {project_id}")
+    # Store LLM config in project
     provider = config.LLM_PROVIDER
     provider_model_key = f"{provider.upper()}_MODEL"
     if provider == "gemini":
@@ -1270,14 +1270,14 @@ def run_new_session(session_mgr, args=None):
         
     llm_model = getattr(config, provider_model_key, "unknown")
     
-    session_meta['llm_config'] = {
+    project_meta['llm_config'] = {
         'provider': provider,
         'text_model': llm_model,
         'max_tokens': config.LLM_MAX_TOKENS
     }
 
-    # Store video config in session
-    session_meta['video_config'] = {
+    # Store video config in project
+    project_meta['video_config'] = {
         'total_length': total_length,
         'shot_length': shot_length,
         'fps': config.VIDEO_FPS,
@@ -1294,7 +1294,7 @@ def run_new_session(session_mgr, args=None):
 
     # Store image generation config
     images_per_shot = getattr(args, 'images_per_shot', None) or config.IMAGES_PER_SHOT
-    session_meta['image_config'] = {
+    project_meta['image_config'] = {
         'mode': image_mode,
         'negative_prompt': negative_prompt,
         'images_per_shot': images_per_shot,
@@ -1305,8 +1305,8 @@ def run_new_session(session_mgr, args=None):
         'height': config.IMAGE_HEIGHT
     }
 
-    # Store workflow config in session
-    session_meta['workflow_config'] = {
+    # Store workflow config in project
+    project_meta['workflow_config'] = {
         'auto_step_mode': get_step_mode(args),
         'continue_on_partial_failure': config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE
     }
@@ -1321,23 +1321,23 @@ def run_new_session(session_mgr, args=None):
     tts_workflow = getattr(args, 'tts_workflow', None) or config.TTS_WORKFLOW_PATH
     tts_voice = getattr(args, 'tts_voice', None) or config.TTS_VOICE
 
-    # Store agent config in session
-    session_meta['agent_config'] = {
+    # Store agent config in project
+    project_meta['agent_config'] = {
         'story': story_agent,
         'shots': shots_agent
     }
 
-    # Store narration config in session
-    session_meta['narration_config'] = {
+    # Store narration config in project
+    project_meta['narration_config'] = {
         'enabled': generate_narration,
         'tts_method': tts_method,
         'tts_workflow': tts_workflow,
         'tts_voice': tts_voice
     }
 
-    session_mgr._save_meta(session_id, session_meta)
+    project_mgr._save_meta(project_id, project_meta)
 
-    print(f"[INFO] Created session: {session_id}")
+    print(f"[INFO] Created project: {project_id}")
     print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
     print(f"[INFO] Image generation: {images_per_shot} image(s) per shot")
     if generate_narration:
@@ -1354,43 +1354,43 @@ def run_new_session(session_mgr, args=None):
     # Execute workflow based on mode
     if auto_mode:
         # Original auto mode - execute all remaining steps
-        _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
+        _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
                       story_agent=story_agent, shots_agent=shots_agent,
                       generate_narration=generate_narration,
                       tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                       images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
     else:
         # New manual mode - step by step with prompts
-        _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
+        _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
                         story_agent=story_agent, shots_agent=shots_agent,
                         generate_narration=generate_narration,
                         tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                         images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
 
 
-def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
+def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
                    story_agent=None, shots_agent=None,
                    generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
                    images_per_shot=1, shots_per_scene=None):
     """Execute all remaining steps automatically"""
-    logger.info(f"Running auto mode for session: {session_id}")
+    logger.info(f"Running auto mode for project: {project_id}")
     # Get current progress
-    steps = session_meta.get('steps', {})
+    steps = project_meta.get('steps', {})
 
-    # Get agent names from session metadata or args
-    agent_config = session_meta.get('agent_config', {})
+    # Get agent names from project metadata or args
+    agent_config = project_meta.get('agent_config', {})
     story_agent = story_agent or agent_config.get('story', config.STORY_AGENT)
     shots_agent = shots_agent or agent_config.get('shots', config.SHOTS_AGENT)
 
     # Get narration config
-    narration_config = session_meta.get('narration_config', {})
+    narration_config = project_meta.get('narration_config', {})
     generate_narration = generate_narration or narration_config.get('enabled', False)
     tts_method = tts_method or narration_config.get('tts_method', config.TTS_METHOD)
     tts_workflow = tts_workflow or narration_config.get('tts_workflow', config.TTS_WORKFLOW_PATH)
     tts_voice = tts_voice or narration_config.get('tts_voice', config.TTS_VOICE)
 
     # Get image config
-    image_config = session_meta.get('image_config', {})
+    image_config = project_meta.get('image_config', {})
     images_per_shot = images_per_shot or image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
 
     print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
@@ -1416,16 +1416,16 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         logger.info("STEP 2: Story Generation")
         print("\nSTEP 2: Story Generation")
         story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
-        session_mgr.save_story(session_id, story_json)
+        project_mgr.save_story(project_id, story_json)
     else:
-        # Check if this is a prompts file session (no story.json)
-        if session_meta.get('prompts_file'):
+        # Check if this is a prompts file project (no story.json)
+        if project_meta.get('prompts_file'):
             print("\n[SKIP] STEP 2: Story skipped (prompts file mode)")
             story_json = None
         else:
             # Load existing story
             print("\n[SKIP] STEP 2: Story already generated")
-            story_dir = session_mgr.get_session_dir(session_id)
+            story_dir = project_mgr.get_project_dir(project_id)
             story_path = os.path.join(story_dir, "story.json")
             with open(story_path, 'r', encoding='utf-8') as f:
                 story_json = f.read()
@@ -1434,7 +1434,7 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
     if not steps.get('scene_graph', False):
         logger.info("STEP 3: Scene Graph")
         print("\nSTEP 3: Scene Graph")
-        session_mgr.mark_step_complete(session_id, 'scene_graph')
+        project_mgr.mark_step_complete(project_id, 'scene_graph')
         graph = build_scene_graph(story_json)
     else:
         print("\n[SKIP] STEP 3: Scene Graph already created")
@@ -1446,10 +1446,10 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
         shots = plan_shots(graph, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
         # Enhance motion prompts with trigger keywords for LoRA activation
         shots = enhance_motion_prompts_with_triggers(shots)
-        session_mgr.save_shots(session_id, shots)
+        project_mgr.save_shots(project_id, shots)
     else:
         # Reload shots if already done
-        shots_dir = session_mgr.get_session_dir(session_id)
+        shots_dir = project_mgr.get_project_dir(project_id)
         shots_path = os.path.join(shots_dir, "shots.json")
         with open(shots_path, 'r', encoding='utf-8') as f:
             shots = json.load(f)
@@ -1458,9 +1458,9 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
     if not steps.get('images', False):
         logger.info("STEP 4.5: Image Generation")
         print("\nSTEP 4.5: Image Generation")
-        _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot)
+        _generate_images(project_id, project_mgr, shots, image_mode, negative_prompt, images_per_shot)
         # Reload shots with updated paths
-        shots_dir = session_mgr.get_session_dir(session_id)
+        shots_dir = project_mgr.get_project_dir(project_id)
         shots_path = os.path.join(shots_dir, "shots.json")
         with open(shots_path, 'r', encoding='utf-8') as f:
             shots = json.load(f)
@@ -1471,12 +1471,12 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
             shots_without = len(shots) - len(shots_with_images)
             print(f"\n[ERROR] After generation: {shots_without} shot(s) without images.")
             print("[STOP] Cannot proceed to video generation without all images.")
-            print("[HINT] Resume the session to regenerate missing images, or use 'python regenerate.py --images'")
+            print("[HINT] Resume the project to regenerate missing images, or use 'python regenerate.py --images'")
             return None
     else:
         # Images step marked complete, but verify images actually exist
         print("\n[VERIFY] Checking if images exist...")
-        images_dir = session_mgr.get_images_dir(session_id)
+        images_dir = project_mgr.get_images_dir(project_id)
 
         # Check if shots have image_path and files exist
         missing_images = False
@@ -1488,9 +1488,9 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
 
         if missing_images:
             print("[WARN] Some images are missing. Regenerating...")
-            _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot)
+            _generate_images(project_id, project_mgr, shots, image_mode, negative_prompt, images_per_shot)
             # Reload shots with updated paths
-            shots_dir = session_mgr.get_session_dir(session_id)
+            shots_dir = project_mgr.get_project_dir(project_id)
             shots_path = os.path.join(shots_dir, "shots.json")
             with open(shots_path, 'r', encoding='utf-8') as f:
                 shots = json.load(f)
@@ -1501,7 +1501,7 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
                 shots_without = len(shots) - len(shots_with_images)
                 print(f"\n[ERROR] After regeneration: {shots_without} shot(s) still without images.")
                 print("[STOP] Cannot proceed to video generation without all images.")
-                print("[HINT] Resume the session to regenerate missing images, or use 'python regenerate.py --images'")
+                print("[HINT] Resume the project to regenerate missing images, or use 'python regenerate.py --images'")
                 return None
         else:
             print("[SKIP] Images verified and already exist")
@@ -1531,18 +1531,18 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
             return
 
         # Count shots that actually need rendering (don't have videos yet)
-        shots_status = session_mgr.get_shots(session_id)
+        shots_status = project_mgr.get_shots(project_id)
         # Use dictionary lookup for reliable access by shot index
         shots_status_dict = {s['index']: s for s in shots_status}
         shots_need_video = [s for s in valid_shots if not shots_status_dict.get(s.get('index'), {}).get('video_rendered', False)]
 
         logger.info(f"STEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
         print(f"\nSTEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
-        _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
+        _render_videos(project_id, project_mgr, valid_shots, shot_length, shots)
     else:
         # Videos step is marked complete, but verify videos actually exist
         print(f"[VERIFY] Checking if videos actually exist...")
-        videos_dir = session_mgr.get_videos_dir(session_id)
+        videos_dir = project_mgr.get_videos_dir(project_id)
 
         # Check for any video matching the pattern shot_XXX*.mp4 (including suffixes)
         import glob
@@ -1560,49 +1560,49 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
             print(f"[WARN] Videos step marked complete but video files are missing!")
             print(f"[INFO] Unmarking videos step and proceeding with video generation...")
             # Unmark the videos step so we can regenerate
-            session_meta['steps']['videos'] = False
-            session_mgr._save_meta(session_id, session_meta)
+            project_meta['steps']['videos'] = False
+            project_mgr._save_meta(project_id, project_meta)
 
             # Now render videos
             valid_shots = [s for s in shots if s.get('image_path')]
             # Count shots that actually need rendering
-            shots_status = session_mgr.get_shots(session_id)
+            shots_status = project_mgr.get_shots(project_id)
             # Use dictionary lookup for reliable access by shot index
             shots_status_dict = {s['index']: s for s in shots_status}
             shots_need_video = [s for s in valid_shots if not shots_status_dict.get(s.get('index'), {}).get('video_rendered', False)]
             logger.info(f"STEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
             print(f"\nSTEP 5: Rendering {len(shots_need_video)} shots (skipping {len(valid_shots) - len(shots_need_video)} already rendered)")
-            _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
+            _render_videos(project_id, project_mgr, valid_shots, shot_length, shots)
         else:
             print(f"[SKIP] Videos verified and already exist")
 
     # STEP 6: Narration TTS
     if generate_narration and not steps.get('narration', False):
-        # Skip narration for prompts file sessions (no story.json)
-        if session_meta.get('prompts_file'):
+        # Skip narration for prompts file projects (no story.json)
+        if project_meta.get('prompts_file'):
             print("\n[SKIP] STEP 6: Narration skipped (prompts file mode)")
             print("[INFO] Shots already have narration text from prompts file")
-            # Mark narration as complete so session can finish
-            session_mgr.mark_step_complete(session_id, 'narration')
+            # Mark narration as complete so project can finish
+            project_mgr.mark_step_complete(project_id, 'narration')
         else:
             logger.info("STEP 6: Narration TTS")
             print("\nSTEP 6: Narration TTS")
 
             # Load story for narration
-            story_dir = session_mgr.get_session_dir(session_id)
+            story_dir = project_mgr.get_project_dir(project_id)
             story_path = os.path.join(story_dir, "story.json")
             with open(story_path, 'r', encoding='utf-8') as f:
                 story_json = f.read()
 
             # Calculate total duration
-            video_config = session_meta.get('video_config', {})
+            video_config = project_meta.get('video_config', {})
             total_duration = video_config.get('total_length') or (len(shots) * shot_length)
 
             # Generate narration
-            from core.narration_generator import generate_narration_for_session
+            from core.narration_generator import generate_narration_for_project
 
-            script_path, audio_path = generate_narration_for_session(
-                session_id=session_id,
+            script_path, audio_path = generate_narration_for_project(
+                project_id=project_id,
                 story_json=story_json,
                 total_duration=total_duration,
                 tts_method=tts_method,
@@ -1623,10 +1623,10 @@ def _run_auto_mode(session_id, session_meta, session_mgr, idea, image_mode, nega
     if not generate_narration or steps.get('videos', False):
         logger.info("All steps completed successfully")
         print("\n[INFO] All steps completed!")
-        session_mgr.print_session_summary(session_id)
+        project_mgr.print_project_summary(project_id)
 
 
-def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
+def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
                      story_agent=None, shots_agent=None,
                      generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
                      images_per_shot=1, shots_per_scene=None):
@@ -1635,20 +1635,20 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
     story_json = None
     graph = None
 
-    # Get agent names from session metadata or args
-    agent_config = session_meta.get('agent_config', {})
+    # Get agent names from project metadata or args
+    agent_config = project_meta.get('agent_config', {})
     story_agent = story_agent or agent_config.get('story', config.STORY_AGENT)
     shots_agent = shots_agent or agent_config.get('shots', config.SHOTS_AGENT)
 
     # Get narration config
-    narration_config = session_meta.get('narration_config', {})
+    narration_config = project_meta.get('narration_config', {})
     generate_narration = generate_narration or narration_config.get('enabled', False)
     tts_method = tts_method or narration_config.get('tts_method', config.TTS_METHOD)
     tts_workflow = tts_workflow or narration_config.get('tts_workflow', config.TTS_WORKFLOW_PATH)
     tts_voice = tts_voice or narration_config.get('tts_voice', config.TTS_VOICE)
 
     # Get image config
-    image_config = session_meta.get('image_config', {})
+    image_config = project_meta.get('image_config', {})
     images_per_shot = images_per_shot or image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
 
     print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
@@ -1672,52 +1672,52 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
 
         # Execute the current step
         if current_step == 2:  # Story
-            if not session_meta.get('steps', {}).get('story', False):
+            if not project_meta.get('steps', {}).get('story', False):
                 print("\nSTEP 2: Story Generation")
                 story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
-                session_mgr.save_story(session_id, story_json)
+                project_mgr.save_story(project_id, story_json)
             else:
-                # Check if this is a prompts file session (no story.json)
-                if session_meta.get('prompts_file'):
+                # Check if this is a prompts file project (no story.json)
+                if project_meta.get('prompts_file'):
                     print("\n[SKIP] STEP 2: Story skipped (prompts file mode)")
                     story_json = None
                 else:
                     print("\n[SKIP] STEP 2: Story already generated")
                     # Load existing story
-                    story_dir = session_mgr.get_session_dir(session_id)
+                    story_dir = project_mgr.get_project_dir(project_id)
                     story_path = os.path.join(story_dir, "story.json")
                     with open(story_path, 'r', encoding='utf-8') as f:
                         story_json = f.read()
 
         elif current_step == 3:  # Scene Graph
-            if not session_meta.get('steps', {}).get('scene_graph', False):
+            if not project_meta.get('steps', {}).get('scene_graph', False):
                 print("\nSTEP 3: Scene Graph")
-                session_mgr.mark_step_complete(session_id, 'scene_graph')
+                project_mgr.mark_step_complete(project_id, 'scene_graph')
                 graph = build_scene_graph(story_json)
             else:
                 print("\n[SKIP] STEP 3: Scene Graph already created")
 
         elif current_step == 4:  # Shot Planning
-            if not session_meta.get('steps', {}).get('shots', False):
+            if not project_meta.get('steps', {}).get('shots', False):
                 print("\nSTEP 4: Shot Planning")
                 shots = plan_shots(graph, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
                 # Enhance motion prompts with trigger keywords for LoRA activation
                 shots = enhance_motion_prompts_with_triggers(shots)
-                session_mgr.save_shots(session_id, shots)
+                project_mgr.save_shots(project_id, shots)
             else:
                 print("\n[SKIP] STEP 4: Shots already planned")
                 # Load existing shots
-                shots_dir = session_mgr.get_session_dir(session_id)
+                shots_dir = project_mgr.get_project_dir(project_id)
                 shots_path = os.path.join(shots_dir, "shots.json")
                 with open(shots_path, 'r', encoding='utf-8') as f:
                     shots = json.load(f)
 
         elif current_step == 5:  # Image Generation
-            if not session_meta.get('steps', {}).get('images', False):
+            if not project_meta.get('steps', {}).get('images', False):
                 print("\nSTEP 5: Image Generation")
-                _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot)
+                _generate_images(project_id, project_mgr, shots, image_mode, negative_prompt, images_per_shot)
                 # Reload shots with updated paths
-                shots_dir = session_mgr.get_session_dir(session_id)
+                shots_dir = project_mgr.get_project_dir(project_id)
                 shots_path = os.path.join(shots_dir, "shots.json")
                 with open(shots_path, 'r', encoding='utf-8') as f:
                     shots = json.load(f)
@@ -1725,7 +1725,7 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
                 print("\n[SKIP] STEP 5: Images already generated")
 
         elif current_step == 6:  # Video Rendering
-            if not session_meta.get('steps', {}).get('videos', False):
+            if not project_meta.get('steps', {}).get('videos', False):
                 # Filter to only shots with successfully generated images
                 valid_shots = [s for s in shots if s.get('image_path')]
 
@@ -1734,28 +1734,28 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
                     return
 
                 print(f"\nSTEP 6: Rendering {len(valid_shots)} shots")
-                _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
+                _render_videos(project_id, project_mgr, valid_shots, shot_length, shots)
             else:
                 print("\n[SKIP] STEP 6: Videos already rendered")
 
         elif current_step == 7:  # Narration TTS
-            if generate_narration and not session_meta.get('steps', {}).get('narration', False):
-                # Skip narration for prompts file sessions (no story.json)
-                if session_meta.get('prompts_file'):
+            if generate_narration and not project_meta.get('steps', {}).get('narration', False):
+                # Skip narration for prompts file projects (no story.json)
+                if project_meta.get('prompts_file'):
                     print("\n[SKIP] STEP 7: Narration skipped (prompts file mode)")
                     print("[INFO] Shots already have narration text from prompts file")
-                    # Mark narration as complete so session can finish
-                    session_mgr.mark_step_complete(session_id, 'narration')
+                    # Mark narration as complete so project can finish
+                    project_mgr.mark_step_complete(project_id, 'narration')
                 else:
                     print("\nSTEP 7: Narration TTS")
 
                     # Calculate total duration
-                    video_config = session_meta.get('video_config', {})
+                    video_config = project_meta.get('video_config', {})
                     total_duration = video_config.get('total_length') or (len(shots) * shot_length)
 
                     # Generate narration
-                    script_path, audio_path = generate_narration_for_session(
-                        session_id=session_id,
+                    script_path, audio_path = generate_narration_for_project(
+                        project_id=project_id,
                         story_json=story_json,
                         total_duration=total_duration,
                         use_comfyui=(tts_method == 'comfyui'),
@@ -1778,15 +1778,15 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
                     print("\n[SKIP] STEP 7: Narration disabled")
                 # All steps complete
                 print("\n[INFO] All steps completed!")
-                session_mgr.print_session_summary(session_id)
+                project_mgr.print_project_summary(project_id)
                 return
 
-        # Reload session metadata after step
-        session_meta = session_mgr.get_session(session_id)
+        # Reload project metadata after step
+        project_meta = project_mgr.get_project(project_id)
 
         # Prompt for next action
         if current_step < 7:  # Don't prompt after final step
-            action = prompt_step_action(current_step, session_id, session_mgr)
+            action = prompt_step_action(current_step, project_id, project_mgr)
 
             if action == 'continue':
                 current_step += 1
@@ -1799,17 +1799,17 @@ def _run_manual_mode(session_id, session_meta, session_mgr, idea, image_mode, ne
                 current_step = int(step_num)
                 print(f"\n[INFO] Restarting from step {current_step}")
             elif action == 'quit':
-                print("\n[INFO] Session saved. You can continue later with:")
+                print("\n[INFO] Project saved. You can continue later with:")
                 print(f"       python core/main.py --step {current_step + 1}")
                 return
 
 
-def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot=1):
+def _generate_images(project_id, project_mgr, shots, image_mode, negative_prompt, images_per_shot=1):
     """Generate images for all shots with optional multiple variations and automatic retry mechanism"""
     from core.image_generator import generate_images_for_shots
     from core.retry_tracker import RetryTracker
 
-    images_dir = session_mgr.get_images_dir(session_id)
+    images_dir = project_mgr.get_images_dir(project_id)
     os.makedirs(images_dir, exist_ok=True)
 
     # First, try to load any existing images from disk (resume case)
@@ -1825,7 +1825,7 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
                 normalized_path = img_path.replace('\\', '/')
                 image_paths.append(normalized_path)
                 stored_index = shot.get('index', shot_idx)
-                session_mgr.mark_image_generated(session_id, stored_index, normalized_path)
+                project_mgr.mark_image_generated(project_id, stored_index, normalized_path)
 
         shot['image_paths'] = image_paths
         shot['image_path'] = image_paths[0] if image_paths else None
@@ -1842,11 +1842,11 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
     if shots_needing_images:
         print(f"[INFO] {len(shots_needing_images)} shot(s) need image generation")
 
-    # Define callback to update session state after each image generation
+    # Define callback to update project state after each image generation
     def update_state_callback(shot_idx, image_path):
-        """Callback to update session state immediately after each image is generated"""
+        """Callback to update project state immediately after each image is generated"""
         normalized_path = image_path.replace('\\', '/')
-        session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+        project_mgr.mark_image_generated(project_id, shot_idx, normalized_path)
 
     # Initialize retry tracker
     retry_tracker = RetryTracker(max_retries=config.IMAGE_GENERATION_MAX_RETRIES)
@@ -1864,14 +1864,14 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
             retry_tracker=retry_tracker
         )
 
-        # Mark newly generated images in session
+        # Mark newly generated images in project
         for shot in shots_needing_images:
             shot_idx = shot.get('index')
             image_paths = shot.get('image_paths', [])
             for img_path in image_paths:
                 if img_path:  # Only mark if path exists (not None)
                     normalized_path = img_path.replace('\\', '/')
-                    session_mgr.mark_image_generated(session_id, shot_idx, normalized_path)
+                    project_mgr.mark_image_generated(project_id, shot_idx, normalized_path)
 
         # Update the shots list with newly generated image paths
         for new_shot in shots_needing_images:
@@ -1887,7 +1887,7 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
 
     if len(shots_with_images) == len(shots):
         # All shots have images
-        session_mgr.mark_step_complete(session_id, 'images')
+        project_mgr.mark_step_complete(project_id, 'images')
         print(f"\n[INFO] All {len(shots)} shots have images generated.")
     elif len(shots_with_images) > 0:
         # Partial success - some shots have images
@@ -1904,7 +1904,7 @@ def _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt
         print(f"\n[ERROR] All shots failed to generate images. Cannot continue to video generation.")
         raise Exception("Image generation failed for all shots")
 
-def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
+def _render_videos(project_id, project_mgr, valid_shots, shot_length, shots):
     """Render videos for all shots and all image variations"""
     video_mode = getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
     
@@ -1920,7 +1920,7 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
         template = load_workflow(workflow_path, video_length_seconds=shot_length)
 
     # Load shots status from shots.json to check which videos are already rendered
-    shots_status = session_mgr.get_shots(session_id)
+    shots_status = project_mgr.get_shots(project_id)
     shots_status_dict = {s['index']: s for s in shots_status}
 
     # Filter out shots without images (in case of partial failure)
@@ -1975,7 +1975,7 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
 
             if video_mode == 'geminiweb':
                 from core.geminiweb_video_generator import generate_video_geminiweb
-                videos_dir = session_mgr.get_videos_dir(session_id)
+                videos_dir = project_mgr.get_videos_dir(project_id)
                 os.makedirs(videos_dir, exist_ok=True)
                 
                 if variation_idx > 1:
@@ -1993,7 +1993,7 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
                 
                 if video_res:
                     if variation_idx == 1:
-                        session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                        project_mgr.mark_video_rendered(project_id, shot_idx, video_save_path)
                     success = True
                     error = None
                     video_path = video_res
@@ -2003,7 +2003,7 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
                     video_path = None
             else:
                 success, error, video_path = submit_and_verify_video(
-                    template, shot, shot_length, session_id, shot_idx, session_mgr,
+                    template, shot, shot_length, project_id, shot_idx, project_mgr,
                     image_path=img_path, variation_idx=variation_idx
                 )
 
@@ -2025,30 +2025,30 @@ def _render_videos(session_id, session_mgr, valid_shots, shot_length, shots):
         for error in errors:
             print(f"  - {error}")
         print("\n[HINT] You can regenerate failed videos with:")
-        print(f"       python regenerate.py --session {session_id} --videos")
+        print(f"       python regenerate.py --project {project_id} --videos")
 
     print("="*70)
 
     # Only mark step complete if at least one video was successfully rendered
     if successful_renders > 0:
-        session_mgr.mark_step_complete(session_id, 'videos')
+        project_mgr.mark_step_complete(project_id, 'videos')
 
-    # Only mark session complete if all renders succeeded
+    # Only mark project complete if all renders succeeded
     if failed_renders == 0:
-        session_mgr.mark_session_complete(session_id)
+        project_mgr.mark_project_complete(project_id)
         print("\n[SUCCESS] ALL RENDERS COMPLETE!")
     else:
-        print("\n[WARNING] Session completed with errors. Some videos failed to render.")
+        print("\n[WARNING] Project completed with errors. Some videos failed to render.")
 
-    session_mgr.print_session_summary(session_id)
+    project_mgr.print_project_summary(project_id)
 
 
-def _run_with_prompts_file(session_mgr, args):
+def _run_with_prompts_file(project_mgr, args):
     """
     Run workflow using custom prompts file (skip story generation).
 
     Args:
-        session_mgr: SessionManager instance
+        project_mgr: ProjectManager instance
         args: argparse namespace with command line arguments
 
     Returns:
@@ -2094,7 +2094,7 @@ def _run_with_prompts_file(session_mgr, args):
     print(f"[INFO] Using default camera: {default_camera}")
     print(f"[INFO] motion_prompt set to image_prompt for all shots")
 
-    # Use overall_title or filename as session idea
+    # Use overall_title or filename as project idea
     idea = overall_title or f"Custom prompts: {os.path.basename(prompts_file)}"
 
     # Get config from args or config
@@ -2103,10 +2103,10 @@ def _run_with_prompts_file(session_mgr, args):
     shot_length = getattr(args, 'shot_length', None) or config.DEFAULT_SHOT_LENGTH
     images_per_shot = getattr(args, 'images_per_shot', None) or config.IMAGES_PER_SHOT
 
-    # Create session
-    session_id, session_meta = session_mgr.create_session(idea)
+    # Create project
+    project_id, project_meta = project_mgr.create_project(idea)
 
-    # Store LLM config in session
+    # Store LLM config in project
     provider = config.LLM_PROVIDER
     provider_model_key = f"{provider.upper()}_MODEL"
     if provider == "gemini":
@@ -2114,14 +2114,14 @@ def _run_with_prompts_file(session_mgr, args):
         
     llm_model = getattr(config, provider_model_key, "unknown")
     
-    session_meta['llm_config'] = {
+    project_meta['llm_config'] = {
         'provider': provider,
         'text_model': llm_model,
         'max_tokens': config.LLM_MAX_TOKENS
     }
 
-    # Store config in session
-    session_meta['video_config'] = {
+    # Store config in project
+    project_meta['video_config'] = {
         'shot_length': shot_length,
         'fps': config.VIDEO_FPS,
         'workflow': config.VIDEO_WORKFLOW, # Store the workflow name
@@ -2133,7 +2133,7 @@ def _run_with_prompts_file(session_mgr, args):
         'append_image_prompt': config.APPEND_IMAGE_TO_MOTION_PROMPT,
         'append_position': config.IMAGE_PROMPT_APPEND_POSITION
     }
-    session_meta['image_config'] = {
+    project_meta['image_config'] = {
         'mode': image_mode,
         'negative_prompt': negative_prompt,
         'images_per_shot': images_per_shot,
@@ -2163,21 +2163,21 @@ def _run_with_prompts_file(session_mgr, args):
             'render_timeout': getattr(config, 'VIDEO_RENDER_TIMEOUT', 900)
         }
     }
-    # Store workflow config in session
-    session_meta['workflow_config'] = {
+    # Store workflow config in project
+    project_meta['workflow_config'] = {
         'auto_step_mode': True, # Prompts file implies auto running shots mostly
         'continue_on_partial_failure': config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE
     }
     
-    session_meta['prompts_file'] = prompts_file
+    project_meta['prompts_file'] = prompts_file
 
     # Mark story and scene_graph as complete (skipped)
-    session_meta['steps']['story'] = True
-    session_meta['steps']['scene_graph'] = True
+    project_meta['steps']['story'] = True
+    project_meta['steps']['scene_graph'] = True
 
-    session_mgr._save_meta(session_id, session_meta)
+    project_mgr._save_meta(project_id, project_meta)
 
-    print(f"[INFO] Created session: {session_id}")
+    print(f"[INFO] Created project: {project_id}")
     print(f"[INFO] Skipping story generation (using custom prompts)")
     print(f"[INFO] Image generation: {image_mode}")
 
@@ -2185,14 +2185,14 @@ def _run_with_prompts_file(session_mgr, args):
     shots = enhance_motion_prompts_with_triggers(shots)
 
     # Save shots
-    session_mgr.save_shots(session_id, shots)
+    project_mgr.save_shots(project_id, shots)
 
     # STEP 4.5: Image Generation
     print("\nSTEP 4.5: Image Generation")
-    _generate_images(session_id, session_mgr, shots, image_mode, negative_prompt, images_per_shot)
+    _generate_images(project_id, project_mgr, shots, image_mode, negative_prompt, images_per_shot)
 
     # Reload shots with image paths
-    shots_dir = session_mgr.get_session_dir(session_id)
+    shots_dir = project_mgr.get_project_dir(project_id)
     shots_path = os.path.join(shots_dir, "shots.json")
     with open(shots_path, 'r', encoding='utf-8') as f:
         shots = json.load(f)
@@ -2218,8 +2218,8 @@ def _run_with_prompts_file(session_mgr, args):
     # Check if images-only mode
     if getattr(args, 'images_only', False):
         print("\n[INFO] Images-only mode: Skipping video generation")
-        session_mgr.mark_session_complete(session_id)
-        session_mgr.print_session_summary(session_id)
+        project_mgr.mark_project_complete(project_id)
+        project_mgr.print_project_summary(project_id)
         return shots
 
     # STEP 5: Video Rendering
@@ -2233,7 +2233,7 @@ def _run_with_prompts_file(session_mgr, args):
 
     print(f"\n[INFO] ✓ Proceeding to video generation with {len(valid_shots)}/{len(shots)} shots")
     print(f"\nSTEP 5: Rendering {len(valid_shots)} shots")
-    _render_videos(session_id, session_mgr, valid_shots, shot_length, shots)
+    _render_videos(project_id, project_mgr, valid_shots, shot_length, shots)
 
     return shots
 
@@ -2315,7 +2315,7 @@ Examples:
   # Skip narration generation
   python core/main.py --idea "Music video" --no-narration
 
-  # Skip resume prompt (always start new session)
+  # Skip resume prompt (always start new project)
   python core/main.py --idea "Quick test" --no-resume
 
   # Use custom prompts file (skip story generation)
@@ -2363,7 +2363,7 @@ Testing Options:
   --shots-per-scene N    : Generate N shots per scene (default: from config)
   --images-per-shot N    : Generate N image variations per shot (default: 1)
   --no-narration        : Skip narration generation
-  --no-resume           : Skip resume prompt, start new session
+  --no-resume           : Skip resume prompt, start new project
 
   Use --list-voices to see ElevenLabs voices
   Use --list-agents to see all available agents
@@ -2460,13 +2460,13 @@ Testing Options:
     parser.add_argument(
         '--no-resume',
         action='store_true',
-        help='Skip resume prompt, always start new session'
+        help='Skip resume prompt, always start new project'
     )
 
     parser.add_argument(
-        '--list-sessions',
+        '--list-projects',
         action='store_true',
-        help='List all sessions and exit'
+        help='List all projects and exit'
     )
 
     parser.add_argument(
@@ -2603,26 +2603,26 @@ Testing Options:
         print("="*70)
         return
 
-    # Handle --list-sessions
-    if args.list_sessions:
-        session_mgr = SessionManager()
-        sessions = session_mgr.list_all_sessions()
+    # Handle --list-projects
+    if args.list_projects:
+        project_mgr = ProjectManager()
+        projects = project_mgr.list_all_projects()
 
-        if not sessions:
-            print("[INFO] No sessions found")
+        if not projects:
+            print("[INFO] No projects found")
             return
 
         print("\n" + "="*70)
         print("ALL SESSIONS")
         print("="*70)
-        for session in sessions:
-            status = "[DONE]" if session['completed'] else "[OPEN]"
-            print(f"\n{status} {session['session_id']}")
-            print(f"  Idea: {session['idea'][:80]}...")
-            print(f"  Created: {session.get('created_at', 'N/A')}")
-            print(f"  Shots: {session['stats']['total_shots']}")
-            print(f"  Images: {session['stats']['images_generated']}")
-            print(f"  Videos: {session['stats']['videos_rendered']}")
+        for project in projects:
+            status = "[DONE]" if project['completed'] else "[OPEN]"
+            print(f"\n{status} {project['project_id']}")
+            print(f"  Idea: {project['idea'][:80]}...")
+            print(f"  Created: {project.get('created_at', 'N/A')}")
+            print(f"  Shots: {project['stats']['total_shots']}")
+            print(f"  Images: {project['stats']['images_generated']}")
+            print(f"  Videos: {project['stats']['videos_rendered']}")
         print("="*70)
         return
 
@@ -2683,47 +2683,47 @@ Testing Options:
     # Print configuration summary after command-line overrides
     print_configuration_summary()
 
-    # Initialize session manager
-    session_mgr = SessionManager()
+    # Initialize project manager
+    project_mgr = ProjectManager()
 
-    # Check for incomplete session (unless --no-resume)
+    # Check for incomplete project (unless --no-resume)
     if args.no_resume:
-        session_id, session_meta = None, None
+        project_id, project_meta = None, None
     else:
-        session_id, session_meta = check_continue_session(session_mgr)
+        project_id, project_meta = check_continue_project(project_mgr)
 
-    if session_id and session_meta:
-        # Continue existing session - use the same workflow as new session
-        # but with existing session_id and metadata
+    if project_id and project_meta:
+        # Continue existing project - use the same workflow as new project
+        # but with existing project_id and metadata
         try:
-            _continue_existing_session(session_id, session_meta, session_mgr, args=args)
+            _continue_existing_project(project_id, project_meta, project_mgr, args=args)
         except Exception as e:
-            print(f"\n[ERROR] Failed to continue session: {e}")
+            print(f"\n[ERROR] Failed to continue project: {e}")
             import traceback
             traceback.print_exc()
     else:
-        # Run new session with command line args
+        # Run new project with command line args
         try:
-            run_new_session(session_mgr, args=args)
+            run_new_project(project_mgr, args=args)
         except Exception as e:
             print(f"\n[ERROR] Pipeline failed: {e}")
             import traceback
             traceback.print_exc()
-            print("\n[INFO] Session data saved. Run again to continue.")
+            print("\n[INFO] Project data saved. Run again to continue.")
 
     print("\n" + "="*70)
-    print("To view all sessions, check: output/sessions/")
+    print("To view all projects, check: output/projects/")
     print("="*70)
 
 
-async def run_auto_mode(session_id: str, idea: str, resume_from: str = None,
+async def run_auto_mode(project_id: str, idea: str, resume_from: str = None,
                         max_shots: int = None, progress_callback=None):
     """
     Async wrapper for running auto mode with progress callbacks.
     Used by web API for background task execution.
 
     Args:
-        session_id: Session identifier
+        project_id: Project identifier
         idea: Video idea
         resume_from: Step name to resume from (optional)
         max_shots: Maximum shots to generate (optional)
@@ -2756,15 +2756,15 @@ async def run_auto_mode(session_id: str, idea: str, resume_from: str = None,
 
     args = Args()
 
-    # Initialize session manager
-    session_mgr = SessionManager()
+    # Initialize project manager
+    project_mgr = ProjectManager()
 
-    # Load or create session
+    # Load or create project
     try:
-        session_meta = session_mgr.load_session(session_id)
+        project_meta = project_mgr.load_project(project_id)
     except:
-        # Create new session if not exists
-        session_id, session_meta = session_mgr.create_session(idea)
+        # Create new project if not exists
+        project_id, project_meta = project_mgr.create_project(idea)
 
     # Determine starting step
     if resume_from:
@@ -2841,14 +2841,14 @@ async def run_auto_mode(session_id: str, idea: str, resume_from: str = None,
                 except:
                     pass
 
-        def session_completed(self):
+        def project_completed(self):
             if self.async_callback:
                 try:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
-                        loop.call_soon(self.async_callback.session_completed)
+                        loop.call_soon(self.async_callback.project_completed)
                     else:
-                        self.async_callback.session_completed()
+                        self.async_callback.project_completed()
                 except:
                     pass
 
@@ -2869,9 +2869,9 @@ async def run_auto_mode(session_id: str, idea: str, resume_from: str = None,
     try:
         # Run auto mode
         _run_auto_mode(
-            session_id=session_id,
-            session_meta=session_meta,
-            session_mgr=session_mgr,
+            project_id=project_id,
+            project_meta=project_meta,
+            project_mgr=project_mgr,
             idea=idea,
             image_mode=args.image_mode or config.IMAGE_GENERATION_MODE,
             negative_prompt=args.negative_prompt or config.DEFAULT_NEGATIVE_PROMPT,

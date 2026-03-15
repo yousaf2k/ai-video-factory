@@ -58,7 +58,7 @@ import {
 
 interface ShotCardProps {
   shot: Shot;
-  sessionId: string;
+  projectId: string;
   showIndex?: boolean;
   selectable?: boolean;
   selected?: boolean;
@@ -76,7 +76,7 @@ interface ShotCardProps {
 
 export function ShotCard({
   shot,
-  sessionId,
+  projectId,
   showIndex = true,
   selectable = false,
   selected = false,
@@ -129,14 +129,14 @@ export function ShotCard({
 
   // ... rest of the hook setup ...
   const queryClient = useQueryClient();
-  const updateShot = useUpdateShot(sessionId, shot.index);
-  const regenerateImage = useRegenerateImage(sessionId);
-  const regenerateVideo = useRegenerateVideo(sessionId);
-  const selectImage = useSelectImage(sessionId);
-  const removeWatermark = useRemoveWatermark(sessionId);
-  const uploadShotImage = useUploadShotImage(sessionId);
-  const uploadShotVideo = useUploadShotVideo(sessionId);
-  const deleteVariation = useDeleteVariationImage(sessionId);
+  const updateShot = useUpdateShot(projectId, shot.index);
+  const regenerateImage = useRegenerateImage(projectId);
+  const regenerateVideo = useRegenerateVideo(projectId);
+  const selectImage = useSelectImage(projectId);
+  const removeWatermark = useRemoveWatermark(projectId);
+  const uploadShotImage = useUploadShotImage(projectId);
+  const uploadShotVideo = useUploadShotVideo(projectId);
+  const deleteVariation = useDeleteVariationImage(projectId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isVideoUploading, setIsVideoUploading] = useState(false);
@@ -149,8 +149,8 @@ export function ShotCard({
   const [isImagePromptExpanded, setIsImagePromptExpanded] = useState(false);
   const [isMotionPromptExpanded, setIsMotionPromptExpanded] = useState(false);
 
-  const selectVideo = useSelectVideo(sessionId);
-  const deleteVariationVideo = useDeleteVariationVideo(sessionId);
+  const selectVideo = useSelectVideo(projectId);
+  const deleteVariationVideo = useDeleteVariationVideo(projectId);
 
   const { data: globalConfig } = useConfig();
 
@@ -180,13 +180,13 @@ export function ShotCard({
     }
   }, [globalConfig]);
 
-  // Load saved video mode preference for this session on mount
+  // Load saved video mode preference for this project on mount
   useEffect(() => {
-    const savedVideoMode = localStorage.getItem(`video_mode_${sessionId}`);
+    const savedVideoMode = localStorage.getItem(`video_mode_${projectId}`);
     if (savedVideoMode) {
       setRegenVideoMode(savedVideoMode);
     }
-  }, [sessionId]);
+  }, [projectId]);
 
   // Derived data for the fullscreen carousel
   // For FLFI2V shots, construct array with THEN and NOW images
@@ -246,8 +246,8 @@ export function ShotCard({
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ["shots", sessionId] });
-    await queryClient.invalidateQueries({ queryKey: ["session", sessionId] });
+    await queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+    await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
     setCacheBuster(Date.now());
     setTimeout(() => setIsRefreshing(false), 600);
   };
@@ -343,17 +343,17 @@ export function ShotCard({
 
   const imageUrl = shot.is_flfi2v
     ? getMediaUrl(
-        activeImageMode === 'then'
-          ? shot.then_image_path || shot.now_image_path || shot.image_path
-          : shot.now_image_path || shot.then_image_path || shot.image_path
-      )
+      activeImageMode === 'then'
+        ? shot.then_image_path || shot.now_image_path || shot.image_path
+        : shot.now_image_path || shot.then_image_path || shot.image_path
+    )
     : getMediaUrl(shot.image_path);
   const videoUrl = shot.is_flfi2v
     ? getMediaUrl(
-        activeVideoMode === 'meeting'
-          ? shot.meeting_video_path || shot.departure_video_path || shot.video_path
-          : shot.departure_video_path || shot.meeting_video_path || shot.video_path
-      )
+      activeVideoMode === 'meeting'
+        ? shot.meeting_video_path || shot.departure_video_path || shot.video_path
+        : shot.departure_video_path || shot.meeting_video_path || shot.video_path
+    )
     : getMediaUrl(shot.video_path);
 
   // Append cache-busting param so browser fetches the latest file from disk
@@ -675,27 +675,27 @@ export function ShotCard({
           {(shot.is_flfi2v
             ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated)
             : shot.image_generated) && (
-            <button
-              onClick={async () => {
-                try {
-                  // For FLFI2V shots, pass the currently active image variant
-                  const variant = shot.is_flfi2v ? activeImageMode : undefined;
-                  await removeWatermark.mutateAsync({ shotIndex: shot.index, variant });
-                  // Refresh the cache buster to show the updated image
-                  setCacheBuster(Date.now());
-                } catch (error: any) {
-                  console.error("Failed to remove watermark:", error);
-                  const errorMessage = error?.response?.data?.detail || error?.message || "Unknown error";
-                  alert(`Failed to remove watermark: ${errorMessage}\n\nPlease ensure the image file exists on disk.`);
-                }
-              }}
-              disabled={removeWatermark.isPending}
-              className="p-1 hover:bg-teal-50 text-teal-600 rounded disabled:opacity-50"
-              title={`Remove Gemini Watermark${shot.is_flfi2v ? ` from ${activeImageMode.toUpperCase()} image` : ''}`}
-            >
-              <Wand2 className={cn("w-4 h-4", removeWatermark.isPending && "animate-pulse")} />
-            </button>
-          )}
+              <button
+                onClick={async () => {
+                  try {
+                    // For FLFI2V shots, pass the currently active image variant
+                    const variant = shot.is_flfi2v ? activeImageMode : undefined;
+                    await removeWatermark.mutateAsync({ shotIndex: shot.index, variant });
+                    // Refresh the cache buster to show the updated image
+                    setCacheBuster(Date.now());
+                  } catch (error: any) {
+                    console.error("Failed to remove watermark:", error);
+                    const errorMessage = error?.response?.data?.detail || error?.message || "Unknown error";
+                    alert(`Failed to remove watermark: ${errorMessage}\n\nPlease ensure the image file exists on disk.`);
+                  }
+                }}
+                disabled={removeWatermark.isPending}
+                className="p-1 hover:bg-teal-50 text-teal-600 rounded disabled:opacity-50"
+                title={`Remove Gemini Watermark${shot.is_flfi2v ? ` from ${activeImageMode.toUpperCase()} image` : ''}`}
+              >
+                <Wand2 className={cn("w-4 h-4", removeWatermark.isPending && "animate-pulse")} />
+              </button>
+            )}
           <button
             onClick={() => setIsEditing(true)}
             className="p-1 hover:bg-muted rounded"
@@ -914,8 +914,8 @@ export function ShotCard({
                 // Get the currently displayed image path based on FLFI2V mode
                 const currentImagePath = shot.is_flfi2v
                   ? (activeImageMode === 'then'
-                      ? shot.then_image_path || shot.now_image_path || shot.image_path
-                      : shot.now_image_path || shot.then_image_path || shot.image_path)
+                    ? shot.then_image_path || shot.now_image_path || shot.image_path
+                    : shot.now_image_path || shot.then_image_path || shot.image_path)
                   : shot.image_path;
 
                 const activeIdx = fsImages.indexOf(currentImagePath ?? "");
@@ -1174,7 +1174,7 @@ export function ShotCard({
                       value={regenVideoMode}
                       onValueChange={(val) => {
                         setRegenVideoMode(val);
-                        localStorage.setItem(`video_mode_${sessionId}`, val);
+                        localStorage.setItem(`video_mode_${projectId}`, val);
                       }}
                     >
                       <SelectTrigger>

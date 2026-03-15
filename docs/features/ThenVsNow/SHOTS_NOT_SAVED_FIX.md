@@ -9,7 +9,7 @@
 ## Problem Description
 
 Images were being generated and saved to disk, but `shots.json` was not being updated with the image paths. This caused:
-- Images exist in `sessions/{id}/images/` directory ✅
+- Images exist in `projects/{id}/images/` directory ✅
 - `shots.json` shows `image_generated: false` ❌
 - `shots.json` shows `image_path: null` ❌
 - UI cannot display images ❌
@@ -25,23 +25,23 @@ The `_regenerate_flfi2v_images()` method had a critical bug where it was modifyi
 **Code Flow:**
 ```python
 # In regenerate_shot_image() (line 297-311):
-shots = self.session_manager.get_shots(session_id)  # Load list A
+shots = self.project_manager.get_shots(project_id)  # Load list A
 shot = shots[shot_index - 1]  # Get reference to list_A[0]
 
 # Call FLFI2V method:
 return await self._regenerate_flfi2v_images(
-    session_id, shot_index, shot, story, ...  # Pass shot reference
+    project_id, shot_index, shot, story, ...  # Pass shot reference
 )
 
 # In _regenerate_flfi2v_images() (line 391-431):
-shots = self.session_manager.get_shots(session_id)  # Load list B (RELOAD!)
+shots = self.project_manager.get_shots(project_id)  # Load list B (RELOAD!)
 
 # BUG: Modifying 'shot' (reference to list_A[0]):
 shot['then_image_generated'] = True
 shot['then_image_path'] = ...
 
 # Saving 'shots' (which is list_B, still has old data!):
-self.session_manager._save_shots(session_id, shots)
+self.project_manager._save_shots(project_id, shots)
 ```
 
 ### Why It Failed
@@ -216,11 +216,11 @@ shots_list[0]['generated'] = True  # Directly modify list element
   "index": 1,
   "is_flfi2v": true,
   "image_generated": true,
-  "image_path": "output/sessions/test/images/shot_001_now_001.png",
+  "image_path": "output/projects/test/images/shot_001_now_001.png",
   "then_image_generated": true,
-  "then_image_path": "output/sessions/test/images/shot_001_then_001.png",
+  "then_image_path": "output/projects/test/images/shot_001_then_001.png",
   "now_image_generated": true,
-  "now_image_path": "output/sessions/test/images/shot_001_now_001.png"
+  "now_image_path": "output/projects/test/images/shot_001_now_001.png"
 }
 ```
 

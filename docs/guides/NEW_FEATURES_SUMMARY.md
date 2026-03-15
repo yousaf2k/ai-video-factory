@@ -4,19 +4,19 @@
 
 Two major features have been added to the AI Film Studio:
 
-1. **Session Management & Crash Recovery**
+1. **Project Management & Crash Recovery**
 2. **Video Length Control**
 
 ---
 
-## 1. Session Management & Crash Recovery
+## 1. Project Management & Crash Recovery
 
 ### What It Does
 - ✅ Saves all progress in real-time (story, shots, images)
-- ✅ Auto-detects interrupted sessions
+- ✅ Auto-detects interrupted projects
 - ✅ Prompts to continue or start fresh
 - ✅ Skips already-completed work
-- ✅ Preserves complete session history
+- ✅ Preserves complete project history
 
 ### How to Use
 
@@ -28,21 +28,21 @@ python core/main.py
 **After Crash:**
 ```bash
 python core/main.py
-# → Detects incomplete session
+# → Detects incomplete project
 # → "Do you want to continue? (y/n)"
 # → Type 'y' to resume
 ```
 
-**View Sessions:**
+**View Projects:**
 ```bash
-python sessions.py list
-python sessions.py view <session_id>
+python projects.py list
+python projects.py view <project_id>
 ```
 
 ### Files Created
 ```
-output/sessions/session_YYYYMMDD_HHMMSS/
-├── session_YYYYMMDD_HHMMSS_meta.json  # Progress tracking
+output/projects/project_YYYYMMDD_HHMMSS/
+├── project_YYYYMMDD_HHMMSS_meta.json  # Progress tracking
 ├── story.json                          # Generated story
 ├── shots.json                          # All prompts
 └── images/                             # Generated images
@@ -51,7 +51,7 @@ output/sessions/session_YYYYMMDD_HHMMSS/
 ### Documentation
 - `SESSION_GUIDE.md` - Complete guide
 - `SESSION_VISUAL_GUIDE.md` - Diagrams
-- `sessions.py` - Session viewer tool
+- `projects.py` - Project viewer tool
 
 ---
 
@@ -62,7 +62,7 @@ output/sessions/session_YYYYMMDD_HHMMSS/
 - ✅ Set shot length (e.g., 5 seconds each)
 - ✅ Automatically calculates shots needed
 - ✅ Sets correct frame count in ComfyUI workflow
-- ✅ Saves configuration per session
+- ✅ Saves configuration per project
 
 ### How to Use
 
@@ -147,9 +147,9 @@ TARGET_VIDEO_LENGTH = None
 
 When you run `python core/main.py`:
 
-1. **Check for incomplete sessions**
+1. **Check for incomplete projects**
    - If found → Ask to continue
-   - If not → Create new session
+   - If not → Create new project
 
 2. **Get video configuration**
    ```
@@ -166,7 +166,7 @@ When you run `python core/main.py`:
    - Story → Shot planning → Images → Videos
 
 5. **Save everything**
-   - All progress saved to session
+   - All progress saved to project
    - Can resume if interrupted
 
 ---
@@ -174,17 +174,17 @@ When you run `python core/main.py`:
 ## New Files Created
 
 ### Core System
-- `core/session_manager.py` - Session tracking module
-- `core/main.py` (updated) - Session management + video length
+- `core/project_manager.py` - Project tracking module
+- `core/main.py` (updated) - Project management + video length
 
 ### Utilities
-- `sessions.py` - Session viewer CLI tool
+- `projects.py` - Project viewer CLI tool
 
 ### Configuration
 - `config.py` (updated) - Video length parameters
 
 ### Documentation
-- `SESSION_GUIDE.md` - Session management complete guide
+- `SESSION_GUIDE.md` - Project management complete guide
 - `SESSION_VISUAL_GUIDE.md` - Visual diagrams
 - `VIDEO_LENGTH_GUIDE.md` - Video length complete guide
 - `VIDEO_LENGTH_QUICKREF.md` - Video length quick reference
@@ -194,11 +194,11 @@ When you run `python core/main.py`:
 
 ## Key Benefits
 
-### Session Management
+### Project Management
 ✅ **Zero Data Loss** - Everything saved immediately
 ✅ **Easy Recovery** - One command to continue
 ✅ **Full History** - Track all generations
-✅ **Reusable Data** - Export prompts from sessions
+✅ **Reusable Data** - Export prompts from projects
 ✅ **Debugging** - Review what was generated
 
 ### Video Length Control
@@ -222,14 +222,14 @@ pip install -r requirements.txt
 python core/main.py
 
 # 4. When prompted:
-#    - Choose to continue incomplete session (if found)
+#    - Choose to continue incomplete project (if found)
 #    - Enter video length or press Enter
 #    - Enter shot length or press Enter
 
 # 5. Wait for generation!
 
-# 6. View sessions
-python sessions.py list
+# 6. View projects
+python projects.py list
 ```
 
 ---
@@ -255,12 +255,12 @@ if max_shots and len(shots) > max_shots:
     shots = shots[:max_shots]
 ```
 
-### Session Persistence
+### Project Persistence
 
-**Session Metadata:**
+**Project Metadata:**
 ```json
 {
-  "session_id": "session_20250208_002238",
+  "project_id": "project_20250208_002238",
   "video_config": {
     "total_length": 60.0,
     "shot_length": 5.0,
@@ -309,9 +309,9 @@ if max_shots and len(shots) > max_shots:
    - Stop it mid-way
    - Run again and choose to continue
 
-4. **View your sessions:**
+4. **View your projects:**
    ```bash
-   python sessions.py list
+   python projects.py list
    ```
 
 ---
@@ -320,7 +320,7 @@ if max_shots and len(shots) > max_shots:
 
 Your AI Film Studio now has:
 
-✅ **Professional Session Management** - Like a real video production tool
+✅ **Professional Project Management** - Like a real video production tool
 ✅ **Crash Recovery** - Never lose work again
 ✅ **Video Length Control** - Precise duration control
 ✅ **Automatic Shot Calculation** - Smart resource management

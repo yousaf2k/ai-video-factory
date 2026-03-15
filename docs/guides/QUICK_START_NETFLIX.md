@@ -34,7 +34,7 @@ python core/main.py --story-agent netflix_documentary --idea "A small town where
 
 The output will be saved to:
 ```
-output/sessions/session_XXXXXX_XXXXXX/story.json
+output/projects/project_XXXXXX_XXXXXX/story.json
 ```
 
 Look for:

@@ -5,13 +5,13 @@ import { Scene } from '@/types';
 
 interface SceneBackgroundManagerProps {
   scene: Scene;
-  sessionId: string;
+  projectId: string;
   onUpdate?: () => void;
 }
 
 export default function SceneBackgroundManager({
   scene,
-  sessionId,
+  projectId,
   onUpdate
 }: SceneBackgroundManagerProps) {
   const [uploading, setUploading] = useState(false);
@@ -20,7 +20,7 @@ export default function SceneBackgroundManager({
   const getMediaUrl = (path: string) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
-    return `/api/sessions/${sessionId}/media/${path.replace(/^output\//, '')}`;
+    return `/api/projects/${projectId}/media/${path.replace(/^output\//, '')}`;
   };
 
   const handleUpload = async (file: File) => {
@@ -31,7 +31,7 @@ export default function SceneBackgroundManager({
 
     try {
       const response = await fetch(
-        `/api/sessions/${sessionId}/story/scenes/${scene.scene_id}/upload-background`,
+        `/api/projects/${projectId}/story/scenes/${scene.scene_id}/upload-background`,
         {
           method: 'POST',
           body: formData
@@ -69,7 +69,7 @@ export default function SceneBackgroundManager({
 
     try {
       const response = await fetch(
-        `/api/sessions/${sessionId}/story/scenes/${scene.scene_id}/generate-background`,
+        `/api/projects/${projectId}/story/scenes/${scene.scene_id}/generate-background`,
         {
           method: 'POST'
         }

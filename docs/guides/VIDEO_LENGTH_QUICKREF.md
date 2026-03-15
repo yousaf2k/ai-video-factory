@@ -77,7 +77,7 @@ TARGET_VIDEO_LENGTH = None # Or set to 60.0 for 60 seconds
 💡 **Start with default** - Press Enter twice for automatic settings
 💡 **Shorter shots** = More dynamic, more images needed
 💡 **Longer shots** = More cinematic, faster to render
-💡 **Check session** - View saved settings: `python sessions.py view <id>`
+💡 **Check project** - View saved settings: `python projects.py view <id>`
 
 ## Need More Details?
 

@@ -93,10 +93,10 @@ print(f'DEFAULT_SHOT_LENGTH = {DEFAULT_SHOT_LENGTH}')
 To test the fix:
 
 ```bash
-# Resume the session that failed
-python core/main.py --resume session_20260226_112952
+# Resume the project that failed
+python core/main.py --resume project_20260226_112952
 
-# Or create a new session
+# Or create a new project
 python core/main.py --story-agent prehistoric_pov --idea "T-Rex encounter"
 ```
 

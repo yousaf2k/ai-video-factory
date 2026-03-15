@@ -31,7 +31,7 @@ class QueueItemStatus(str, Enum):
 class QueueItem(BaseModel):
     """Individual queue item with metadata"""
     item_id: str = Field(..., description="Unique identifier for this queue item")
-    session_id: str = Field(..., description="Session identifier")
+    project_id: str = Field(..., description="Project identifier")
     shot_index: Optional[int] = Field(None, description="Shot index (1-based)")
     scene_id: Optional[int] = Field(None, description="Scene ID for narrations/backgrounds")
     generation_type: GenerationType = Field(..., description="Type of generation")
@@ -47,8 +47,18 @@ class QueueItem(BaseModel):
     is_flfi2v: bool = Field(default=False, description="Is this a FLFI2V shot?")
     character_name: Optional[str] = Field(None, description="Character name for FLFI2V shots")
 
-    # Session metadata for display
-    session_title: Optional[str] = Field(None, description="Session title")
+    # Override parameters for Single-Shot Queue support
+    prompt_override: Optional[str] = Field(None, description="Custom prompt overlay")
+    seed: Optional[int] = Field(None, description="Execution seed")
+    image_mode: Optional[str] = Field(None, description="Image generation mode speed parameter")
+    image_workflow: Optional[str] = Field(None, description="Override Image Workflow template")
+    video_mode: Optional[str] = Field(None, description="Video generation mode speed parameter")
+    video_workflow: Optional[str] = Field(None, description="Override Video Workflow template")
+    image_variant: Optional[str] = Field(None, description="Image variant (then/now)")
+    video_variant: Optional[str] = Field(None, description="Video variant (meeting/departure)")
+
+    # Project metadata for display
+    project_title: Optional[str] = Field(None, description="Project title")
     scene_name: Optional[str] = Field(None, description="Scene name")
     shot_id: Optional[str] = Field(None, description="Shot UUID")
 
@@ -72,8 +82,8 @@ class QueueStatistics(BaseModel):
     narrations: int = Field(default=0, description="Narration generations")
     backgrounds: int = Field(default=0, description="Background generations")
 
-    # Session counts
-    total_sessions: int = Field(default=0, description="Number of unique sessions in queue")
+    # Project counts
+    total_projects: int = Field(default=0, description="Number of unique projects in queue")
 
     class Config:
         use_enum_values = False

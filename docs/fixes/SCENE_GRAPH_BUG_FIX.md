@@ -116,7 +116,7 @@ Tested the fix with the actual story that caused the error:
 ```bash
 python -c "
 from core.scene_graph import build_scene_graph
-with open('output/sessions/session_20260226_112952/story.json', 'r') as f:
+with open('output/projects/project_20260226_112952/story.json', 'r') as f:
     story_json = f.read()
 graph = build_scene_graph(story_json)
 print(f'✓ Built scene graph with {len(graph)} scenes')
@@ -144,8 +144,8 @@ This ensures the pipeline works regardless of which format the LLM returns.
 To test the fix:
 
 ```bash
-# Test with existing session
-python core/main.py --resume session_20260226_112952
+# Test with existing project
+python core/main.py --resume project_20260226_112952
 
 # Or generate new content with POV agents
 python core/main.py --story-agent prehistoric_pov --idea "Time traveler encounters T-Rex"

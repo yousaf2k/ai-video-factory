@@ -167,7 +167,7 @@ Verify:
 
 ### Test 4: Shot Variety
 ```bash
-cat session_<timestamp>/shots.json | grep -c "image_prompt"
+cat project_<timestamp>/shots.json | grep -c "image_prompt"
 ```
 Verify:
 - Each scene has 3+ unique shots
@@ -185,8 +185,8 @@ Verify:
 - All syntax validated with `python -m py_compile`
 - Import paths verified working
 - Command-line argument parsing tested
-- Session metadata updated to store shots_per_scene
-- Backward compatible with existing sessions
+- Project metadata updated to store shots_per_scene
+- Backward compatible with existing projects
 
 ## Success Metrics
 - ✅ Configuration constants added and accessible

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **Video Regeneration** feature allows you to re-render videos from existing sessions without regenerating images. This is useful when you want to:
+The **Video Regeneration** feature allows you to re-render videos from existing projects without regenerating images. This is useful when you want to:
 
 - ✅ Change video length (e.g., from 5s shots to 10s shots)
 - ✅ Re-render failed videos
@@ -24,15 +24,15 @@ You'll see a menu:
 VIDEO REGENERATION WIZARD
 ==================================================================
 
-Available Sessions:
-  1. ✓ session_20250207_143000
+Available Projects:
+  1. ✓ project_20250207_143000
      Idea: A futuristic city at sunset...
      Shots: 7, Videos: 7
-  2. ⏳ session_20250208_002238
+  2. ⏳ project_20250208_002238
      Idea: A documentary about Indus Valley...
      Shots: 7, Videos: 4
 
-Select session number (or 'q' to quit): 2
+Select project number (or 'q' to quit): 2
 
 [INFO] Current shot length: 5.0s
 Enter new shot length (or press Enter to keep 5.0s): 10
@@ -46,17 +46,17 @@ Proceed with rendering? (y/n): y
 ### Command-Line Mode
 
 ```bash
-# List sessions first
+# List projects first
 python regenerate.py --list
 
 # Regenerate with new length
-python regenerate.py --session session_20250208_002238 --length 10
+python regenerate.py --project project_20250208_002238 --length 10
 
 # Force regenerate all videos
-python regenerate.py --session session_20250208_002238 --force
+python regenerate.py --project project_20250208_002238 --force
 
 # Change length and regenerate all
-python regenerate.py --session session_20250208_002238 --length 8 --force
+python regenerate.py --project project_20250208_002238 --length 8 --force
 ```
 
 ## Use Cases
@@ -66,7 +66,7 @@ python regenerate.py --session session_20250208_002238 --length 8 --force
 **Problem:** Videos are too short
 
 ```bash
-python regenerate.py --session session_XXX --length 10
+python regenerate.py --project project_XXX --length 10
 ```
 
 This changes each shot from current length (e.g., 5s) to 10 seconds.
@@ -81,7 +81,7 @@ This changes each shot from current length (e.g., 5s) to 10 seconds.
 **Problem:** Some videos failed during rendering
 
 ```bash
-python regenerate.py --session session_XXX
+python regenerate.py --project project_XXX
 ```
 
 This automatically detects which videos are missing and only renders those.
@@ -100,7 +100,7 @@ This automatically detects which videos are missing and only renders those.
 # Update your workflow in ComfyUI
 # Save the updated workflow
 # Then re-render all videos:
-python regenerate.py --session session_XXX --force
+python regenerate.py --project project_XXX --force
 ```
 
 This regenerates all videos using the new workflow settings.
@@ -115,20 +115,20 @@ This regenerates all videos using the new workflow settings.
 **Problem:** Want longer videos AND re-render everything
 
 ```bash
-python regenerate.py --session session_XXX --length 8 --force
+python regenerate.py --project project_XXX --length 8 --force
 ```
 
 This changes shot length to 8 seconds and regenerates all videos.
 
 ## Commands Reference
 
-### List Sessions
+### List Projects
 
 ```bash
 python regenerate.py --list
 ```
 
-Shows all sessions with status.
+Shows all projects with status.
 
 ### Interactive Mode
 
@@ -140,20 +140,20 @@ python regenerate.py --interactive
 
 Menu-driven interface.
 
-### Regenerate Specific Session
+### Regenerate Specific Project
 
 ```bash
 # Basic regeneration (only missing videos)
-python regenerate.py --session session_20250208_002238
+python regenerate.py --project project_20250208_002238
 
 # With new shot length
-python regenerate.py --session session_20250208_002238 --length 10
+python regenerate.py --project project_20250208_002238 --length 10
 
 # Force regenerate all
-python regenerate.py --session session_20250208_002238 --force
+python regenerate.py --project project_20250208_002238 --force
 
 # Combine options
-python regenerate.py --session session_20250208_002238 --length 8 --force
+python regenerate.py --project project_20250208_002238 --length 8 --force
 ```
 
 ## Options
@@ -161,10 +161,10 @@ python regenerate.py --session session_20250208_002238 --length 8 --force
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--interactive` | `-i` | Interactive mode with menus |
-| `--session ID` | `-s ID` | Session ID to regenerate |
+| `--project ID` | `-s ID` | Project ID to regenerate |
 | `--length SEC` | `-l SEC` | New shot length in seconds |
 | `--force` | `-f` | Regenerate all videos |
-| `--list` | | List all sessions |
+| `--list` | | List all projects |
 | `--help` | `-h` | Show help message |
 
 ## Examples
@@ -175,16 +175,16 @@ python regenerate.py --session session_20250208_002238 --length 8 --force
 # Current: 5s shots, 35 seconds total
 # Want: 10s shots, 70 seconds total
 
-python regenerate.py --session session_20250208_002238 --length 10
+python regenerate.py --project project_20250208_002238 --length 10
 ```
 
 ### Example 2: Re-render Only Failed Videos
 
 ```bash
-# Session has 3 failed videos out of 7
+# Project has 3 failed videos out of 7
 # Only regenerate the 3 failed ones
 
-python regenerate.py --session session_20250208_002238
+python regenerate.py --project project_20250208_002238
 ```
 
 ### Example 3: Complete Re-render
@@ -192,7 +192,7 @@ python regenerate.py --session session_20250208_002238
 ```bash
 # Want to re-render all videos with new workflow
 
-python regenerate.py --session session_20250208_002238 --force
+python regenerate.py --project project_20250208_002238 --force
 ```
 
 ### Example 4: Change Length + Re-render All
@@ -200,18 +200,18 @@ python regenerate.py --session session_20250208_002238 --force
 ```bash
 # Change to 8-second shots and re-render everything
 
-python regenerate.py --session session_20250208_002238 --length 8 --force
+python regenerate.py --project project_20250208_002238 --length 8 --force
 ```
 
 ## What Gets Updated
 
-### Session Metadata
+### Project Metadata
 
-When you regenerate videos, the session is updated:
+When you regenerate videos, the project is updated:
 
 ```json
 {
-  "session_id": "session_20250208_002238",
+  "project_id": "project_20250208_002238",
   "video_config": {
     "shot_length": 10.0,  // Updated if changed
     "fps": 24
@@ -240,7 +240,7 @@ The original videos are **not automatically deleted** - you'll need to manually 
 ### Regeneration Process
 
 ```
-1. Load session metadata
+1. Load project metadata
 2. Load shots data
 3. Determine shot length to use
 4. Check which shots have images
@@ -250,7 +250,7 @@ The original videos are **not automatically deleted** - you'll need to manually 
 6. Load workflow with video length
 7. Submit to ComfyUI
 8. Wait for completion
-9. Update session metadata
+9. Update project metadata
 ```
 
 ### Image Reuse
@@ -258,7 +258,7 @@ The original videos are **not automatically deleted** - you'll need to manually 
 **Key benefit:** Existing images are reused!
 
 ```
-Session:
+Project:
   ├─ Images (already generated)
   │   ├─ shot_001.png ✓
   │   ├─ shot_002.png ✓
@@ -293,16 +293,16 @@ Example (10-second shots):
 
 ## Troubleshooting
 
-### "Session not found"
+### "Project not found"
 
 ```bash
-# List sessions first to get correct ID
+# List projects first to get correct ID
 python regenerate.py --list
 ```
 
 ### "No shots with images found"
 
-The session doesn't have generated images. You need to generate images first:
+The project doesn't have generated images. You need to generate images first:
 
 ```bash
 python core/main.py
@@ -326,12 +326,12 @@ Check that `WAN_VIDEO_NODE_ID` in `config.py` matches your workflow.
 
 ## Advanced Usage
 
-### Batch Regenerate Multiple Sessions
+### Batch Regenerate Multiple Projects
 
 ```bash
-# Regenerate all sessions with 10-second shots
-for session in session_20250207_* session_20250208_*; do
-    python regenerate.py --session "$session" --length 10
+# Regenerate all projects with 10-second shots
+for project in project_20250207_* project_20250208_*; do
+    python regenerate.py --project "$project" --length 10
 done
 ```
 
@@ -339,30 +339,30 @@ done
 
 ```bash
 # Short: 3 seconds each
-python regenerate.py --session session_XXX --length 3
+python regenerate.py --project project_XXX --length 3
 
 # Default: 5 seconds each
-python regenerate.py --session session_XXX --length 5
+python regenerate.py --project project_XXX --length 5
 
 # Medium: 8 seconds each
-python regenerate.py --session session_XXX --length 8
+python regenerate.py --project project_XXX --length 8
 
 # Long: 10 seconds each
-python regenerate.py --session session_XXX --length 10
+python regenerate.py --project project_XXX --length 10
 
 # Very long: 15 seconds each
-python regenerate.py --session session_XXX --length 15
+python regenerate.py --project project_XXX --length 15
 ```
 
 ### Quality Comparison
 
 ```bash
-# Render same session with different lengths
-python regenerate.py --session session_XXX --length 5
+# Render same project with different lengths
+python regenerate.py --project project_XXX --length 5
 # Compare...
 
 # Then try longer
-python regenerate.py --session session_XXX --length 10 --force
+python regenerate.py --project project_XXX --length 10 --force
 # Compare...
 ```
 
@@ -391,7 +391,7 @@ python regenerate.py --session session_XXX --length 10 --force
 
 ### Workflow
 
-1. **List sessions** → Find the right one
+1. **List projects** → Find the right one
 2. **Check current settings** → Note current shot length
 3. **Decide on changes** → New length? Force re-render?
 4. **Run regeneration** → Use appropriate command

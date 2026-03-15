@@ -32,7 +32,7 @@ export interface Character {
   now_reference_image_path?: string;
 }
 
-export interface SessionStep {
+export interface ProjectStep {
   story: boolean;
   scene_graph: boolean;
   shots: boolean;
@@ -41,15 +41,15 @@ export interface SessionStep {
   narration: boolean;
 }
 
-export interface SessionStats {
+export interface ProjectStats {
   total_shots: number;
   images_generated: number;
   videos_rendered: number;
   narration_generated: boolean;
 }
 
-export interface Session {
-  session_id: string;
+export interface Project {
+  project_id: string;
   timestamp: string;
   idea: string;
   story_agent?: string;
@@ -57,8 +57,8 @@ export interface Session {
   started_at: string;
   completed: boolean;
   completed_at?: string;
-  steps: SessionStep;
-  stats: SessionStats;
+  steps: ProjectStep;
+  stats: ProjectStats;
   thumbnail_url?: string;
   thumbnail_url_9_16?: string;
   aspect_ratio?: string;
@@ -66,8 +66,8 @@ export interface Session {
   shots?: Shot[];
 }
 
-export interface SessionListItem {
-  session_id: string;
+export interface ProjectListItem {
+  project_id: string;
   timestamp: string;
   idea: string;
   started_at: string;
@@ -149,9 +149,9 @@ export interface Shot {
   departure_video_path?: string;
   departure_video_rendered?: boolean;
 }
-export interface CreateSessionRequest {
+export interface CreateProjectRequest {
   idea: string;
-  session_id?: string;
+  project_id?: string;
   story_agent?: string;
   shots_agent?: string;
   total_duration?: number;
@@ -159,7 +159,7 @@ export interface CreateSessionRequest {
   aspect_ratio?: "16:9" | "9:16";
 }
 
-export interface UpdateSessionRequest {
+export interface UpdateProjectRequest {
   idea?: string;
   completed?: boolean;
   story_agent?: string;
@@ -266,7 +266,7 @@ export enum QueueItemStatus {
 
 export interface QueueItem {
   item_id: string;
-  session_id: string;
+  project_id: string;
   shot_index?: number;
   scene_id?: number;
   generation_type: GenerationType;
@@ -279,7 +279,7 @@ export interface QueueItem {
   error_message?: string;
   is_flfi2v: boolean;
   character_name?: string;
-  session_title?: string;
+  project_title?: string;
   scene_name?: string;
   shot_id?: string;
 }
@@ -296,7 +296,7 @@ export interface QueueStatistics {
   flfi2v: number;
   narrations: number;
   backgrounds: number;
-  total_sessions: number;
+  total_projects: number;
 }
 
 export type ViewMode = 'flat' | 'grouped';

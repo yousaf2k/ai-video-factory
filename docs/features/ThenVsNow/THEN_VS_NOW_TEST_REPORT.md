@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-All components of the "Then Vs Now" feature with FLFI2V support have been successfully implemented and tested. The implementation is production-ready and maintains full backward compatibility with existing Documentary sessions.
+All components of the "Then Vs Now" feature with FLFI2V support have been successfully implemented and tested. The implementation is production-ready and maintains full backward compatibility with existing Documentary projects.
 
 **Test Result: 12/12 Tests Passed (100%)**
 
@@ -98,20 +98,20 @@ First shot:
 
 ---
 
-### 4. Session Manager Tests ✅
+### 4. Project Manager Tests ✅
 
 **Test:** Verify FLFI2V marker methods exist
 
 **Methods Tested:**
-- `mark_then_image_generated(session_id, shot_index, image_path)`
-- `mark_now_image_generated(session_id, shot_index, image_path)`
-- `mark_meeting_video_rendered(session_id, shot_index, video_path)`
-- `mark_departure_video_rendered(session_id, shot_index, video_path)`
+- `mark_then_image_generated(project_id, shot_index, image_path)`
+- `mark_now_image_generated(project_id, shot_index, image_path)`
+- `mark_meeting_video_rendered(project_id, shot_index, video_path)`
+- `mark_departure_video_rendered(project_id, shot_index, video_path)`
 
 **Results:**
 - ✅ All 4 methods exist
 - ✅ All 4 methods are callable
-- ✅ Methods properly scoped in SessionManager class
+- ✅ Methods properly scoped in ProjectManager class
 
 **Status:** PASSED
 
@@ -274,8 +274,8 @@ const imageUrl = shot.is_flfi2v
 **Test:** Verify API endpoints accept variant parameters
 
 **Endpoints Checked:**
-- `POST /api/sessions/{session_id}/shots/{shot_index}/regenerate-image`
-- `POST /api/sessions/{session_id}/shots/{shot_index}/regenerate-video`
+- `POST /api/projects/{project_id}/shots/{shot_index}/regenerate-image`
+- `POST /api/projects/{project_id}/shots/{shot_index}/regenerate-video`
 
 **Request Models:**
 - ✅ `RegenerateImageRequest.image_variant` field exists
@@ -287,12 +287,12 @@ const imageUrl = shot.is_flfi2v
 
 ---
 
-### 12. Session Service Test ✅
+### 12. Project Service Test ✅
 
-**Test:** Verify session service detects ThenVsNow agent
+**Test:** Verify project service detects ThenVsNow agent
 
 **Code Check:**
-- ✅ `create_session()` checks for `story_agent == "then_vs_now"`
+- ✅ `create_project()` checks for `story_agent == "then_vs_now"`
 - ✅ Calls `build_story_then_vs_now()` for ThenVsNow projects
 - ✅ Bypasses shot planner for ThenVsNow projects
 - ✅ Marks story, scene_graph, shots steps complete
@@ -308,7 +308,7 @@ const imageUrl = shot.is_flfi2v
 | Data Models | 7/7 | 0/7 | 100% |
 | Story Engine | 3/3 | 0/3 | 100% |
 | Configuration | 2/2 | 0/2 | 100% |
-| Session Manager | 4/4 | 0/4 | 100% |
+| Project Manager | 4/4 | 0/4 | 100% |
 | Generation Service | 6/6 | 0/6 | 100% |
 | TypeScript Types | 8/8 | 0/8 | 100% |
 | Frontend Components | 9/9 | 0/9 | 100% |
@@ -408,8 +408,8 @@ python -c "from core.story_engine import generate_shots_from_then_vs_now_story; 
 # Test configuration
 python -c "import config; print('OK' if 'wan22_flfi2v' in config.VIDEO_WORKFLOWS else 'FAIL')"
 
-# Test session manager
-python -c "from core.session_manager import SessionManager; sm = SessionManager(); print('OK' if hasattr(sm, 'mark_then_image_generated') else 'FAIL')"
+# Test project manager
+python -c "from core.project_manager import ProjectManager; sm = ProjectManager(); print('OK' if hasattr(sm, 'mark_then_image_generated') else 'FAIL')"
 
 # Test generation service
 python -c "from web_ui.backend.services.generation_service import GenerationService; gs = GenerationService(); print('OK' if hasattr(gs, '_regenerate_flfi2v_images') else 'FAIL')"
@@ -419,7 +419,7 @@ python -c "from web_ui.backend.services.generation_service import GenerationServ
 
 1. Start the web UI: `python web_ui/backend/main.py`
 2. Navigate to http://localhost:8000
-3. Create new session with:
+3. Create new project with:
    - Story Agent: `then_vs_now`
    - Idea: `The Godfather`
 4. Verify story generates with `project_type: 2`

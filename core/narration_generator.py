@@ -470,12 +470,12 @@ def _generate_with_local_tts(script, output_path, voice):
         return None
 
 
-def generate_scene_narration(session_id, scene_id, text, tts_method=None, tts_workflow=None, voice=None):
+def generate_scene_narration(project_id, scene_id, text, tts_method=None, tts_workflow=None, voice=None):
     """
     Generate narration for a single scene with versioning.
     
     Args:
-        session_id: Session identifier
+        project_id: Project identifier
         scene_id: 0-based scene ID
         text: Narration text
         tts_method: Optional override for TTS method
@@ -485,14 +485,14 @@ def generate_scene_narration(session_id, scene_id, text, tts_method=None, tts_wo
     Returns:
         Dictionary with status and paths
     """
-    from core.session_manager import SessionManager
-    session_mgr = SessionManager()
+    from core.project_manager import ProjectManager
+    project_mgr = ProjectManager()
     
     # Defaults from config
     tts_method = tts_method or config.TTS_METHOD
     tts_workflow = tts_workflow or config.TTS_WORKFLOW
     voice = voice or config.TTS_VOICE
-    narration_dir = os.path.join(session_mgr.get_session_dir(session_id), "narration")
+    narration_dir = os.path.join(project_mgr.get_project_dir(project_id), "narration")
     os.makedirs(narration_dir, exist_ok=True)
     
     # 1-based index for filename
@@ -544,16 +544,16 @@ def generate_scene_narration(session_id, scene_id, text, tts_method=None, tts_wo
         }
 
 
-def generate_narration_for_session(session_id, story_json, total_duration, agent_name="default",
+def generate_narration_for_project(project_id, story_json, total_duration, agent_name="default",
                                    tts_method="local", tts_workflow="default", voice="default",
                                    use_comfyui=False):
     """
-    Complete narration TTS workflow for a session (Legacy/Batch).
+    Complete narration TTS workflow for a project (Legacy/Batch).
     """
-    from core.session_manager import SessionManager
+    from core.project_manager import ProjectManager
 
-    session_mgr = SessionManager()
-    narration_dir = os.path.join(session_mgr.get_session_dir(session_id), "narration")
+    project_mgr = ProjectManager()
+    narration_dir = os.path.join(project_mgr.get_project_dir(project_id), "narration")
     os.makedirs(narration_dir, exist_ok=True)
 
     # Step 1: Extract narration from scenes
@@ -570,14 +570,14 @@ def generate_narration_for_session(session_id, story_json, total_duration, agent
     for i, scene in enumerate(scenes):
         narration_text = scene.get('narration', '')
         if narration_text:
-            result = generate_scene_narration(session_id, i, narration_text, tts_method, tts_workflow, voice)
+            result = generate_scene_narration(project_id, i, narration_text, tts_method, tts_workflow, voice)
             if result["status"] == "success":
                 audio_paths.append(result["full_path"])
         else:
             print(f"[INFO] Scene {i+1} has no narration text.")
 
     if audio_paths:
-        session_mgr.mark_step_complete(session_id, 'narration')
+        project_mgr.mark_step_complete(project_id, 'narration')
         return None, audio_paths[0] if audio_paths else None
     else:
         print("[FAIL] Narration generation failed for all scenes")

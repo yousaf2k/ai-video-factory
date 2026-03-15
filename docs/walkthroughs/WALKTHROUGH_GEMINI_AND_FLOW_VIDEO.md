@@ -12,8 +12,8 @@ I have successfully integrated Google Flow and Gemini Web as new video generatio
 - **Dynamic Routing**: Updated `core/main.py` and `core/video_regenerator.py` to route generation tasks based on the `VIDEO_GENERATION_MODE` setting.
 - **API Interfaces**: Created `core/flowweb_video_generator.py` and `core/geminiweb_video_generator.py` as clean interfaces for the subprocess scripts.
 
-### 3. Session & Data Management
-- **Multiple Variations**: Updated `SessionManager` to track `video_paths` as an array, allowing users to generate and manage multiple variations of the same shot.
+### 3. Project & Data Management
+- **Multiple Variations**: Updated `ProjectManager` to track `video_paths` as an array, allowing users to generate and manage multiple variations of the same shot.
 - **Mark Rendered**: Refined `mark_video_rendered` to properly append new video paths to the variation list.
 
 ### 4. Frontend UI Updates
@@ -38,5 +38,5 @@ I successfully verified that we can extract the TRPC media URL from Google Flow 
 
 ## How to use
 1. **Configure Mode**: Go to the **Configuration** page in the Web UI and set **Video Mode** to `FlowWeb`.
-2. **Generate**: Start a new session or regenerate an existing shot's video using the new backend.
-3. **Verify Downloads**: Confirm that the generated videos are correctly saved to the session's folder and appear in the UI.
+2. **Generate**: Start a new project or regenerate an existing shot's video using the new backend.
+3. **Verify Downloads**: Confirm that the generated videos are correctly saved to the project's folder and appear in the UI.

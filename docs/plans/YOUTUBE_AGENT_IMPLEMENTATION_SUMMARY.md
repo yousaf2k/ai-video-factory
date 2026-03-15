@@ -196,7 +196,7 @@ python core/main.py --story-agent youtube_documentary
 
 Generated stories are saved to:
 ```
-output/sessions/{session_id}/story.json
+output/projects/{project_id}/story.json
 ```
 
 The JSON file will contain all YouTube-specific fields for further processing or manual review.

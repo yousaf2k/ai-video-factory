@@ -248,7 +248,7 @@ For future agent files, ensure:
 ## Status
 
 ✅ **FIXED** - {USER_INPUT} placeholder added to prehistoric_pov.md
-✅ **READY FOR TESTING** - Run new session to verify fix
+✅ **READY FOR TESTING** - Run new project to verify fix
 
 ---
 

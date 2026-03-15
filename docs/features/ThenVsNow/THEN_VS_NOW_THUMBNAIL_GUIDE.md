@@ -417,7 +417,7 @@ When the ThenVsNow agent generates a story, it will automatically create thumbna
 
 Users can manually edit thumbnail prompts in the story.json file before generation:
 
-1. Navigate to session folder
+1. Navigate to project folder
 2. Open `story.json`
 3. Edit `thumbnail_prompt_16_9` and/or `thumbnail_prompt_9_16`
 4. Save and regenerate thumbnails
@@ -440,7 +440,7 @@ Users can manually edit thumbnail prompts in the story.json file before generati
 **Status:** ✅ Updated and ready for use
 
 **Next Steps:**
-1. Create a new ThenVsNow session
+1. Create a new ThenVsNow project
 2. Generate story with new thumbnail prompts
 3. Verify thumbnail prompts follow all guidelines
 4. Generate thumbnails and test click-through appeal

@@ -25,13 +25,13 @@ This document shows the complete data flow from UI upload to final image generat
 │                                                                   │
 │  POST /characters/{index}/upload-reference?variant={then|now}  │
 │  ├─ Validate file type                                           │
-│  ├─ Save to session/references/                                  │
+│  ├─ Save to project/references/                                  │
 │  ├─ Update story.json with path                                  │
 │  └─ Broadcast WebSocket update                                   │
 │                                                                   │
 │  POST /scenes/{id}/upload-background                             │
 │  ├─ Validate file type                                           │
-│  ├─ Save to session/backgrounds/                                 │
+│  ├─ Save to project/backgrounds/                                 │
 │  ├─ Update scene with path                                       │
 │  └─ Broadcast WebSocket update                                   │
 │                                                                   │
@@ -49,7 +49,7 @@ This document shows the complete data flow from UI upload to final image generat
 │  generate_scene_background()                                     │
 │  ├─ Load scene.set_prompt                                        │
 │  ├─ Generate using Flux workflow                                 │
-│  ├─ Save to session/backgrounds/                                 │
+│  ├─ Save to project/backgrounds/                                 │
 │  ├─ Update story.json                                            │
 │  └─ Broadcast progress via WebSocket                             │
 │                                                                   │
@@ -108,7 +108,7 @@ This document shows the complete data flow from UI upload to final image generat
 │                      FILE SYSTEM                                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
-│  session/{session_id}/                                            │
+│  project/{project_id}/                                            │
 │  ├── references/                                                 │
 │  │   ├── {uuid}_then_ref.png           ← THEN reference          │
 │  │   └── {uuid}_now_ref.png            ← NOW reference           │
@@ -130,12 +130,12 @@ User Action:
 
 Frontend:
   1. Create FormData with file
-  2. POST to /api/sessions/{id}/story/characters/{index}/upload-reference?variant={then|now}
+  2. POST to /api/projects/{id}/story/characters/{index}/upload-reference?variant={then|now}
 
 Backend API:
   1. Validate file is image
   2. Generate unique filename: {uuid}_then_ref.png
-  3. Save to: output/sessions/{id}/references/{filename}
+  3. Save to: output/projects/{id}/references/{filename}
   4. Load story.json
   5. Update character[{index}].{then|now}_reference_image_path = relative_path
   6. Save story.json
@@ -164,7 +164,7 @@ User Action:
   2. Component checks scene.set_prompt exists
 
 Backend API:
-  1. POST to /api/sessions/{id}/story/scenes/{scene_id}/generate-background
+  1. POST to /api/projects/{id}/story/scenes/{scene_id}/generate-background
   2. Create async task: generate_scene_background()
 
 Generation Service (Async):
@@ -173,7 +173,7 @@ Generation Service (Async):
   3. Call generate_image_comfyui() with:
      - prompt: scene.set_prompt
      - workflow: flux_background (no IP-Adapter)
-     - output: session/backgrounds/scene_{id}_background_001.png
+     - output: project/backgrounds/scene_{id}_background_001.png
   4. Progress callbacks broadcast to WebSocket
   5. On complete:
      a. Save image path as relative
@@ -235,15 +235,15 @@ FOR each shot to generate:
 │        "scene_id": 0,                                          │
 │        "then_prompt": "...",                                   │
 │        "now_prompt": "...",                                    │
-│        "then_reference_image_path": "output/sessions/.../then_ref.png",  ← NEW
-│        "now_reference_image_path": "output/sessions/.../now_ref.png"   ← NEW
+│        "then_reference_image_path": "output/projects/.../then_ref.png",  ← NEW
+│        "now_reference_image_path": "output/projects/.../now_ref.png"   ← NEW
 │      }                                                          │
 │    ],                                                           │
 │    "scenes": [                                                 │
 │      {                                                          │
 │        "scene_id": 0,                                          │
 │        "set_prompt": "movie set background...",                │
-│        "background_image_path": "output/sessions/.../background.png", ← NEW
+│        "background_image_path": "output/projects/.../background.png", ← NEW
 │        "background_generated": true,                            ← NEW
 │        "background_is_generated": true                         ← NEW
 │      }                                                          │
@@ -258,8 +258,8 @@ FOR each shot to generate:
 │                                                                │
 │  generate_image_comfyui(                                       │
 │    prompt = "young version, 20 years ago, actor description",  │
-│    output_path = "session/images/shot_001_then_001.png",        │
-│    reference_image_path = "output/sessions/.../then_ref.png"   ← KEY!
+│    output_path = "project/images/shot_001_then_001.png",        │
+│    reference_image_path = "output/projects/.../then_ref.png"   ← KEY!
 │  )                                                              │
 │                                                                │
 │  ↓                                                              │
@@ -268,7 +268,7 @@ FOR each shot to generate:
 │  {                                                              │
 │    "1": {  ← LoadImage                                         │
 │      "inputs": {                                              │
-│        "image": "output/sessions/.../then_ref.png"  ← Injected! │
+│        "image": "output/projects/.../then_ref.png"  ← Injected! │
 │      }                                                         │
 │    },                                                          │
 │    "5": {  ← IPAdapter                                        │
@@ -295,7 +295,7 @@ Progress Updates During Generation:
 Backend → Frontend WebSocket:
 {
   "type": "progress",
-  "session_id": "abc123",
+  "project_id": "abc123",
   "shot_index": 1,
   "progress": 45  ← Percentage
 }
@@ -303,17 +303,17 @@ Backend → Frontend WebSocket:
 Story Update After Upload:
 {
   "type": "story_updated",
-  "session_id": "abc123",
+  "project_id": "abc123",
   "story": { ... }
 }
 
 Background Generation Complete:
 {
   "type": "completed",
-  "session_id": "abc123",
+  "project_id": "abc123",
   "scene_id": 0,
   "step": "background_generation",
-  "background_image_path": "output/sessions/..."
+  "background_image_path": "output/projects/..."
 }
 ```
 
@@ -339,17 +339,17 @@ Return: Warning message to user about mode switch
 
 ```
 1. USER: Uploads THEN reference photo for character 0
-   → File saved: session/references/abc123_then_ref.png
+   → File saved: project/references/abc123_then_ref.png
    → story.json updated: characters[0].then_reference_image_path
 
 2. USER: Uploads NOW reference photo for character 0
-   → File saved: session/references/abc123_now_ref.png
+   → File saved: project/references/abc123_now_ref.png
    → story.json updated: characters[0].now_reference_image_path
 
 3. USER: Clicks "Generate Background" for scene 0
    → Queues background generation
    → Uses flux_background workflow (no IP-Adapter)
-   → Saves: session/backgrounds/scene_0_background_001.png
+   → Saves: project/backgrounds/scene_0_background_001.png
    → Updates scene.background_image_path
 
 4. USER: Clicks "Generate" on shot 1 (character 0, scene 0)
@@ -357,15 +357,15 @@ Return: Warning message to user about mode switch
    GENERATE NOW:
    → Detects: characters[0].now_reference_image_path exists
    → Selects: flux_ipadapter_now workflow
-   → Injects: session/references/abc123_now_ref.png into LoadImage
-   → Generates: session/images/shot_001_now_001.png
+   → Injects: project/references/abc123_now_ref.png into LoadImage
+   → Generates: project/images/shot_001_now_001.png
    → Result: Face matches NOW reference photo ✅
 
    GENERATE THEN:
    → Detects: characters[0].then_reference_image_path exists
    → Selects: flux_ipadapter_then workflow
-   → Injects: session/references/abc123_then_ref.png into LoadImage
-   → Generates: session/images/shot_001_then_001.png
+   → Injects: project/references/abc123_then_ref.png into LoadImage
+   → Generates: project/images/shot_001_then_001.png
    → Result: Face matches THEN reference photo ✅
 
 5. RESULT:
@@ -378,7 +378,7 @@ Return: Warning message to user about mode switch
 ## File System Layout After Complete Generation
 
 ```
-output/sessions/abc123/
+output/projects/abc123/
 ├── references/
 │   ├── a1b2c3d4_then_ref.png          ← THEN reference (uploaded)
 │   └── e5f6g7h8_now_ref.png           ← NOW reference (uploaded)

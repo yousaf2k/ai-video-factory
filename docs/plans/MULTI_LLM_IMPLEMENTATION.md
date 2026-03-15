@@ -287,7 +287,7 @@ Create setup guides:
 
 - 🔮 Streaming response support
 - 🔮 Automatic provider fallback on errors
-- 🔮 Cost tracking per session
+- 🔮 Cost tracking per project
 - 🔮 Provider-specific prompt optimization
 - 🔮 Response caching
 - 🔮 Rate limiting handling

@@ -43,7 +43,7 @@ This checklist helps verify the complete implementation of reference images and 
 - [ ] Auto-selects `flux_ipadapter_now` workflow for NOW images
 - [ ] Falls back to standard Flux when no references provided
 - [ ] `generate_scene_background()` generates backgrounds correctly
-- [ ] Background images saved to `session/backgrounds/`
+- [ ] Background images saved to `project/backgrounds/`
 - [ ] Story.json updated with background paths
 
 ### Configuration
@@ -80,7 +80,7 @@ This checklist helps verify the complete implementation of reference images and 
 ## End-to-End Tests
 
 ### Test 1: Upload Character References
-**Setup**: Create new ThenVsNow session
+**Setup**: Create new ThenVsNow project
 
 **Steps**:
 1. Navigate to story editor
@@ -91,16 +91,16 @@ This checklist helps verify the complete implementation of reference images and 
 6. Upload NOW reference photo
 7. Verify preview appears
 8. Check story.json contains both paths
-9. Verify paths are relative (start with `output/sessions/`)
+9. Verify paths are relative (start with `output/projects/`)
 
 **Expected Results**:
 - [ ] Both uploads complete without errors
 - [ ] Previews display correctly
 - [ ] story.json updated with paths
-- [ ] Images saved in `session/references/`
+- [ ] Images saved in `project/references/`
 
 ### Test 2: Generate Scene Background (Upload)
-**Setup**: Existing session with scene that has set_prompt
+**Setup**: Existing project with scene that has set_prompt
 
 **Steps**:
 1. Navigate to scene 0
@@ -116,10 +116,10 @@ This checklist helps verify the complete implementation of reference images and 
 - [ ] Upload completes without errors
 - [ ] Preview displays
 - [ ] Badge shows "Uploaded"
-- [ ] Image saved in `session/backgrounds/`
+- [ ] Image saved in `project/backgrounds/`
 
 ### Test 3: Generate Scene Background (AI)
-**Setup**: Existing session with scene that has set_prompt
+**Setup**: Existing project with scene that has set_prompt
 
 **Steps**:
 1. Navigate to scene 0
@@ -137,10 +137,10 @@ This checklist helps verify the complete implementation of reference images and 
 - [ ] Progress updates received
 - [ ] Preview displays after completion
 - [ ] Badge shows "AI Generated"
-- [ ] Image saved in `session/backgrounds/`
+- [ ] Image saved in `project/backgrounds/`
 
 ### Test 4: Complete FLFI2V Workflow with References
-**Setup**: Session with uploaded references and background
+**Setup**: Project with uploaded references and background
 
 **Steps**:
 1. Upload THEN reference for character 0
@@ -164,10 +164,10 @@ This checklist helps verify the complete implementation of reference images and 
 - [ ] No errors in console or logs
 
 ### Test 5: Fallback Without References
-**Setup**: Session without reference images
+**Setup**: Project without reference images
 
 **Steps**:
-1. Create new session (no references)
+1. Create new project (no references)
 2. Generate NOW image
 3. Verify standard Flux workflow used
 4. Generate THEN image
@@ -334,10 +334,10 @@ Notes:
 
 ```bash
 # Test API endpoints
-curl -X POST "http://localhost:8000/api/sessions/{session_id}/story/characters/0/upload-reference?variant=then" \
+curl -X POST "http://localhost:8000/api/projects/{project_id}/story/characters/0/upload-reference?variant=then" \
   -F "file=@then.jpg"
 
-curl -X POST "http://localhost:8000/api/sessions/{session_id}/story/scenes/0/generate-background"
+curl -X POST "http://localhost:8000/api/projects/{project_id}/story/scenes/0/generate-background"
 
 # Check backend logs
 tail -f output/logs/backend.log | grep -i "ipadapter"

@@ -1,4 +1,4 @@
-# Bug Fix: Missing get_story Method in SessionManager
+# Bug Fix: Missing get_story Method in ProjectManager
 
 **Date:** March 12, 2026
 **Status:** ✅ Fixed
@@ -11,18 +11,18 @@
 When generating images for FLFI2V shots, the system threw an error:
 
 ```
-ERROR: 'SessionManager' object has no attribute 'get_story'
+ERROR: 'ProjectManager' object has no attribute 'get_story'
 ```
 
 This error occurred in `web_ui/backend.services.generation_service:regenerate_shot_image()` at line 298 when trying to load the story to check the `project_type`.
 
 **Error Location:**
 ```python
-story = self.session_manager.get_story(session_id)
+story = self.project_manager.get_story(project_id)
 ```
 
 **Root Cause:**
-The `SessionManager` class did not have a `get_story()` method, which was needed to:
+The `ProjectManager` class did not have a `get_story()` method, which was needed to:
 1. Check the `project_type` (Documentary vs ThenVsNow)
 2. Access scene data for `set_prompt` appending
 3. Support FLFI2V image generation workflow
@@ -31,27 +31,27 @@ The `SessionManager` class did not have a `get_story()` method, which was needed
 
 ## Solution
 
-Added two new methods to `SessionManager` class in `core/session_manager.py`:
+Added two new methods to `ProjectManager` class in `core/project_manager.py`:
 
-### 1. get_story(session_id)
+### 1. get_story(project_id)
 
-Public method to get story data for a session.
+Public method to get story data for a project.
 
 ```python
-def get_story(self, session_id):
+def get_story(self, project_id):
     """Get story from story.json"""
-    return self._load_story(session_id)
+    return self._load_story(project_id)
 ```
 
-### 2. _load_story(session_id)
+### 2. _load_story(project_id)
 
 Private method to load story from story.json file.
 
 ```python
-def _load_story(self, session_id):
+def _load_story(self, project_id):
     """Load story from story.json"""
-    session_dir = os.path.join(self.sessions_dir, session_id)
-    story_path = os.path.join(session_dir, "story.json")
+    project_dir = os.path.join(self.projects_dir, project_id)
+    story_path = os.path.join(project_dir, "story.json")
 
     if os.path.exists(story_path):
         try:
@@ -69,7 +69,7 @@ def _load_story(self, session_id):
 
 ## Implementation Details
 
-**File Modified:** `core/session_manager.py`
+**File Modified:** `core/project_manager.py`
 
 **Location:** After `get_shots()` method (line 408)
 
@@ -85,32 +85,32 @@ def _load_story(self, session_id):
 
 ### Test 1: Method Exists
 ```bash
-python -c "from core.session_manager import SessionManager; sm = SessionManager(); print(hasattr(sm, 'get_story'))"
+python -c "from core.project_manager import ProjectManager; sm = ProjectManager(); print(hasattr(sm, 'get_story'))"
 ```
 **Result:** ✅ True
 
 ### Test 2: Method is Callable
 ```bash
-python -c "from core.session_manager import SessionManager; sm = SessionManager(); print(callable(getattr(sm, 'get_story')))"
+python -c "from core.project_manager import ProjectManager; sm = ProjectManager(); print(callable(getattr(sm, 'get_story')))"
 ```
 **Result:** ✅ True
 
 ### Test 3: Integration Test
 ```bash
-python -c "from web_ui.backend.services.generation_service import GenerationService; gs = GenerationService(); print(hasattr(gs.session_manager, 'get_story'))"
+python -c "from web_ui.backend.services.generation_service import GenerationService; gs = GenerationService(); print(hasattr(gs.project_manager, 'get_story'))"
 ```
 **Result:** ✅ True
 
 ### Test 4: All Required Methods
 Verified all methods called by `generation_service.py` exist:
-- ✅ get_session
+- ✅ get_project
 - ✅ get_shots
 - ✅ get_story (NEW)
 - ✅ _save_shots
 - ✅ mark_image_generated
 - ✅ get_images_dir
 - ✅ get_videos_dir
-- ✅ get_session_dir
+- ✅ get_project_dir
 - ✅ save_shots
 - ✅ mark_video_rendered
 - ✅ _save_meta
@@ -130,7 +130,7 @@ Verified all methods called by `generation_service.py` exist:
 ### No Breaking Changes
 - ✅ Method addition only (no existing methods changed)
 - ✅ Returns None for missing story (graceful handling)
-- ✅ Follows existing SessionManager patterns
+- ✅ Follows existing ProjectManager patterns
 - ✅ Backward compatible with all existing code
 
 ---
@@ -138,12 +138,12 @@ Verified all methods called by `generation_service.py` exist:
 ## Usage Example
 
 ```python
-from core.session_manager import SessionManager
+from core.project_manager import ProjectManager
 
-sm = SessionManager()
+sm = ProjectManager()
 
-# Get story for a session
-story = sm.get_story("session_20260312_192053")
+# Get story for a project
+story = sm.get_story("project_20260312_192053")
 
 if story:
     project_type = story.get('project_type', 1)
@@ -152,7 +152,7 @@ if story:
     else:
         print("This is a Documentary project")
 else:
-    print("No story found for this session")
+    print("No story found for this project")
 ```
 
 ---
@@ -160,7 +160,7 @@ else:
 ## Related Files
 
 **Modified:**
-- `core/session_manager.py` - Added get_story() and _load_story() methods
+- `core/project_manager.py` - Added get_story() and _load_story() methods
 
 **Used By:**
 - `web_ui/backend/services/generation_service.py` - Calls get_story() in regenerate_shot_image()

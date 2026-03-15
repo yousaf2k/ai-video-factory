@@ -1,33 +1,35 @@
 /**
- * SessionGroup component - Collapsible session grouping for queue
+ * ProjectGroup component - Collapsible project grouping for queue
  */
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { QueueItem as QueueItemType, QueueItemStatus } from '../../types';
 import QueueList from './QueueList';
 
-interface SessionGroupProps {
-  sessionId: string;
-  sessionTitle: string;
+interface ProjectGroupProps {
+  projectId: string;
+  projectTitle: string;
   items: QueueItemType[];
   selectedItems?: Set<string>;
   onSelectItem?: (itemId: string) => void;
   onCancelItem?: (itemId: string) => void;
+  onRequeueItem?: (itemId: string) => void;
   onReorder?: (itemIds: string[]) => void;
 }
 
-export function SessionGroup({
-  sessionId,
-  sessionTitle,
+export function ProjectGroup({
+  projectId,
+  projectTitle,
   items,
   selectedItems,
   onSelectItem,
   onCancelItem,
+  onRequeueItem,
   onReorder
-}: SessionGroupProps) {
+}: ProjectGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Calculate session statistics
+  // Calculate project statistics
   const total = items.length;
   const completed = items.filter(item => item.status === QueueItemStatus.COMPLETED).length;
   const active = items.filter(item => item.status === QueueItemStatus.ACTIVE).length;
@@ -44,7 +46,7 @@ export function SessionGroup({
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
-      {/* Session header */}
+      {/* Project header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
@@ -57,9 +59,9 @@ export function SessionGroup({
             <ChevronRight className="w-5 h-5 text-gray-500" />
           )}
 
-          {/* Session title */}
+          {/* Project title */}
           <span className="font-medium text-gray-900">
-            {sessionTitle}
+            {projectTitle}
           </span>
 
           {/* Badge with item count */}
@@ -130,6 +132,7 @@ export function SessionGroup({
             selectedItems={selectedItems}
             onSelectItem={onSelectItem}
             onCancelItem={onCancelItem}
+            onRequeueItem={onRequeueItem}
             onReorder={onReorder}
           />
         </div>
@@ -138,4 +141,4 @@ export function SessionGroup({
   );
 }
 
-export default SessionGroup;
+export default ProjectGroup;

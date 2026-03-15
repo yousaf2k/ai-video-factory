@@ -127,7 +127,7 @@ def print_usage_examples():
          "python core/main.py --story-agent prehistoric_pov --idea \"Time traveler encounters T-Rex\""),
 
         ("Generate POV Images",
-         "python core/main.py --shots-agent prehistoric_pov --resume [session_id]"),
+         "python core/main.py --shots-agent prehistoric_pov --resume [project_id]"),
 
         ("Generate Full POV Video",
          "python core/main.py --story-agent prehistoric_pov --shots-agent prehistoric_pov --idea \"Triceratops herd encounter\""),
@@ -204,7 +204,7 @@ def main():
         print("     python core/main.py --story-agent prehistoric_pov --idea \"T-Rex encounter\"")
         print()
         print("  2. Test image generation:")
-        print("     python core/main.py --shots-agent prehistoric_pov --resume [session_id]")
+        print("     python core/main.py --shots-agent prehistoric_pov --resume [project_id]")
         print()
         print("  3. Generate full video:")
         print("     python core/main.py --story-agent prehistoric_pov --shots-agent prehistoric_pov --idea \"Dinosaur survival\" --render")

@@ -1,5 +1,5 @@
 """
-Session service - Wrapper around SessionManager
+Project service - Wrapper around ProjectManager
 """
 import sys
 import os
@@ -8,86 +8,86 @@ from typing import List, Dict, Any, Optional
 # Add parent directory to path to import core modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
-from core.session_manager import SessionManager
-from web_ui.backend.models.session import (
-    SessionMetadata, SessionDetail, SessionListItem,
-    CreateSessionRequest, UpdateSessionRequest
+from core.project_manager import ProjectManager
+from web_ui.backend.models.project import (
+    ProjectMetadata, ProjectDetail, ProjectListItem,
+    CreateProjectRequest, UpdateProjectRequest
 )
 import json
 
 
-class SessionService:
-    """Service for session management operations"""
+class ProjectService:
+    """Service for project management operations"""
 
-    def __init__(self, sessions_dir: str = None):
-        # Default to configured sessions directory
-        if sessions_dir is None:
+    def __init__(self, projects_dir: str = None):
+        # Default to configured projects directory
+        if projects_dir is None:
             import config
-            sessions_dir = getattr(config, 'ABS_SESSIONS_DIR', None)
+            projects_dir = getattr(config, 'ABS_PROJECTS_DIR', None)
             
-            if sessions_dir is None:
+            if projects_dir is None:
                 # Fallback if config not loaded properly
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-                sessions_dir = os.path.join(project_root, "output", "sessions")
+                projects_dir = os.path.join(project_root, "output", "projects")
 
         # Debug logging
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"SessionService initialized with sessions_dir: {sessions_dir}")
-        logger.info(f"Directory exists: {os.path.exists(sessions_dir)}")
-        print(f"[DEBUG] SessionService sessions_dir: {sessions_dir}")
-        print(f"[DEBUG] Directory exists: {os.path.exists(sessions_dir)}")
+        logger.info(f"ProjectService initialized with projects_dir: {projects_dir}")
+        logger.info(f"Directory exists: {os.path.exists(projects_dir)}")
+        print(f"[DEBUG] ProjectService projects_dir: {projects_dir}")
+        print(f"[DEBUG] Directory exists: {os.path.exists(projects_dir)}")
 
-        self.session_manager = SessionManager(sessions_dir)
+        self.project_manager = ProjectManager(projects_dir)
 
-    def list_sessions(self) -> List[SessionListItem]:
-        """List all sessions"""
-        sessions_data = self.session_manager.list_all_sessions()
+    def list_projects(self) -> List[ProjectListItem]:
+        """List all projects"""
+        projects_data = self.project_manager.list_all_projects()
         
         result = []
-        for meta in sessions_data:
-            session_id = meta.get("session_id")
+        for meta in projects_data:
+            project_id = meta.get("project_id")
             story = None
-            if session_id:
-                session_dir = self.session_manager.get_session_dir(session_id)
-                story_path = os.path.join(session_dir, "story.json")
+            if project_id:
+                project_dir = self.project_manager.get_project_dir(project_id)
+                story_path = os.path.join(project_dir, "story.json")
                 if os.path.exists(story_path):
                     try:
                         with open(story_path, 'r', encoding='utf-8') as f:
                             story = json.load(f)
                     except Exception:
                         pass
-            result.append(SessionListItem.from_metadata(meta, story))
+            result.append(ProjectListItem.from_metadata(meta, story))
             
         return result
 
-    def get_session(self, session_id: str) -> SessionDetail:
-        """Get session detail with story and shots"""
-        meta = self.session_manager.load_session(session_id)
+    def get_project(self, project_id: str) -> ProjectDetail:
+        """Get project detail with story and shots"""
+        meta = self.project_manager.load_project(project_id)
 
         # Load story if exists
         story = None
-        session_dir = self.session_manager.get_session_dir(session_id)
-        story_path = os.path.join(session_dir, "story.json")
+        project_dir = self.project_manager.get_project_dir(project_id)
+        story_path = os.path.join(project_dir, "story.json")
         if os.path.exists(story_path):
             with open(story_path, 'r', encoding='utf-8') as f:
                 story = json.load(f)
 
         # Load shots if exist
-        shots = self.session_manager.get_shots(session_id)
+        shots = self.project_manager.get_shots(project_id)
 
-        return SessionDetail.from_session_data(
+        return ProjectDetail.from_project_data(
             meta=meta,
             story=story,
             shots=shots
         )
 
-    def create_session(self, request: CreateSessionRequest) -> SessionDetail:
-        """Create a new session"""
-        session_id, meta = self.session_manager.create_session(
+    def create_project(self, request: CreateProjectRequest) -> ProjectDetail:
+        """Create a new project"""
+        project_id, meta = self.project_manager.create_project(
             idea=request.idea,
-            session_id=request.session_id,
+            project_id=request.project_id,
             story_agent=request.story_agent,
             shots_agent=request.shots_agent,
             total_duration=request.total_duration,
@@ -104,8 +104,8 @@ class SessionService:
             logger = logging.getLogger(__name__)
 
             try:
-                logger.info(f"Creating ThenVsNow session for movie: {request.idea}")
-                print(f"[INFO] Creating ThenVsNow session for movie: {request.idea}")
+                logger.info(f"Creating ThenVsNow project for movie: {request.idea}")
+                print(f"[INFO] Creating ThenVsNow project for movie: {request.idea}")
 
                 # Generate story with shots directly
                 story_json = build_story_then_vs_now(
@@ -119,13 +119,13 @@ class SessionService:
                 shots = story.pop('shots', [])
 
                 # Save story.json
-                session_dir = self.session_manager.get_session_dir(session_id)
-                story_path = os.path.join(session_dir, "story.json")
+                project_dir = self.project_manager.get_project_dir(project_id)
+                story_path = os.path.join(project_dir, "story.json")
                 with open(story_path, 'w', encoding='utf-8') as f:
                     json.dump(story, f, indent=2, ensure_ascii=False)
 
                 # Save shots.json directly (bypass shot planner)
-                shots_path = os.path.join(session_dir, "shots.json")
+                shots_path = os.path.join(project_dir, "shots.json")
                 with open(shots_path, 'w', encoding='utf-8') as f:
                     json.dump(shots, f, indent=2, ensure_ascii=False)
 
@@ -143,17 +143,17 @@ class SessionService:
                 meta['stats']['total_shots'] = len(shots)
 
                 # Save updated metadata
-                self.session_manager._save_meta(session_id, meta)
+                self.project_manager._save_meta(project_id, meta)
 
-                logger.info(f"ThenVsNow session created with {len(shots)} shots")
-                print(f"[INFO] ThenVsNow session created with {len(shots)} shots")
+                logger.info(f"ThenVsNow project created with {len(shots)} shots")
+                print(f"[INFO] ThenVsNow project created with {len(shots)} shots")
 
             except Exception as e:
                 logger.error(f"Failed to create ThenVsNow story: {e}")
                 print(f"[ERROR] Failed to create ThenVsNow story: {e}")
                 import traceback
                 traceback.print_exc()
-                # Continue with empty session
+                # Continue with empty project
 
         # Handle prompts file if provided
         if request.prompts_file:
@@ -184,11 +184,11 @@ class SessionService:
                 meta['total_duration'] = calculated_duration
 
                 # Save shots
-                self.session_manager.save_shots(session_id, shots)
+                self.project_manager.save_shots(project_id, shots)
 
                 # Create dummy story.json
-                session_dir = self.session_manager.get_session_dir(session_id)
-                story_path = os.path.join(session_dir, "story.json")
+                project_dir = self.project_manager.get_project_dir(project_id)
+                story_path = os.path.join(project_dir, "story.json")
                 
                 dummy_story = {
                     "title": overall_title or request.idea,
@@ -210,21 +210,21 @@ class SessionService:
                     json.dump(dummy_story, f, indent=2, ensure_ascii=False)
 
                 # Save updated metadata
-                self.session_manager._save_meta(session_id, meta)
+                self.project_manager._save_meta(project_id, meta)
 
             except Exception as e:
-                # Log error but don't fail session creation completely?
+                # Log error but don't fail project creation completely?
                 # Actually, it's better to log it and maybe the user can retry story generation
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.error(f"Failed to process prompts file {request.prompts_file}: {e}")
                 print(f"[ERROR] Failed to process prompts file: {e}")
 
-        return SessionDetail.from_session_data(meta=meta)
+        return ProjectDetail.from_project_data(meta=meta)
 
-    def update_session(self, session_id: str, request: UpdateSessionRequest) -> SessionMetadata:
-        """Update session metadata"""
-        meta = self.session_manager.load_session(session_id)
+    def update_project(self, project_id: str, request: UpdateProjectRequest) -> ProjectMetadata:
+        """Update project metadata"""
+        meta = self.project_manager.load_project(project_id)
 
         if request.idea is not None:
             meta['idea'] = request.idea
@@ -244,37 +244,37 @@ class SessionService:
                 from datetime import datetime
                 meta['completed_at'] = datetime.now().isoformat()
 
-        self.session_manager._save_meta(session_id, meta)
-        return SessionMetadata(**meta)
+        self.project_manager._save_meta(project_id, meta)
+        return ProjectMetadata(**meta)
 
-    def delete_session(self, session_id: str) -> bool:
-        """Delete a session and all its files"""
+    def delete_project(self, project_id: str) -> bool:
+        """Delete a project and all its files"""
         import shutil
-        session_dir = self.session_manager.get_session_dir(session_id)
+        project_dir = self.project_manager.get_project_dir(project_id)
 
-        if os.path.exists(session_dir):
-            shutil.rmtree(session_dir)
+        if os.path.exists(project_dir):
+            shutil.rmtree(project_dir)
             return True
         return False
 
-    def duplicate_session(self, session_id: str, new_session_id: Optional[str] = None) -> SessionDetail:
-        """Duplicate a session"""
+    def duplicate_project(self, project_id: str, new_project_id: Optional[str] = None) -> ProjectDetail:
+        """Duplicate a project"""
         import shutil
         from datetime import datetime
 
-        old_session_dir = self.session_manager.get_session_dir(session_id)
+        old_project_dir = self.project_manager.get_project_dir(project_id)
 
-        # Create new session
-        meta = self.session_manager.load_session(session_id)
+        # Create new project
+        meta = self.project_manager.load_project(project_id)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        new_session_id = new_session_id or f"session_{timestamp}"
+        new_project_id = new_project_id or f"project_{timestamp}"
 
-        new_session_dir = self.session_manager.get_session_dir(new_session_id)
-        shutil.copytree(old_session_dir, new_session_dir)
+        new_project_dir = self.project_manager.get_project_dir(new_project_id)
+        shutil.copytree(old_project_dir, new_project_dir)
 
         # Update metadata
         new_meta = meta.copy()
-        new_meta['session_id'] = new_session_id
+        new_meta['project_id'] = new_project_id
         new_meta['timestamp'] = timestamp
         new_meta['started_at'] = datetime.now().isoformat()
         new_meta['completed'] = False
@@ -295,7 +295,7 @@ class SessionService:
         }
 
         # Reset shot status in shots.json
-        shots_path = os.path.join(new_session_dir, "shots.json")
+        shots_path = os.path.join(new_project_dir, "shots.json")
         if os.path.exists(shots_path):
             with open(shots_path, 'r', encoding='utf-8') as f:
                 shots = json.load(f)
@@ -305,18 +305,18 @@ class SessionService:
             with open(shots_path, 'w', encoding='utf-8') as f:
                 json.dump(shots, f, indent=2, ensure_ascii=False)
 
-        self.session_manager._save_meta(new_session_id, new_meta)
+        self.project_manager._save_meta(new_project_id, new_meta)
 
-        return self.get_session(new_session_id)
+        return self.get_project(new_project_id)
 
-    def get_session_dir(self, session_id: str) -> str:
-        """Get session directory path"""
-        return self.session_manager.get_session_dir(session_id)
+    def get_project_dir(self, project_id: str) -> str:
+        """Get project directory path"""
+        return self.project_manager.get_project_dir(project_id)
 
-    def get_images_dir(self, session_id: str) -> str:
-        """Get images directory for session"""
-        return self.session_manager.get_images_dir(session_id)
+    def get_images_dir(self, project_id: str) -> str:
+        """Get images directory for project"""
+        return self.project_manager.get_images_dir(project_id)
 
-    def get_videos_dir(self, session_id: str) -> str:
-        """Get videos directory for session"""
-        return self.session_manager.get_videos_dir(session_id)
+    def get_videos_dir(self, project_id: str) -> str:
+        """Get videos directory for project"""
+        return self.project_manager.get_videos_dir(project_id)

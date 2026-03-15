@@ -1,41 +1,41 @@
-# Session Management Implementation Summary
+# Project Management Implementation Summary
 
 ## ✅ New Features Added
 
-### 1. Session Manager Module (`core/session_manager.py`)
-Complete session tracking system with methods for:
-- Creating new sessions
+### 1. Project Manager Module (`core/project_manager.py`)
+Complete project tracking system with methods for:
+- Creating new projects
 - Saving story and shot data
 - Tracking image and video generation progress
 - Marking steps as complete
 - Crash recovery detection
-- Session history listing
+- Project history listing
 
 ### 2. Updated Main Pipeline (`core/main.py`)
-Enhanced with session management:
-- Auto-detects incomplete sessions
+Enhanced with project management:
+- Auto-detects incomplete projects
 - Prompts user to continue or start fresh
 - Skips already-completed shots
 - Saves progress in real-time
 - Handles crashes gracefully
 
-### 3. Session Viewer Utility (`sessions.py`)
+### 3. Project Viewer Utility (`projects.py`)
 Command-line tool to:
-- List all sessions
-- View detailed session information
+- List all projects
+- View detailed project information
 - Check shot status
 - Display statistics
 
 ### 4. Updated Documentation
-- `SESSION_GUIDE.md` - Complete session management guide
+- `SESSION_GUIDE.md` - Complete project management guide
 - Updated `QUICK_START.md` - Added crash recovery info
 
-## 📁 Session Directory Structure
+## 📁 Project Directory Structure
 
 ```
-output/sessions/
-└── session_YYYYMMDD_HHMMSS/
-    ├── session_YYYYMMDD_HHMMSS_meta.json   # Metadata & progress
+output/projects/
+└── project_YYYYMMDD_HHMMSS/
+    ├── project_YYYYMMDD_HHMMSS_meta.json   # Metadata & progress
     ├── story.json                          # Generated story
     ├── shots.json                          # All shot prompts
     └── images/                             # Generated images
@@ -49,15 +49,15 @@ output/sessions/
 ### System Crash Detection
 ```
 1. User runs: python core/main.py
-2. System checks for incomplete sessions
-3. If found, displays session summary:
-   - Session ID, timestamp
+2. System checks for incomplete projects
+3. If found, displays project summary:
+   - Project ID, timestamp
    - Original idea
    - Progress (images/videos completed)
    - Shot-by-shot status
 4. Prompts: "Do you want to continue? (y/n)"
    - y: Resume from last point
-   - n: Start new session
+   - n: Start new project
 ```
 
 ### Smart Continuation
@@ -66,13 +66,13 @@ output/sessions/
 - ✅ Only processes incomplete shots
 - ✅ Preserves all previous data
 
-## 📊 Session Metadata
+## 📊 Project Metadata
 
-Each session tracks:
+Each project tracks:
 
 ```json
 {
-  "session_id": "session_20250208_002238",
+  "project_id": "project_20250208_002238",
   "timestamp": "20250208_002238",
   "idea": "Original video idea...",
   "started_at": "2025-02-08T00:22:38.123456",
@@ -92,7 +92,7 @@ Each session tracks:
       "motion_prompt": "Motion description...",
       "camera": "slow pan",
       "image_generated": true,
-      "image_path": "output/sessions/.../images/shot_001.png",
+      "image_path": "output/projects/.../images/shot_001.png",
       "video_rendered": true
     },
     ...
@@ -111,25 +111,25 @@ Each session tracks:
 ```bash
 python core/main.py
 ```
-Creates new session, generates everything
+Creates new project, generates everything
 
 ### Run After Crash
 ```bash
 python core/main.py
 ```
-Detects incomplete session, asks to continue
+Detects incomplete project, asks to continue
 
-### View All Sessions
+### View All Projects
 ```bash
-python sessions.py list
+python projects.py list
 ```
-Shows all sessions with status
+Shows all projects with status
 
-### View Specific Session
+### View Specific Project
 ```bash
-python sessions.py view session_20250208_002238
+python projects.py view project_20250208_002238
 ```
-Shows detailed session info and file locations
+Shows detailed project info and file locations
 
 ## 💾 What Gets Saved
 
@@ -161,30 +161,30 @@ Shows detailed session info and file locations
 1. **No Lost Work** - Everything saved in real-time
 2. **Easy Recovery** - One command to continue
 3. **Full History** - Track all generations
-4. **Reusable Data** - Export prompts from sessions
+4. **Reusable Data** - Export prompts from projects
 5. **Debugging** - Review what was generated
-6. **Cost Tracking** - See how many images/videos per session
+6. **Cost Tracking** - See how many images/videos per project
 
 ## 📝 File Changes
 
 ### New Files
-- `core/session_manager.py` - Session tracking module
-- `sessions.py` - Session viewer utility
+- `core/project_manager.py` - Project tracking module
+- `projects.py` - Project viewer utility
 - `SESSION_GUIDE.md` - Complete documentation
 
 ### Modified Files
-- `core/main.py` - Integrated session management
+- `core/main.py` - Integrated project management
 - `QUICK_START.md` - Added crash recovery info
 
 ## 🧪 Testing Checklist
 
-- [x] Session manager imports correctly
-- [x] Can create new session
+- [x] Project manager imports correctly
+- [x] Can create new project
 - [x] Can save story data
 - [x] Can save shots data
 - [x] Can track image generation
 - [x] Can track video rendering
-- [x] Can list sessions
+- [x] Can list projects
 - [x] Crash recovery prompts user
 - [x] Smart continuation skips completed shots
 
@@ -195,14 +195,14 @@ Shows detailed session info and file locations
    python core/main.py
    ```
 
-2. **Check your sessions**:
+2. **Check your projects**:
    ```bash
-   python sessions.py list
+   python projects.py list
    ```
 
-3. **View session details**:
+3. **View project details**:
    ```bash
-   python sessions.py view <session_id>
+   python projects.py view <project_id>
    ```
 
 4. **Read the guide**:
@@ -210,6 +210,6 @@ Shows detailed session info and file locations
 
 ## 🎉 Summary
 
-The session management system ensures **zero data loss** and **easy recovery** from any interruption. All outputs (story, prompts, images) are preserved and organized, with complete progress tracking and smart continuation.
+The project management system ensures **zero data loss** and **easy recovery** from any interruption. All outputs (story, prompts, images) are preserved and organized, with complete progress tracking and smart continuation.
 
 **The system now works like a professional video production tool with full project management capabilities!**

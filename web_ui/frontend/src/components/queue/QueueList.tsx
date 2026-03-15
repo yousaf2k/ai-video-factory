@@ -28,9 +28,10 @@ interface SortableQueueItemProps {
   isSelected?: boolean;
   onSelect?: (itemId: string) => void;
   onCancel?: (itemId: string) => void;
+  onRequeue?: (itemId: string) => void;
 }
 
-function SortableQueueItem({ item, isSelected, onSelect, onCancel }: SortableQueueItemProps) {
+function SortableQueueItem({ item, isSelected, onSelect, onCancel, onRequeue }: SortableQueueItemProps) {
   const {
     attributes,
     listeners,
@@ -53,6 +54,7 @@ function SortableQueueItem({ item, isSelected, onSelect, onCancel }: SortableQue
         isSelected={isSelected}
         onSelect={onSelect}
         onCancel={onCancel}
+        onRequeue={onRequeue}
         dragAttributes={attributes}
         dragListeners={listeners}
       />
@@ -65,6 +67,7 @@ interface QueueListProps {
   selectedItems?: Set<string>;
   onSelectItem?: (itemId: string) => void;
   onCancelItem?: (itemId: string) => void;
+  onRequeueItem?: (itemId: string) => void;
   onReorder?: (itemIds: string[]) => void;
 }
 
@@ -73,6 +76,7 @@ export function QueueList({
   selectedItems = new Set(),
   onSelectItem,
   onCancelItem,
+  onRequeueItem,
   onReorder
 }: QueueListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -129,6 +133,7 @@ export function QueueList({
               isSelected={selectedItems.has(item.item_id)}
               onSelect={onSelectItem}
               onCancel={onCancelItem}
+              onRequeue={onRequeueItem}
             />
           ))}
         </div>

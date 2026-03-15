@@ -125,7 +125,7 @@ This change is **fully backward compatible**:
 
 1. ✅ Image agent updated
 2. ⏳ Test with new generation to verify prompts
-3. ⏳ Regenerate existing sessions if needed (optional)
+3. ⏳ Regenerate existing projects if needed (optional)
 
 ## Documentation
 

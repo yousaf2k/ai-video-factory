@@ -5,7 +5,7 @@ import config
 import os
 from core.logger_config import get_logger
 
-# Use a session to pool TCP connections and prevent socket exhaustion (WinError 10055)
+# Use a project to pool TCP connections and prevent socket exhaustion (WinError 10055)
 http_session = requests.Session()
 
 # Get logger for ComfyUI API operations

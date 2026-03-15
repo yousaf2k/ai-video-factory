@@ -23,6 +23,6 @@ To achieve full automation of the AI video generation system, focusing on improv
 
 ### Phase 4: UI Enhancements & Stability
 
-- Added the generated `master_script` as a preview string on the `/sessions` Next.js frontend dashboard.
+- Added the generated `master_script` as a preview string on the `/projects` Next.js frontend dashboard.
 - Mapped Max Shots dynamically from `config.py` as a configuration dialog setting (`0` = Auto).
-- Fixed `[WinError 10055]` socket exhaustion by pooling REST API calls to ComfyUI and LLMs via `requests.Session`.
+- Fixed `[WinError 10055]` socket exhaustion by pooling REST API calls to ComfyUI and LLMs via `requests.Project`.

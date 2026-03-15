@@ -1,6 +1,6 @@
-# Session Management - Visual Guide
+# Project Management - Visual Guide
 
-## Pipeline Flow with Session Management
+## Pipeline Flow with Project Management
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -10,7 +10,7 @@
                          ▼
               ┌──────────────────────┐
               │ Check for Incomplete │
-              │      Sessions         │
+              │      Projects         │
               └──────────┬───────────┘
                          │
             ┌────────────┴────────────┐
@@ -20,7 +20,7 @@
             ▼                         ▼
     ┌───────────────┐       ┌─────────────────┐
     │ Display       │       │ Create New      │
-    │ Session Info  │       │ Session         │
+    │ Project Info  │       │ Project         │
     └───────┬───────┘       └────────┬────────┘
             │                        │
             ▼                        │
@@ -34,9 +34,9 @@
         │                            │
         ▼                            ▼
 ┌─────────────────┐         ┌─────────────────┐
-│ Resume Session  │         │   New Session   │
+│ Resume Project  │         │   New Project   │
 │                 │         │                 │
-│ • Load metadata │         │ • Create session│
+│ • Load metadata │         │ • Create project│
 │ • Check progress│         │ • Save idea     │
 │ • Skip completed│         └────────┬────────┘
 └────────┬────────┘                   │
@@ -83,18 +83,18 @@
          └────────────┬───────────┘
                       ▼
          ┌────────────────────────┐
-         │   Mark Session         │
+         │   Mark Project         │
          │   COMPLETE             │
          └────────────────────────┘
 ```
 
-## Session Directory Structure
+## Project Directory Structure
 
 ```
-output/sessions/
+output/projects/
 │
-├── session_20250207_143000/              ← COMPLETED SESSION
-│   ├── session_20250207_143000_meta.json
+├── project_20250207_143000/              ← COMPLETED SESSION
+│   ├── project_20250207_143000_meta.json
 │   ├── story.json
 │   ├── shots.json
 │   └── images/
@@ -102,8 +102,8 @@ output/sessions/
 │       ├── shot_002.png
 │       └── ... (all 7 shots)
 │
-├── session_20250208_002238/              ← INCOMPLETE SESSION
-│   ├── session_20250208_002238_meta.json
+├── project_20250208_002238/              ← INCOMPLETE SESSION
+│   ├── project_20250208_002238_meta.json
 │   ├── story.json
 │   ├── shots.json
 │   └── images/
@@ -113,7 +113,7 @@ output/sessions/
 │       ├── shot_004.png    ← FAILED
 │       └── ... (remaining not generated)
 │
-└── session_20250208_031515/              ← FUTURE SESSION
+└── project_20250208_031515/              ← FUTURE SESSION
     └── (will be created on next run)
 ```
 
@@ -162,17 +162,17 @@ After Re-run:
 
 ```
 Initial Run:
-  Incomplete session found
+  Incomplete project found
   Continue? [n]
 
   Result:
-    → Create NEW session
+    → Create NEW project
     → New timestamp
     → Generate everything fresh
-    → Old session preserved for reference
+    → Old project preserved for reference
 ```
 
-## Session States
+## Project States
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -211,21 +211,21 @@ Initial Run:
 # Main pipeline
 python core/main.py                    # Run with auto-recovery
 
-# Session management
-python sessions.py list                # List all sessions
-python sessions.py view <id>           # View session details
-python sessions.py help                # Show help
+# Project management
+python projects.py list                # List all projects
+python projects.py view <id>           # View project details
+python projects.py help                # Show help
 
 # Direct file access
-cat output/sessions/session_X/story.json       # View story
-cat output/sessions/session_X/shots.json       # View prompts
-ls output/sessions/session_X/images/           # View images
+cat output/projects/project_X/story.json       # View story
+cat output/projects/project_X/shots.json       # View prompts
+ls output/projects/project_X/images/           # View images
 ```
 
 ## Progress Tracking Example
 
 ```
-Session: session_20250208_002238
+Project: project_20250208_002238
 Status: IN PROGRESS
 
 Progress Bar:
@@ -251,4 +251,4 @@ Shot Breakdown:
 ✅ **Full History** - Track all generations
 ✅ **Easy Management** - Simple commands
 ✅ **Debugging** - Review all data
-✅ **Reusable** - Export prompts from sessions
+✅ **Reusable** - Export prompts from projects

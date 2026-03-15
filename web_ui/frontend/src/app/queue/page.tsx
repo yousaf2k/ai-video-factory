@@ -8,7 +8,7 @@ import { useQueue } from '../../hooks/useQueue';
 import { QueueItem, QueueItemStatus, GenerationType, ViewMode } from '../../types';
 import QueueHeader from '../../components/queue/QueueHeader';
 import QueueList from '../../components/queue/QueueList';
-import SessionGroup from '../../components/queue/SessionGroup';
+import ProjectGroup from '../../components/queue/ProjectGroup';
 import { Loader2 } from 'lucide-react';
 
 export default function QueuePage() {
@@ -26,6 +26,7 @@ export default function QueuePage() {
     clearFailed,
     clearCancelled,
     reorderItems,
+    requeueItem,
     refetch
   } = useQueue({ enabled: true });
 
@@ -54,37 +55,37 @@ export default function QueuePage() {
       if (statusFilter !== 'all' && item.status !== statusFilter) {
         return false;
       }
-      
+
       // Type filter
       if (typeFilter !== 'all') {
         const isImage = [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE].includes(item.generation_type);
         const isVideo = [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO].includes(item.generation_type);
-        
+
         if (typeFilter === 'image' && !isImage) return false;
         if (typeFilter === 'video' && !isVideo) return false;
         if (typeFilter === 'narration' && item.generation_type !== GenerationType.NARRATION) return false;
         if (typeFilter === 'background' && item.generation_type !== GenerationType.BACKGROUND) return false;
       }
-      
+
       return true;
     });
   }, [items, statusFilter, typeFilter]);
 
-  // Group items by session for grouped view
+  // Group items by project for grouped view
   const groupedItems = useMemo(() => {
     const groups: Map<string, QueueItem[]> = new Map();
 
     displayItems.forEach((item) => {
-      if (!groups.has(item.session_id)) {
-        groups.set(item.session_id, []);
+      if (!groups.has(item.project_id)) {
+        groups.set(item.project_id, []);
       }
-      groups.get(item.session_id)!.push(item);
+      groups.get(item.project_id)!.push(item);
     });
 
-    return Array.from(groups.entries()).map(([sessionId, sessionItems]) => ({
-      sessionId,
-      sessionTitle: sessionItems[0]?.session_title || sessionId,
-      items: sessionItems
+    return Array.from(groups.entries()).map(([projectId, projectItems]) => ({
+      projectId,
+      projectTitle: projectItems[0]?.project_title || projectId,
+      items: projectItems
     }));
   }, [displayItems]);
 
@@ -159,6 +160,10 @@ export default function QueuePage() {
     }
   };
 
+  const handleRequeueItem = (itemId: string) => {
+    requeueItem(itemId);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -203,7 +208,7 @@ export default function QueuePage() {
             <div className="max-w-md mx-auto">
               <h3 className="text-lg font-medium text-gray-900 mb-2">Queue is empty</h3>
               <p className="text-gray-500">
-                No items in the generation queue. Queue shots or videos from a session to see them here.
+                No items in the generation queue. Queue shots or videos from a project to see them here.
               </p>
             </div>
           </div>
@@ -214,20 +219,22 @@ export default function QueuePage() {
             selectedItems={selectedItems}
             onSelectItem={handleToggleSelect}
             onCancelItem={handleCancelItem}
+            onRequeueItem={handleRequeueItem}
             onReorder={handleReorder}
           />
         ) : (
           /* Grouped view */
           <div className="space-y-4">
-            {groupedItems.map(({ sessionId, sessionTitle, items }) => (
-              <SessionGroup
-                key={sessionId}
-                sessionId={sessionId}
-                sessionTitle={sessionTitle}
+            {groupedItems.map(({ projectId, projectTitle, items }) => (
+              <ProjectGroup
+                key={projectId}
+                projectId={projectId}
+                projectTitle={projectTitle}
                 items={items}
                 selectedItems={selectedItems}
                 onSelectItem={handleToggleSelect}
                 onCancelItem={handleCancelItem}
+                onRequeueItem={handleRequeueItem}
                 onReorder={handleReorder}
               />
             ))}

@@ -258,7 +258,7 @@ on movie set
 
 ## Example Output
 
-When generating a "The Godfather" session, the NOW image prompt will be:
+When generating a "The Godfather" project, the NOW image prompt will be:
 
 ```
 Medium shot showing both characters side by side on dark movie set background.
@@ -278,7 +278,7 @@ warm lamp lighting, vintage desk and chair, atmospheric shadows, rich wood tones
 **Status:** ✅ Updated and ready for use
 
 **Next Steps:**
-1. Create a new ThenVsNow session
+1. Create a new ThenVsNow project
 2. Generate images to see the new selfie composition
 3. Verify iPhone 15 Pro Max is visible
 4. Check that both characters appear in NOW images

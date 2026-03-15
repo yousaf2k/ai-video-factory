@@ -52,12 +52,12 @@ logger = get_logger(__name__)
 ```
 **Purpose**: ComfyUI client operations
 
-#### core/session_manager.py
+#### core/project_manager.py
 ```python
 from core.logger_config import get_logger
 logger = get_logger(__name__)
 ```
-**Purpose**: Session management operations
+**Purpose**: Project management operations
 
 #### core/narration_generator.py
 ```python
@@ -189,7 +189,7 @@ def ask(prompt: str, response_format: str = None) -> str:
 ## 5. Logger Types
 
 ### get_logger(__name__)
-- **Used in**: main.py, gemini_engine.py, comfy_client.py, session_manager.py, narration_generator.py, image_generator.py
+- **Used in**: main.py, gemini_engine.py, comfy_client.py, project_manager.py, narration_generator.py, image_generator.py
 - **Purpose**: General-purpose module logging
 - **Logs to**: `logs/app.log`
 

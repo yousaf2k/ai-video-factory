@@ -1,13 +1,13 @@
 """
-Pydantic models for session data
+Pydantic models for project data
 """
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 
 
-class SessionStep(BaseModel):
-    """Progress steps for session"""
+class ProjectStep(BaseModel):
+    """Progress steps for project"""
     story: bool = False
     scene_graph: bool = False
     shots: bool = False
@@ -16,33 +16,33 @@ class SessionStep(BaseModel):
     narration: bool = False
 
 
-class SessionStats(BaseModel):
-    """Statistics for session"""
+class ProjectStats(BaseModel):
+    """Statistics for project"""
     total_shots: int = 0
     images_generated: int = 0
     videos_rendered: int = 0
     narration_generated: bool = False
 
 
-class SessionMetadata(BaseModel):
-    """Session metadata model"""
-    session_id: str
+class ProjectMetadata(BaseModel):
+    """Project metadata model"""
+    project_id: str
     timestamp: str
     idea: str
     started_at: str
     completed: bool = False
     completed_at: Optional[str] = None
-    steps: SessionStep = Field(default_factory=SessionStep)
-    stats: SessionStats = Field(default_factory=SessionStats)
+    steps: ProjectStep = Field(default_factory=ProjectStep)
+    stats: ProjectStats = Field(default_factory=ProjectStats)
 
     model_config = {
         "extra": "allow"
     }
 
 
-class SessionListItem(BaseModel):
-    """Session item for list view"""
-    session_id: str
+class ProjectListItem(BaseModel):
+    """Project item for list view"""
+    project_id: str
     timestamp: str
     idea: str
     started_at: str
@@ -54,10 +54,10 @@ class SessionListItem(BaseModel):
     story: Optional[Dict[str, Any]] = None
 
     @classmethod
-    def from_metadata(cls, meta: dict, story: dict = None) -> "SessionListItem":
-        """Create from SessionManager metadata dict"""
+    def from_metadata(cls, meta: dict, story: dict = None) -> "ProjectListItem":
+        """Create from ProjectManager metadata dict"""
         return cls(
-            session_id=meta.get("session_id", ""),
+            project_id=meta.get("project_id", ""),
             timestamp=meta.get("timestamp", ""),
             idea=meta.get("idea", ""),
             started_at=meta.get("started_at", ""),
@@ -70,8 +70,8 @@ class SessionListItem(BaseModel):
         )
 
 
-class SessionDetail(SessionMetadata):
-    """Full session detail with story and shots"""
+class ProjectDetail(ProjectMetadata):
+    """Full project detail with story and shots"""
     story: Optional[Dict[str, Any]] = None
     shots: Optional[List[Dict[str, Any]]] = None
 
@@ -80,8 +80,8 @@ class SessionDetail(SessionMetadata):
     }
 
     @classmethod
-    def from_session_data(cls, meta: dict, story: dict = None, shots: list = None) -> "SessionDetail":
-        """Create from SessionManager data"""
+    def from_project_data(cls, meta: dict, story: dict = None, shots: list = None) -> "ProjectDetail":
+        """Create from ProjectManager data"""
         # Filter meta to only include fields in the model if Pydantic is strict
         # But with extra="allow", this should work
         return cls(
@@ -91,10 +91,10 @@ class SessionDetail(SessionMetadata):
         )
 
 
-class CreateSessionRequest(BaseModel):
-    """Request to create a new session"""
+class CreateProjectRequest(BaseModel):
+    """Request to create a new project"""
     idea: str = Field(..., description="Video idea/prompt", min_length=1)
-    session_id: Optional[str] = Field(default=None, description="Optional custom session ID")
+    project_id: Optional[str] = Field(default=None, description="Optional custom project ID")
     story_agent: str = Field(default="default", description="Story generation agent")
     shots_agent: str = Field(default="default", description="Shots prompt agent")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
@@ -109,8 +109,8 @@ class CreateSessionRequest(BaseModel):
         return v
 
 
-class UpdateSessionRequest(BaseModel):
-    """Request to update session metadata"""
+class UpdateProjectRequest(BaseModel):
+    """Request to update project metadata"""
     idea: Optional[str] = None
     completed: Optional[bool] = None
     story_agent: Optional[str] = None
@@ -125,11 +125,11 @@ class UpdateSessionRequest(BaseModel):
         return v
 
 
-class DuplicateSessionRequest(BaseModel):
-    """Request to duplicate a session"""
-    new_session_id: Optional[str] = None
+class DuplicateProjectRequest(BaseModel):
+    """Request to duplicate a project"""
+    new_project_id: Optional[str] = None
 
 
-class ResumeSessionRequest(BaseModel):
+class ResumeProjectRequest(BaseModel):
     """Request to resume from a specific step"""
     step: str = Field(..., description="Step to resume from (story, shots, images, videos, narration)")

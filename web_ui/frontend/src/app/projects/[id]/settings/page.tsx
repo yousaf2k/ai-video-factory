@@ -1,12 +1,12 @@
 /**
- * Session Settings Page
+ * Project Settings Page
  */
 "use client";
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSession, useUpdateSession } from "@/hooks/useSessions";
+import { useProject, useUpdateProject } from "@/hooks/useProjects";
 import { useAgents } from "@/hooks/useAgents";
 import { api } from "@/services/api";
 import { Save, RefreshCw, ChevronLeft, Globe } from "lucide-react";
@@ -20,14 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function SessionSettingsPage() {
+export default function ProjectSettingsPage() {
   const params = useParams();
-  const sessionId = params.id as string;
+  const projectId = params.id as string;
   const router = useRouter();
 
-  const { data: session, isLoading, error } = useSession(sessionId);
+  const { data: project, isLoading, error } = useProject(projectId);
   const { data: agents } = useAgents();
-  const updateSessionMutation = useUpdateSession(sessionId);
+  const updateProjectMutation = useUpdateProject(projectId);
 
   const [formData, setFormData] = useState({
     idea: "",
@@ -37,24 +37,24 @@ export default function SessionSettingsPage() {
   const [isLaunchingBrowser, setIsLaunchingBrowser] = useState(false);
 
   useEffect(() => {
-    if (session) {
+    if (project) {
       setFormData({
-        idea: session.idea || "",
-        story_agent: session.story_agent || "default",
-        shots_agent: session.shots_agent || "default",
+        idea: project.idea || "",
+        story_agent: project.story_agent || "default",
+        shots_agent: project.shots_agent || "default",
       });
     }
-  }, [session]);
+  }, [project]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await updateSessionMutation.mutateAsync(formData);
-      alert("Session settings updated successfully!");
-      router.push(`/sessions/${sessionId}`);
+      await updateProjectMutation.mutateAsync(formData);
+      alert("Project settings updated successfully!");
+      router.push(`/projects/${projectId}`);
     } catch (error) {
-      console.error("Failed to update session settings:", error);
-      alert("Failed to update session settings.");
+      console.error("Failed to update project settings:", error);
+      alert("Failed to update project settings.");
     }
   };
 
@@ -76,15 +76,15 @@ export default function SessionSettingsPage() {
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        Loading session settings...
+        Loading project settings...
       </div>
     );
   }
 
-  if (error || !session) {
+  if (error || !project) {
     return (
       <div className="container mx-auto px-4 py-8 text-red-500">
-        Error loading session settings.
+        Error loading project settings.
       </div>
     );
   }
@@ -93,16 +93,16 @@ export default function SessionSettingsPage() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <Link
-          href={`/sessions/${sessionId}`}
+          href={`/projects/${projectId}`}
           className="text-primary hover:underline mb-4 flex items-center gap-1"
         >
           <ChevronLeft className="w-4 h-4" />
-          Back to Session
+          Back to Project
         </Link>
-        <h1 className="text-3xl font-bold">Session Settings</h1>
+        <h1 className="text-3xl font-bold">Project Settings</h1>
         <p className="text-muted-foreground">
-          Configuration for session:{" "}
-          <span className="font-mono text-foreground">{sessionId}</span>
+          Configuration for project:{" "}
+          <span className="font-mono text-foreground">{projectId}</span>
         </p>
       </div>
 
@@ -133,7 +133,7 @@ export default function SessionSettingsPage() {
             Agent Configuration
           </h2>
           <p className="text-sm text-muted-foreground">
-            Default agents to use for regeneration steps in this session.
+            Default agents to use for regeneration steps in this project.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -197,7 +197,7 @@ export default function SessionSettingsPage() {
           <p className="text-sm text-muted-foreground">
             If you are having trouble with Google login being blocked, use this
             button to launch a browser with persistent context and stealth
-            settings. Once you log in there, Google will recognize your session
+            settings. Once you log in there, Google will recognize your project
             in future automated runs.
           </p>
           <Button
@@ -223,17 +223,17 @@ export default function SessionSettingsPage() {
 
         <div className="flex justify-end pt-4 gap-3">
           <Link
-            href={`/sessions/${sessionId}`}
+            href={`/projects/${projectId}`}
             className="px-6 py-2 border rounded-md hover:bg-muted transition-colors"
           >
             Cancel
           </Link>
           <Button
             type="submit"
-            disabled={updateSessionMutation.isPending}
+            disabled={updateProjectMutation.isPending}
             className="flex items-center gap-2"
           >
-            {updateSessionMutation.isPending ? (
+            {updateProjectMutation.isPending ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
                 Saving...

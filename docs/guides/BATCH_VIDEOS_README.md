@@ -7,7 +7,7 @@ Generate videos from existing images using ComfyUI's video generation models.
 - **Load images from folder**: Automatically discovers all images in a directory
 - **Smart camera detection**: Detects camera movement from filename
 - **Customizable video length**: Set video duration in seconds
-- **Session tracking**: Optional session management for progress tracking
+- **Project tracking**: Optional project management for progress tracking
 - **Resume support**: Resume interrupted generations
 - **Unique filenames**: Automatically handles duplicate filenames with suffixes (a, b, c)
 
@@ -37,13 +37,13 @@ This will:
 python batch_videos.py input_images/ output_videos/ --length 10
 ```
 
-### Create a Session for Tracking
+### Create a Project for Tracking
 
 ```bash
-python batch_videos.py input_images/ output_videos/ --session my_project
+python batch_videos.py input_images/ output_videos/ --project my_project
 ```
 
-Sessions are saved to `output/sessions/<session_id>/` and include:
+Projects are saved to `output/projects/<project_id>/` and include:
 - Progress tracking
 - Video paths
 - Generation statistics
@@ -117,22 +117,22 @@ Videos are saved as MP4 files with the naming pattern:
 - `shot_001.mp4`, `shot_002.mp4`, etc.
 - If a file exists, suffixes are added: `shot_001a.mp4`, `shot_001b.mp4`, etc.
 
-## Session Tracking
+## Project Tracking
 
-When you use `--session`, the system:
+When you use `--project`, the system:
 
-1. Creates a session in `output/sessions/<session_id>/`
+1. Creates a project in `output/projects/<project_id>/`
 2. Saves progress after each video generation
 3. Tracks which shots are complete
 4. Enables resume if interrupted
 
-Session files:
-- `{session_id}_meta.json`: Session metadata and progress
+Project files:
+- `{project_id}_meta.json`: Project metadata and progress
 - `videos/`: Generated videos
 
-### Resume a Session
+### Resume a Project
 
-If a session is interrupted, you can't currently resume from where it left off.
+If a project is interrupted, you can't currently resume from where it left off.
 This feature may be added in future versions.
 
 ## Examples
@@ -155,13 +155,13 @@ python batch_videos.py input_images/ output_videos/
 #   └── shot_003.mp4  (bird flying, pan)
 ```
 
-### Example 2: Long Videos with Session
+### Example 2: Long Videos with Project
 
 ```bash
-python batch_videos.py my_photos/ my_videos/ --length 15 --session vacation_2024
+python batch_videos.py my_photos/ my_videos/ --length 15 --project vacation_2024
 
-# Creates session: output/sessions/vacation_2024/
-# Session contains:
+# Creates project: output/projects/vacation_2024/
+# Project contains:
 #   - vacation_2024_meta.json (progress tracking)
 #   - videos/ (generated videos)
 ```
@@ -221,7 +221,7 @@ If camera type is not found in filename, it defaults to `static`.
 1. **Organize files**: Use descriptive filenames with camera info
 2. **Consistent naming**: Use consistent patterns (e.g., `scene_description_camera.jpg`)
 3. **Test first**: Try with a few images before processing large batches
-4. **Use sessions**: Enable sessions for large batches to track progress
+4. **Use projects**: Enable projects for large batches to track progress
 5. **Check storage**: Ensure enough disk space for output videos
 
 ## Advanced: Camera Detection Patterns
@@ -240,14 +240,14 @@ CAMERA_PATTERNS = {
 
 This batch script is standalone but can be integrated into the main pipeline:
 
-1. Videos generated here can be used in sessions
-2. Session metadata is compatible with main system
+1. Videos generated here can be used in projects
+2. Project metadata is compatible with main system
 3. Can be used for pre-processing existing images before full pipeline
 
 ## Future Enhancements
 
 Potential features for future versions:
-- Resume from interrupted sessions
+- Resume from interrupted projects
 - Batch size control
 - Custom motion prompts file
 - Image preprocessing (resize, format conversion)

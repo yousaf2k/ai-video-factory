@@ -14,14 +14,14 @@ Each character gets two video segments:
 
 ## How to Use
 
-### Step 1: Create a New Session
+### Step 1: Create a New Project
 
 1. Go to the Web UI
-2. Click "Create New Session"
+2. Click "Create New Project"
 3. **Story Agent**: Select "then_vs_now"
 4. **Idea**: Enter a movie name (e.g., "The Godfather", "Back to the Future")
 5. **Duration** (optional): Set target video length in seconds
-6. Click "Create Session"
+6. Click "Create Project"
 
 ### Step 2: Review Generated Content
 
@@ -173,7 +173,7 @@ Total shots: 8 characters × 2 = 16 shots
 **Solution**:
 1. Check that story agent was "then_vs_now"
 2. Verify shots.json has `"is_flfi2v": true`
-3. Try recreating the session
+3. Try recreating the project
 
 ### "Only one image generated"
 
@@ -236,7 +236,7 @@ The set_prompt is in the scene data:
 Generated files are organized as:
 
 ```
-output/sessions/{session_id}/
+output/projects/{project_id}/
 ├── images/
 │   ├── shot_001_then_001.png
 │   ├── shot_001_now_001.png
@@ -334,6 +334,6 @@ The "Then Vs Now" feature creates immersive reunion videos with:
 ✅ Dual-video generation (Meeting + Departure)
 ✅ SEO-optimized YouTube metadata
 ✅ Easy-to-use toggle controls
-✅ Backward compatible with existing sessions
+✅ Backward compatible with existing projects
 
 Try it with your favorite movie today!

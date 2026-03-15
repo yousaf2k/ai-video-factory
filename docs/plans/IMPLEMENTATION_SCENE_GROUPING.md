@@ -1,6 +1,6 @@
 # Scene Grouping and Filtering Implementation Plan
 
-Implement functionality to group shots by scene and filter them by individual scenes using tabs in the Edit Session page.
+Implement functionality to group shots by scene and filter them by individual scenes using tabs in the Edit Project page.
 
 ## Proposed Changes
 
@@ -9,8 +9,8 @@ Implement functionality to group shots by scene and filter them by individual sc
 #### [MODIFY] [types/index.ts](file:///c:/AI/ai_video_factory_v1/web_ui/frontend/src/types/index.ts)
 - Add `scene_index?: number` to the `Shot` interface.
 
-#### [MODIFY] [page.tsx](file:///c:/AI/ai_video_factory_v1/web_ui/frontend/src/app/sessions/%5Bid%5D/edit/page.tsx)
-- Pass `session.story.scenes` to the `ShotGrid` component.
+#### [MODIFY] [page.tsx](file:///c:/AI/ai_video_factory_v1/web_ui/frontend/src/app/projects/%5Bid%5D/edit/page.tsx)
+- Pass `project.story.scenes` to the `ShotGrid` component.
 
 #### [MODIFY] [ShotGrid.tsx](file:///c:/AI/ai_video_factory_v1/web_ui/frontend/src/components/shots/ShotGrid.tsx)
 - Add state for `isGroupingEnabled` and `activeSceneTab` (default "All").

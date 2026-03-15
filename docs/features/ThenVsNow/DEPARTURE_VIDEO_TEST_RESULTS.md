@@ -31,9 +31,9 @@ All FLFI2V workflows are properly configured:
 
 ---
 
-## Session Test Results
+## Project Test Results
 
-### Test Session: Titanic: The Reunion (session_20260312_230034)
+### Test Project: Titanic: The Reunion (project_20260312_230034)
 
 **Total Shots:** 20 FLFI2V shots
 **Test Result:** ✅ PASSED
@@ -87,7 +87,7 @@ All FLFI2V workflows are properly configured:
 3. **Scene Image Fallback** ✓
    - When no next character in scene, system searches for scene image
    - Checks `story['scenes'][scene_id]['scene_image_path']`
-   - Currently not defined in test session (optional feature)
+   - Currently not defined in test project (optional feature)
 
 4. **Ultimate Fallback** ✓
    - When no next character and no scene image, uses current NOW image
@@ -147,11 +147,11 @@ Shots 17-20 need THEN and NOW images:
 
 ```bash
 # Using Web UI
-# Navigate to session > Shots tab
+# Navigate to project > Shots tab
 # Click "Regenerate All Images"
 
 # Or using API
-curl -X POST "http://localhost:8000/api/sessions/session_20260312_230034/shots/batch-regenerate" \
+curl -X POST "http://localhost:8000/api/projects/project_20260312_230034/shots/batch-regenerate" \
   -H "Content-Type: application/json" \
   -d '{
     "shot_indices": [17, 18, 19, 20],
@@ -165,20 +165,20 @@ curl -X POST "http://localhost:8000/api/sessions/session_20260312_230034/shots/b
 Once all images exist, generate departure videos:
 
 **Option A: Web UI**
-1. Navigate to session page
+1. Navigate to project page
 2. Click "Regenerate All Videos" button
 3. System generates both Meeting and Departure videos
 
 **Option B: API - Generate Only Departure Videos**
 ```bash
 # Single shot
-curl -X POST "http://localhost:8000/api/sessions/session_20260312_230034/shots/1/regenerate-video" \
+curl -X POST "http://localhost:8000/api/projects/project_20260312_230034/shots/1/regenerate-video" \
   -H "Content-Type: application/json" \
   -d '{"force": true, "video_variant": "departure"}'
 
 # All shots
 for i in {1..20}; do
-  curl -X POST "http://localhost:8000/api/sessions/session_20260312_230034/shots/$i/regenerate-video" \
+  curl -X POST "http://localhost:8000/api/projects/project_20260312_230034/shots/$i/regenerate-video" \
     -H "Content-Type: application/json" \
     -d '{"force": true, "video_variant": "departure"}'
 done
@@ -186,7 +186,7 @@ done
 
 **Option C: Command Line**
 ```bash
-python regenerate.py --session session_20260312_230034 --videos --video-variant departure
+python regenerate.py --project project_20260312_230034 --videos --video-variant departure
 ```
 
 ### 3. View Departure Videos
@@ -294,4 +294,4 @@ The departure video generation logic is **ready for production use**. The system
 4. ✅ Falls back to current NOW when neither is available
 5. ✅ Generates videos with seed=1 for reproducibility
 
-**Action:** Proceed with generating departure videos for your ThenVsNow sessions!
+**Action:** Proceed with generating departure videos for your ThenVsNow projects!

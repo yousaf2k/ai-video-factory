@@ -245,7 +245,7 @@ After creating workflows:
 2. Verify node IDs match config.py expectations
 3. Test with actual reference photos
 4. Integrate with story editor UI
-5. Run end-to-end test with complete ThenVsNow session
+5. Run end-to-end test with complete ThenVsNow project
 
 ## Resources
 

@@ -51,7 +51,7 @@ class Shot(BaseModel):
                 "narration": "The soldiers stood vigilant",
                 "batch_number": 1,
                 "image_generated": True,
-                "image_path": "output/sessions/session_xxx/images/shot_001.png",
+                "image_path": "output/projects/project_xxx/images/shot_001.png",
                 "image_paths": [],
                 "video_rendered": False,
                 "video_path": None

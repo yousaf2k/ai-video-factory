@@ -114,7 +114,7 @@ This meant the batch instruction with shot requirements was never inserted into 
 The pipeline should now work correctly. To test:
 
 ```bash
-# Create new session with fixed code
+# Create new project with fixed code
 python core/main.py \
   --story-agent prehistoric_pov \
   --image-agent prehistoric_pov \

@@ -73,37 +73,37 @@ def _create_browser_context(playwright_instance):
         raise
 
 
-def _ensure_session_chat(page, session_title: str):
-    """Ensure we are in a chat named after the session_title."""
-    if not session_title:
+def _ensure_project_chat(page, project_title: str):
+    """Ensure we are in a chat named after the project_title."""
+    if not project_title:
         return
 
-    logger.info(f"Ensuring Gemini chat for session: '{session_title}'")
+    logger.info(f"Ensuring Gemini chat for project: '{project_title}'")
     try:
         sidebar_selectors = [
-            f'a[aria-label*="{session_title}"]',
-            f'div[role="button"]:has-text("{session_title}")',
-            f'a:has-text("{session_title}")',
+            f'a[aria-label*="{project_title}"]',
+            f'div[role="button"]:has-text("{project_title}")',
+            f'a:has-text("{project_title}")',
         ]
         
         for sel in sidebar_selectors:
             try:
                 chat_link = page.query_selector(sel)
                 if chat_link:
-                    logger.info(f"Found existing chat: '{session_title}'. Clicking...")
+                    logger.info(f"Found existing chat: '{project_title}'. Clicking...")
                     chat_link.click()
                     time.sleep(3)
                     return
             except Exception:
                 continue
                 
-        logger.info(f"No existing chat found for '{session_title}'. Using current/new chat.")
+        logger.info(f"No existing chat found for '{project_title}'. Using current/new chat.")
         new_chat_btn = page.query_selector('a[href="/app"], button:has-text("New chat")')
         if new_chat_btn and not page.url.endswith('/app'):
             new_chat_btn.click()
             time.sleep(2)
     except Exception as e:
-        logger.warning(f"Error while managing session chat: {e}")
+        logger.warning(f"Error while managing project chat: {e}")
 
 
 def _inject_text_into_input(page, input_element, text: str) -> bool:
@@ -246,7 +246,7 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
                         for btn in reversed(btns):
                             if btn.is_visible():
                                 logger.info(f"Clicking download button: {btn_sel} (at DOM depth {depth})")
-                                with page.expect_download(timeout=120000) as dl_info:
+                                with page.expect_download(timeout=300000) as dl_info:
                                     btn.click()
                                 dl = dl_info.value
                                 dl.save_as(output_path)
@@ -352,11 +352,12 @@ def _download_video_fallback(page, output_path: str) -> Optional[str]:
         
     return None
 
-def run(image_path: str, motion_prompt: str, output_path: str, session_title: str = None) -> Optional[str]:
+def run(image_path: str, motion_prompt: str, output_path: str, project_title: str = None) -> Optional[str]:
     """Main entry point — run Playwright and generate a video."""
     from playwright.sync_api import sync_playwright
 
     gemini_url = getattr(config, 'GEMINIWEB_URL', 'https://gemini.google.com/app')
+    timeout = getattr(config, 'GEMINIWEB_TIMEOUT', 120)
 
     logger.info(f"Generating video (GeminiWeb subprocess): {output_path}")
     logger.debug(f"  Prompt: {motion_prompt[:100]}...")
@@ -368,12 +369,12 @@ def run(image_path: str, motion_prompt: str, output_path: str, session_title: st
 
         try:
             logger.info(f"Navigating to {gemini_url}")
-            page.goto(gemini_url, wait_until='domcontentloaded', timeout=60000)
+            page.goto(gemini_url, wait_until='domcontentloaded', timeout=timeout * 1000)
             time.sleep(5)
 
             # ── Ensure correct chat ──────────────────────────────────────────
-            if session_title:
-                _ensure_session_chat(page, session_title)
+            if project_title:
+                _ensure_project_chat(page, project_title)
 
             # Dismiss any dialogs
             try:
@@ -586,10 +587,10 @@ if __name__ == "__main__":
     parser.add_argument("image_path")
     parser.add_argument("motion_prompt")
     parser.add_argument("output_path")
-    parser.add_argument("session_title", nargs='?', default=None)
+    parser.add_argument("project_title", nargs='?', default=None)
     args = parser.parse_args()
 
-    result = run(args.image_path, args.motion_prompt, args.output_path, args.session_title)
+    result = run(args.image_path, args.motion_prompt, args.output_path, args.project_title)
     if result:
         print(f"SUCCESS:{result}")
         sys.exit(0)

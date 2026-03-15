@@ -240,7 +240,7 @@ Shot length: 5
 
 # 4. Generate images (now using ComfyUI)
 # → Each image submitted to ComfyUI
-# → Downloaded to session folder
+# → Downloaded to project folder
 # → No API cost!
 
 # 5. Render videos

@@ -39,7 +39,7 @@ Complete guide to all documentation for the AI Video Factory system.
 | Document | Description |
 |----------|-------------|
 | **[Workflow Guide](WORKFLOW_GUIDE.md)** ⭐ | Complete pipeline overview |
-| [Session Guide](SESSION_GUIDE.md) | Session management |
+| [Project Guide](SESSION_GUIDE.md) | Project management |
 | [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md) | Regenerate failed shots |
 | [Workflow Diagram](WORKFLOW_DIAGRAM.md) | Visual system architecture |
 | **[Then Vs Now Quick Start](features/thenvsnow/THEN_VS_NOW_QUICKSTART.md)** 🆕 | FLFI2V reunion video guide |
@@ -69,7 +69,7 @@ Complete guide to all documentation for the AI Video Factory system.
 | [Video Length Guide](VIDEO_LENGTH_GUIDE.md) | Video length configuration |
 | [Video Length QuickRef](VIDEO_LENGTH_QUICKREF.md) | Video length cheat sheet |
 | [Video Regeneration QuickRef](VIDEO_REGEN_QUICKREF.md) | Regeneration quick reference |
-| [Session Visual Guide](SESSION_VISUAL_GUIDE.md) | Visual session guide |
+| [Project Visual Guide](SESSION_VISUAL_GUIDE.md) | Visual project guide |
 | [Features Summary](FEATURES_SUMMARY.md) | Feature summary |
 | [New Features Summary](NEW_FEATURES_SUMMARY.md) | New features overview |
 | [Final Feature Summary](FINAL_FEATURE_SUMMARY.md) | Final feature list |
@@ -170,22 +170,22 @@ IMAGE_GENERATION_MODE = "gemini"  # or "comfyui"
 
 **See:** [Configuration Guide](CONFIGURATION.md), [ComfyUI Image Guide](COMFYUI_IMAGE_GUIDE.md)
 
-### Session Management & Crash Recovery
+### Project Management & Crash Recovery
 
-Full session tracking with automatic resume:
+Full project tracking with automatic resume:
 
 ```bash
-# List sessions
-python sessions.py --list
+# List projects
+python projects.py --list
 
-# Resume session
-python main.py --session session_20260210_174844
+# Resume project
+python main.py --project project_20260210_174844
 
 # Regenerate failed shots
-python regenerate.py --session session_20260210_174844 --videos --failed-only
+python regenerate.py --project project_20260210_174844 --videos --failed-only
 ```
 
-**See:** [Session Guide](SESSION_GUIDE.md), [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md)
+**See:** [Project Guide](SESSION_GUIDE.md), [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md)
 
 ---
 
@@ -201,11 +201,11 @@ python main.py --idea "Your idea" --max-shots 5 --shot-length 8
 # Enable narration
 python main.py --idea "Your idea" --generate-narration --tts-voice en-US-AriaNeural
 
-# Resume from session
-python main.py --session session_20260210_174844
+# Resume from project
+python main.py --project project_20260210_174844
 
 # Regenerate specific shots
-python regenerate.py --session session_20260210_174844 --shots 1,3,5
+python regenerate.py --project project_20260210_174844 --shots 1,3,5
 
 # Test setup
 python test_setup.py
@@ -221,7 +221,7 @@ ai_video_factory/
 ├── config.py                    # All configuration
 ├── main.py                      # Pipeline entry point
 ├── regenerate.py                # Regeneration utility
-├── sessions.py                  # Session management CLI
+├── projects.py                  # Project management CLI
 │
 ├── docs/                        # 📚 Documentation (this folder)
 │   ├── DOCS_INDEX.md           # ← You are here
@@ -240,7 +240,7 @@ ai_video_factory/
 │   ├── image_generator.py      # Image generation
 │   ├── prompt_compiler.py      # Workflow compilation
 │   ├── comfy_client.py         # ComfyUI interface
-│   └── session_manager.py      # Session management
+│   └── project_manager.py      # Project management
 │
 ├── agents/                      # Prompt templates
 │   ├── story/                  # Story generation agents
@@ -257,7 +257,7 @@ ai_video_factory/
 │   └── story.txt               # Default idea input
 │
 └── output/                      # Output files
-    └── sessions/               # Session folders
+    └── projects/               # Project folders
 ```
 
 ---
@@ -323,7 +323,7 @@ Do you want to...
 
 ### Workflow
 - [Workflow Guide](WORKFLOW_GUIDE.md)
-- [Session Guide](SESSION_GUIDE.md)
+- [Project Guide](SESSION_GUIDE.md)
 - [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md)
 
 ### Reference

@@ -44,9 +44,9 @@ except Exception as e:
 except Exception as e:
     logger.error(f"Error regenerating shot {shot_index} image: {e}")
     # Broadcast cancelled event to clear loading state in UI
-    manager.broadcast_sync(session_id, {
+    manager.broadcast_sync(project_id, {
         "type": "cancelled",
-        "session_id": session_id,
+        "project_id": project_id,
         "shot_index": shot_index,
         "shot_id": shot.get('id')
     })
@@ -67,9 +67,9 @@ except Exception as e:
 except Exception as e:
     logger.error(f"Error regenerating shot {shot_index} video: {e}")
     # Broadcast cancelled event to clear loading state in UI
-    manager.broadcast_sync(session_id, {
+    manager.broadcast_sync(project_id, {
         "type": "cancelled",
-        "session_id": session_id,
+        "project_id": project_id,
         "shot_index": shot_index,
         "shot_id": shot.get('id')
     })
@@ -83,9 +83,9 @@ except Exception as e:
 except Exception as e:
     logger.error(f"Batch error on shot {shot_index}: {str(e)}")
     # Broadcast error/cancel so UI spinner doesn't run forever
-    manager.broadcast_sync(session_id, {
+    manager.broadcast_sync(project_id, {
         "type": "cancelled",
-        "session_id": session_id,
+        "project_id": project_id,
         "shot_index": shot_index
     })
 ```
@@ -95,9 +95,9 @@ except Exception as e:
 except Exception as e:
     logger.error(f"Batch error on shot {shot_index}: {str(e)}")
     # Broadcast error/cancel so UI spinner doesn't run forever
-    manager.broadcast_sync(session_id, {
+    manager.broadcast_sync(project_id, {
         "type": "cancelled",
-        "session_id": session_id,
+        "project_id": project_id,
         "shot_index": shot_index,
         "shot_id": shot_data.get('id') if shot_data else None
     })
@@ -204,7 +204,7 @@ To verify the fix works correctly:
 ```json
 {
   "type": "cancelled",
-  "session_id": "session_abc123",
+  "project_id": "project_abc123",
   "shot_index": 1,
   "shot_id": "def456"
 }

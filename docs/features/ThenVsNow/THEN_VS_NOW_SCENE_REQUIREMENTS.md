@@ -291,9 +291,9 @@ Hyper-realistic, 4K cinematic, behind-the-scenes realism.
 
 ## Testing
 
-### Generate New Session
+### Generate New Project
 
-1. Create new ThenVsNow session
+1. Create new ThenVsNow project
 2. Enter movie name (e.g., "The Godfather")
 3. Generate story
 4. Check scenes in story.json
@@ -303,7 +303,7 @@ Hyper-realistic, 4K cinematic, behind-the-scenes realism.
 
 ```bash
 # Check scene prompts
-cat output/sessions/{session_id}/story.json | jq '.scenes[0].set_prompt'
+cat output/projects/{project_id}/story.json | jq '.scenes[0].set_prompt'
 ```
 
 Should see:
@@ -355,7 +355,7 @@ Hobbit holes with round doors, lush green gardens, warm sunlight
 **Status:** ✅ Updated and ready for use
 
 **Next Steps:**
-1. Create new ThenVsNow session to see enhanced scene prompts
+1. Create new ThenVsNow project to see enhanced scene prompts
 2. Verify all 7 requirements are in generated scenes
 3. Check that set prompts are much more detailed than before
 4. Enjoy ultra-realistic set recreations!

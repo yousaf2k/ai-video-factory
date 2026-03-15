@@ -1,5 +1,5 @@
 /**
- * Sessions list page
+ * Projects list page
  */
 "use client";
 
@@ -8,11 +8,11 @@ import Link from "next/link";
 import { Trash2, Copy, ImageIcon, RefreshCw, PlaySquare } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  useSessions,
-  useCreateSession,
-  useDeleteSession,
-  useDuplicateSession,
-} from "@/hooks/useSessions";
+  useProjects,
+  useCreateProject,
+  useDeleteProject,
+  useDuplicateProject,
+} from "@/hooks/useProjects";
 import { useAgents } from "@/hooks/useAgents";
 import { getMediaUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -26,16 +26,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/services/api";
-import type { CreateSessionRequest } from "@/types";
+import type { CreateProjectRequest } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 
-export default function SessionsPage() {
+export default function ProjectsPage() {
   const queryClient = useQueryClient();
-  const { data: sessions, isLoading, error } = useSessions();
+  const { data: projects, isLoading, error } = useProjects();
   const { data: agents } = useAgents();
-  const createSessionMutation = useCreateSession();
-  const deleteSessionMutation = useDeleteSession();
-  const duplicateSessionMutation = useDuplicateSession();
+  const createProjectMutation = useCreateProject();
+  const deleteProjectMutation = useDeleteProject();
+  const duplicateProjectMutation = useDuplicateProject();
 
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newIdea, setNewIdea] = useState("");
@@ -51,23 +51,23 @@ export default function SessionsPage() {
     Record<string, boolean>
   >({});
 
-  const handleGenerateThumbnail = async (sessionId: string) => {
+  const handleGenerateThumbnail = async (projectId: string) => {
     try {
-      setGeneratingThumbnails((prev) => ({ ...prev, [sessionId]: true }));
-      await api.generateThumbnail(sessionId, "16:9", true);
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      setGeneratingThumbnails((prev) => ({ ...prev, [projectId]: true }));
+      await api.generateThumbnail(projectId, "16:9", true);
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
     } catch (error) {
       console.error("Failed to generate thumbnail:", error);
     } finally {
-      setGeneratingThumbnails((prev) => ({ ...prev, [sessionId]: false }));
+      setGeneratingThumbnails((prev) => ({ ...prev, [projectId]: false }));
     }
   };
 
-  const handleCreateSession = async (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newIdea.trim()) return;
 
-    const request: CreateSessionRequest = {
+    const request: CreateProjectRequest = {
       idea: newIdea,
       story_agent: selectedStoryAgent,
       shots_agent: selectedShotsAgent,
@@ -78,63 +78,63 @@ export default function SessionsPage() {
 
     try {
       setIsGeneratingStory(true);
-      const session = await createSessionMutation.mutateAsync(request);
+      const project = await createProjectMutation.mutateAsync(request);
 
       try {
         // Automatically generate the initial story ONLY if not using a prompts file
         if (!request.prompts_file) {
-          await api.regenerateStory(session.session_id, request.story_agent);
+          await api.regenerateStory(project.project_id, request.story_agent);
         }
       } catch (storyError) {
         console.error("Failed to generate initial story:", storyError);
-        // Continue to the session page even if story generation fails
+        // Continue to the project page even if story generation fails
       }
 
       setShowNewDialog(false);
       setNewIdea("");
       setPromptsFile("");
-      // Navigate to the new session
-      window.location.href = `/sessions/${session.session_id}`;
+      // Navigate to the new project
+      window.location.href = `/projects/${project.project_id}`;
     } catch (error) {
-      console.error("Failed to create session:", error);
-      alert("Failed to create session. Please try again.");
+      console.error("Failed to create project:", error);
+      alert("Failed to create project. Please try again.");
     } finally {
       setIsGeneratingStory(false);
     }
   };
 
-  const handleDeleteSession = async (sessionId: string) => {
+  const handleDeleteProject = async (projectId: string) => {
     if (
       !confirm(
-        "Are you sure you want to delete this session? This action cannot be undone.",
+        "Are you sure you want to delete this project? This action cannot be undone.",
       )
     ) {
       return;
     }
 
     try {
-      await deleteSessionMutation.mutateAsync(sessionId);
+      await deleteProjectMutation.mutateAsync(projectId);
     } catch (error) {
-      console.error("Failed to delete session:", error);
-      alert("Failed to delete session. Please try again.");
+      console.error("Failed to delete project:", error);
+      alert("Failed to delete project. Please try again.");
     }
   };
 
-  const handleDuplicateSession = async (sessionId: string) => {
+  const handleDuplicateProject = async (projectId: string) => {
     try {
-      const session = await duplicateSessionMutation.mutateAsync({ sessionId });
-      // Navigate to the duplicated session
-      window.location.href = `/sessions/${session.session_id}`;
+      const project = await duplicateProjectMutation.mutateAsync({ projectId });
+      // Navigate to the duplicated project
+      window.location.href = `/projects/${project.project_id}`;
     } catch (error) {
-      console.error("Failed to duplicate session:", error);
-      alert("Failed to duplicate session. Please try again.");
+      console.error("Failed to duplicate project:", error);
+      alert("Failed to duplicate project. Please try again.");
     }
   };
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading sessions...</div>
+        <div className="text-lg">Loading projects...</div>
       </div>
     );
   }
@@ -142,7 +142,7 @@ export default function SessionsPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-500">Error loading sessions</div>
+        <div className="text-red-500">Error loading projects</div>
       </div>
     );
   }
@@ -157,23 +157,23 @@ export default function SessionsPage() {
             Generate cinematic videos from text ideas
           </p>
         </div>
-        <Button onClick={() => setShowNewDialog(true)}>New Session</Button>
+        <Button onClick={() => setShowNewDialog(true)}>New Project</Button>
       </div>
 
-      {/* Sessions Grid */}
-      {sessions && sessions.length > 0 ? (
+      {/* Projects Grid */}
+      {projects && projects.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-10 gap-x-4">
-          {sessions.map((session) => (
+          {projects.map((project) => (
             <div
-              key={session.session_id}
+              key={project.project_id}
               className="group relative flex flex-col gap-3 transition-colors rounded-xl hover:bg-muted/30 p-2 -m-2"
             >
               {/* Thumbnail Container */}
               <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted outline outline-1 outline-transparent group-hover:outline-border transition-all">
-                {session.thumbnail_url ? (
+                {project.thumbnail_url ? (
                   <img
-                    src={getMediaUrl(session.thumbnail_url)}
-                    alt={session.idea}
+                    src={getMediaUrl(project.thumbnail_url)}
+                    alt={project.idea}
                     className="object-cover w-full h-full"
                   />
                 ) : (
@@ -183,7 +183,7 @@ export default function SessionsPage() {
                 )}
 
                 {/* Generate Button Overlay */}
-                {!session.thumbnail_url && (
+                {!project.thumbnail_url && (
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
                     <Button
                       variant="secondary"
@@ -191,16 +191,16 @@ export default function SessionsPage() {
                       className="gap-2 shadow-lg"
                       onClick={(e) => {
                         e.preventDefault();
-                        handleGenerateThumbnail(session.session_id);
+                        handleGenerateThumbnail(project.project_id);
                       }}
-                      disabled={generatingThumbnails[session.session_id]}
+                      disabled={generatingThumbnails[project.project_id]}
                     >
-                      {generatingThumbnails[session.session_id] ? (
+                      {generatingThumbnails[project.project_id] ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
                       ) : (
                         <ImageIcon className="w-4 h-4" />
                       )}
-                      {generatingThumbnails[session.session_id]
+                      {generatingThumbnails[project.project_id]
                         ? "Generating..."
                         : "Generate Thumbnail"}
                     </Button>
@@ -209,7 +209,7 @@ export default function SessionsPage() {
 
                 {/* Duration / Status Badges on Thumbnail */}
                 <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium text-white bg-black/80 rounded z-10">
-                  {session.completed ? "Done" : "In Progress"}
+                  {project.completed ? "Done" : "In Progress"}
                 </div>
               </div>
 
@@ -224,27 +224,27 @@ export default function SessionsPage() {
                 <div className="flex flex-col overflow-hidden">
                   <h3
                     className="text-sm font-semibold line-clamp-2 leading-tight text-foreground"
-                    title={session.idea}
+                    title={project.idea}
                   >
-                    {session.story?.title || session.idea}
+                    {project.story?.title || project.idea}
                   </h3>
                   <div className="text-xs text-muted-foreground mt-1 flex flex-col gap-0.5">
                     <span className="truncate">
-                      {session.started_at
+                      {project.started_at
                         ? (() => {
-                            try {
-                              return formatDistanceToNow(
-                                new Date(session.started_at),
-                                { addSuffix: true },
-                              );
-                            } catch (e) {
-                              return "Unknown date";
-                            }
-                          })()
+                          try {
+                            return formatDistanceToNow(
+                              new Date(project.started_at),
+                              { addSuffix: true },
+                            );
+                          } catch (e) {
+                            return "Unknown date";
+                          }
+                        })()
                         : "Unknown date"}
                     </span>
                     <span className="truncate">
-                      {session.videos_rendered} videos • {session.total_shots}{" "}
+                      {project.videos_rendered} videos • {project.total_shots}{" "}
                       shots
                     </span>
                   </div>
@@ -252,10 +252,10 @@ export default function SessionsPage() {
               </div>
 
               <Link
-                href={`/sessions/${session.session_id}`}
+                href={`/projects/${project.project_id}`}
                 className="absolute inset-0 z-10"
               >
-                <span className="sr-only">View Session</span>
+                <span className="sr-only">View Project</span>
               </Link>
 
               {/* Action Menu overlay in corner */}
@@ -266,9 +266,9 @@ export default function SessionsPage() {
                   className="w-8 h-8 rounded-full shadow-md bg-background/80 hover:bg-background"
                   onClick={(e) => {
                     e.preventDefault();
-                    handleDuplicateSession(session.session_id);
+                    handleDuplicateProject(project.project_id);
                   }}
-                  title="Duplicate session"
+                  title="Duplicate project"
                 >
                   <Copy className="w-4 h-4" />
                 </Button>
@@ -278,9 +278,9 @@ export default function SessionsPage() {
                   className="w-8 h-8 rounded-full shadow-md"
                   onClick={(e) => {
                     e.preventDefault();
-                    handleDeleteSession(session.session_id);
+                    handleDeleteProject(project.project_id);
                   }}
-                  title="Delete session"
+                  title="Delete project"
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -291,18 +291,18 @@ export default function SessionsPage() {
       ) : (
         <div className="text-center py-12">
           <p className="text-muted-foreground mb-4">
-            No sessions yet. Create your first session!
+            No projects yet. Create your first project!
           </p>
-          <Button onClick={() => setShowNewDialog(true)}>Create Session</Button>
+          <Button onClick={() => setShowNewDialog(true)}>Create Project</Button>
         </div>
       )}
 
-      {/* New Session Dialog */}
+      {/* New Project Dialog */}
       {showNewDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-background rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Create New Session</h2>
-            <form onSubmit={handleCreateSession}>
+            <h2 className="text-xl font-bold mb-4">Create New Project</h2>
+            <form onSubmit={handleCreateProject}>
               <div className="mb-4">
                 <label
                   htmlFor="idea"
@@ -451,12 +451,12 @@ export default function SessionsPage() {
                 <Button
                   type="submit"
                   disabled={
-                    createSessionMutation.isPending || isGeneratingStory
+                    createProjectMutation.isPending || isGeneratingStory
                   }
                 >
                   {isGeneratingStory
                     ? "Generating Story..."
-                    : createSessionMutation.isPending
+                    : createProjectMutation.isPending
                       ? "Creating..."
                       : "Create"}
                 </Button>

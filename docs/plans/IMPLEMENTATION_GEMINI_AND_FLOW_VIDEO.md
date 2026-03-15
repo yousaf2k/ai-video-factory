@@ -48,9 +48,9 @@ This plan outlines the steps to add support for generating videos using the Gemi
 #### [MODIFY] [core/video_regenerator.py](file:///c:/AI/ai_video_factory_v1/core/video_regenerator.py)
 - Update regeneration logic to handle the new backend modes.
 
-### Session Management
+### Project Management
 
-#### [MODIFY] [core/session_manager.py](file:///c:/AI/ai_video_factory_v1/core/session_manager.py)
+#### [MODIFY] [core/project_manager.py](file:///c:/AI/ai_video_factory_v1/core/project_manager.py)
 - Track multiple `video_paths` in the shot object to allow variations.
 
 ### Backend API

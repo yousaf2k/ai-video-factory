@@ -104,9 +104,9 @@ If neither next character's NOW image nor scene image is available:
 **Added parameter:**
 ```python
 def _generate_flfi2v_video(
-    self, session_id: str, shot: Dict[str, Any],
+    self, project_id: str, shot: Dict[str, Any],
     variant: str, video_mode: Optional[str],
-    workflow_name: Optional[str], session_title: Optional[str],
+    workflow_name: Optional[str], project_title: Optional[str],
     video_filename: str, seed: Optional[int] = None,
     last_frame_image_path: Optional[str] = None  # NEW
 ) -> str:
@@ -143,7 +143,7 @@ if current_scene_id is not None:
 
     # If no next character, try scene image
     if not last_frame_image:
-        story = self.session_manager.get_story(session_id)
+        story = self.project_manager.get_story(project_id)
         if story and current_scene_id < len(story.get('scenes', [])):
             scene = story['scenes'][current_scene_id]
             scene_image_path = scene.get('scene_image_path')
@@ -248,9 +248,9 @@ Currently, scene images must be generated separately. A future feature could:
 
 **Potential implementation:**
 ```python
-def generate_scene_image(session_id: str, scene_id: int):
+def generate_scene_image(project_id: str, scene_id: int):
     """Generate a scene/set image for departure video last frames"""
-    story = session_manager.get_story(session_id)
+    story = project_manager.get_story(project_id)
     scene = story['scenes'][scene_id]
     set_prompt = scene.get('set_prompt', '')
 
@@ -259,7 +259,7 @@ def generate_scene_image(session_id: str, scene_id: int):
 
     # Save to scene
     scene['scene_image_path'] = image_path
-    save_story(session_id, story)
+    save_story(project_id, story)
 ```
 
 ---

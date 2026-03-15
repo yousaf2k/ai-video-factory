@@ -17,7 +17,7 @@ import config
 if sys.platform == 'win32':
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-from web_ui.backend.api import sessions, stories, shots, config as config_api, queue
+from web_ui.backend.api import projects, stories, shots, config as config_api, queue
 from web_ui.backend.websocket.manager import manager
 
 # Configure logging
@@ -44,7 +44,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(sessions.router)
+app.include_router(projects.router)
 app.include_router(stories.router)
 app.include_router(shots.router)
 app.include_router(config_api.router)
@@ -76,19 +76,19 @@ async def health():
     }
 
 
-@app.websocket("/api/ws/progress/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
+@app.websocket("/api/ws/progress/{project_id}")
+async def websocket_endpoint(websocket: WebSocket, project_id: str):
     """WebSocket endpoint for real-time progress updates"""
-    await manager.connect(websocket, session_id)
+    await manager.connect(websocket, project_id)
     try:
         while True:
             # We don't expect messages from client, but handle ping/pong if needed
             await websocket.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(websocket, session_id)
+        manager.disconnect(websocket, project_id)
     except Exception as e:
-        logger.error(f"WebSocket error for session {session_id}: {e}")
-        manager.disconnect(websocket, session_id)
+        logger.error(f"WebSocket error for project {project_id}: {e}")
+        manager.disconnect(websocket, project_id)
 
 
 
@@ -104,8 +104,8 @@ async def startup_event():
 
     print("[DEBUG] Startup: Ensuring output directories exist")
     import config
-    sessions_dir = config.ABS_SESSIONS_DIR
-    os.makedirs(sessions_dir, exist_ok=True)
+    projects_dir = config.ABS_PROJECTS_DIR
+    os.makedirs(projects_dir, exist_ok=True)
     
     print("[DEBUG] Startup: Importing get_generation_service")
     from web_ui.backend.services.generation_service import get_generation_service
@@ -124,8 +124,8 @@ async def startup_event():
     
     with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "a") as f: f.write("[DEBUG] Startup: Completed startup_event\n")
     
-    # Note: Sessions assets (images/videos) are now served dynamically 
-    # via endpoints in sessions.py to support newly created sessions
+    # Note: Projects assets (images/videos) are now served dynamically 
+    # via endpoints in projects.py to support newly created projects
     # without requiring a server restart.
 
 

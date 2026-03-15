@@ -44,7 +44,7 @@ The AI Film Studio system has been successfully upgraded to integrate Google Gem
 4. **`core/main.py`**
    - Added: STEP 4.5 - Image Generation
    - Added: Import for image_generator module
-   - Added: Timestamped session directories
+   - Added: Timestamped project directories
    - Added: Filtering for valid shots only
    - Enhanced: Error handling
 
@@ -67,7 +67,7 @@ The AI Film Studio system has been successfully upgraded to integrate Google Gem
 
 ### 2. Gemini Image Generation
 - ✅ Pre-generates images using Gemini NanoBanana Pro
-- ✅ Saves images to organized session directories
+- ✅ Saves images to organized project directories
 - ✅ Handles failures gracefully
 - ✅ Progress tracking for each shot
 
@@ -125,7 +125,7 @@ C:\AI\ai_video_factory\
 │
 └── 📁 output\
     └── 📁 generated_images\           ⭐ NEW DIRECTORY
-        └── 📁 session_YYYYMMDD_HHMMSS\
+        └── 📁 project_YYYYMMDD_HHMMSS\
             ├── 🖼️ shot_001.png
             ├── 🖼️ shot_002.png
             └── ...

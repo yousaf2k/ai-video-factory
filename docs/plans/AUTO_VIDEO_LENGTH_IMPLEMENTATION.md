@@ -34,7 +34,7 @@ Replaced the existing priority chain with clearer logic:
 - Shows calculation: "Automatic calculation: 600s ÷ 5s/shot = 120 shots"
 - Indicates source: "from --total-length", "from DEFAULT_MAX_SHOTS manual override", etc.
 
-**Fixed resume session bug (Line 2613):**
+**Fixed resume project bug (Line 2613):**
 - Before: `max_shots=args.max_shots or config.DEFAULT_MAX_SHOTS` (bug: `0` is falsy)
 - After: `max_shots=args.max_shots if args.max_shots is not None else calculate_max_shots_from_config()`
 

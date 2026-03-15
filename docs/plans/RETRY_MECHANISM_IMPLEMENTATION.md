@@ -184,7 +184,7 @@ Tests verify:
 
 ## Backward Compatibility
 
-- Existing sessions without retry metadata continue to work
+- Existing projects without retry metadata continue to work
 - Old code calling `generate_images_for_shots()` without `retry_tracker` parameter still works
 - Can ignore second return value if retry tracking not needed
 - Configuration defaults ensure functionality even if config not updated
@@ -226,7 +226,7 @@ Generating 30 images (1 per shot) using ComfyUI...
 
 [SUCCESS] All retries completed successfully!
 
-[INFO] Image generation complete. Images saved to: output/session_xxx/generated_images
+[INFO] Image generation complete. Images saved to: output/project_xxx/generated_images
 
 ==================================================================
 IMAGE GENERATION RETRY SUMMARY
@@ -258,4 +258,4 @@ Possible future improvements:
 - Per-shot retry limits (some shots may need more retries)
 - Retry with different parameters (e.g., different workflow)
 - Parallel retry of failed variations
-- Persistent retry state across sessions
+- Persistent retry state across projects

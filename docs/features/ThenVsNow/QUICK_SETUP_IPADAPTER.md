@@ -176,7 +176,7 @@ Open each workflow file and update model paths:
 2. **Test NOW workflow** with current reference photo
 3. **Verify facial consistency** in generated images
 4. **Integrate with backend** for automated generation
-5. **Run end-to-end test** with complete ThenVsNow session
+5. **Run end-to-end test** with complete ThenVsNow project
 
 ## Model Path Reference
 
