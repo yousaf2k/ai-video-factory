@@ -854,42 +854,49 @@ export function ShotCard({
       <div className="mb-3 relative group">
         <div className="aspect-video bg-muted rounded overflow-hidden flex items-center justify-center relative">
           {isGenerating ? (
-            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg z-10">
-              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-              <span className="text-white font-medium">
-                {progress === 0
-                  ? "Initializing Generation..."
-                  : progress !== undefined
-                    ? `Generating... ${progress}%`
-                    : "Generating..."}
-              </span>
-              {onCancel && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCancel();
-                  }}
-                  className="mt-2 px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
-                >
-                  Cancel
-                </button>
-              )}
+            <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm p-2 flex flex-col gap-1 z-10 text-xs text-white rounded-b-lg border-t border-white/10">
+              <div className="flex items-center justify-between font-medium">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <span>Generating</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span>{progress !== undefined && progress > 0 ? `${progress}%` : "Initializing..."}</span>
+                  {onCancel && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCancel();
+                      }}
+                      className="p-1 hover:bg-white/10 rounded-full transition-colors text-red-500 hover:text-red-400"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                <div 
+                  className="bg-primary h-full transition-all duration-300 ease-in-out" 
+                  style={{ width: `${progress !== undefined ? progress : 0}%` }}
+                />
+              </div>
             </div>
           ) : isQueued ? (
-            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg z-10">
-              <Clock className="w-8 h-8 text-white/70 mb-2" />
-              <span className="text-white/90 font-medium text-sm">
-                Queued...
-              </span>
+            <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm p-2 flex items-center justify-between z-10 text-xs text-white rounded-b-lg border-t border-white/10">
+              <div className="flex items-center gap-1.5 font-medium">
+                <Clock className="w-3.5 h-3.5 text-yellow-500 animate-pulse" />
+                <span>Queued</span>
+              </div>
               {onCancel && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onCancel();
                   }}
-                  className="mt-2 px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                  className="p-1 hover:bg-white/10 rounded-full transition-colors text-red-500 hover:text-red-400"
                 >
-                  Cancel
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>

@@ -144,10 +144,18 @@ class QueueService:
             List of added items with assigned item_ids
         """
         with self._queue_lock:
-            # Generate item_ids if not provided
-            for item in items:
+            # Find current max priority to place new items at the bottom
+            max_priority = 0
+            if self._queue:
+                max_priority = max(item.priority for item in self._queue)
+
+            # Generate item_ids if not provided and set priorities
+            for i, item in enumerate(items):
                 if not item.item_id:
                     item.item_id = f"queue_{uuid.uuid4().hex[:8]}"
+                
+                # Assign priority sequentially from max_priority
+                item.priority = max_priority + (i + 1) * 10
 
             # Add to queue and sort by priority
             self._queue.extend(items)
@@ -692,11 +700,13 @@ class QueueService:
 
 # Global singleton instance
 _queue_service: Optional[QueueService] = None
+_queue_service_lock = threading.Lock()
 
 
 def get_queue_service() -> QueueService:
     """Get global QueueService instance"""
     global _queue_service
-    if _queue_service is None:
-        _queue_service = QueueService()
-    return _queue_service
+    with _queue_service_lock:
+        if _queue_service is None:
+            _queue_service = QueueService()
+        return _queue_service

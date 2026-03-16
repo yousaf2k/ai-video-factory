@@ -24,7 +24,7 @@
     "inputs": {
       "shift": 3,
       "model": [
-        "94",
+        "95",
         0
       ]
     },
@@ -137,6 +137,22 @@
     "class_type": "UNETLoader",
     "_meta": {
       "title": "Load Diffusion Model"
+    }
+  },
+  "95": {
+    "inputs": {
+      "model_type": "hidream_i1_full",
+      "rel_l1_thresh": 0.35,
+      "start_percent": 0.1,
+      "end_percent": 1,
+      "model": [
+        "94",
+        0
+      ]
+    },
+    "class_type": "TeaCache",
+    "_meta": {
+      "title": "TeaCache"
     }
   }
 }

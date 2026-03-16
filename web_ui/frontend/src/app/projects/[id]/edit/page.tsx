@@ -362,9 +362,9 @@ export default function ProjectEditPage() {
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Edit Project</h1>
-            <p className="text-muted-foreground">
-              Edit story structure and shot prompts
+            <h1 className="text-3xl font-bold">{story.title}</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Project ID: {projectId}
             </p>
           </div>
           <div className="flex items-center gap-3">

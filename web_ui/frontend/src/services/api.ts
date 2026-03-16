@@ -189,8 +189,8 @@ class ApiClient {
     });
   }
 
-  async getQueueStatus(projectId: string): Promise<{ queued_indices: number[] }> {
-    const response = await this.client.get<{ queued_indices: number[] }>(`/api/projects/${projectId}/shots/queue-status`);
+  async getQueueStatus(projectId: string): Promise<any> {
+    const response = await this.client.get<any>(`/api/projects/${projectId}/shots/queue-status`);
     return response.data;
   }
 

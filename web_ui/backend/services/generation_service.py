@@ -8,6 +8,7 @@ import glob
 import random
 import asyncio
 from typing import List, Dict, Any, Optional
+import threading
 import logging
 
 # Add parent directory to path
@@ -2366,11 +2367,13 @@ class GenerationService:
 
 # Global singleton instance
 _generation_service = None
+_service_lock = threading.Lock()
 
 
 def get_generation_service() -> GenerationService:
     """Get global GenerationService instance"""
     global _generation_service
-    if _generation_service is None:
-        _generation_service = GenerationService()
-    return _generation_service
+    with _service_lock:
+        if _generation_service is None:
+            _generation_service = GenerationService()
+        return _generation_service

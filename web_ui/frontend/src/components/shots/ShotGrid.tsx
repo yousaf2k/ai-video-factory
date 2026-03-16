@@ -432,10 +432,17 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
     const fetchQueueStatus = async () => {
       try {
         const data = await api.getQueueStatus(projectId);
-        if (data.queued_indices && data.queued_indices.length > 0) {
-          setQueuedIndices(
-            (prev) => new Set([...prev, ...data.queued_indices]),
-          );
+        if (data.queued_items) {
+          const indices = data.queued_items
+            .map((i: any) => i.shot_index)
+            .filter((idx: any) => idx !== undefined && idx !== null);
+          setQueuedIndices((prev) => new Set([...prev, ...indices]));
+        }
+        if (data.active_items) {
+          const indices = data.active_items
+            .map((i: any) => i.shot_index)
+            .filter((idx: any) => idx !== undefined && idx !== null);
+          setGeneratingIndices((prev) => new Set([...prev, ...indices]));
         }
       } catch (err) {
         console.error("Failed to fetch queue status:", err);

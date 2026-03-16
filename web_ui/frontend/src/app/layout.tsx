@@ -8,6 +8,7 @@ import { Providers } from '@/components/providers';
 import { Toaster } from 'sonner';
 import Link from 'next/link';
 import { List } from 'lucide-react';
+import QueueMenuLink from '@/components/navigation/QueueMenuLink';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -35,10 +36,7 @@ export default function RootLayout({
                   <Link href="/projects" className="text-sm font-medium hover:text-primary transition-colors">
                     Projects
                   </Link>
-                  <Link href="/queue" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1">
-                    <List className="w-4 h-4" />
-                    Queue
-                  </Link>
+                  <QueueMenuLink />
                   <Link href="/agents" className="text-sm font-medium hover:text-primary transition-colors">
                     Agents
                   </Link>

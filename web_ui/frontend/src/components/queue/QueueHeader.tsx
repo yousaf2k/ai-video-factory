@@ -94,11 +94,10 @@ export function QueueHeader({
           <h1 className="text-2xl font-bold text-foreground">Generation Queue</h1>
 
           {/* Connection status indicator */}
-          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-            wsConnected
-              ? 'bg-green-100 text-green-700'
-              : 'bg-gray-100 text-card-foreground/80'
-          }`} title={wsConnected ? 'Real-time updates active' : 'Using polling (5s updates)'}>
+          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${wsConnected
+            ? 'bg-green-100 text-green-700'
+            : 'bg-gray-100 text-card-foreground/80'
+            }`} title={wsConnected ? 'Real-time updates active' : 'Using polling (5s updates)'}>
             {wsConnected ? (
               <>
                 <Wifi className="w-3.5 h-3.5" />
@@ -206,7 +205,7 @@ export function QueueHeader({
 
         {/* Filters */}
         <div className="flex items-center bg-card border border-border/80 rounded-xl shadow-sm h-9 overflow-hidden">
-          <div className="pl-3 pr-2 py-2 flex items-center bg-muted/40 h-full border-r border-gray-100">
+          <div className="pl-3 pr-2 py-2 flex items-center bg-muted/40 h-full border-r ">
             <Filter className="w-3.5 h-3.5 text-gray-400" />
           </div>
           <Select value={statusFilter} onValueChange={onStatusFilterChange}>
@@ -224,7 +223,7 @@ export function QueueHeader({
             </SelectContent>
           </Select>
 
-          <div className="w-px h-5 bg-gray-200 self-center"></div>
+          <div className="w-px h-5 bg-gray-800 self-center"></div>
 
           <Select value={typeFilter} onValueChange={onTypeFilterChange}>
             <SelectTrigger className="border-none bg-transparent shadow-none focus:ring-0 text-xs font-medium h-full pl-2 pr-4 text-card-foreground/80 w-auto hover:bg-muted/30 transition-colors">
