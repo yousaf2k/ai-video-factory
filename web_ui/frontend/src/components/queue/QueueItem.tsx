@@ -12,7 +12,8 @@ import {
   GripVertical,
   MoreVertical,
   StopCircle,
-  RotateCw
+  RotateCw,
+  Pause
 } from 'lucide-react';
 
 interface QueueItemProps {
@@ -52,6 +53,8 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onI
         return <X className="w-4 h-4 text-muted-foreground/80" />;
       case QueueItemStatus.FAILED:
         return <X className="w-4 h-4 text-red-500" />;
+      case QueueItemStatus.PAUSED:
+        return <Pause className="w-4 h-4 text-yellow-500" />;
       default:
         return null;
     }
@@ -67,6 +70,8 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onI
         return 'border-gray-300 bg-muted/30 opacity-70';
       case QueueItemStatus.FAILED:
         return 'border-destructive/30 bg-destructive/5';
+      case QueueItemStatus.PAUSED:
+        return 'border-yellow-500/30 bg-yellow-500/5';
       default:
         return 'border-gray-200/80 hover:border-gray-300/80';
     }

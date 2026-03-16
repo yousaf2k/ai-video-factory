@@ -375,6 +375,30 @@ class QueueService:
                     return True
             return False
 
+    def mark_paused(self, item_id: str) -> bool:
+        """
+        Mark item as paused.
+
+        Args:
+            item_id: Item identifier
+
+        Returns:
+            True if item was found and updated
+        """
+        with self._queue_lock:
+            for item in self._queue:
+                if item.item_id == item_id:
+                    item.status = QueueItemStatus.PAUSED
+
+                    manager.broadcast_sync('global', {
+                        'type': 'queue.item_paused',
+                        'data': item.model_dump(mode='json')
+                    })
+                    self._broadcast_statistics()
+                    logger.info(f"Marked item {item_id} as paused")
+                    return True
+            return False
+
     def mark_failed(self, item_id: str, error_message: str) -> bool:
         """
         Mark item as failed.
@@ -453,6 +477,30 @@ class QueueService:
                     })
                     self._broadcast_statistics()
                     logger.info(f"Requeued item {item_id}")
+                    return True
+            return False
+
+    def resume_item(self, item_id: str) -> bool:
+        """
+        Resume a paused item.
+
+        Args:
+            item_id: Item identifier
+
+        Returns:
+            True if item was found and resumed
+        """
+        with self._queue_lock:
+            for item in self._queue:
+                if item.item_id == item_id and item.status == QueueItemStatus.PAUSED:
+                    item.status = QueueItemStatus.QUEUED
+
+                    manager.broadcast_sync('global', {
+                        'type': 'queue.item_resumed',
+                        'data': item.model_dump(mode='json')
+                    })
+                    self._broadcast_statistics()
+                    logger.info(f"Resumed item {item_id}")
                     return True
             return False
 
@@ -587,7 +635,8 @@ class QueueService:
                 'active': 0,
                 'completed': 0,
                 'cancelled': 0,
-                'failed': 0
+                'failed': 0,
+                'paused': 0
             }
 
             # Count by type

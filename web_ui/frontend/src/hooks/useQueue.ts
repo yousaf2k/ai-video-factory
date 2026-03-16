@@ -225,6 +225,76 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     }
   });
 
+  const pauseItem = useMutation({
+    mutationFn: async (itemId: string) => {
+      const response = await api.post(`/api/queue/items/${itemId}/pause`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
+      toast.success('Item paused');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to pause item: ${error.message}`);
+    }
+  });
+
+  const resumeItem = useMutation({
+    mutationFn: async (itemId: string) => {
+      const response = await api.post(`/api/queue/items/${itemId}/resume`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
+      toast.success('Item resumed');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to resume item: ${error.message}`);
+    }
+  });
+
+  const bulkPauseItems = useMutation({
+    mutationFn: async (itemIds: string[]) => {
+      const response = await api.post('/api/queue/items/bulk-pause', { item_ids: itemIds });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
+      toast.success(`${data.count} item(s) paused`);
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to pause items: ${error.message}`);
+    }
+  });
+
+  const bulkResumeItems = useMutation({
+    mutationFn: async (itemIds: string[]) => {
+      const response = await api.post('/api/queue/items/bulk-resume', { item_ids: itemIds });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
+      toast.success(`${data.count} item(s) resumed`);
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to resume items: ${error.message}`);
+    }
+  });
+
+  const bulkRequeueItems = useMutation({
+    mutationFn: async (itemIds: string[]) => {
+      const response = await api.post('/api/queue/items/bulk-requeue', { item_ids: itemIds });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
+      toast.success(`${data.count} item(s) requeued`);
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to requeue items: ${error.message}`);
+    }
+  });
+
   const clearMultipleItems = useMutation({
     mutationFn: async (itemsToClear: string[]) => {
       // iterate singular delete
@@ -334,6 +404,7 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
       completed: 0,
       cancelled: 0,
       failed: 0,
+      paused: 0,
       images: 0,
       videos: 0,
       flfi2v: 0,
@@ -347,6 +418,11 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     wsConnected, // WebSocket connection status
 
     // Actions
+    pauseItem: pauseItem.mutate,
+    resumeItem: resumeItem.mutate,
+    bulkPauseItems: bulkPauseItems.mutate,
+    bulkResumeItems: bulkResumeItems.mutate,
+    bulkRequeueItems: bulkRequeueItems.mutate,
     pauseQueue: pauseQueue.mutate,
     resumeQueue: resumeQueue.mutate,
     cancelItem: cancelItem.mutate,

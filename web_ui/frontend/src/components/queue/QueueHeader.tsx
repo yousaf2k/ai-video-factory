@@ -21,7 +21,8 @@ import {
   RefreshCw,
   Wifi,
   WifiOff,
-  Filter
+  Filter,
+  RotateCw
 } from 'lucide-react';
 
 interface QueueHeaderProps {
@@ -38,6 +39,12 @@ interface QueueHeaderProps {
   onClearSelected?: () => void;
   hasCancellableSelected?: boolean;
   hasClearableSelected?: boolean;
+  hasPausableSelected?: boolean;
+  hasResumableSelected?: boolean;
+  onPauseSelected?: () => void;
+  onResumeSelected?: () => void;
+  hasRequeueableSelected?: boolean;
+  onRequeueSelected?: () => void;
   onClearCompleted: () => void;
   onClearFailed: () => void;
   onClearCancelled: () => void;
@@ -63,6 +70,12 @@ export function QueueHeader({
   onClearSelected,
   hasCancellableSelected = false,
   hasClearableSelected = false,
+  hasPausableSelected = false,
+  hasResumableSelected = false,
+  onPauseSelected,
+  onResumeSelected,
+  hasRequeueableSelected = false,
+  onRequeueSelected,
   onClearCompleted,
   onClearFailed,
   onClearCancelled,
@@ -196,30 +209,34 @@ export function QueueHeader({
           <div className="pl-3 pr-2 py-2 flex items-center bg-muted/40 h-full border-r border-gray-100">
             <Filter className="w-3.5 h-3.5 text-gray-400" />
           </div>
-          <select 
-            value={statusFilter}
-            onChange={(e) => onStatusFilterChange(e.target.value)}
-            className="text-xs bg-transparent border-none focus:ring-0 text-card-foreground/80 font-medium py-1.5 pl-2 pr-8 outline-none cursor-pointer h-full"
-          >
-            <option value="all">All Status</option>
-            <option value="active_queued">Active + Queued</option>
-            <option value="queued">Queued</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+          <Select value={statusFilter} onValueChange={onStatusFilterChange}>
+            <SelectTrigger className="border-none bg-transparent shadow-none focus:ring-0 text-xs font-medium h-full pl-2 pr-4 text-card-foreground/80 w-auto hover:bg-muted/30 transition-colors">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent className="bg-card text-card-foreground">
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active_queued">Active + Queued</SelectItem>
+              <SelectItem value="queued">Queued</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+
           <div className="w-px h-5 bg-gray-200 self-center"></div>
-          <select 
-            value={typeFilter}
-            onChange={(e) => onTypeFilterChange(e.target.value)}
-            className="text-xs bg-transparent border-none focus:ring-0 text-card-foreground/80 font-medium py-1.5 pl-2 pr-8 outline-none cursor-pointer h-full"
-          >
-            <option value="all">All Types</option>
-            <option value="image">Images</option>
-            <option value="video">Videos</option>
-            <option value="narration">Audio</option>
-          </select>
+
+          <Select value={typeFilter} onValueChange={onTypeFilterChange}>
+            <SelectTrigger className="border-none bg-transparent shadow-none focus:ring-0 text-xs font-medium h-full pl-2 pr-4 text-card-foreground/80 w-auto hover:bg-muted/30 transition-colors">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent className="bg-card text-card-foreground">
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="image">Images</SelectItem>
+              <SelectItem value="video">Videos</SelectItem>
+              <SelectItem value="narration">Audio</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Selection controls */}
@@ -251,6 +268,39 @@ export function QueueHeader({
           >
             <Pause className="w-4 h-4" />
             Cancel Selected
+          </button>
+        )}
+
+        {/* Pause selected button */}
+        {selectedCount > 0 && hasPausableSelected && onPauseSelected && (
+          <button
+            onClick={onPauseSelected}
+            className="px-3 py-1.5 text-sm font-medium text-yellow-600 hover:bg-yellow-50 border border-yellow-100 rounded-xl shadow-sm bg-card transition-all flex items-center gap-2 hover:shadow-md animate-in fade-in-0 duration-200"
+          >
+            <Pause className="w-4 h-4" />
+            Pause Selected
+          </button>
+        )}
+
+        {/* Resume selected button */}
+        {selectedCount > 0 && hasResumableSelected && onResumeSelected && (
+          <button
+            onClick={onResumeSelected}
+            className="px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 border border-green-100 rounded-xl shadow-sm bg-card transition-all flex items-center gap-2 hover:shadow-md animate-in fade-in-0 duration-200"
+          >
+            <Play className="w-4 h-4" />
+            Resume Selected
+          </button>
+        )}
+
+        {/* Requeue selected button */}
+        {selectedCount > 0 && hasRequeueableSelected && onRequeueSelected && (
+          <button
+            onClick={onRequeueSelected}
+            className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 border border-blue-100 rounded-xl shadow-sm bg-card transition-all flex items-center gap-2 hover:shadow-md animate-in fade-in-0 duration-200"
+          >
+            <RotateCw className="w-4 h-4" />
+            Requeue Selected
           </button>
         )}
 

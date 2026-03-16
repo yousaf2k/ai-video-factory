@@ -134,7 +134,7 @@ class GenerationService:
                     
                     # Check if already cancelled by user (e.g. via API)
                     current_item = queue_service.get_item(item.item_id)
-                    if current_item and current_item.status == QueueItemStatus.CANCELLED:
+                    if current_item and current_item.status in [QueueItemStatus.CANCELLED, QueueItemStatus.PAUSED]:
                         logger.info(f"Item {item.item_id} was cancelled, skipping failure status update")
                         return
                         

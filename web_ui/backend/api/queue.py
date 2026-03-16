@@ -10,7 +10,8 @@ from web_ui.backend.models.queue import (
     QueueStatistics,
     QueueItemStatus,
     ReorderRequest,
-    PriorityUpdateRequest
+    PriorityUpdateRequest,
+    BulkActionRequest
 )
 from web_ui.backend.services.queue_service import get_queue_service
 
@@ -150,6 +151,133 @@ async def cancel_queue_item(item_id: str):
         return {"message": "Item cancelled successfully"}
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/{item_id}/pause")
+async def pause_queue_item(item_id: str):
+    """
+    Pause a specific queue item.
+
+    If the item is currently active, an interrupt will be sent to ComfyUI.
+    """
+    try:
+        item = queue_service.get_item(item_id)
+        is_active = item and item.status == QueueItemStatus.ACTIVE
+
+        success = queue_service.mark_paused(item_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+
+        # If item was active, interrupt ComfyUI generation
+        if is_active:
+            from core.comfy_client import interrupt_generation
+            interrupt_generation()
+
+        return {"message": "Item paused successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/{item_id}/resume")
+async def resume_queue_item(item_id: str):
+    """
+    Resume a paused queue item.
+    """
+    try:
+        success = queue_service.resume_item(item_id)
+        if not success:
+            raise HTTPException(status_code=400, detail=f"Item {item_id} not found or not paused")
+
+        # Ensure queue processor is running
+        try:
+            from web_ui.backend.services.generation_service import get_generation_service
+            get_generation_service()._ensure_queue_processor_started()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+
+        return {"message": "Item resumed successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/bulk-pause")
+async def bulk_pause_items(request: BulkActionRequest):
+    """
+    Pause multiple queue items.
+    """
+    try:
+        paused_count = 0
+        active_interrupted = False
+
+        for item_id in request.item_ids:
+            item = queue_service.get_item(item_id)
+            if item:
+                is_active = item.status == QueueItemStatus.ACTIVE
+                if queue_service.mark_paused(item_id):
+                    paused_count += 1
+                    if is_active:
+                        active_interrupted = True
+
+        if active_interrupted:
+            from core.comfy_client import interrupt_generation
+            interrupt_generation()
+
+        return {"message": f"Paused {paused_count} items", "count": paused_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/bulk-resume")
+async def bulk_resume_items(request: BulkActionRequest):
+    """
+    Resume multiple paused queue items.
+    """
+    try:
+        resumed_count = 0
+        for item_id in request.item_ids:
+            if queue_service.resume_item(item_id):
+                resumed_count += 1
+
+        if resumed_count > 0:
+            try:
+                from web_ui.backend.services.generation_service import get_generation_service
+                get_generation_service()._ensure_queue_processor_started()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+
+        return {"message": f"Resumed {resumed_count} items", "count": resumed_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/bulk-requeue")
+async def bulk_requeue_items(request: BulkActionRequest):
+    """
+    Requeue multiple failed/cancelled queue items.
+    """
+    try:
+        requeued_count = 0
+        for item_id in request.item_ids:
+            if queue_service.requeue_item(item_id):
+                requeued_count += 1
+
+        if requeued_count > 0:
+            try:
+                from web_ui.backend.services.generation_service import get_generation_service
+                get_generation_service()._ensure_queue_processor_started()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+
+        return {"message": f"Requeued {requeued_count} items", "count": requeued_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

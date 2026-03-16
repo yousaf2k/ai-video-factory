@@ -29,7 +29,10 @@ export default function QueuePage() {
     clearCancelled,
     reorderItems,
     requeueItem,
-    refetch
+    refetch,
+    bulkPauseItems,
+    bulkResumeItems,
+    bulkRequeueItems
   } = useQueue({ enabled: true });
 
   const { showDialog, dialogProps } = useConfirmDialog();
@@ -48,6 +51,24 @@ export default function QueuePage() {
   const hasCancellableSelected = useMemo(() => {
     return selectedItemsList.some(item => 
       item.status === QueueItemStatus.QUEUED || item.status === QueueItemStatus.ACTIVE
+    );
+  }, [selectedItemsList]);
+
+  const hasPausableSelected = useMemo(() => {
+    return selectedItemsList.some(item => 
+      item.status === QueueItemStatus.QUEUED || item.status === QueueItemStatus.ACTIVE
+    );
+  }, [selectedItemsList]);
+
+  const hasResumableSelected = useMemo(() => {
+    return selectedItemsList.some(item => 
+      item.status === QueueItemStatus.PAUSED
+    );
+  }, [selectedItemsList]);
+
+  const hasRequeueableSelected = useMemo(() => {
+    return selectedItemsList.some(item => 
+      item.status === QueueItemStatus.FAILED || item.status === QueueItemStatus.CANCELLED
     );
   }, [selectedItemsList]);
 
@@ -221,6 +242,44 @@ export default function QueuePage() {
     }
   };
 
+  const handlePauseSelected = async () => {
+    if (selectedItems.size === 0) return;
+
+    const confirmed = await showDialog({
+      title: "Pause Items",
+      description: `Are you sure you want to pause ${selectedItems.size} item(s)?`,
+      type: "warning",
+      confirmText: "Pause",
+    });
+
+    if (confirmed) {
+      bulkPauseItems(Array.from(selectedItems));
+      setSelectedItems(new Set());
+    }
+  };
+
+  const handleResumeSelected = async () => {
+    if (selectedItems.size === 0) return;
+    bulkResumeItems(Array.from(selectedItems));
+    setSelectedItems(new Set());
+  };
+
+  const handleRequeueSelected = async () => {
+    if (selectedItems.size === 0) return;
+
+    const confirmed = await showDialog({
+      title: "Requeue Items",
+      description: `Are you sure you want to requeue ${selectedItems.size} item(s)?`,
+      type: "warning",
+      confirmText: "Requeue",
+    });
+
+    if (confirmed) {
+      bulkRequeueItems(Array.from(selectedItems));
+      setSelectedItems(new Set());
+    }
+  };
+
   const handleClearCompleted = async () => {
     if (statistics.completed === 0) return;
 
@@ -326,6 +385,12 @@ export default function QueuePage() {
         onClearSelected={handleClearSelected}
         hasCancellableSelected={hasCancellableSelected}
         hasClearableSelected={hasClearableSelected}
+        hasPausableSelected={hasPausableSelected}
+        hasResumableSelected={hasResumableSelected}
+        onPauseSelected={handlePauseSelected}
+        onResumeSelected={handleResumeSelected}
+        hasRequeueableSelected={hasRequeueableSelected}
+        onRequeueSelected={handleRequeueSelected}
         onClearCompleted={handleClearCompleted}
         onClearFailed={handleClearFailed}
         onClearCancelled={handleClearCancelled}

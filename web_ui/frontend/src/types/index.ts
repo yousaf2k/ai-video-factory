@@ -261,6 +261,7 @@ export enum QueueItemStatus {
   ACTIVE = "active",
   COMPLETED = "completed",
   CANCELLED = "cancelled",
+  PAUSED = "paused",
   FAILED = "failed"
 }
 
@@ -291,6 +292,7 @@ export interface QueueStatistics {
   completed: number;
   cancelled: number;
   failed: number;
+  paused: number;
   images: number;
   videos: number;
   flfi2v: number;

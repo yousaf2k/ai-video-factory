@@ -25,6 +25,7 @@ class QueueItemStatus(str, Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    PAUSED = "paused"
     FAILED = "failed"
 
 
@@ -75,6 +76,7 @@ class QueueStatistics(BaseModel):
     completed: int = Field(..., description="Items completed successfully")
     cancelled: int = Field(..., description="Items cancelled by user")
     failed: int = Field(..., description="Items that failed with errors")
+    paused: int = Field(default=0, description="Items currently paused")
 
     # Breakdown by type
     images: int = Field(default=0, description="Image generations (including THEN/NOW)")
@@ -98,3 +100,8 @@ class ReorderRequest(BaseModel):
 class PriorityUpdateRequest(BaseModel):
     """Request to update item priority"""
     priority: int = Field(..., ge=0, le=1000, description="New priority value (lower = higher priority)")
+
+
+class BulkActionRequest(BaseModel):
+    """Request for bulk actions on queue items"""
+    item_ids: List[str] = Field(..., description="List of item IDs to act upon")
