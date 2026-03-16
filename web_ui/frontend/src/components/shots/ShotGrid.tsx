@@ -193,13 +193,11 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
       await updateShotsMutation.mutateAsync(updatedShots);
       toast.success("Shots reordered successfully", {
         description: `Shot ${active.id} has been moved to position ${newIndex + 1}.`,
-        className: toastStyles.success,
       });
     } catch (error) {
       console.error("Failed to reorder shots:", error);
       toast.error("Failed to reorder shots", {
         description: "Please try again.",
-        className: toastStyles.error,
       });
     }
   };
@@ -526,13 +524,11 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
       await updateShotsMutation.mutateAsync(reindexedShots);
       toast.success("Shot deleted successfully", {
         description: `Shot ${indexToRemove} has been removed.`,
-        className: toastStyles.success,
       });
     } catch (error) {
       console.error("Failed to delete shot:", error);
       toast.error("Failed to delete shot", {
         description: "Please try again.",
-        className: toastStyles.error,
       });
     }
   };
@@ -605,13 +601,11 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
       });
       toast.success("Shot added successfully", {
         description: `New shot has been inserted at position ${pos + 1}.`,
-        className: toastStyles.success,
       });
     } catch (error) {
       console.error("Failed to insert shot:", error);
       toast.error("Failed to insert shot", {
         description: "Please try again.",
-        className: toastStyles.error,
       });
     }
   };
