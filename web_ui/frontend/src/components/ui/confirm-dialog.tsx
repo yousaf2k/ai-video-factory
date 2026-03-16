@@ -113,7 +113,7 @@ export function useConfirmDialog(): UseConfirmDialogReturn {
     },
   });
 
-  const [resolvePromise, setResolvePromise] = useState<(value: boolean) => void | null>(null);
+  const [resolvePromise, setResolvePromise] = useState<((value: boolean) => void) | null>(null);
 
   const showDialog = useCallback(
     (props: Omit<ConfirmDialogProps, "open" | "onOpenChange" | "onConfirm">): Promise<boolean> => {
