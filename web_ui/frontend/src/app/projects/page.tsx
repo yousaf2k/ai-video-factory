@@ -5,7 +5,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Trash2, Copy, ImageIcon, RefreshCw, PlaySquare } from "lucide-react";
+import { 
+  Trash2, 
+  Copy, 
+  ImageIcon, 
+  RefreshCw, 
+  PlaySquare,
+  Plus,
+  Video,
+  Clock,
+  Layers,
+  FolderPlus,
+  Sparkles
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useProjects,
@@ -148,47 +160,59 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">AI Video Factory</h1>
-          <p className="text-muted-foreground mt-1">
-            Generate cinematic videos from text ideas
-          </p>
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden bg-card/50 border border-border/50 rounded-2xl p-8 mb-10 shadow-sm">
+        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
+          <Video className="w-64 h-64" />
         </div>
-        <Button onClick={() => setShowNewDialog(true)}>New Project</Button>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div>
+            <h1 className="text-4xl font-extrabold tracking-tight mb-2">Projects</h1>
+            <p className="text-lg text-muted-foreground max-w-xl">
+              Create, manage, and generate cinematic videos from your text ideas.
+            </p>
+          </div>
+          <Button 
+            size="lg" 
+            className="shadow-md hover:shadow-lg transition-all"
+            onClick={() => setShowNewDialog(true)}
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            New Project
+          </Button>
+        </div>
       </div>
 
       {/* Projects Grid */}
       {projects && projects.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-y-10 gap-x-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {projects.map((project) => (
             <div
               key={project.project_id}
-              className="group relative flex flex-col gap-3 transition-colors rounded-xl hover:bg-muted/30 p-2 -m-2"
+              className="group relative flex flex-col gap-3 transition-all duration-300 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-1 overflow-hidden"
             >
               {/* Thumbnail Container */}
-              <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted outline outline-1 outline-transparent group-hover:outline-border transition-all">
+              <div className="relative aspect-video w-full overflow-hidden bg-muted">
                 {project.thumbnail_url ? (
                   <img
                     src={getMediaUrl(project.thumbnail_url)}
                     alt={project.idea}
-                    className="object-cover w-full h-full"
+                    className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
                   />
                 ) : (
-                  <div className="flex w-full h-full flex-col items-center justify-center bg-card text-muted-foreground relative">
-                    <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
+                  <div className="flex w-full h-full flex-col items-center justify-center bg-muted text-muted-foreground relative">
+                    <ImageIcon className="w-10 h-10 mb-2 opacity-30" />
                   </div>
                 )}
-
+                
                 {/* Generate Button Overlay */}
                 {!project.thumbnail_url && (
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                  <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="gap-2 shadow-lg"
+                      className="gap-2 shadow-lg hover:scale-105 transition-transform"
                       onClick={(e) => {
                         e.preventDefault();
                         handleGenerateThumbnail(project.project_id);
@@ -198,7 +222,7 @@ export default function ProjectsPage() {
                       {generatingThumbnails[project.project_id] ? (
                         <RefreshCw className="w-4 h-4 animate-spin" />
                       ) : (
-                        <ImageIcon className="w-4 h-4" />
+                        <Sparkles className="w-4 h-4" />
                       )}
                       {generatingThumbnails[project.project_id]
                         ? "Generating..."
@@ -207,50 +231,59 @@ export default function ProjectsPage() {
                   </div>
                 )}
 
-                {/* Duration / Status Badges on Thumbnail */}
-                <div className="absolute bottom-1 right-1 px-1.5 py-0.5 text-xs font-medium text-white bg-black/80 rounded z-10">
-                  {project.completed ? "Done" : "In Progress"}
+                {/* Status Badges on Thumbnail */}
+                <div className="absolute top-2 left-2 z-10">
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-md shadow-sm backdrop-blur-md ${
+                    project.completed 
+                      ? "bg-green-500/80 text-white" 
+                      : "bg-blue-500/80 text-white"
+                  }`}>
+                    {project.completed ? "Done" : "In Progress"}
+                  </span>
+                </div>
+                
+                {/* Duration Overlay */}
+                <div className="absolute bottom-2 right-2 px-2 py-1 text-xs font-medium text-white bg-black/70 backdrop-blur-sm rounded-md z-10 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {project.started_at
+                    ? (() => {
+                        try {
+                          return formatDistanceToNow(
+                            new Date(project.started_at),
+                            { addSuffix: true },
+                          );
+                        } catch (e) {
+                          return "Unknown";
+                        }
+                      })()
+                    : "New"}
                 </div>
               </div>
 
-              {/* Details */}
-              <div className="flex gap-3 px-1">
-                <div className="flex-none mt-0.5 text-primary">
-                  <PlaySquare
-                    className="w-9 h-9 opacity-80"
-                    strokeWidth={1.5}
-                  />
-                </div>
-                <div className="flex flex-col overflow-hidden">
+              {/* Details & Actions Section */}
+              <div className="flex flex-col p-4 flex-grow">
+                <div className="flex items-start justify-between gap-2 mb-2">
                   <h3
-                    className="text-sm font-semibold line-clamp-2 leading-tight text-foreground"
+                    className="text-base font-semibold line-clamp-2 leading-tight text-card-foreground group-hover:text-primary transition-colors"
                     title={project.idea}
                   >
                     {project.story?.title || project.idea}
                   </h3>
-                  <div className="text-xs text-muted-foreground mt-1 flex flex-col gap-0.5">
-                    <span className="truncate">
-                      {project.started_at
-                        ? (() => {
-                          try {
-                            return formatDistanceToNow(
-                              new Date(project.started_at),
-                              { addSuffix: true },
-                            );
-                          } catch (e) {
-                            return "Unknown date";
-                          }
-                        })()
-                        : "Unknown date"}
-                    </span>
-                    <span className="truncate">
-                      {project.videos_rendered} videos • {project.total_shots}{" "}
-                      shots
-                    </span>
+                </div>
+                
+                <div className="flex items-center gap-4 text-xs text-muted-foreground mt-auto pt-4 border-t border-border/40">
+                  <div className="flex items-center gap-1.5" title="Rendered Videos">
+                    <Video className="w-3.5 h-3.5" />
+                    <span>{project.videos_rendered || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5" title="Total Shots">
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>{project.total_shots || 0}</span>
                   </div>
                 </div>
               </div>
 
+              {/* Clickable Area Overlay */}
               <Link
                 href={`/projects/${project.project_id}`}
                 className="absolute inset-0 z-10"
@@ -259,23 +292,23 @@ export default function ProjectsPage() {
               </Link>
 
               {/* Action Menu overlay in corner */}
-              <div className="absolute top-4 right-4 z-30 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+              <div className="absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-2">
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="w-8 h-8 rounded-full shadow-md bg-background/80 hover:bg-background"
+                  className="w-8 h-8 rounded-full shadow-md bg-background/90 hover:bg-background hover:scale-110 transition-transform"
                   onClick={(e) => {
                     e.preventDefault();
                     handleDuplicateProject(project.project_id);
                   }}
                   title="Duplicate project"
                 >
-                  <Copy className="w-4 h-4" />
+                   <Copy className="w-4 h-4" />
                 </Button>
                 <Button
                   variant="destructive"
                   size="icon"
-                  className="w-8 h-8 rounded-full shadow-md"
+                  className="w-8 h-8 rounded-full shadow-md hover:scale-110 transition-transform"
                   onClick={(e) => {
                     e.preventDefault();
                     handleDeleteProject(project.project_id);
@@ -289,158 +322,185 @@ export default function ProjectsPage() {
           ))}
         </div>
       ) : (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground mb-4">
-            No projects yet. Create your first project!
+        <div className="flex flex-col items-center justify-center py-20 px-4 text-center border-2 border-dashed rounded-2xl bg-card/30">
+          <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6 shadow-sm">
+            <FolderPlus className="w-10 h-10 text-muted-foreground" />
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight mb-2">No projects yet</h2>
+          <p className="text-muted-foreground max-w-md mx-auto mb-8">
+            You don't have any video projects. Create your first project to start generating cinematic videos from your ideas.
           </p>
-          <Button onClick={() => setShowNewDialog(true)}>Create Project</Button>
+          <Button size="lg" onClick={() => setShowNewDialog(true)} className="shadow-md">
+            <Plus className="w-5 h-5 mr-2" />
+            Create First Project
+          </Button>
         </div>
       )}
 
       {/* New Project Dialog */}
       {showNewDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Create New Project</h2>
-            <form onSubmit={handleCreateProject}>
-              <div className="mb-4">
-                <label
-                  htmlFor="idea"
-                  className="block text-sm font-medium mb-2"
-                >
-                  Video Idea
-                </label>
-                <Textarea
-                  id="idea"
-                  value={newIdea}
-                  onChange={(e) => setNewIdea(e.target.value)}
-                  className="min-h-[100px] mb-4"
-                  placeholder="Describe your video idea..."
-                  required
-                />
-              </div>
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-card border shadow-xl rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b shrink-0 bg-card/95 z-10 rounded-t-2xl">
+              <h2 className="text-2xl font-bold tracking-tight">Create New Project</h2>
+              <p className="text-muted-foreground mt-1">
+                Configure your new video generation project.
+              </p>
+            </div>
+            
+            <form onSubmit={handleCreateProject} className="flex flex-col min-h-0">
+              <div className="p-6 overflow-y-auto space-y-8 min-h-0">
+                {/* Basic Details Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Video className="w-5 h-5 text-primary" />
+                    Project Details
+                  </h3>
+                  
+                  <div>
+                    <label
+                      htmlFor="idea"
+                      className="block text-sm font-medium mb-1.5"
+                    >
+                      Video Idea
+                    </label>
+                    <Textarea
+                      id="idea"
+                      value={newIdea}
+                      onChange={(e) => setNewIdea(e.target.value)}
+                      className="min-h-[120px] resize-y bg-background"
+                      placeholder="Describe your video idea in detail..."
+                      required
+                    />
+                  </div>
 
-              <div className="mb-4">
-                <label
-                  htmlFor="promptsFile"
-                  className="block text-sm font-medium mb-2"
-                >
-                  Prompts File Path (optional)
-                </label>
-                <Input
-                  id="promptsFile"
-                  type="text"
-                  value={promptsFile}
-                  onChange={(e) => setPromptsFile(e.target.value)}
-                  placeholder="e.g., input/my_prompts.txt"
-                />
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Skip story generation and import shots directly from this
-                  file.
-                </p>
-              </div>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">
-                  Aspect Ratio
-                </label>
-                <Select
-                  value={selectedAspectRatio}
-                  onValueChange={(val) => setSelectedAspectRatio(val as "16:9" | "9:16")}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Aspect Ratio" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="16:9">16:9 Landscape</SelectItem>
-                    <SelectItem value="9:16">9:16 Portrait</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  {selectedAspectRatio === "16:9"
-                    ? "Horizontal format, best for YouTube and desktop viewing"
-                    : "Vertical format, best for TikTok, Reels, and Shorts"}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Story Agent
-                  </label>
-                  <Select
-                    value={selectedStoryAgent}
-                    onValueChange={(val) => setSelectedStoryAgent(val)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Story Agent" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {!agents?.story.length && (
-                        <SelectItem value="default">Default</SelectItem>
-                      )}
-                      {agents?.story.map((agent) => (
-                        <SelectItem key={agent.id} value={agent.id}>
-                          {agent.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <label
+                      htmlFor="promptsFile"
+                      className="block text-sm font-medium mb-1.5"
+                    >
+                      Prompts File Path <span className="text-muted-foreground font-normal">(optional)</span>
+                    </label>
+                    <Input
+                      id="promptsFile"
+                      type="text"
+                      value={promptsFile}
+                      onChange={(e) => setPromptsFile(e.target.value)}
+                      placeholder="e.g., input/my_prompts.txt"
+                      className="bg-background"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Skip generation and import shots directly from a text file.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Shots Agent
-                  </label>
-                  <Select
-                    value={selectedShotsAgent}
-                    onValueChange={(val) => setSelectedShotsAgent(val)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Shots Agent" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {!agents?.shots?.length && (
-                        <SelectItem value="default">Default</SelectItem>
-                      )}
-                      {agents?.shots?.map((agent) => (
-                        <SelectItem key={agent.id} value={agent.id}>
-                          {agent.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                <div className="border-t"></div>
+
+                {/* Configuration Section */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                    Generation Settings
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">
+                        Aspect Ratio
+                      </label>
+                      <Select
+                        value={selectedAspectRatio}
+                        onValueChange={(val) => setSelectedAspectRatio(val as "16:9" | "9:16")}
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select Aspect Ratio" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="16:9">16:9 (Landscape - YouTube)</SelectItem>
+                          <SelectItem value="9:16">9:16 (Portrait - TikTok/Reels)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="duration"
+                        className="block text-sm font-medium mb-1.5"
+                      >
+                        Target Duration
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <Input
+                          id="duration"
+                          type="number"
+                          value={totalDuration}
+                          onChange={(e) =>
+                            setTotalDuration(parseInt(e.target.value) || 0)
+                          }
+                          min="10"
+                          step="10"
+                          className="bg-background"
+                        />
+                        <span className="text-sm font-medium whitespace-nowrap bg-muted px-3 py-2 rounded-md border min-w-[5rem] text-center">
+                          {Math.floor(totalDuration / 60)}m {totalDuration % 60}s
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">
+                        Story Agent
+                      </label>
+                      <Select
+                        value={selectedStoryAgent}
+                        onValueChange={(val) => setSelectedStoryAgent(val)}
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select Story Agent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {!agents?.story.length && (
+                            <SelectItem value="default">Default</SelectItem>
+                          )}
+                          {agents?.story.map((agent) => (
+                            <SelectItem key={agent.id} value={agent.id}>
+                              {agent.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">
+                        Shots Agent
+                      </label>
+                      <Select
+                        value={selectedShotsAgent}
+                        onValueChange={(val) => setSelectedShotsAgent(val)}
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select Shots Agent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {!agents?.shots?.length && (
+                            <SelectItem value="default">Default</SelectItem>
+                          )}
+                          {agents?.shots?.map((agent) => (
+                            <SelectItem key={agent.id} value={agent.id}>
+                              {agent.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="mb-6">
-                <label
-                  htmlFor="duration"
-                  className="block text-sm font-medium mb-1"
-                >
-                  Target Duration (seconds)
-                </label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    id="duration"
-                    type="number"
-                    value={totalDuration}
-                    onChange={(e) =>
-                      setTotalDuration(parseInt(e.target.value) || 0)
-                    }
-                    min="10"
-                    step="10"
-                  />
-                  <span className="text-sm text-muted-foreground bg-muted px-2 py-1 rounded">
-                    {Math.floor(totalDuration / 60)}m {totalDuration % 60}s
-                  </span>
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  The AI will try to generate a story that fits this total
-                  length.
-                </p>
-              </div>
-
-              <div className="flex gap-2 justify-end">
+              <div className="px-6 py-4 border-t flex gap-3 justify-end shrink-0 bg-card rounded-b-2xl">
                 <Button
                   type="button"
                   variant="outline"
@@ -453,12 +513,24 @@ export default function ProjectsPage() {
                   disabled={
                     createProjectMutation.isPending || isGeneratingStory
                   }
+                  className="min-w-[120px]"
                 >
-                  {isGeneratingStory
-                    ? "Generating Story..."
-                    : createProjectMutation.isPending
-                      ? "Creating..."
-                      : "Create"}
+                  {isGeneratingStory ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : createProjectMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Project
+                    </>
+                  )}
                 </Button>
               </div>
             </form>
