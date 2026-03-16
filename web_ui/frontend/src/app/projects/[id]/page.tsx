@@ -21,6 +21,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { 
+  Tabs, 
+  TabsContent, 
+  TabsList, 
+  TabsTrigger 
+} from "@/components/ui/tabs";
+import { 
+  Film, 
+  Image as LucideImage, 
+  Clock, 
+  Video, 
+  CheckCircle2, 
+  AlertCircle, 
+  Settings, 
+  Edit,
+  ArrowLeft,
+  LayoutDashboard,
+  Layers
+} from "lucide-react";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -107,30 +126,44 @@ export default function ProjectDetailPage() {
       ? (project.stats.videos_rendered / project.stats.total_shots) * 100
       : 0;
 
+  // Calculate counts for stats
+  const totalShotsCount = project.shots?.length || project.stats?.total_shots || 0;
+  const imagesDoneCount = project.stats?.images_generated || 0;
+  const videosDoneCount = project.stats?.videos_rendered || 0;
+
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Header */}
       <div className="mb-8">
         <Link
           href="/projects"
-          className="text-primary hover:underline mb-4 inline-block"
+          className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-primary mb-4 transition-colors"
         >
-          ← Back to Projects
+          <ArrowLeft className="w-4 h-4" />
+          Back to Projects
         </Link>
-        <div className="flex items-start justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-bold">{project.project_id}</h1>
+              <h1 className="text-3xl font-extrabold tracking-tight">
+                {project.story?.title || project.idea || project.project_id}
+              </h1>
               <span
-                className={`px-3 py-1 text-sm rounded-full ${project.completed
-                    ? "bg-green-100 text-green-800"
-                    : "bg-yellow-100 text-yellow-800"
-                  }`}
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold backdrop-blur-md ${
+                  project.completed
+                    ? "bg-green-500/10 text-green-500 border border-green-500/20"
+                    : "bg-blue-500/10 text-blue-500 border border-blue-500/20"
+                }`}
               >
+                {project.completed ? (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                ) : (
+                  <AlertCircle className="w-3.5 h-3.5" />
+                )}
                 {project.completed ? "Completed" : "In Progress"}
               </span>
             </div>
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Started{" "}
               {project.started_at
                 ? (() => {
@@ -148,22 +181,82 @@ export default function ProjectDetailPage() {
           <div className="flex gap-2">
             <Link
               href={`/projects/${projectId}/settings`}
-              className="px-4 py-2 border rounded-md hover:bg-muted transition-colors"
+              className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted hover:text-primary transition-all shadow-sm"
             >
+              <Settings className="w-4 h-4" />
               Settings
             </Link>
             <Link
               href={`/projects/${projectId}/edit`}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-all shadow-sm"
             >
+              <Edit className="w-4 h-4" />
               Edit Project
             </Link>
           </div>
         </div>
+
+        {/* Quick Stats Banner */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
+          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+              <Film className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Shots</p>
+              <p className="text-xl font-bold">{totalShotsCount}</p>
+            </div>
+          </div>
+          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-500">
+              <LucideImage className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Images Ready</p>
+              <p className="text-xl font-bold">
+                {imagesDoneCount}/{totalShotsCount}
+              </p>
+            </div>
+          </div>
+          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center text-purple-500">
+              <Video className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Videos Ready</p>
+              <p className="text-xl font-bold">
+                {videosDoneCount}/{totalShotsCount}
+              </p>
+            </div>
+          </div>
+          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4">
+            <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center text-accent">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Duration</p>
+              <p className="text-xl font-bold">
+                {project.story?.total_duration || 0}s
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Main Workspace Layout */}
-      <div className="flex flex-col lg:flex-row gap-6 mb-8">
+      <Tabs defaultValue="workspace" className="space-y-6">
+        <TabsList className="bg-muted p-1 border rounded-lg">
+          <TabsTrigger value="workspace" className="gap-1.5">
+            <LayoutDashboard className="w-4 h-4" />
+            Workspace
+          </TabsTrigger>
+          <TabsTrigger value="shots" className="gap-1.5">
+            <Layers className="w-4 h-4" />
+            Shots Board ({totalShotsCount})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="workspace" className="space-y-6">
+          <div className="flex flex-col lg:flex-row gap-6">
         {/* Left Sidebar (LumeFlow Style "Model/Prompt" area) */}
         <div className="w-full lg:w-1/3 space-y-6">
           <div className="bg-card border border-border rounded-xl p-5 shadow-lg">
@@ -525,78 +618,81 @@ export default function ProjectDetailPage() {
           )}
         </div>
       </div>
+    </TabsContent>
 
-      {/* Shots Section */}
-      {project.shots && project.shots.length > 0 && (
-        <div className="border rounded-lg p-6">
-          <h2 className="text-lg font-semibold mb-4">
-            Shots ({project.shots.length})
+    <TabsContent value="shots" className="space-y-6">
+      {project.shots && project.shots.length > 0 ? (
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+          <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+            <Film className="w-5 h-5 text-primary" />
+            Shots Timeline ({project.shots.length})
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {project.shots.slice(0, 12).map((shot) => (
-              <div key={shot.index} className="border rounded p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">Shot {shot.index}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {shot.camera}
-                  </span>
-                </div>
-
-                {/* Media Preview */}
-                <div className="mb-2 aspect-video bg-muted rounded overflow-hidden relative group flex items-center justify-center">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+            {project.shots.map((shot) => (
+              <div key={shot.index} className="group relative flex flex-col gap-3 transition-all duration-300 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-1 overflow-hidden">
+                <div className="relative aspect-video w-full overflow-hidden bg-muted">
                   {shot.video_rendered && shot.video_path ? (
                     <video
                       src={getMediaUrl(shot.video_path)}
-                      poster={getMediaUrl(shot.image_path)}
+                      poster={shot.image_path ? getMediaUrl(shot.image_path) : undefined}
+                      className="w-full h-full object-cover transition-all"
                       controls
-                      className="w-full h-full object-cover"
                     />
                   ) : shot.image_path ? (
                     <img
                       src={getMediaUrl(shot.image_path)}
                       alt={`Shot ${shot.index}`}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   ) : (
-                    <span className="text-muted-foreground text-xs">
-                      No media
-                    </span>
+                    <div className="flex w-full h-full flex-col items-center justify-center bg-muted text-muted-foreground">
+                      <LucideImage className="w-10 h-10 mb-2 opacity-30" />
+                      <span className="text-xs">No media</span>
+                    </div>
                   )}
+
+                  {/* Badges */}
+                  <div className="absolute top-2 left-2 z-10 flex gap-1.5 flex-wrap">
+                    <span className={`px-2 py-0.5 text-xs font-semibold rounded-md shadow-sm backdrop-blur-md ${
+                      shot.image_generated ? "bg-green-500/80 text-white" : "bg-neutral-500/80 text-white"
+                    }`}>
+                      IMG {shot.image_generated ? "✓" : "○"}
+                    </span>
+                    <span className={`px-2 py-0.5 text-xs font-semibold rounded-md shadow-sm backdrop-blur-md ${
+                      shot.video_rendered ? "bg-purple-500/80 text-white" : "bg-neutral-500/80 text-white"
+                    }`}>
+                      VID {shot.video_rendered ? "✓" : "○"}
+                    </span>
+                  </div>
+
+                  <div className="absolute bottom-2 right-2 px-2 py-1 text-xs font-medium text-white bg-black/70 backdrop-blur-sm rounded-md z-10">
+                    Shot {shot.index}
+                  </div>
                 </div>
 
-                {/* Status */}
-                <div className="flex gap-2 text-xs mb-2">
-                  <span
-                    className={
-                      shot.image_generated ? "text-green-600" : "text-gray-400"
-                    }
-                  >
-                    Image: {shot.image_generated ? "✓" : "○"}
-                  </span>
-                  <span
-                    className={
-                      shot.video_rendered ? "text-green-600" : "text-gray-400"
-                    }
-                  >
-                    Video: {shot.video_rendered ? "✓" : "○"}
-                  </span>
-                </div>
-
-                {/* Prompts */}
-                <div className="text-xs text-muted-foreground line-clamp-2">
-                  {shot.image_prompt}
+                <div className="flex flex-col p-4 flex-grow">
+                  <div className="flex justify-between text-xs font-medium text-muted-foreground mb-2">
+                    <span>{shot.camera || "No Camera Info"}</span>
+                  </div>
+                  <p className="text-xs text-card-foreground line-clamp-3 leading-relaxed mt-auto" title={shot.image_prompt}>
+                    {shot.image_prompt}
+                  </p>
                 </div>
               </div>
             ))}
           </div>
-
-          {project.shots.length > 12 && (
-            <div className="text-center mt-4 text-muted-foreground">
-              And {project.shots.length - 12} more shots...
-            </div>
-          )}
+        </div>
+      ) : (
+        <div className="text-center py-20 border-2 border-dashed rounded-2xl bg-card/30">
+          <Film className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
+          <h3 className="text-lg font-medium mb-1">No shots planned yet</h3>
+          <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+            Once you generate a story, shots will appear here for orchestrating the assets.
+          </p>
         </div>
       )}
+    </TabsContent>
+  </Tabs>
       {/* Regeneration Modal */}
       {showRegenModal && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
