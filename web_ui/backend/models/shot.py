@@ -95,6 +95,7 @@ class RegenerateVideoRequest(BaseModel):
     video_mode: Optional[str] = Field(default=None, description="Override video generation mode (geminiweb/comfyui)")
     video_workflow: Optional[str] = Field(default=None, description="Override video workflow")
     video_variant: Optional[str] = Field(default=None, description="Video variant for FLFI2V: 'meeting', 'departure', or 'both'")
+    append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
 
 
 class BatchRegenerateRequest(BaseModel):
@@ -109,6 +110,9 @@ class BatchRegenerateRequest(BaseModel):
     image_workflow: Optional[str] = Field(default=None, description="Override image workflow")
     video_mode: Optional[str] = Field(default=None, description="Override video generation mode")
     video_workflow: Optional[str] = Field(default=None, description="Override video workflow")
+    queue_setting: Optional[str] = Field(default="all_images_then_videos", description="Queue order: 'image_then_video' or 'all_images_then_videos'")
+    append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
+
 
 
 class ReplanShotsRequest(BaseModel):

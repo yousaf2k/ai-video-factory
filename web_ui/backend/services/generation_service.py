@@ -131,6 +131,13 @@ class GenerationService:
                 except Exception as e:
                     logger.error(f"Error processing queue item {item.item_id}: {e}")
                     queue_service = get_queue_service()
+                    
+                    # Check if already cancelled by user (e.g. via API)
+                    current_item = queue_service.get_item(item.item_id)
+                    if current_item and current_item.status == QueueItemStatus.CANCELLED:
+                        logger.info(f"Item {item.item_id} was cancelled, skipping failure status update")
+                        return
+                        
                     queue_service.mark_failed(item.item_id, str(e))
 
         # Track active tasks
@@ -244,7 +251,8 @@ class GenerationService:
                 video_mode=item.video_mode,
                 video_workflow=item.video_workflow,
                 project_title=project_title,
-                video_variant=video_variant
+                video_variant=video_variant,
+                append_image_prompt=item.append_image_prompt
             )
 
             logger.info(f"Completed video generation for queue item {item.item_id}")
@@ -373,7 +381,8 @@ class GenerationService:
             video_mode=getattr(request, 'video_mode', None) if request else None,
             video_workflow=getattr(request, 'video_workflow', None) if request else None,
             image_variant=getattr(request, 'image_variant', None) if request else None,
-            video_variant=getattr(request, 'video_variant', None) if request else None
+            video_variant=getattr(request, 'video_variant', None) if request else None,
+            append_image_prompt=getattr(request, 'append_image_prompt', None) if request else None
         )
 
     def _get_queue_item_id(
@@ -531,48 +540,73 @@ class GenerationService:
         queue_items = []
         for idx in request.shot_indices:
             shot = shots[idx - 1] if idx <= len(shots) else None
+            if not shot:
+                continue
 
-            # Create image queue item if regenerating images
-            if request.regenerate_images:
+            # Resolve force flags, defaulting to True (force) if not provided
+            force_images = getattr(request, 'force_images', None)
+            if force_images is None:
+                force_images = getattr(request, 'force', True)
+                
+            force_videos = getattr(request, 'force_videos', None)
+            if force_videos is None:
+                force_videos = getattr(request, 'force', True)
+
+            # Determine if we should skip based on existence
+            skip_images = not force_images and shot.get('image_generated', False)
+            skip_videos = not force_videos and shot.get('video_rendered', False)
+
+            logger.debug(f"Shot {idx}: force_images={force_images}, force_videos={force_videos}, image_generated={shot.get('image_generated')}, video_rendered={shot.get('video_rendered')}")
+
+            # Create image queue item if regenerating images and not skipping
+            if request.regenerate_images and not skip_images:
                 # For FLFI2V shots, create separate items for THEN and NOW images
-                if shot and shot.get('is_flfi2v') and story.get('project_type') == 2:
+                if shot.get('is_flfi2v') and story.get('project_type') == 2:
                     # THEN image item
                     then_item = self._create_queue_item(
-                        project_id, idx, GenerationType.THEN_IMAGE, shot, story
+                        project_id, idx, GenerationType.THEN_IMAGE, shot, story, request=request
                     )
                     queue_items.append(then_item)
                     # NOW image item
                     now_item = self._create_queue_item(
-                        project_id, idx, GenerationType.NOW_IMAGE, shot, story
+                        project_id, idx, GenerationType.NOW_IMAGE, shot, story, request=request
                     )
                     queue_items.append(now_item)
                 else:
                     # Standard image item
                     image_item = self._create_queue_item(
-                        project_id, idx, GenerationType.IMAGE, shot, story
+                        project_id, idx, GenerationType.IMAGE, shot, story, request=request
                     )
                     queue_items.append(image_item)
 
-            # Create video queue item if regenerating videos
-            if request.regenerate_videos:
+            # Create video queue item if regenerating videos and not skipping
+            if request.regenerate_videos and not skip_videos:
                 # For FLFI2V shots, create separate items for meeting and departure videos
-                if shot and shot.get('is_flfi2v') and story.get('project_type') == 2:
+                if shot.get('is_flfi2v') and story.get('project_type') == 2:
                     # Meeting video item
                     meeting_item = self._create_queue_item(
-                        project_id, idx, GenerationType.MEETING_VIDEO, shot, story
+                        project_id, idx, GenerationType.MEETING_VIDEO, shot, story, request=request
                     )
                     queue_items.append(meeting_item)
                     # Departure video item
                     departure_item = self._create_queue_item(
-                        project_id, idx, GenerationType.DEPARTURE_VIDEO, shot, story
+                        project_id, idx, GenerationType.DEPARTURE_VIDEO, shot, story, request=request
                     )
                     queue_items.append(departure_item)
                 else:
                     # Standard video item
                     video_item = self._create_queue_item(
-                        project_id, idx, GenerationType.VIDEO, shot, story
+                        project_id, idx, GenerationType.VIDEO, shot, story, request=request
                     )
                     queue_items.append(video_item)
+
+        # Reorder items based on queue setting
+        queue_setting = getattr(request, 'queue_setting', 'all_images_then_videos')
+        if queue_setting == 'all_images_then_videos':
+            logger.info(f"Reordering queue items for 'all_images_then_videos'")
+            image_items = [item for item in queue_items if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]]
+            video_items = [item for item in queue_items if item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]]
+            queue_items = image_items + video_items
 
         # Add all items to queue
         if queue_items:
@@ -898,6 +932,9 @@ class GenerationService:
                     # Continue to NOW image if "both" was requested
                     if image_variant == "then":
                         raise
+            else:
+                logger.info(f"FLFI2V shot {shot_index} THEN image already generated, skipping and marking completed")
+                self._mark_queue_item_completed(project_id, shot_index, GenerationType.THEN_IMAGE)
 
         # Generate NOW image
         if image_variant in ["now", "both"]:
@@ -986,7 +1023,11 @@ class GenerationService:
                     if image_variant == "now":
                         raise
 
-        # Update standard image_path to NOW (for backward compatibility)
+        
+            else:
+                logger.info(f"FLFI2V shot {shot_index} NOW image already generated, skipping and marking completed")
+                self._mark_queue_item_completed(project_id, shot_index, GenerationType.NOW_IMAGE)
+# Update standard image_path to NOW (for backward compatibility)
         if shots[shot_index - 1].get('now_image_path'):
             shots[shot_index - 1]['image_path'] = shots[shot_index - 1]['now_image_path']
             shots[shot_index - 1]['image_generated'] = True
@@ -1015,7 +1056,8 @@ class GenerationService:
     async def regenerate_shot_video(
         self, project_id: str, shot_index: int, force: bool = False,
         video_mode: Optional[str] = None, video_workflow: Optional[str] = None,
-        project_title: Optional[str] = None, video_variant: str = None
+        project_title: Optional[str] = None, video_variant: str = None,
+        append_image_prompt: Optional[str] = None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -1092,7 +1134,8 @@ class GenerationService:
                 shot,
                 video_mode,
                 video_workflow,
-                project_title
+                project_title,
+                append_image_prompt
             )
 
             # Mark as rendered
@@ -1400,7 +1443,11 @@ class GenerationService:
                     if video_variant == "meeting":
                         raise
 
-        # Generate departure video
+        
+            else:
+                logger.info(f"FLFI2V shot {shot_index} meeting video already rendered or missing prompt, skipping and marking completed")
+                self._mark_queue_item_completed(project_id, shot_index, GenerationType.MEETING_VIDEO)
+# Generate departure video
         if video_variant in ["departure", "both"]:
             if shot.get('departure_video_prompt') and (not shots[shot_index - 1].get('departure_video_rendered') or force):
                 try:
@@ -1483,7 +1530,11 @@ class GenerationService:
                     if video_variant == "departure":
                         raise
 
-        # Update standard video_path to meeting (for backward compatibility)
+        
+            else:
+                logger.info(f"FLFI2V shot {shot_index} departure video already rendered or missing prompt, skipping and marking completed")
+                self._mark_queue_item_completed(project_id, shot_index, GenerationType.DEPARTURE_VIDEO)
+# Update standard video_path to meeting (for backward compatibility)
         if shots[shot_index - 1].get('meeting_video_path'):
             shots[shot_index - 1]['video_path'] = shots[shot_index - 1]['meeting_video_path']
             shots[shot_index - 1]['video_rendered'] = True
@@ -1973,7 +2024,8 @@ class GenerationService:
     def _generate_single_video(self, project_id: str, shot: Dict[str, Any],
                                video_mode: Optional[str] = None,
                                workflow_path: Optional[str] = None,
-                               project_title: Optional[str] = None) -> str:
+                               project_title: Optional[str] = None,
+                               append_image_prompt: Optional[str] = None) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
@@ -1984,6 +2036,27 @@ class GenerationService:
 
         shot_index = shot['index']
         mode = video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
+        
+        # Avoid modifying the original reference
+        shot = shot.copy()
+
+        # Resolve prompt append choice
+        append_image_choice = append_image_prompt
+        if append_image_choice is None:
+            if getattr(config, 'APPEND_IMAGE_TO_MOTION_PROMPT', False):
+                append_image_choice = getattr(config, 'IMAGE_PROMPT_APPEND_POSITION', 'end')
+            else:
+                append_image_choice = 'none'
+
+        motion_prompt = shot.get('motion_prompt', '')
+        image_prompt = shot.get('image_prompt', '')
+
+        if append_image_choice != "none" and image_prompt:
+            if append_image_choice == "start":
+                shot['motion_prompt'] = f"{image_prompt}, {motion_prompt}"
+            elif append_image_choice == "end":
+                shot['motion_prompt'] = f"{motion_prompt}, {image_prompt}"
+            logger.info(f"Appended image prompt to motion prompt for shot {shot_index} ({append_image_choice})")
 
         if mode == 'geminiweb':
             from core.geminiweb_video_generator import generate_video_geminiweb

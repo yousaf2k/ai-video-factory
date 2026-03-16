@@ -424,22 +424,49 @@ IMAGE_WORKFLOWS = {
         "description": "Flux for scene background generation (standard text-to-image)"
     },
     "flux2": {
-        "workflow_path": resolve_path("workflow/image/flux2.json"),
-        "text_node_id": "6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "13",
-        "vae_node_id": "8",
-        "save_node_id": "9",
-        "description": "Flux2 Dev"
-    },
-    "flux2_4g_2k": {
         "workflow_path": resolve_path("workflow/image/flux2_4g_2k.json"),
         "text_node_id": "98:6",
         "neg_text_node_id": None,
         "ksampler_node_id": "98:16",
         "vae_node_id": "98:10",
         "save_node_id": "9",
-        "description": "Flux2.Dev for high quality images workflow"
+        "description": "Flux2.Dev"
+    },
+    "flux2_hq": {
+        "workflow_path": resolve_path("workflow/image/flux2_hq.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:16",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2.Dev for high quality images"
+    },
+    "flux2_hq_4ms": {
+        "workflow_path": resolve_path("workflow/image/flux2_hq_4mis.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:16",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2.Dev for high quality images"
+    },
+    "flux2_hq_4s_turbo": {
+        "workflow_path": resolve_path("workflow/image/flux2_hq_4s_turbo.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:16",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2.Dev for high quality with turbo lora"
+    },
+    "flux2_hq_8s_turbo": {
+        "workflow_path": resolve_path("workflow/image/flux2_hq_8s_turbo.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:16",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2.Dev for high quality with turbo lora"
     },
     "flux2_api": {
         "workflow_path": resolve_path("workflow/image/image_flux2_text_to_image_api.json"),

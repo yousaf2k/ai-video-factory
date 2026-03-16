@@ -29,9 +29,10 @@ interface SortableQueueItemProps {
   onSelect?: (itemId: string) => void;
   onCancel?: (itemId: string) => void;
   onRequeue?: (itemId: string) => void;
+  onImageClick?: (itemId: string) => void;
 }
 
-function SortableQueueItem({ item, isSelected, onSelect, onCancel, onRequeue }: SortableQueueItemProps) {
+function SortableQueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onImageClick }: SortableQueueItemProps) {
   const {
     attributes,
     listeners,
@@ -44,7 +45,6 @@ function SortableQueueItem({ item, isSelected, onSelect, onCancel, onRequeue }: 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    cursor: isDragging ? 'grabbing' : 'grab'
   };
 
   return (
@@ -55,6 +55,7 @@ function SortableQueueItem({ item, isSelected, onSelect, onCancel, onRequeue }: 
         onSelect={onSelect}
         onCancel={onCancel}
         onRequeue={onRequeue}
+        onImageClick={onImageClick}
         dragAttributes={attributes}
         dragListeners={listeners}
       />
@@ -69,6 +70,7 @@ interface QueueListProps {
   onCancelItem?: (itemId: string) => void;
   onRequeueItem?: (itemId: string) => void;
   onReorder?: (itemIds: string[]) => void;
+  onImageClick?: (itemId: string) => void;
 }
 
 export function QueueList({
@@ -77,7 +79,8 @@ export function QueueList({
   onSelectItem,
   onCancelItem,
   onRequeueItem,
-  onReorder
+  onReorder,
+  onImageClick
 }: QueueListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -134,6 +137,7 @@ export function QueueList({
               onSelect={onSelectItem}
               onCancel={onCancelItem}
               onRequeue={onRequeueItem}
+              onImageClick={onImageClick}
             />
           ))}
         </div>

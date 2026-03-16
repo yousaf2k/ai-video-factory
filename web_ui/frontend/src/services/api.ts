@@ -161,13 +161,15 @@ class ApiClient {
     force: boolean = false,
     videoMode?: string,
     videoWorkflow?: string,
-    videoVariant?: string
+    videoVariant?: string,
+    appendImagePrompt?: string
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/regenerate-video`, {
       force,
       video_mode: videoMode,
       video_workflow: videoWorkflow,
       video_variant: videoVariant || undefined,
+      append_image_prompt: appendImagePrompt
     });
   }
 
@@ -321,6 +323,8 @@ class ApiClient {
       image_workflow?: string;
       video_mode?: string;
       video_workflow?: string;
+      queue_setting?: string;
+      append_image_prompt?: string;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/projects/${projectId}/shots/batch-regenerate`, data);

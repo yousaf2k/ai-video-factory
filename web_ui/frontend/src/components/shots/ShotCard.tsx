@@ -126,6 +126,7 @@ export function ShotCard({
   const [regenVideoMode, setRegenVideoMode] = useState("comfyui");
   const [regenSeed, setRegenSeed] = useState<number | "">("");
   const [regenPromptOverride, setRegenPromptOverride] = useState<string>("");
+  const [appendImagePrompt, setAppendImagePrompt] = useState<string>("default");
 
   // ... rest of the hook setup ...
   const queryClient = useQueryClient();
@@ -326,6 +327,7 @@ export function ShotCard({
           videoMode: regenVideoMode,
           videoWorkflow: regenVideoMode === "comfyui" ? regenVideoWorkflow : undefined,
           videoVariant,
+          appendImagePrompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
         });
         setViewMode("video");
         toast.info("Video regeneration started", {
@@ -1215,6 +1217,26 @@ export function ShotCard({
                       </Select>
                     </div>
                   )}
+
+                  <div className="space-y-2 mt-4 border-t pt-4">
+                    <label className="block text-[10px] font-medium text-muted-foreground mb-1">
+                      Append Image Prompt to Motion Prompt
+                    </label>
+                    <Select
+                      value={appendImagePrompt}
+                      onValueChange={(val) => setAppendImagePrompt(val)}
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select Position" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Use Config Default</SelectItem>
+                        <SelectItem value="none">None (Do Not Append)</SelectItem>
+                        <SelectItem value="start">Start (Image + Motion)</SelectItem>
+                        <SelectItem value="end">End (Motion + Image)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </>
               )}
             </div>

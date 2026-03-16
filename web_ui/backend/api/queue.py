@@ -134,13 +134,16 @@ async def cancel_queue_item(item_id: str):
     If the item is currently active, an interrupt will be sent to ComfyUI.
     """
     try:
+        # If the item is active, we need to know BEFORE we change its status
+        item = queue_service.get_item(item_id)
+        is_active = item and item.status == QueueItemStatus.ACTIVE
+
         success = queue_service.mark_cancelled(item_id)
         if not success:
             raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
 
-        # If item is active, interrupt ComfyUI generation
-        item = queue_service.get_item(item_id)
-        if item and item.status == QueueItemStatus.ACTIVE:
+        # If item was active, interrupt ComfyUI generation
+        if is_active:
             from core.comfy_client import interrupt_generation
             interrupt_generation()
 

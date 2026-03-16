@@ -6,6 +6,14 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { getMediaUrl } from "@/lib/utils";
+import { Image as ImageIcon, Video as VideoIcon } from "lucide-react";
 import { useProject } from "@/hooks/useProjects";
 import { useUpdateStory, useRegenerateStory } from "@/hooks/useStory";
 import { useShots, useReplanShots } from "@/hooks/useShots";
@@ -14,7 +22,7 @@ import { SceneList } from "@/components/scenes/SceneList";
 import { ShotGrid } from "@/components/shots/ShotGrid";
 import { Scene, Story, Shot } from "@/types";
 import { api } from "@/services/api";
-import { Save, RefreshCw, X, BookOpen, Film } from "lucide-react";
+import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +52,11 @@ export default function ProjectEditPage() {
   const [story, setStory] = useState<Story | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState("shots");
+  // Media dialog states
+  const [showImagesDialog, setShowImagesDialog] = useState(false);
+  const [showVideosDialog, setShowVideosDialog] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
 
   // Modal states
   const [showRegenStoryModal, setShowRegenStoryModal] = useState(false);
@@ -319,6 +332,24 @@ export default function ProjectEditPage() {
     0,
   );
 
+  // Flat media lists for Dialogs
+  const allImages = shots?.flatMap(shot => {
+    const images = [];
+    if (shot.image_path) images.push({ path: shot.image_path, label: `Shot ${shot.index}` });
+    if (shot.then_image_path) images.push({ path: shot.then_image_path, label: `Shot ${shot.index} (Then)` });
+    if (shot.now_image_path) images.push({ path: shot.now_image_path, label: `Shot ${shot.index} (Now)` });
+    return images;
+  }) || [];
+
+  const allVideos = shots?.flatMap(shot => {
+    const vids = [];
+    const poster = shot.image_path || shot.then_image_path || shot.now_image_path || null;
+    if (shot.video_path) vids.push({ path: shot.video_path, label: `Shot ${shot.index}`, poster });
+    if (shot.meeting_video_path) vids.push({ path: shot.meeting_video_path, label: `Shot ${shot.index} (Meeting)`, poster });
+    if (shot.departure_video_path) vids.push({ path: shot.departure_video_path, label: `Shot ${shot.index} (Departure)`, poster });
+    return vids;
+  }) || [];
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
@@ -337,34 +368,26 @@ export default function ProjectEditPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Test Toast Button - Remove after testing */}
+            {/* View All Media Buttons */}
             <Button
-              onClick={() => {
-                toast.success("Success Toast Test", {
-                  description: "This is a success message in green.",
-                });
-                setTimeout(() => {
-                  toast.error("Error Toast Test", {
-                    description: "This is an error message in red.",
-                  });
-                }, 1500);
-                setTimeout(() => {
-                  toast.warning("Warning Toast Test", {
-                    description: "This is a warning message in yellow.",
-                  });
-                }, 3000);
-                setTimeout(() => {
-                  toast.info("Info Toast Test", {
-                    description: "This is an info message in blue.",
-                  });
-                }, 4500);
-              }}
               variant="outline"
               size="sm"
-              className="text-xs"
+              onClick={() => setShowImagesDialog(true)}
+              className="flex items-center gap-2"
             >
-              Test Toasts
+              <ImageIcon className="w-4 h-4" />
+              All Images
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowVideosDialog(true)}
+              className="flex items-center gap-2"
+            >
+              <VideoIcon className="w-4 h-4" />
+              All Videos
+            </Button>
+
             {activeTab === "story" && hasChanges && (
               <>
                 <Link
@@ -654,6 +677,213 @@ export default function ProjectEditPage() {
       )}
 
       {/* Confirmation Dialog */}
+
+      {/* View All Images Modal */}
+      <Dialog open={showImagesDialog} onOpenChange={(open) => {
+        setShowImagesDialog(open);
+        if (!open) setSelectedImageIndex(null);
+      }}>
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 overflow-hidden bg-card border-border">
+          <DialogHeader className="p-4 border-b border-border/60">
+            <DialogTitle>All Project Images ({allImages.length})</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {allImages.map((img, i) => (
+                <div 
+                  key={i} 
+                  onClick={() => setSelectedImageIndex(i)} 
+                  className="relative aspect-video rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors"
+                >
+                  <img src={getMediaUrl(img.path)} alt={img.label} className="object-cover w-full h-full" loading="lazy" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                    <span className="text-xs text-white font-medium">{img.label}</span>
+                  </div>
+                  <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white group-hover:hidden">
+                    {img.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Lightbox Slideshow */}
+          {selectedImageIndex !== null && allImages[selectedImageIndex] && (
+            <div className="absolute inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center animate-in fade-in-0 duration-200">
+              <button 
+                onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(null); }} 
+                className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors z-10"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              {selectedImageIndex > 0 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex - 1); }} 
+                  className="absolute left-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
+                >
+                  <ChevronLeft className="w-8 h-8" />
+                </button>
+              )}
+
+              <div className="relative aspect-video w-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-black/40 rounded-lg overflow-hidden border border-border/40">
+                <img 
+                  src={getMediaUrl(allImages[selectedImageIndex].path)} 
+                  alt={allImages[selectedImageIndex].label} 
+                  className="w-full h-full object-contain select-none" 
+                />
+              </div>
+              
+              <div className="mt-4 text-white text-center">
+                <span className="font-semibold">{allImages[selectedImageIndex].label}</span>
+                <div className="text-xs text-white/60 mt-1">{selectedImageIndex + 1} of {allImages.length}</div>
+              </div>
+
+              {selectedImageIndex < allImages.length - 1 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex + 1); }} 
+                  className="absolute right-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
+                >
+                  <ChevronRight className="w-8 h-8" />
+                </button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View All Videos Modal */}
+      <Dialog open={showVideosDialog} onOpenChange={(open) => {
+        setShowVideosDialog(open);
+        if (!open) setSelectedVideoIndex(null);
+      }}>
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 overflow-hidden bg-card border-border">
+          <DialogHeader className="p-4 border-b border-border/60">
+            <DialogTitle>All Project Videos ({allVideos.length})</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {allVideos.map((vid, i) => (
+                <div 
+                  key={i} 
+                  onClick={() => setSelectedVideoIndex(i)} 
+                  className="relative aspect-video rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors"
+                >
+                  {vid.poster ? (
+                    <img src={getMediaUrl(vid.poster)} alt={vid.label} className="object-cover w-full h-full" loading="lazy" />
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full bg-slate-900/40 text-xs text-muted-foreground">
+                      No Poster
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="bg-primary p-3 rounded-full shadow-lg">
+                      <Play className="w-6 h-6 text-primary-foreground fill-current" />
+                    </div>
+                  </div>
+                  <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white group-hover:hidden">
+                    {vid.label}
+                  </div>
+                  <div className="absolute top-2 right-2 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white/80">
+                    Video
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Fullscreen Video Player */}
+          {selectedVideoIndex !== null && allVideos[selectedVideoIndex] && (
+            <div className="absolute inset-0 z-[100] bg-black/98 flex flex-col items-center justify-center animate-in fade-in-0 duration-200">
+              <button 
+                onClick={(e) => { e.stopPropagation(); setSelectedVideoIndex(null); }} 
+                className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors z-10"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              {selectedVideoIndex > 0 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setSelectedVideoIndex(selectedVideoIndex - 1); }} 
+                  className="absolute left-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
+                >
+                  <ChevronLeft className="w-8 h-8" />
+                </button>
+              )}
+
+              <div className="relative aspect-video w-full max-w-5xl max-h-[80vh] flex items-center justify-center bg-black rounded-lg overflow-hidden shadow-2xl">
+                <video 
+                  src={getMediaUrl(allVideos[selectedVideoIndex].path)} 
+                  controls 
+                  autoPlay 
+                  className="w-full h-full object-contain" 
+                  onClick={(e) => e.stopPropagation()} 
+                />
+              </div>
+              
+              <div className="mt-4 text-white text-center">
+                <span className="font-semibold">{allVideos[selectedVideoIndex].label}</span>
+                <div className="text-xs text-white/60 mt-1">{selectedVideoIndex + 1} of {allVideos.length}</div>
+              </div>
+
+              {selectedVideoIndex < allVideos.length - 1 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setSelectedVideoIndex(selectedVideoIndex + 1); }} 
+                  className="absolute right-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
+                >
+                  <ChevronRight className="w-8 h-8" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Lightbox Slideshow */}
+          {selectedImageIndex !== null && allImages[selectedImageIndex] && (
+            <div className="absolute inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center animate-in fade-in-0 duration-200">
+              <button 
+                onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(null); }} 
+                className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors z-10"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              {selectedImageIndex > 0 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex - 1); }} 
+                  className="absolute left-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
+                >
+                  <ChevronLeft className="w-8 h-8" />
+                </button>
+              )}
+
+              <div className="relative aspect-video w-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-black/40 rounded-lg overflow-hidden border border-border/40">
+                <img 
+                  src={getMediaUrl(allImages[selectedImageIndex].path)} 
+                  alt={allImages[selectedImageIndex].label} 
+                  className="w-full h-full object-contain select-none" 
+                />
+              </div>
+              
+              <div className="mt-4 text-white text-center">
+                <span className="font-semibold">{allImages[selectedImageIndex].label}</span>
+                <div className="text-xs text-white/60 mt-1">{selectedImageIndex + 1} of {allImages.length}</div>
+              </div>
+
+              {selectedImageIndex < allImages.length - 1 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex + 1); }} 
+                  className="absolute right-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
+                >
+                  <ChevronRight className="w-8 h-8" />
+                </button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+
+
       <ConfirmDialog {...confirmDialog.dialogProps} />
     </div>
   );

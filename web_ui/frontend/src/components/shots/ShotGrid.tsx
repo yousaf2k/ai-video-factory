@@ -132,6 +132,8 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
   const [videoWorkflow, setVideoWorkflow] = useState<string>("wan22");
   const [videoMode, setVideoMode] = useState<string>("comfyui");
   const [batchSkipImages, setBatchSkipImages] = useState<boolean>(true);
+  const [queueSetting, setQueueSetting] = useState<string>("all_images_then_videos");
+  const [appendImagePrompt, setAppendImagePrompt] = useState<string>("default");
 
   const [ttsMethod, setTtsMethod] = useState("local");
   const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
@@ -306,10 +308,19 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
     setShowBatchModal(null);
     setSelectedIndices([]);
 
+    const actualIndicesQueued = indicesToProcess.filter(idx => {
+      const shot = shots.find((s: any) => s.index === idx);
+      if (!shot) return false;
+      if (type === "image" && batchSkipImages && !!shot.image_path) {
+        return false;
+      }
+      return true;
+    });
+
     // Mark all selected shots as generating
     setGeneratingIndices((prev) => {
       const next = new Set(prev);
-      indicesToProcess.forEach((i) => next.add(i));
+      actualIndicesQueued.forEach((i) => next.add(i));
       return next;
     });
 
@@ -319,15 +330,14 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: true,
-          // When doing both: 
-          // 1. Image force depends on the "Skip" checkbox
-          // 2. Video force is ALWAYS true if they clicked regenerate videos
           force_images: !batchSkipImages,
           force_videos: true,
           image_mode: imageMode,
           image_workflow: imageWorkflow,
           video_mode: videoMode,
           video_workflow: videoWorkflow,
+          queue_setting: queueSetting,
+          append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
         });
       } catch (error) {
         console.error("Failed to start batch both generation:", error);
@@ -338,7 +348,7 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: false,
-          force_images: true,
+          force_images: !batchSkipImages,
           image_mode: imageMode,
           image_workflow: imageWorkflow,
         });
@@ -354,6 +364,7 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
           force_videos: true,
           video_mode: videoMode,
           video_workflow: videoWorkflow,
+          append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
         });
       } catch (error) {
         console.error("Failed to start batch video generation:", error);
@@ -383,7 +394,7 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
     setShowBatchModal(null);
     setSelectedIndices([]);
     setGeneratingIndices(new Set()); // Fallback visual clear, websocket will fill valid ones
-    setQueuedIndices(new Set(indicesToProcess));
+    setQueuedIndices(new Set(actualIndicesQueued));
 
     // We optionally fetch the latest data just in case
     queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
@@ -1251,8 +1262,8 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
 
               {(showBatchModal === "image" || showBatchModal === "both") && (
                 <div className="space-y-4">
-                  {showBatchModal === "both" && (
-                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md border text-sm">
+                  {(showBatchModal === "both" || showBatchModal === "image") && (
+                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md border text-sm mb-3">
                       <Input
                         type="checkbox"
                         id="skip-existing"
@@ -1266,6 +1277,30 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
                       >
                         Skip generating images if they already exist
                       </label>
+                    </div>
+                  )}
+
+                  {showBatchModal === "both" && (
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium mb-1">
+                        Queue Setting
+                      </label>
+                      <Select
+                        value={queueSetting}
+                        onValueChange={(val) => setQueueSetting(val)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select Queue Setting" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all_images_then_videos">
+                            All Images then Videos
+                          </SelectItem>
+                          <SelectItem value="image_then_video">
+                            Image then Video
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
 
@@ -1370,6 +1405,26 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
                     <p className="text-xs text-muted-foreground mt-1">
                       Pre-configured ComfyUI video workflow.
                     </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Append Image Prompt to Motion Prompt
+                    </label>
+                    <Select
+                      value={appendImagePrompt}
+                      onValueChange={(val) => setAppendImagePrompt(val)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Position" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Use Config Default</SelectItem>
+                        <SelectItem value="none">None (Do Not Append)</SelectItem>
+                        <SelectItem value="start">Start (Image + Motion)</SelectItem>
+                        <SelectItem value="end">End (Motion + Image)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               )}

@@ -13,7 +13,7 @@
   "85": {
     "inputs": {
       "add_noise": "disable",
-      "noise_seed": 963431149027610,
+      "noise_seed": 643216061209298,
       "steps": 4,
       "cfg": 1,
       "sampler_name": "euler",
@@ -46,7 +46,7 @@
   "86": {
     "inputs": {
       "add_noise": "enable",
-      "noise_seed": 880575082283237,
+      "noise_seed": 777448470704338,
       "steps": 4,
       "cfg": 1,
       "sampler_name": "euler",
@@ -116,7 +116,7 @@
   },
   "93": {
     "inputs": {
-      "text": "DRONE SHOT",
+      "text": "Crowd watches intently, cheering and gasping as the player navigates the game, the arcade floor vibrating with the energy of the onlookers, hands rise in excitement, lights flicker dramatically. orbit, ymq",
       "clip": [
         "84",
         0
@@ -142,7 +142,7 @@
   },
   "97": {
     "inputs": {
-      "image": "ComfyUI_00371_.png"
+      "image": "shot_006_001.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -153,7 +153,7 @@
     "inputs": {
       "width": 1280,
       "height": 720,
-      "length": 121,
+      "length": 81,
       "batch_size": 1,
       "positive": [
         "93",
@@ -209,7 +209,7 @@
     "inputs": {
       "shift": 5,
       "model": [
-        "135",
+        "119",
         0
       ]
     },
@@ -222,7 +222,7 @@
     "inputs": {
       "shift": 5,
       "model": [
-        "134",
+        "118",
         0
       ]
     },
@@ -264,24 +264,10 @@
       "title": "Unet Loader (GGUF)"
     }
   },
-  "127": {
+  "118": {
     "inputs": {
-      "lora_name": "",
-      "strength_model": 0.8,
-      "model": [
-        "102",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly1"
-    }
-  },
-  "128": {
-    "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
+      "lora_name": "high_noise_pusa.safetensors",
+      "strength_model": 1.5,
       "model": [
         "101",
         0
@@ -289,85 +275,15 @@
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
-      "title": "LoraLoaderModelOnly1"
-    }
-  },
-  "130": {
-    "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
-      "model": [
-        "128",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
       "title": "LoraLoaderModelOnly"
     }
   },
-  "131": {
+  "119": {
     "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
+      "lora_name": "low_noise_pusa.safetensors",
+      "strength_model": 1.4,
       "model": [
-        "127",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly"
-    }
-  },
-  "132": {
-    "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
-      "model": [
-        "130",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly"
-    }
-  },
-  "133": {
-    "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
-      "model": [
-        "131",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly"
-    }
-  },
-  "134": {
-    "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
-      "model": [
-        "132",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly"
-    }
-  },
-  "135": {
-    "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
-      "model": [
-        "133",
+        "102",
         0
       ]
     },

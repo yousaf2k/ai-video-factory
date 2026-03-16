@@ -59,8 +59,8 @@ export function useRegenerateVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force, videoMode, videoWorkflow, videoVariant }: { shotIndex: number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string }) =>
-      api.regenerateShotVideo(projectId, shotIndex, force, videoMode, videoWorkflow, videoVariant),
+    mutationFn: ({ shotIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt }: { shotIndex: number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string }) =>
+      api.regenerateShotVideo(projectId, shotIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });

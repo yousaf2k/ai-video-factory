@@ -56,6 +56,7 @@ class QueueItem(BaseModel):
     video_workflow: Optional[str] = Field(None, description="Override Video Workflow template")
     image_variant: Optional[str] = Field(None, description="Image variant (then/now)")
     video_variant: Optional[str] = Field(None, description="Video variant (meeting/departure)")
+    append_image_prompt: Optional[str] = Field(None, description="Append image prompt position ('none', 'start', 'end')")
 
     # Project metadata for display
     project_title: Optional[str] = Field(None, description="Project title")

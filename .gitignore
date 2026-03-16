@@ -8,10 +8,6 @@ core/__pycache__/
 output/projects/
 output/
 input/
-workflow/image/
-workflow/video/
-workflow/audio/
-workflow/text/
 /*test*.py
 
 # Log files

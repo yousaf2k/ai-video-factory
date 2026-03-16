@@ -225,6 +225,23 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     }
   });
 
+  const clearMultipleItems = useMutation({
+    mutationFn: async (itemsToClear: string[]) => {
+      // iterate singular delete
+      await Promise.all(
+        itemsToClear.map(id => api.delete(`/api/queue/items/${id}`))
+      );
+      return itemsToClear;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
+      toast.success(`${data.length} item(s) cleared`);
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to clear items: ${error.message}`);
+    }
+  });
+
   const requeueItem = useMutation({
     mutationFn: async (itemId: string) => {
       const response = await api.post(`/api/queue/items/${itemId}/requeue`);
@@ -334,6 +351,7 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     resumeQueue: resumeQueue.mutate,
     cancelItem: cancelItem.mutate,
     cancelMultipleItems: cancelMultipleItems.mutate,
+    clearMultipleItems: clearMultipleItems.mutate,
     requeueItem: requeueItem.mutate,
     clearCompleted: clearCompleted.mutate,
     clearFailed: clearFailed.mutate,

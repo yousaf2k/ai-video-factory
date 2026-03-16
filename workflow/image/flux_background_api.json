@@ -1,0 +1,82 @@
+{
+  "2": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "flux1-dev.sft",
+      "weight_dtype": "fp8_e4m3fn"
+    }
+  },
+  "3": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "t5xxl_fp16.safetensors",
+      "type": "flux"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "3",
+        0
+      ],
+      "text": "movie set background, cinematic lighting, high quality"
+    }
+  },
+  "10": {
+    "class_type": "EmptyFlux2LatentImage",
+    "inputs": {
+      "width": 1344,
+      "height": 768,
+      "batch_size": 1
+    }
+  },
+  "13": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "latent_image": [
+        "10",
+        0
+      ],
+      "negative": "euler"
+    }
+  },
+  "14": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "13",
+        0
+      ],
+      "vae": [
+        "14",
+        0
+      ]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "filename_prefix": "scene_background"
+    }
+  }
+}

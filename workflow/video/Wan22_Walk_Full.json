@@ -13,13 +13,13 @@
   "85": {
     "inputs": {
       "add_noise": "disable",
-      "noise_seed": 963431149027610,
-      "steps": 4,
+      "noise_seed": 208892340314637,
+      "steps": 14,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
-      "start_at_step": 2,
-      "end_at_step": 4,
+      "start_at_step": 8,
+      "end_at_step": 14,
       "return_with_leftover_noise": "disable",
       "model": [
         "103",
@@ -45,14 +45,17 @@
   },
   "86": {
     "inputs": {
-      "add_noise": "enable",
-      "noise_seed": 880575082283237,
-      "steps": 4,
+      "add_noise": "disable",
+      "noise_seed": [
+        "142",
+        0
+      ],
+      "steps": 14,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
-      "start_at_step": 0,
-      "end_at_step": 2,
+      "start_at_step": 4,
+      "end_at_step": 8,
       "return_with_leftover_noise": "enable",
       "model": [
         "104",
@@ -67,8 +70,8 @@
         1
       ],
       "latent_image": [
-        "98",
-        2
+        "145",
+        0
       ]
     },
     "class_type": "KSamplerAdvanced",
@@ -116,7 +119,7 @@
   },
   "93": {
     "inputs": {
-      "text": "DRONE SHOT",
+      "text": "walk towards camera ",
       "clip": [
         "84",
         0
@@ -127,33 +130,31 @@
       "title": "CLIP Text Encode (Positive Prompt)"
     }
   },
-  "94": {
+  "95": {
     "inputs": {
-      "fps": 16,
-      "images": [
-        "87",
-        0
-      ]
+      "unet_name": "Wan2_2-I2V-A14B-HIGH_fp8_e5m2_scaled_KJ.safetensors",
+      "weight_dtype": "default"
     },
-    "class_type": "CreateVideo",
+    "class_type": "UNETLoader",
     "_meta": {
-      "title": "Create Video"
+      "title": "Load Diffusion Model"
     }
   },
-  "97": {
+  "96": {
     "inputs": {
-      "image": "ComfyUI_00371_.png"
+      "unet_name": "Wan2_2-I2V-A14B-LOW_fp8_e5m2_scaled_KJ.safetensors",
+      "weight_dtype": "default"
     },
-    "class_type": "LoadImage",
+    "class_type": "UNETLoader",
     "_meta": {
-      "title": "Load Image"
+      "title": "Load Diffusion Model"
     }
   },
   "98": {
     "inputs": {
       "width": 1280,
       "height": 720,
-      "length": 121,
+      "length": 81,
       "batch_size": 1,
       "positive": [
         "93",
@@ -168,7 +169,7 @@
         0
       ],
       "start_image": [
-        "97",
+        "128",
         0
       ]
     },
@@ -180,36 +181,36 @@
   "101": {
     "inputs": {
       "lora_name": "wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
-      "strength_model": 1,
+      "strength_model": 0.6,
       "model": [
-        "116",
+        "95",
         0
       ]
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
-      "title": "LoraLoaderModelOnly"
+      "title": "Load LoRA"
     }
   },
   "102": {
     "inputs": {
       "lora_name": "wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1030.safetensors",
-      "strength_model": 1,
+      "strength_model": 0.95,
       "model": [
-        "117",
+        "96",
         0
       ]
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
-      "title": "LoraLoaderModelOnly"
+      "title": "Load LoRA"
     }
   },
   "103": {
     "inputs": {
-      "shift": 5,
+      "shift": 8.5,
       "model": [
-        "135",
+        "149",
         0
       ]
     },
@@ -220,9 +221,9 @@
   },
   "104": {
     "inputs": {
-      "shift": 5,
+      "shift": 8.5,
       "model": [
-        "134",
+        "148",
         0
       ]
     },
@@ -231,56 +232,76 @@
       "title": "ModelSamplingSD3"
     }
   },
-  "108": {
-    "inputs": {
-      "filename_prefix": "video/ComfyUI",
-      "format": "auto",
-      "codec": "auto",
-      "video": [
-        "94",
-        0
-      ]
-    },
-    "class_type": "SaveVideo",
-    "_meta": {
-      "title": "Save Video"
-    }
-  },
-  "116": {
-    "inputs": {
-      "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf"
-    },
-    "class_type": "UnetLoaderGGUF",
-    "_meta": {
-      "title": "Unet Loader (GGUF)"
-    }
-  },
-  "117": {
-    "inputs": {
-      "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf"
-    },
-    "class_type": "UnetLoaderGGUF",
-    "_meta": {
-      "title": "Unet Loader (GGUF)"
-    }
-  },
-  "127": {
-    "inputs": {
-      "lora_name": "",
-      "strength_model": 0.8,
-      "model": [
-        "102",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly1"
-    }
-  },
   "128": {
     "inputs": {
-      "lora_name": "",
+      "image": "Gemini_Generated_Image_bc6rg3bc6rg3bc6r_processed.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "142": {
+    "inputs": {
+      "value": -1047887611297057
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "Seed"
+    }
+  },
+  "145": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": [
+        "142",
+        0
+      ],
+      "steps": 14,
+      "cfg": 3.5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 4,
+      "return_with_leftover_noise": "enable",
+      "model": [
+        "146",
+        0
+      ],
+      "positive": [
+        "98",
+        0
+      ],
+      "negative": [
+        "98",
+        1
+      ],
+      "latent_image": [
+        "98",
+        2
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "KSampler (Advanced)"
+    }
+  },
+  "146": {
+    "inputs": {
+      "shift": 8.5,
+      "model": [
+        "150",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "ModelSamplingSD3"
+    }
+  },
+  "148": {
+    "inputs": {
+      "lora_name": "Walk01_HighWan2_2.safetensors",
       "strength_model": 1,
       "model": [
         "101",
@@ -289,91 +310,78 @@
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
-      "title": "LoraLoaderModelOnly1"
+      "title": "Load LoRA"
     }
   },
-  "130": {
+  "149": {
     "inputs": {
-      "lora_name": "",
+      "lora_name": "Walk01_LowWan2_2.safetensors",
       "strength_model": 1,
       "model": [
-        "128",
+        "102",
         0
       ]
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
-      "title": "LoraLoaderModelOnly"
+      "title": "Load LoRA"
     }
   },
-  "131": {
+  "150": {
     "inputs": {
-      "lora_name": "",
+      "lora_name": "Walk01_HighWan2_2.safetensors",
       "strength_model": 1,
       "model": [
-        "127",
+        "95",
         0
       ]
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
-      "title": "LoraLoaderModelOnly"
+      "title": "Load LoRA"
     }
   },
-  "132": {
+  "154": {
     "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
-      "model": [
-        "130",
+      "ckpt_name": "film_net_fp32.pt",
+      "clear_cache_after_n_frames": 10,
+      "multiplier": 4,
+      "frames": [
+        "87",
         0
       ]
     },
-    "class_type": "LoraLoaderModelOnly",
+    "class_type": "FILM VFI",
     "_meta": {
-      "title": "LoraLoaderModelOnly"
+      "title": "FILM VFI"
     }
   },
-  "133": {
+  "155": {
     "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
-      "model": [
-        "131",
+      "fps": 64,
+      "images": [
+        "154",
         0
       ]
     },
-    "class_type": "LoraLoaderModelOnly",
+    "class_type": "CreateVideo",
     "_meta": {
-      "title": "LoraLoaderModelOnly"
+      "title": "Create Video"
     }
   },
-  "134": {
+  "156": {
     "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
-      "model": [
-        "132",
+      "filename_prefix": "video/ComfyUI",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "155",
         0
       ]
     },
-    "class_type": "LoraLoaderModelOnly",
+    "class_type": "SaveVideo",
     "_meta": {
-      "title": "LoraLoaderModelOnly"
-    }
-  },
-  "135": {
-    "inputs": {
-      "lora_name": "",
-      "strength_model": 1,
-      "model": [
-        "133",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "LoraLoaderModelOnly"
+      "title": "Save Video"
     }
   }
 }

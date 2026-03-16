@@ -9,7 +9,8 @@ import { QueueItem, QueueItemStatus, GenerationType, ViewMode } from '../../type
 import QueueHeader from '../../components/queue/QueueHeader';
 import QueueList from '../../components/queue/QueueList';
 import ProjectGroup from '../../components/queue/ProjectGroup';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ConfirmDialog, useConfirmDialog } from '../../components/ui/confirm-dialog';
 
 export default function QueuePage() {
   const {
@@ -22,6 +23,7 @@ export default function QueuePage() {
     resumeQueue,
     cancelItem,
     cancelMultipleItems,
+    clearMultipleItems,
     clearCompleted,
     clearFailed,
     clearCancelled,
@@ -30,30 +32,82 @@ export default function QueuePage() {
     refetch
   } = useQueue({ enabled: true });
 
+  const { showDialog, dialogProps } = useConfirmDialog();
+
   const [viewMode, setViewMode] = useState<ViewMode>('flat');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [statusFilter, setStatusFilter] = useState<string>('queued');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [mounted, setMounted] = useState(false);
 
-  // Load view mode preference from localStorage
+  // Compute selected items statistics
+  const selectedItemsList = useMemo(() => {
+    return items.filter(item => selectedItems.has(item.item_id));
+  }, [items, selectedItems]);
+
+  const hasCancellableSelected = useMemo(() => {
+    return selectedItemsList.some(item => 
+      item.status === QueueItemStatus.QUEUED || item.status === QueueItemStatus.ACTIVE
+    );
+  }, [selectedItemsList]);
+
+  const hasClearableSelected = useMemo(() => {
+    return selectedItemsList.some(item => 
+      item.status === QueueItemStatus.COMPLETED || 
+      item.status === QueueItemStatus.FAILED || 
+      item.status === QueueItemStatus.CANCELLED
+    );
+  }, [selectedItemsList]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  // Load preferences from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('queue-view-mode');
-    if (saved === 'flat' || saved === 'grouped') {
-      setViewMode(saved);
+    setMounted(true);
+    const savedView = localStorage.getItem('queue-view-mode');
+    if (savedView === 'flat' || savedView === 'grouped') {
+      setViewMode(savedView);
+    }
+
+    const savedStatus = localStorage.getItem('queue-status-filter');
+    if (savedStatus) {
+      setStatusFilter(savedStatus);
+    }
+
+    const savedType = localStorage.getItem('queue-type-filter');
+    if (savedType) {
+      setTypeFilter(savedType);
     }
   }, []);
 
-  // Save view mode preference to localStorage
+  // Save preferences to localStorage
   useEffect(() => {
+    if (!mounted) return;
     localStorage.setItem('queue-view-mode', viewMode);
-  }, [viewMode]);
+  }, [viewMode, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem('queue-status-filter', statusFilter);
+  }, [statusFilter, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem('queue-type-filter', typeFilter);
+  }, [typeFilter, mounted]);
+
 
   // Filter items based on selected filters
   const displayItems = useMemo(() => {
     return items.filter(item => {
       // Status filter
-      if (statusFilter !== 'all' && item.status !== statusFilter) {
-        return false;
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'active_queued') {
+          if (item.status !== QueueItemStatus.ACTIVE && item.status !== QueueItemStatus.QUEUED) {
+            return false;
+          }
+        } else if (item.status !== statusFilter) {
+          return false;
+        }
       }
 
       // Type filter
@@ -70,6 +124,33 @@ export default function QueuePage() {
       return true;
     });
   }, [items, statusFilter, typeFilter]);
+
+    // Filter display items that can have pictures
+  const imageItems = useMemo(() => {
+    return displayItems.filter(item => 
+      item.shot_index && item.project_id &&
+      [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE].includes(item.generation_type)
+    );
+  }, [displayItems]);
+
+  const handleImageClick = (itemId: string) => {
+    const idx = imageItems.findIndex(i => i.item_id === itemId);
+    if (idx !== -1) setLightboxIndex(idx);
+  };
+
+  const currentLightboxImage = lightboxIndex !== null ? imageItems[lightboxIndex] : null;
+
+  const getLightboxImageUrl = (item: QueueItem) => {
+    if (!item.shot_index || !item.project_id) return '';
+    const padded = String(item.shot_index).padStart(3, '0');
+    if (item.generation_type === GenerationType.THEN_IMAGE) {
+      return `/api/projects/${item.project_id}/images/shot_${padded}_then_001.png`;
+    }
+    if (item.generation_type === GenerationType.NOW_IMAGE) {
+      return `/api/projects/${item.project_id}/images/shot_${padded}_now_001.png`;
+    }
+    return `/api/projects/${item.project_id}/images/shot_${padded}_001.png`;
+  };
 
   // Group items by project for grouped view
   const groupedItems = useMemo(() => {
@@ -108,35 +189,79 @@ export default function QueuePage() {
     setSelectedItems(newSelected);
   };
 
-  const handleCancelSelected = () => {
+    const handleClearSelected = async () => {
     if (selectedItems.size === 0) return;
 
-    if (confirm(`Are you sure you want to cancel ${selectedItems.size} item(s)?`)) {
+    const confirmed = await showDialog({
+      title: "Clear Selected Items",
+      description: `Are you sure you want to remove ${selectedItems.size} selected item(s) from the queue?`,
+      type: "delete",
+      confirmText: "Clear Items",
+    });
+
+    if (confirmed) {
+      clearMultipleItems(Array.from(selectedItems));
+      setSelectedItems(new Set());
+    }
+  };
+
+  const handleCancelSelected = async () => {
+    if (selectedItems.size === 0) return;
+
+    const confirmed = await showDialog({
+      title: "Cancel Items",
+      description: `Are you sure you want to cancel ${selectedItems.size} item(s)?`,
+      type: "delete",
+      confirmText: "Cancel Items",
+    });
+
+    if (confirmed) {
       cancelMultipleItems(Array.from(selectedItems));
       setSelectedItems(new Set());
     }
   };
 
-  const handleClearCompleted = () => {
+  const handleClearCompleted = async () => {
     if (statistics.completed === 0) return;
 
-    if (confirm(`Are you sure you want to clear ${statistics.completed} completed item(s)?`)) {
+    const confirmed = await showDialog({
+      title: "Clear Completed",
+      description: `Are you sure you want to clear ${statistics.completed} completed item(s)?`,
+      type: "delete",
+      confirmText: "Clear",
+    });
+
+    if (confirmed) {
       clearCompleted();
     }
   };
 
-  const handleClearFailed = () => {
+  const handleClearFailed = async () => {
     if (statistics.failed === 0) return;
 
-    if (confirm(`Are you sure you want to clear ${statistics.failed} failed item(s)?`)) {
+    const confirmed = await showDialog({
+      title: "Clear Failed",
+      description: `Are you sure you want to clear ${statistics.failed} failed item(s)?`,
+      type: "delete",
+      confirmText: "Clear",
+    });
+
+    if (confirmed) {
       clearFailed();
     }
   };
 
-  const handleClearCancelled = () => {
+  const handleClearCancelled = async () => {
     if (statistics.cancelled === 0) return;
 
-    if (confirm(`Are you sure you want to clear ${statistics.cancelled} cancelled item(s)?`)) {
+    const confirmed = await showDialog({
+      title: "Clear Cancelled",
+      description: `Are you sure you want to clear ${statistics.cancelled} cancelled item(s)?`,
+      type: "delete",
+      confirmText: "Clear",
+    });
+
+    if (confirmed) {
       clearCancelled();
     }
   };
@@ -153,8 +278,15 @@ export default function QueuePage() {
     reorderItems(itemIds);
   };
 
-  const handleCancelItem = (itemId: string) => {
-    if (confirm('Are you sure you want to cancel this item?')) {
+  const handleCancelItem = async (itemId: string) => {
+    const confirmed = await showDialog({
+      title: "Cancel Item",
+      description: "Are you sure you want to cancel this item?",
+      type: "delete",
+      confirmText: "Yes",
+    });
+
+    if (confirmed) {
       cancelItem(itemId);
       selectedItems.delete(itemId);
     }
@@ -176,7 +308,9 @@ export default function QueuePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background relative">
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-colors-blue-50),_transparent_50%)] -z-10" />
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-colors-purple-50),_transparent_40%)] -z-10" />
       {/* Header */}
       <QueueHeader
         statistics={statistics}
@@ -189,6 +323,9 @@ export default function QueuePage() {
         onSelectAll={handleSelectAll}
         onDeselectAll={handleDeselectAll}
         onCancelSelected={handleCancelSelected}
+        onClearSelected={handleClearSelected}
+        hasCancellableSelected={hasCancellableSelected}
+        hasClearableSelected={hasClearableSelected}
         onClearCompleted={handleClearCompleted}
         onClearFailed={handleClearFailed}
         onClearCancelled={handleClearCancelled}
@@ -204,10 +341,10 @@ export default function QueuePage() {
       <div className="p-4">
         {displayItems.length === 0 ? (
           /* Empty state */
-          <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-12 text-center">
+          <div className="bg-card/50 backdrop-blur-sm rounded-xl border border-dashed border-border p-12 text-center">
             <div className="max-w-md mx-auto">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Queue is empty</h3>
-              <p className="text-gray-500">
+              <h3 className="text-lg font-medium text-foreground mb-2">Queue is empty</h3>
+              <p className="text-muted-foreground">
                 No items in the generation queue. Queue shots or videos from a project to see them here.
               </p>
             </div>
@@ -221,6 +358,7 @@ export default function QueuePage() {
             onCancelItem={handleCancelItem}
             onRequeueItem={handleRequeueItem}
             onReorder={handleReorder}
+            onImageClick={handleImageClick}
           />
         ) : (
           /* Grouped view */
@@ -236,11 +374,61 @@ export default function QueuePage() {
                 onCancelItem={handleCancelItem}
                 onRequeueItem={handleRequeueItem}
                 onReorder={handleReorder}
+                onImageClick={handleImageClick}
               />
             ))}
           </div>
         )}
       </div>
+      
+      {/* Lightbox Slideshow for Queue Page */}
+      {currentLightboxImage && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center animate-in fade-in-0 duration-200 p-4">
+          <button 
+            onClick={() => setLightboxIndex(null)} 
+            className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors z-10"
+          >
+            <X className="w-6 h-6" />
+          </button>
+
+          {lightboxIndex! > 0 && (
+            <button 
+              onClick={() => setLightboxIndex(lightboxIndex! - 1)} 
+              className="absolute left-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
+            >
+              <ChevronLeft className="w-8 h-8" />
+            </button>
+          )}
+
+          <div className="relative aspect-video w-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-black/40 rounded-lg overflow-hidden border border-border/40">
+            <img 
+              src={getLightboxImageUrl(currentLightboxImage)} 
+              alt={`Shot ${currentLightboxImage.shot_index}`} 
+              className="w-full h-full object-contain select-none" 
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/api/placeholder/1920/1080?text=Image+Not+Found';
+              }}
+            />
+          </div>
+          
+          <div className="mt-4 text-white text-center">
+            <span className="font-semibold">{currentLightboxImage.project_title || currentLightboxImage.project_id}</span>
+            <div className="text-xs text-white/60 mt-1">Shot {currentLightboxImage.shot_index} ({currentLightboxImage.generation_type.replace('_', ' ')})</div>
+            <div className="text-xs text-white/40 mt-1">{lightboxIndex! + 1} of {imageItems.length}</div>
+          </div>
+
+          {lightboxIndex! < imageItems.length - 1 && (
+            <button 
+              onClick={() => setLightboxIndex(lightboxIndex! + 1)} 
+              className="absolute right-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
+            >
+              <ChevronRight className="w-8 h-8" />
+            </button>
+          )}
+        </div>
+      )}
+
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }
