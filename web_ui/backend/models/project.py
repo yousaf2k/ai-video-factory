@@ -91,10 +91,13 @@ class ProjectDetail(ProjectMetadata):
         )
 
 
+from web_ui.backend.models.story import ProjectType
+
 class CreateProjectRequest(BaseModel):
     """Request to create a new project"""
     idea: str = Field(..., description="Video idea/prompt", min_length=1)
     project_id: Optional[str] = Field(default=None, description="Optional custom project ID")
+    project_type: ProjectType = Field(default=ProjectType.DOCUMENTARY, description="Project Type (1=Documentary, 2=ThenVsNow)")
     story_agent: str = Field(default="default", description="Story generation agent")
     shots_agent: str = Field(default="default", description="Shots prompt agent")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")

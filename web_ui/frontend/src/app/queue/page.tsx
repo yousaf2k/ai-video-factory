@@ -29,6 +29,7 @@ export default function QueuePage() {
     clearCancelled,
     reorderItems,
     requeueItem,
+    forceStartItem,
     refetch,
     bulkPauseItems,
     bulkResumeItems,
@@ -355,6 +356,10 @@ export default function QueuePage() {
     requeueItem(itemId);
   };
 
+  const handleForceStartItem = (itemId: string) => {
+    forceStartItem(itemId);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -422,6 +427,7 @@ export default function QueuePage() {
             onSelectItem={handleToggleSelect}
             onCancelItem={handleCancelItem}
             onRequeueItem={handleRequeueItem}
+            onForceStartItem={handleForceStartItem}
             onReorder={handleReorder}
             onImageClick={handleImageClick}
           />
@@ -438,6 +444,7 @@ export default function QueuePage() {
                 onSelectItem={handleToggleSelect}
                 onCancelItem={handleCancelItem}
                 onRequeueItem={handleRequeueItem}
+                onForceStartItem={handleForceStartItem}
                 onReorder={handleReorder}
                 onImageClick={handleImageClick}
               />

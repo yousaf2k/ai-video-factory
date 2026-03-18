@@ -145,7 +145,7 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         return generate_image_comfyui(prompt, output_path, seed=seed, workflow_name=workflow_name, progress_callback=step_progress_callback, reference_image_path=reference_image_path)
     elif mode == "geminiweb":
         from core.geminiweb_image_generator import generate_image_geminiweb
-        return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio, project_title=project_title)
+        return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio, project_title=project_title, reference_image_path=reference_image_path)
     else:
         return generate_image_gemini(prompt, output_path, aspect_ratio, resolution, seed)
 

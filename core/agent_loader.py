@@ -71,8 +71,15 @@ class AgentLoader:
             return []
 
         agents = []
-        for file in agent_dir.glob("*.md"):
-            agents.append(file.stem)
+        # Support both flat files and agents design nested in subdirectories
+        for item in agent_dir.iterdir():
+            if item.is_file() and item.suffix == ".md":
+                agents.append(item.stem)
+            elif item.is_dir():
+                for file in item.glob("*.md"):
+                    # Format as category/filename (e.g., documentary/default)
+                    agents.append(f"{item.name}/{file.name[:-3]}")
+                    
         return sorted(agents)
 
     def load_prompt(self, agent_type: str, agent_name: str = "default") -> str:

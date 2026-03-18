@@ -114,8 +114,18 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
         // Whenever a WebSocket progress message broadcasts 'completed', refresh this project's UI!
         queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+
+        // Clear from generatingIndices on completion to remove sticky overlays
+        if (type === 'shot') {
+          setGeneratingIndices((prev) => {
+            const next = new Set(prev);
+            const shot = shots.find(s => s.id === id || s.index.toString() === id.toString());
+            if (shot) next.delete(shot.index);
+            return next;
+          });
+        }
       },
-      [queryClient, projectId],
+      [queryClient, projectId, shots],
     ),
   );
 
@@ -467,8 +477,10 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
     async (shotIndex: number) => {
       try {
         await api.cancelShotGeneration(projectId, shotIndex);
-
-        // Remove just this one shot from local sets
+      } catch (error) {
+        console.error(`Failed to cancel shot ${shotIndex}:`, error);
+      } finally {
+        // Unconditionally clear local state when cancelling
         setGeneratingIndices((prev) => {
           const next = new Set(prev);
           next.delete(shotIndex);
@@ -481,8 +493,6 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
         });
 
         queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
-      } catch (error) {
-        console.error(`Failed to cancel shot ${shotIndex}:`, error);
       }
     },
     [projectId, queryClient],

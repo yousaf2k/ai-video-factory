@@ -609,6 +609,11 @@ export default function ProjectDetailPage() {
                             <p className="text-xs text-muted-foreground">
                               {scene.location} • {scene.characters}
                             </p>
+                            {scene.set_prompt && (
+                              <p className="text-xs text-muted-foreground mt-1 bg-secondary/10 p-1.5 rounded border border-border/20">
+                                <span className="font-semibold text-foreground/80">Set Prompt:</span> {scene.set_prompt}
+                              </p>
+                            )}
                             {scene.narration && (
                               <div className="mt-3 p-3 bg-background/50 rounded border-l-2 border-secondary/50 text-sm italic text-foreground/80">
                                 "{scene.narration}"

@@ -207,6 +207,22 @@ async def resume_queue_item(item_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/items/{item_id}/force-start")
+async def force_start_queue_item(item_id: str):
+    """
+    Force start a specific queue item immediately, bypassing limits.
+    """
+    try:
+        from web_ui.backend.services.generation_service import get_generation_service
+        gen_service = get_generation_service()
+        await gen_service.force_start_item(item_id)
+        return {"message": "Item force started successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/items/bulk-pause")
 async def bulk_pause_items(request: BulkActionRequest):
     """

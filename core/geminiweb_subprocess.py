@@ -147,31 +147,59 @@ def _ensure_project_chat(page, project_title: str):
 
 def _wait_for_response_complete(page, timeout: int = 180):
     """Wait for Gemini to finish processing the response."""
+    import time
     logger.info("Waiting for Gemini to finish responding...")
-    spinner_selectors = [
-        '.loading-indicator',
-        '.response-loading',
-        'mat-progress-bar',
-        '.thinking-indicator',
-        '[data-test-id="loading"]',
-    ]
-    time.sleep(5)
-    waited = 0
-    while waited < timeout:
-        still_loading = False
-        for sel in spinner_selectors:
-            try:
-                el = page.query_selector(sel)
-                if el and el.is_visible():
-                    still_loading = True
-                    break
-            except Exception:
-                continue
-        if not still_loading:
-            break
-        time.sleep(2)
-        waited += 2
+    start_time = time.time()
+    
+    # First wait a bit for the response to start
     time.sleep(3)
+    
+    while time.time() - start_time < timeout:
+        # Check if Gemini is still processing
+        # The stop button appears while generating, disappears when done
+        stop_btn = page.query_selector('button[aria-label="Stop response"]')
+        if stop_btn and stop_btn.is_visible():
+            logger.debug("Gemini still generating...")
+            time.sleep(2)
+            continue
+            
+        # Also check for the thinking/loading indicators
+        thinking = page.query_selector('.thoughts-header-button, .loading-indicator, .thinking-indicator')
+        loading_dots = page.query_selector('div.loading-dots, span.loading')
+        spinner_selectors = [
+            '.loading-indicator', '.response-loading', 'mat-progress-bar', 
+            '.thinking-indicator', '[data-test-id="loading"]'
+        ]
+        
+        still_loading = False
+        if loading_dots and loading_dots.is_visible():
+            still_loading = True
+        elif thinking and thinking.is_visible():
+            # Check if active or just exists
+            still_loading = True
+        else:
+            for sel in spinner_selectors:
+                try:
+                    el = page.query_selector(sel)
+                    if el and el.is_visible():
+                        still_loading = True
+                        break
+                except Exception:
+                    continue
+                    
+        if not still_loading:
+            # If no stop button and no loading, response might be done
+            # Wait a brief moment and double-check
+            time.sleep(2)
+            stop_btn = page.query_selector('button[aria-label="Stop response"]')
+            if not stop_btn or not stop_btn.is_visible():
+                logger.info("Gemini response appears complete")
+                return
+                
+        time.sleep(2)
+        
+    logger.warning(f"Response wait timed out after {timeout}s")
+
 
 
 def _find_generated_image(page):
@@ -338,8 +366,8 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
 
     # Selectors for the download button (appears in toolbar on hover)
     download_button_selectors = [
-        'button[aria-label="Download"]',
         'button[aria-label="Download full-sized image"]',
+        'button[aria-label="Download"]',
         'button[jsname][aria-label*="ownload"]',
         'a[download]',
     ]
@@ -349,8 +377,28 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
 
     def _do_hover_and_download(image_container) -> Optional[str]:
         """Hover over the image container and click the download button."""
+        # ── Step 1: Direct Click attempt (Playwright implicitly hovers)
+        for btn_sel in download_button_selectors:
+            try:
+                btns = page.query_selector_all(btn_sel)
+                if btns:
+                    btn = btns[-1]
+                    if btn.is_visible():
+                        logger.info(f"Direct clicking download button: {btn_sel}")
+                        with page.expect_download(timeout=120000) as dl_info:
+                            btn.click()
+                        dl = dl_info.value
+                        dl.save_as(output_path)
+                        logger.info(f"Direct download saved: {output_path}")
+                        return output_path
+            except Exception as e:
+                logger.debug(f"Direct click attempt via '{btn_sel}' failed: {e}")
+                continue
+
+        # ── Step 2: Hover Fallback (if direct failed or buttons hidden)
+        logger.info("Direct download button not visible. Hovering to reveal toolbar...")
         image_container.hover()
-        time.sleep(1.5)  # give the toolbar animation time to complete
+        time.sleep(2.0)  # give the toolbar animation time to complete
 
         for btn_sel in download_button_selectors:
             try:
@@ -358,7 +406,7 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
                 if btns:
                     btn = btns[-1]
                     if btn.is_visible():
-                        logger.info(f"Clicking download button: {btn_sel}")
+                        logger.info(f"Clicking revealed download button: {btn_sel}")
                         # Increase download wait timeout support 5 mins to align with full res generation wait
                         with page.expect_download(timeout=300000) as dl_info:
                             btn.click()
@@ -628,7 +676,7 @@ def _remove_watermark(image_path: str):
         logger.error(f"Error in precise watermark restoration: {e}")
 
 
-def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: str = None) -> Optional[str]:
+def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: str = None, reference_image_path: str = None) -> Optional[str]:
     """Main entry point — run Playwright and generate an image."""
     from playwright.sync_api import sync_playwright
 
@@ -701,6 +749,68 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 logger.error("Could not find the chat input field")
                 return None
 
+            # ── Upload Reference Images ───────────────────────────────────────
+            images_to_upload = reference_image_path if isinstance(reference_image_path, list) else ([reference_image_path] if reference_image_path else [])
+            
+            for ref_path in images_to_upload:
+                if ref_path and os.path.exists(ref_path):
+                    import shutil
+                    try:
+                        logger.info(f"Uploading reference image: {ref_path}")
+                        
+                        # 1. Click the Plus/Upload button to open menu
+                        upload_selectors = [
+                            'button[aria-label^="Upload"]',
+                            'button.upload-card-button',
+                            'button[aria-label="Add text or media"]',
+                            'button[aria-label="Open upload file menu"]',
+                        ]
+                        clicked = False
+                        for sel in upload_selectors:
+                            try:
+                                btn = page.query_selector(sel)
+                                if btn and btn.is_visible():
+                                    btn.click()
+                                    time.sleep(1.5)  # wait for menu animation
+                                    clicked = True
+                                    logger.info(f"Clicked upload trigger button: {sel}")
+                                    break
+                            except Exception:
+                                continue
+                        
+                        uploaded = False
+                        if clicked:
+                            # 2. Click 'Upload files' and intercept with FileChooser
+                            menu_item_selectors = [
+                                'button[aria-label^="Upload files"]',
+                                'div[role="menuitem"]:has-text("Upload files")',
+                                '.mat-mdc-list-item:has-text("Upload files")',
+                                'button:has-text("Upload files")',
+                            ]
+                            for m_sel in menu_item_selectors:
+                                try:
+                                    if page.query_selector(m_sel):
+                                        with page.expect_file_chooser() as fc_info:
+                                            page.click(m_sel)
+                                        file_chooser = fc_info.value
+                                        file_chooser.set_files(ref_path)
+                                        uploaded = True
+                                        logger.info(f"Uploaded reference image via FileChooser trigger ({m_sel})")
+                                        time.sleep(5)  # Wait for upload and thumbnail preview to render
+                                        break
+                                except Exception as e:
+                                    logger.debug(f"Click menu item failed for {m_sel}: {e}")
+                                    continue
+                                    
+                        if not uploaded:
+                            logger.warning(f"Could not upload {ref_path} via FileChooser trigger. Trying direct set_input_files fallback...")
+                            page.set_input_files('input[type="file"]', ref_path)
+                            logger.info(f"Reference image {ref_path} uploaded via direct set_input_files fallback")
+                            time.sleep(5)
+    
+                    except Exception as e:
+                        logger.error(f"Failed to upload reference image {ref_path}: {e}")
+
             # ── Inject the prompt (no clipboard / copy-paste) ────────────────
             injected = _inject_text_into_input(page, input_element, full_prompt)
             if not injected:
@@ -762,6 +872,9 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 return None
 
             # ── Download the image ───────────────────────────────────────────
+            logger.info("Waiting 5 seconds for full resolution to stabilize...")
+            time.sleep(5)  # Wait for full res image to fully render (User requested)
+            
             # Preferred: Playwright native download (highest quality, exact file)
             result = _try_download_native(page, output_path)
             if not result:
@@ -775,6 +888,9 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 return result
             else:
                 logger.error("Failed to download the generated image")
+                diag_path = output_path.replace('.png', '_download_diagnostic.png')
+                page.screenshot(path=diag_path, full_page=False)
+                logger.info(f"Download failure diagnostic screenshot saved: {diag_path}")
                 return None
 
         finally:
@@ -795,9 +911,11 @@ if __name__ == "__main__":
     parser.add_argument("output_path")
     parser.add_argument("--aspect-ratio", default=None)
     parser.add_argument("--project-title", default=None)
+    parser.add_argument("--reference-image", action="append", default=[])
     args = parser.parse_args()
 
-    result = run(args.prompt, args.output_path, args.aspect_ratio, args.project_title)
+    # Pass the list directly
+    result = run(args.prompt, args.output_path, args.aspect_ratio, args.project_title, args.reference_image)
     if result:
         print(f"SUCCESS:{result}")
         sys.exit(0)

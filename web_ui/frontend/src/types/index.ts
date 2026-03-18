@@ -152,6 +152,7 @@ export interface Shot {
 export interface CreateProjectRequest {
   idea: string;
   project_id?: string;
+  project_type: ProjectType;
   story_agent?: string;
   shots_agent?: string;
   total_duration?: number;

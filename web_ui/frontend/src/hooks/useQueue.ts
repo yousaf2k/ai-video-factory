@@ -326,6 +326,20 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     }
   });
 
+  const forceStartItem = useMutation({
+    mutationFn: async (itemId: string) => {
+      const response = await api.post(`/api/queue/items/${itemId}/force-start`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
+      toast.success('Item force started');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to force start item: ${error.message}`);
+    }
+  });
+
   const clearCompleted = useMutation({
     mutationFn: async () => {
       const response = await api.delete('/api/queue/completed');
@@ -434,6 +448,7 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     clearCancelled: clearCancelled.mutate,
     reorderItems: reorderItems.mutate,
     updatePriority: updatePriority.mutate,
+    forceStartItem: forceStartItem.mutate,
     refetch
   };
 }

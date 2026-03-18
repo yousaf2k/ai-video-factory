@@ -234,6 +234,50 @@ class GenerationService:
             logger.error(f"Error processing image generation for {item.item_id}: {e}")
             raise
 
+    async def force_start_item(self, item_id: str):
+        """
+        Force start a queue item immediately, bypassing processor throttles.
+        """
+        queue_service = get_queue_service()
+        item = queue_service.get_item(item_id)
+        if not item:
+            raise ValueError(f"Item {item_id} not found in queue")
+
+        logger.info(f"Force starting queue item {item_id} ({item.generation_type.value})")
+
+        # 1. Reset state to QUEUED so it can be marked active
+        if item.status == QueueItemStatus.PAUSED:
+            queue_service.resume_item(item_id)
+        elif item.status in [QueueItemStatus.FAILED, QueueItemStatus.CANCELLED, QueueItemStatus.COMPLETED]:
+            # Use requeue to reset counters/paths
+            queue_service.requeue_item(item_id)
+
+        # Re-fetch item to ensure state sync, then force mark to ACTIVE 
+        # to guarantee the core processor doesn't pick it up too
+        queue_service.mark_active(item_id)
+
+        # 2. Trigger task execution in background bypassing semaphore
+        async def run_now():
+            try:
+                if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]:
+                    await self._process_image_generation(item)
+                elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
+                    await self._process_video_generation(item)
+                elif item.generation_type == GenerationType.NARRATION:
+                    await self._process_narration_generation(item)
+                elif item.generation_type == GenerationType.BACKGROUND:
+                    await self._process_background_generation(item)
+                else:
+                    logger.warning(f"Unknown generation type on force start: {item.generation_type}")
+            except Exception as e:
+                logger.error(f"Force start failed executing task {item_id}: {e}")
+                # _process triggers usually handle failure markings internally
+                # but single_image handlers lift exceptions
+
+        # Execute immediately
+        asyncio.create_task(run_now())
+        return {"message": "Item force started successfully"}
+
     async def _process_video_generation(self, item: QueueItem):
         """Process video generation for a queue item"""
         try:
@@ -513,10 +557,10 @@ class GenerationService:
         if shot and shot.get('is_flfi2v') and project_type == 2:
             if generation_type == GenerationType.IMAGE:
                 image_variant = getattr(request, 'image_variant', 'both') or 'both'
-                if image_variant in ['then', 'both']:
-                    items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.THEN_IMAGE, shot, story, request))
                 if image_variant in ['now', 'both']:
                     items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.NOW_IMAGE, shot, story, request))
+                if image_variant in ['then', 'both']:
+                    items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.THEN_IMAGE, shot, story, request))
             elif generation_type == GenerationType.VIDEO:
                 video_variant = getattr(request, 'video_variant', 'both') or 'both'
                 if video_variant in ['meeting', 'both']:
@@ -579,16 +623,17 @@ class GenerationService:
             if request.regenerate_images and not skip_images:
                 # For FLFI2V shots, create separate items for THEN and NOW images
                 if shot.get('is_flfi2v') and story.get('project_type') == 2:
-                    # THEN image item
-                    then_item = self._create_queue_item(
-                        project_id, idx, GenerationType.THEN_IMAGE, shot, story, request=request
-                    )
-                    queue_items.append(then_item)
                     # NOW image item
                     now_item = self._create_queue_item(
                         project_id, idx, GenerationType.NOW_IMAGE, shot, story, request=request
                     )
                     queue_items.append(now_item)
+                    
+                    # THEN image item
+                    then_item = self._create_queue_item(
+                        project_id, idx, GenerationType.THEN_IMAGE, shot, story, request=request
+                    )
+                    queue_items.append(then_item)
                 else:
                     # Standard image item
                     image_item = self._create_queue_item(
@@ -736,7 +781,8 @@ class GenerationService:
             if shot.get('is_flfi2v') and project_type == 2:
                 results = await self._regenerate_flfi2v_images(
                     project_id, shot_index, shot, story, force,
-                    image_mode, image_workflow, seed, project_title, image_variant
+                    image_mode, image_workflow, seed, project_title, image_variant,
+                    prompt_override=prompt_override
                 )
                 # Return the NOW image path for backward compatibility
                 # (UI will use then_image_path/now_image_path for FLFI2V shots)
@@ -774,6 +820,31 @@ class GenerationService:
                 "progress": 0
             })
 
+            # Get character reference images for standard shots
+            reference_images = None
+            import config
+            actual_mode = image_mode or config.IMAGE_GENERATION_MODE
+            if story.get('characters'):
+                character_name = shot.get('character_name')
+                character = None
+                for char in story['characters']:
+                    if char.get('name') == character_name:
+                        character = char
+                        break
+                if character:
+                    then_ref = character.get('then_reference_image_path')
+                    now_ref = character.get('now_reference_image_path')
+                    if actual_mode in ["geminiweb", "gemini"]:
+                        reference_images = []
+                        if then_ref:
+                            reference_images.append(config.resolve_path(then_ref))
+                        if now_ref:
+                            reference_images.append(config.resolve_path(now_ref))
+                        if not reference_images:
+                            reference_images = None
+                    else:
+                        reference_images = then_ref or now_ref
+
             # Run in thread pool to avoid blocking
             image_path = await asyncio.to_thread(
                 self._generate_single_image,
@@ -784,7 +855,8 @@ class GenerationService:
                 seed,
                 prompt_override,
                 project_title,
-                None  # No variant for standard shots
+                None,  # No variant for standard shots
+                reference_images
             )
 
             # Mark as generated
@@ -824,7 +896,8 @@ class GenerationService:
     async def _regenerate_flfi2v_images(
         self, project_id: str, shot_index: int, shot: dict, story: dict,
         force: bool, image_mode: Optional[str], image_workflow: Optional[str],
-        seed: Optional[int], project_title: Optional[str], image_variant: str
+        seed: Optional[int], project_title: Optional[str], image_variant: str,
+        prompt_override: Optional[str] = None
     ) -> dict:
         """Regenerate THEN and/or NOW images for FLFI2V shot"""
         from web_ui.backend.models.story import ProjectType
@@ -832,11 +905,17 @@ class GenerationService:
         images_dir = self.project_manager.get_images_dir(project_id)
         os.makedirs(images_dir, exist_ok=True)
 
-        scene_id = shot.get('scene_id', 0)
-        scene = story['scenes'][scene_id] if scene_id < len(story.get('scenes', [])) else None
+        try:
+            scene_id = int(shot.get('scene_id', 0))
+        except (ValueError, TypeError):
+            scene_id = 0
+            
+        scene = next((s for s in story.get('scenes', []) if int(s.get('scene_id', 0)) == scene_id), None)
         set_prompt = scene.get('set_prompt', '') if scene else ''
 
         results = {}
+        import config
+        actual_mode = image_mode or config.IMAGE_GENERATION_MODE
         shots = self.project_manager.get_shots(project_id)
 
         # Get character reference images if available
@@ -844,11 +923,11 @@ class GenerationService:
         then_reference = None
         now_reference = None
 
-        if character_id and story.get('characters'):
-            # Find character by matching character_id or index
+        if story.get('characters'):
+            character_name = shot.get('character_name')
             character = None
             for char in story['characters']:
-                if str(char.get('scene_id', 0)) == str(character_id):
+                if char.get('name') == character_name:
                     character = char
                     break
 
@@ -861,10 +940,143 @@ class GenerationService:
         if not image_variant:
             image_variant = "both"
 
+        # Generate NOW image
+        if image_variant in ["now", "both"]:
+            if not shots[shot_index - 1].get('now_image_generated') or force:
+                try:
+                    # Preserve old NOW image before generating new one
+                    old_now_path = shots[shot_index - 1].get('now_image_path')
+                    if old_now_path:
+                        if 'image_paths' not in shots[shot_index - 1]:
+                            shots[shot_index - 1]['image_paths'] = []
+                        if old_now_path not in shots[shot_index - 1]['image_paths']:
+                            shots[shot_index - 1]['image_paths'].append(old_now_path)
+
+                    # Use prompt_override if provided, otherwise fall back to shot.get('now_image_prompt')
+                    now_prompt = prompt_override if prompt_override and prompt_override.strip() else shot.get('now_image_prompt', '')
+                    if set_prompt:
+                        now_prompt = f"{now_prompt}. Background: {set_prompt}"
+                    
+                    with open(r"E:\output\debug_now_prompt.txt", "w", encoding="utf-8") as f:
+                        f.write(f"PROMPT OVERRIDE: {prompt_override}\n")
+                        f.write(f"SET PROMPT: {set_prompt}\n")
+                        f.write(f"FINAL NOW PROMPT: {now_prompt}\n")
+
+                    next_version = self._get_next_image_version(images_dir, shot_index, "now")
+                    image_filename = f"shot_{shot_index:03d}_now_{next_version:03d}.png"
+                    image_path = os.path.join(images_dir, image_filename)
+
+                    # Use seed=1 for first NOW image, otherwise use provided seed or None
+                    now_seed = 1 if next_version == 1 else seed
+                    if next_version == 1:
+                        logger.info(f"FLFI2V shot {shot_index} NOW image using fixed seed: 1")
+
+                    # Mark NOW_IMAGE queue item as active
+                    self._mark_queue_item_active(project_id, shot_index, GenerationType.NOW_IMAGE)
+
+                    # Broadcast progress
+                    manager.broadcast_sync(project_id, {
+                        "type": "progress",
+                        "project_id": project_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "now_image",
+                        "progress": 0
+                    })
+
+                    # Determine workflow and reference for NOW
+                    now_workflow = image_workflow
+                    # Auto-switch to IP-Adapter workflow ONLY for ComfyUI mode with reference
+                    actual_mode = image_mode or config.IMAGE_GENERATION_MODE
+                    now_reference_to_use = []
+                    if actual_mode in ["geminiweb", "gemini"]:
+                        import config
+                        if then_reference:
+                            now_reference_to_use.append(config.resolve_path(then_reference))
+                        if now_reference:
+                            now_reference_to_use.append(config.resolve_path(now_reference))
+                        if not now_reference_to_use:
+                            now_reference_to_use = None
+                        logger.info(f"Using aggregated references for NOW in Gemini Web: {now_reference_to_use}")
+                    elif now_reference and actual_mode == "comfyui":
+                        if not now_workflow or now_workflow == "flux":
+                            now_workflow = "flux_ipadapter_now"
+                            logger.info(f"Using IP-Adapter workflow for NOW with reference: {now_reference}")
+
+                    # Generate
+                    result_path = await asyncio.to_thread(
+                        self._generate_single_image,
+                        project_id,
+                        {**shot, 'image_prompt': now_prompt},
+                        image_mode,
+                        now_workflow,
+                        now_seed,
+                        None,  # Reset prompt_override to None since we merged it into image_prompt above
+                        project_title,
+                        "now",
+                        now_reference_to_use,  # Pass absolute NOW reference image
+                        GenerationType.NOW_IMAGE  # Pass generation type for queue tracking
+                    )
+
+                    shots[shot_index - 1]['now_image_generated'] = True
+                    shots[shot_index - 1]['now_image_path'] = self._get_relative_path(result_path)
+                    results['now'] = shots[shot_index - 1]['now_image_path']
+
+                    # Append to general image_paths for variations tracking
+                    if 'image_paths' not in shots[shot_index - 1]:
+                        shots[shot_index - 1]['image_paths'] = []
+                    relative_path = shots[shot_index - 1]['now_image_path']
+                    if relative_path not in shots[shot_index - 1]['image_paths']:
+                        shots[shot_index - 1]['image_paths'].append(relative_path)
+
+                    # Mark NOW_IMAGE queue item as completed
+                    self._mark_queue_item_completed(project_id, shot_index, GenerationType.NOW_IMAGE)
+
+                    # Broadcast completion
+                    manager.broadcast_sync(project_id, {
+                        "type": "completed",
+                        "project_id": project_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "now_image"
+                    })
+                except Exception as e:
+                    import traceback
+                    with open(r"E:\output\debug_now_prompt.txt", "a", encoding="utf-8") as f:
+                        f.write(f"\n[EXCEPTION DURING NOW GENERATION]\n")
+                        f.write(f"Error: {e}\n")
+                        f.write(traceback.format_exc())
+                    logger.error(f"Error generating NOW image for shot {shot_index}: {e}")
+                    # Mark NOW_IMAGE queue item as failed
+                    self._mark_queue_item_failed(project_id, shot_index, GenerationType.NOW_IMAGE, str(e))
+
+                    # Broadcast error
+                    manager.broadcast_sync(project_id, {
+                        "type": "cancelled",
+                        "project_id": project_id,
+                        "shot_index": shot_index,
+                        "shot_id": shot.get('id'),
+                        "generation_type": "now_image",
+                        "error": str(e)
+                    })
+                    # Only raise if this was the only variant requested
+                    if image_variant == "now":
+                        raise
+
+        
+            else:
+                logger.info(f"FLFI2V shot {shot_index} NOW image already generated, skipping and marking completed")
+                self._mark_queue_item_completed(project_id, shot_index, GenerationType.NOW_IMAGE)
         # Generate THEN image
         if image_variant in ["then", "both"]:
             if not shots[shot_index - 1].get('then_image_generated') or force:
                 try:
+                    # Check if NOW image exists before generating THEN (required for reference consistency)
+                    current_now = shots[shot_index - 1].get('now_image_path')
+                    if not current_now:
+                        logger.error(f"Cannot generate THEN image for shot {shot_index} because NOW image is missing")
+                        raise ValueError("Cannot generate THEN image: NOW image is missing and required for reference consistency.")
+
                     # Preserve old THEN image before generating new one
                     old_then_path = shots[shot_index - 1].get('then_image_path')
                     if old_then_path:
@@ -898,10 +1110,41 @@ class GenerationService:
                         "shot_index": shot_index,
                         "shot_id": shot.get('id'),
                         "generation_type": "then_image",
-                        "progress": 0
+                        "progress": 50 if image_variant == "both" else 0
                     })
 
                     # Determine workflow and reference for THEN
+                    then_reference_to_use = []
+                    current_now = shots[shot_index - 1].get('now_image_path')
+                    if actual_mode in ["geminiweb", "gemini"]:
+                        import config
+                        if current_now:
+                            then_reference_to_use.append(config.resolve_path(current_now))
+                        if then_reference:
+                            then_reference_to_use.append(config.resolve_path(then_reference))
+                        if not then_reference_to_use:
+                            then_reference_to_use = None
+                            then_reference_to_use = None
+                        logger.info(f"Using aggregated references for THEN in Gemini Web: {then_reference_to_use}")
+
+                    active_prompt_override = prompt_override
+                    # If override matches default prompt precisely, treat as no override so edit_instructions apply
+                    if active_prompt_override and active_prompt_override == shot.get('then_image_prompt'):
+                        logger.info("prompt_override matches default then_image_prompt; clearing for edit_instructions trigger")
+                        active_prompt_override = None
+                        
+                    if current_now and actual_mode in ["geminiweb", "gemini"]:
+                        # Reference already aggregated in list above
+                        
+                        # Append framing instructions for reference image composition
+                        edit_instructions = (
+                            "Remove the right side of the image showing the adult/now version of the person from this reference image. "
+                            "Make the left side the new younger/then version, looking directly into camera with happy, cheerful smiling expressions. "
+                            "No change in background, no side angle, no profile view, no tilt."
+                        )
+                        # Use edit instructions directly as the prompt to avoid mixing with LLM prompt
+                        then_prompt = edit_instructions
+
                     then_workflow = image_workflow
                     # Auto-switch to IP-Adapter workflow ONLY for ComfyUI mode with reference
                     actual_mode = image_mode or config.IMAGE_GENERATION_MODE
@@ -918,10 +1161,10 @@ class GenerationService:
                         image_mode,
                         then_workflow,
                         then_seed,
-                        None,  # No prompt override for FLFI2V
+                        active_prompt_override,  # Pass active override helper
                         project_title,
                         "then",
-                        then_reference,  # Pass THEN reference image
+                        then_reference_to_use,  # Pass THEN reference image
                         GenerationType.THEN_IMAGE  # Pass generation type for queue tracking
                     )
 
@@ -968,112 +1211,6 @@ class GenerationService:
                 logger.info(f"FLFI2V shot {shot_index} THEN image already generated, skipping and marking completed")
                 self._mark_queue_item_completed(project_id, shot_index, GenerationType.THEN_IMAGE)
 
-        # Generate NOW image
-        if image_variant in ["now", "both"]:
-            if not shots[shot_index - 1].get('now_image_generated') or force:
-                try:
-                    # Preserve old NOW image before generating new one
-                    old_now_path = shots[shot_index - 1].get('now_image_path')
-                    if old_now_path:
-                        if 'image_paths' not in shots[shot_index - 1]:
-                            shots[shot_index - 1]['image_paths'] = []
-                        if old_now_path not in shots[shot_index - 1]['image_paths']:
-                            shots[shot_index - 1]['image_paths'].append(old_now_path)
-
-                    now_prompt = shot.get('now_image_prompt', '')
-                    if set_prompt:
-                        now_prompt = f"{now_prompt}. Background: {set_prompt}"
-
-                    next_version = self._get_next_image_version(images_dir, shot_index, "now")
-                    image_filename = f"shot_{shot_index:03d}_now_{next_version:03d}.png"
-                    image_path = os.path.join(images_dir, image_filename)
-
-                    # Use seed=1 for first NOW image, otherwise use provided seed or None
-                    now_seed = 1 if next_version == 1 else seed
-                    if next_version == 1:
-                        logger.info(f"FLFI2V shot {shot_index} NOW image using fixed seed: 1")
-
-                    # Mark NOW_IMAGE queue item as active
-                    self._mark_queue_item_active(project_id, shot_index, GenerationType.NOW_IMAGE)
-
-                    # Broadcast progress
-                    manager.broadcast_sync(project_id, {
-                        "type": "progress",
-                        "project_id": project_id,
-                        "shot_index": shot_index,
-                        "shot_id": shot.get('id'),
-                        "generation_type": "now_image",
-                        "progress": 50 if image_variant == "both" else 0
-                    })
-
-                    # Determine workflow and reference for NOW
-                    now_workflow = image_workflow
-                    # Auto-switch to IP-Adapter workflow ONLY for ComfyUI mode with reference
-                    actual_mode = image_mode or config.IMAGE_GENERATION_MODE
-                    if now_reference and actual_mode == "comfyui":
-                        if not now_workflow or now_workflow == "flux":
-                            now_workflow = "flux_ipadapter_now"
-                            logger.info(f"Using IP-Adapter workflow for NOW with reference: {now_reference}")
-
-                    # Generate
-                    result_path = await asyncio.to_thread(
-                        self._generate_single_image,
-                        project_id,
-                        {**shot, 'image_prompt': now_prompt},
-                        image_mode,
-                        now_workflow,
-                        now_seed,
-                        None,  # No prompt override for FLFI2V
-                        project_title,
-                        "now",
-                        now_reference,  # Pass NOW reference image
-                        GenerationType.NOW_IMAGE  # Pass generation type for queue tracking
-                    )
-
-                    shots[shot_index - 1]['now_image_generated'] = True
-                    shots[shot_index - 1]['now_image_path'] = self._get_relative_path(result_path)
-                    results['now'] = shots[shot_index - 1]['now_image_path']
-
-                    # Append to general image_paths for variations tracking
-                    if 'image_paths' not in shots[shot_index - 1]:
-                        shots[shot_index - 1]['image_paths'] = []
-                    relative_path = shots[shot_index - 1]['now_image_path']
-                    if relative_path not in shots[shot_index - 1]['image_paths']:
-                        shots[shot_index - 1]['image_paths'].append(relative_path)
-
-                    # Mark NOW_IMAGE queue item as completed
-                    self._mark_queue_item_completed(project_id, shot_index, GenerationType.NOW_IMAGE)
-
-                    # Broadcast completion
-                    manager.broadcast_sync(project_id, {
-                        "type": "completed",
-                        "project_id": project_id,
-                        "shot_index": shot_index,
-                        "shot_id": shot.get('id'),
-                        "generation_type": "now_image"
-                    })
-                except Exception as e:
-                    logger.error(f"Error generating NOW image for shot {shot_index}: {e}")
-                    # Mark NOW_IMAGE queue item as failed
-                    self._mark_queue_item_failed(project_id, shot_index, GenerationType.NOW_IMAGE, str(e))
-
-                    # Broadcast error
-                    manager.broadcast_sync(project_id, {
-                        "type": "cancelled",
-                        "project_id": project_id,
-                        "shot_index": shot_index,
-                        "shot_id": shot.get('id'),
-                        "generation_type": "now_image",
-                        "error": str(e)
-                    })
-                    # Only raise if this was the only variant requested
-                    if image_variant == "now":
-                        raise
-
-        
-            else:
-                logger.info(f"FLFI2V shot {shot_index} NOW image already generated, skipping and marking completed")
-                self._mark_queue_item_completed(project_id, shot_index, GenerationType.NOW_IMAGE)
 # Update standard image_path to NOW (for backward compatibility)
         if shots[shot_index - 1].get('now_image_path'):
             shots[shot_index - 1]['image_path'] = shots[shot_index - 1]['now_image_path']

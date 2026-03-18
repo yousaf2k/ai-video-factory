@@ -63,12 +63,20 @@ async def get_agents():
             agent_id = agent_info.get("id", "unknown")
             agent_name = agent_info.get("name", agent_id)
 
+            category = None
+            if "/" in agent_id:
+                category, name = agent_id.split("/", 1)
+                agent_name = name.replace('_', ' ').title()
+
             if agent_type in agents_by_type:
-                agents_by_type[agent_type].append({
+                item = {
                     "id": agent_id,
                     "name": agent_name,
                     "type": agent_type
-                })
+                }
+                if category:
+                    item["category"] = category
+                agents_by_type[agent_type].append(item)
 
         # Sort alphabetically by name
         for agent_type in agents_by_type:

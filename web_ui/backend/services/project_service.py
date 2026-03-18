@@ -94,8 +94,13 @@ class ProjectService:
             aspect_ratio=request.aspect_ratio
         )
 
+        from web_ui.backend.models.story import ProjectType
+
+        # Store project_type in metadata
+        meta['project_type'] = request.project_type
+
         # Detect if this is a ThenVsNow project
-        is_then_vs_now = request.story_agent == "then_vs_now"
+        is_then_vs_now = request.project_type == ProjectType.THEN_VS_NOW
 
         if is_then_vs_now:
             # Use special story generation flow for ThenVsNow

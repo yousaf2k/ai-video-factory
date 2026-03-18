@@ -15,6 +15,7 @@ interface ProjectGroupProps {
   onSelectItem?: (itemId: string) => void;
   onCancelItem?: (itemId: string) => void;
   onRequeueItem?: (itemId: string) => void;
+  onForceStartItem?: (itemId: string) => void;
   onReorder?: (itemIds: string[]) => void;
   onImageClick?: (itemId: string) => void;
 }
@@ -27,6 +28,7 @@ export function ProjectGroup({
   onSelectItem,
   onCancelItem,
   onRequeueItem,
+  onForceStartItem,
   onReorder,
   onImageClick
 }: ProjectGroupProps) {
@@ -131,6 +133,7 @@ export function ProjectGroup({
             onSelectItem={onSelectItem}
             onCancelItem={onCancelItem}
             onRequeueItem={onRequeueItem}
+            onForceStartItem={onForceStartItem}
             onReorder={onReorder}
             onImageClick={onImageClick}
           />

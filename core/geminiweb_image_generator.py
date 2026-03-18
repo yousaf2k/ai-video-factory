@@ -398,7 +398,8 @@ def generate_image_geminiweb(
     aspect_ratio: str = None,
     resolution: str = None,
     seed: int = None,
-    project_title: str = None
+    project_title: str = None,
+    reference_image_path: str = None
 ) -> Optional[str]:
     """
     Generate a single image using Gemini web UI via browser automation.
@@ -414,6 +415,7 @@ def generate_image_geminiweb(
         resolution: Not used for GeminiWeb mode (kept for API consistency)
         seed: Not used for GeminiWeb mode (kept for API consistency)
         project_title: Optional title for Gemini Web chat persistence
+        reference_image_path: Optional path to an image to upload as a reference
 
     Returns:
         Path to the generated image file, or None if failed
@@ -438,10 +440,18 @@ def generate_image_geminiweb(
         sys.executable, script_path,
         prompt, output_path,
     ]
+    with open(os.path.join(os.path.dirname(output_path), "cmd_debug.txt"), "w", encoding="utf-8") as f:
+        f.write(str(cmd))
     if aspect_ratio:
         cmd.extend(['--aspect-ratio', aspect_ratio])
     if project_title:
         cmd.extend(['--project-title', project_title])
+    if reference_image_path:
+        if isinstance(reference_image_path, list):
+            for img_path in reference_image_path:
+                cmd.extend(['--reference-image', img_path])
+        else:
+            cmd.extend(['--reference-image', reference_image_path])
 
     try:
         with _generation_lock:
