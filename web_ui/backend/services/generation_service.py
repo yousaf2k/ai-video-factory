@@ -865,6 +865,14 @@ class GenerationService:
         if image_variant in ["then", "both"]:
             if not shots[shot_index - 1].get('then_image_generated') or force:
                 try:
+                    # Preserve old THEN image before generating new one
+                    old_then_path = shots[shot_index - 1].get('then_image_path')
+                    if old_then_path:
+                        if 'image_paths' not in shots[shot_index - 1]:
+                            shots[shot_index - 1]['image_paths'] = []
+                        if old_then_path not in shots[shot_index - 1]['image_paths']:
+                            shots[shot_index - 1]['image_paths'].append(old_then_path)
+
                     print(f"[DEBUG] entering _regenerate_flfi2v_images THEN-block for shot {shot_index}")
                     logger.info(f"entering _regenerate_flfi2v_images THEN-block for shot {shot_index}")
                     then_prompt = shot.get('then_image_prompt', '')
@@ -964,6 +972,14 @@ class GenerationService:
         if image_variant in ["now", "both"]:
             if not shots[shot_index - 1].get('now_image_generated') or force:
                 try:
+                    # Preserve old NOW image before generating new one
+                    old_now_path = shots[shot_index - 1].get('now_image_path')
+                    if old_now_path:
+                        if 'image_paths' not in shots[shot_index - 1]:
+                            shots[shot_index - 1]['image_paths'] = []
+                        if old_now_path not in shots[shot_index - 1]['image_paths']:
+                            shots[shot_index - 1]['image_paths'].append(old_now_path)
+
                     now_prompt = shot.get('now_image_prompt', '')
                     if set_prompt:
                         now_prompt = f"{now_prompt}. Background: {set_prompt}"
@@ -1403,6 +1419,14 @@ class GenerationService:
         if video_variant in ["meeting", "both"]:
             if shot.get('meeting_video_prompt') and (not shots[shot_index - 1].get('meeting_video_rendered') or force):
                 try:
+                    # Preserve old meeting video before generating new one
+                    old_meeting_path = shots[shot_index - 1].get('meeting_video_path')
+                    if old_meeting_path:
+                        if 'video_paths' not in shots[shot_index - 1]:
+                            shots[shot_index - 1]['video_paths'] = []
+                        if old_meeting_path not in shots[shot_index - 1]['video_paths']:
+                            shots[shot_index - 1]['video_paths'].append(old_meeting_path)
+
                     next_version = self._get_next_video_version(
                         self.project_manager.get_videos_dir(project_id), shot_index, "meeting"
                     )
@@ -1445,6 +1469,13 @@ class GenerationService:
                     shots[shot_index - 1]['meeting_video_path'] = self._get_relative_path(result_path)
                     results['meeting'] = shots[shot_index - 1]['meeting_video_path']
 
+                    # Append to general video_paths for variations tracking
+                    if 'video_paths' not in shots[shot_index - 1]:
+                        shots[shot_index - 1]['video_paths'] = []
+                    if shots[shot_index - 1]['meeting_video_path'] not in shots[shot_index - 1]['video_paths']:
+                        shots[shot_index - 1]['video_paths'].append(shots[shot_index - 1]['meeting_video_path'])
+
+
                     # Mark MEETING_VIDEO queue item as completed
                     self._mark_queue_item_completed(project_id, shot_index, GenerationType.MEETING_VIDEO)
 
@@ -1482,6 +1513,14 @@ class GenerationService:
         if video_variant in ["departure", "both"]:
             if shot.get('departure_video_prompt') and (not shots[shot_index - 1].get('departure_video_rendered') or force):
                 try:
+                    # Preserve old departure video before generating new one
+                    old_departure_path = shots[shot_index - 1].get('departure_video_path')
+                    if old_departure_path:
+                        if 'video_paths' not in shots[shot_index - 1]:
+                            shots[shot_index - 1]['video_paths'] = []
+                        if old_departure_path not in shots[shot_index - 1]['video_paths']:
+                            shots[shot_index - 1]['video_paths'].append(old_departure_path)
+
                     next_version = self._get_next_video_version(
                         self.project_manager.get_videos_dir(project_id), shot_index, "departure"
                     )
@@ -1531,6 +1570,13 @@ class GenerationService:
                     shots[shot_index - 1]['departure_video_rendered'] = True
                     shots[shot_index - 1]['departure_video_path'] = self._get_relative_path(result_path)
                     results['departure'] = shots[shot_index - 1]['departure_video_path']
+
+                    # Append to general video_paths for variations tracking
+                    if 'video_paths' not in shots[shot_index - 1]:
+                        shots[shot_index - 1]['video_paths'] = []
+                    if shots[shot_index - 1]['departure_video_path'] not in shots[shot_index - 1]['video_paths']:
+                        shots[shot_index - 1]['video_paths'].append(shots[shot_index - 1]['departure_video_path'])
+
 
                     # Mark DEPARTURE_VIDEO queue item as completed
                     self._mark_queue_item_completed(project_id, shot_index, GenerationType.DEPARTURE_VIDEO)
