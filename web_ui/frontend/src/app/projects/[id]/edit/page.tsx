@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getMediaUrl } from "@/lib/utils";
+import { getMediaUrl, cn } from "@/lib/utils";
 import { Image as ImageIcon, Video as VideoIcon } from "lucide-react";
 import { useProject } from "@/hooks/useProjects";
 import { useUpdateStory, useRegenerateStory } from "@/hooks/useStory";
@@ -22,7 +22,10 @@ import { SceneList } from "@/components/scenes/SceneList";
 import { ShotGrid } from "@/components/shots/ShotGrid";
 import { Scene, Story, Shot } from "@/types";
 import { api } from "@/services/api";
-import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import CharacterReferenceUpload from "@/components/characters/CharacterReferenceUpload";
+import { useProgress } from "@/hooks/useProgress";
+import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play, ArrowLeft, Clock, Video, ListMusic, Settings, CheckCircle2, UserCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +38,7 @@ import {
 } from "@/components/ui/select";
 import { useConfirmDialog, ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
+import { useCallback } from "react";
 
 export default function ProjectEditPage() {
   const params = useParams();
@@ -42,6 +46,19 @@ export default function ProjectEditPage() {
   const { data: project, isLoading, error } = useProject(projectId);
   const { data: shots } = useShots(projectId);
   const { data: agents } = useAgents();
+  const queryClient = useQueryClient();
+
+  // Keep WebSocket invalidation connected top-level for both tabs
+  useProgress(
+    projectId,
+    useCallback(
+      (id: string | number, type: 'shot' | 'scene') => {
+        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+        queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+      },
+      [queryClient, projectId]
+    )
+  );
 
   const updateStoryMutation = useUpdateStory(projectId);
   const regenerateStoryMutation = useRegenerateStory(projectId);
@@ -53,8 +70,8 @@ export default function ProjectEditPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState("shots");
   // Media dialog states
-  const [showImagesDialog, setShowImagesDialog] = useState(false);
-  const [showVideosDialog, setShowVideosDialog] = useState(false);
+  const [showGalleryDialog, setShowGalleryDialog] = useState(false);
+  const [galleryTab, setGalleryTab] = useState<"images" | "videos">("images");
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
 
@@ -67,10 +84,12 @@ export default function ProjectEditPage() {
   const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
   const [maxShots, setMaxShots] = useState(0);
 
-  // Initialize story when project loads
-  if (project && project.story && !story) {
-    setStory(project.story);
-  }
+  // Initialize and sync story when project loads
+  useEffect(() => {
+    if (project && project.story) {
+      setStory(project.story);
+    }
+  }, [project?.story]);
 
   // Load backend config for replan shots dialog default values
   useEffect(() => {
@@ -109,7 +128,7 @@ export default function ProjectEditPage() {
       await updateStoryMutation.mutateAsync(updatedStory);
       toast.success("Scene updated successfully", {
         description: `"${updatedScene.location || 'Scene ' + (index + 1)}" has been saved.`,
-        
+
       });
     } catch (error) {
       console.error("Failed to update scene:", error);
@@ -351,55 +370,40 @@ export default function ProjectEditPage() {
   }) || [];
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Header */}
       <div className="mb-8">
         <Link
           href={`/projects/${projectId}`}
-          className="text-primary hover:underline mb-4 inline-block"
+          className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-primary mb-4 transition-colors"
         >
-          ← Back to Project
+          <ArrowLeft className="w-4 h-4" />
+          Back to Project
         </Link>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">{story.title}</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              {story.title}
+            </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Project ID: {projectId}
+              Project ID: <span className="font-mono text-xs">{projectId}</span>
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            {/* View All Media Buttons */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowImagesDialog(true)}
-              className="flex items-center gap-2"
-            >
-              <ImageIcon className="w-4 h-4" />
-              All Images
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowVideosDialog(true)}
-              className="flex items-center gap-2"
-            >
-              <VideoIcon className="w-4 h-4" />
-              All Videos
-            </Button>
-
+          <div className="flex flex-wrap items-center gap-2">
             {activeTab === "story" && hasChanges && (
               <>
                 <Link
                   href={`/projects/${projectId}/settings`}
-                  className="px-4 py-2 border rounded-md hover:bg-muted transition-colors flex items-center gap-2"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium border rounded-md hover:bg-muted transition-all shadow-sm"
                 >
+                  <Settings className="w-4 h-4" />
                   Settings
                 </Link>
                 <Button
                   onClick={handleSaveStory}
+                  size="sm"
                   disabled={!hasChanges || updateStoryMutation.isPending}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-1.5 shadow-sm font-medium"
                 >
                   <Save className="w-4 h-4" />
                   {updateStoryMutation.isPending ? "Saving..." : "Save Changes"}
@@ -411,26 +415,47 @@ export default function ProjectEditPage() {
       </div>
 
       {/* Story Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="border rounded-lg p-4">
-          <div className="text-sm text-muted-foreground">Total Scenes</div>
-          <div className="text-2xl font-bold">{story.scenes.length}</div>
-        </div>
-        <div className="border rounded-lg p-4">
-          <div className="text-sm text-muted-foreground">Total Duration</div>
-          <div className="text-2xl font-bold">
-            {Math.floor(totalDuration / 60)}:
-            {(totalDuration % 60).toString().padStart(2, "0")}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
+          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+            <BookOpen className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Total Scenes</p>
+            <p className="text-xl font-bold">{story.scenes.length}</p>
           </div>
         </div>
-        <div className="border rounded-lg p-4">
-          <div className="text-sm text-muted-foreground">Total Shots</div>
-          <div className="text-2xl font-bold">{shots ? shots.length : 0}</div>
+        <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
+          <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center text-accent">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Total Duration</p>
+            <p className="text-xl font-bold">
+              {Math.floor(totalDuration / 60)}:
+              {(totalDuration % 60).toString().padStart(2, "0")}
+            </p>
+          </div>
         </div>
-        <div className="border rounded-lg p-4">
-          <div className="text-sm text-muted-foreground">Status</div>
-          <div className="text-2xl font-bold">
-            {activeTab === "story" && hasChanges ? "Unsaved" : "Saved"}
+        <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
+          <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center text-purple-500">
+            <Film className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Planned Shots</p>
+            <p className="text-xl font-bold">{shots ? shots.length : 0}</p>
+          </div>
+        </div>
+        <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${hasChanges ? "bg-amber-500/10 text-amber-500" : "bg-green-500/10 text-green-500"
+            }`}>
+            {hasChanges ? <RefreshCw className="w-5 h-5 animate-spin-slow" /> : <CheckCircle2 className="w-5 h-5" />}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Status</p>
+            <p className={`text-xl font-bold ${hasChanges ? "text-amber-500" : "text-green-500"}`}>
+              {hasChanges ? "Unsaved" : "Saved"}
+            </p>
           </div>
         </div>
       </div>
@@ -453,16 +478,47 @@ export default function ProjectEditPage() {
         </TabsList>
 
         <TabsContent value="story" className="mt-6">
+          {/* Characters Section */}
+          {story.characters && story.characters.length > 0 && (
+            <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2 mb-6 pb-4 border-b border-border/50">
+                <UserCircle className="w-5 h-5 text-primary" />
+                Character References
+              </h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {story.characters.map((character, idx) => (
+                  <div key={idx} className="border border-border/50 rounded-xl p-5 bg-background shadow-sm hover:border-primary/30 transition-colors">
+                    <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                       <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs">{idx + 1}</span>
+                       {character.name}
+                    </h3>
+                    <CharacterReferenceUpload
+                      character={character}
+                      characterIndex={idx}
+                      projectId={projectId}
+                      onUpdate={() => {
+                        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Scenes Editor */}
-          <div className="border rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Scenes</h2>
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/50">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <ListMusic className="w-5 h-5 text-primary" />
+                Scenes Breakdown
+              </h2>
               <button
                 onClick={() => setShowRegenStoryModal(true)}
-                className="flex items-center gap-2 text-sm px-3 py-1.5 border rounded-md hover:bg-muted transition-colors text-blue-600"
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-blue-500/20 rounded-md hover:bg-blue-500/10 transition-colors text-blue-500 shadow-sm"
                 title="Regenerate entire story using an AI agent"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-3.5 h-3.5" />
                 Regenerate Story
               </button>
             </div>
@@ -472,6 +528,7 @@ export default function ProjectEditPage() {
               onDelete={handleDeleteScene}
               onReorder={handleReorderScenes}
               onAdd={handleAddScene}
+              projectType={story.project_type}
             />
           </div>
 
@@ -489,19 +546,33 @@ export default function ProjectEditPage() {
 
         <TabsContent value="shots" className="mt-6">
           {/* Shots Grid */}
-          <div className="border rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">
-                Shots
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-border/50">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Film className="w-5 h-5 text-primary" />
+                Shots Timeline
               </h2>
-              <button
-                onClick={() => setShowReplanShotsModal(true)}
-                className="flex items-center gap-2 text-sm px-3 py-1.5 border rounded-md hover:bg-muted transition-colors text-purple-600"
-                title="Re-plan all shots from the current story"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Re-plan Shots
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setGalleryTab("images");
+                    setShowGalleryDialog(true);
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-border rounded-md hover:bg-muted transition-colors shadow-sm"
+                  title="Open Project Media Gallery"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  Media Gallery
+                </button>
+                <button
+                  onClick={() => setShowReplanShotsModal(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-purple-500/20 rounded-md hover:bg-purple-500/10 transition-colors text-purple-500 shadow-sm"
+                  title="Re-plan all shots from the current story"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Re-plan Shots
+                </button>
+              </div>
             </div>
             <ShotGrid
               shots={shots || []}
@@ -678,133 +749,106 @@ export default function ProjectEditPage() {
 
       {/* Confirmation Dialog */}
 
-      {/* View All Images Modal */}
-      <Dialog open={showImagesDialog} onOpenChange={(open) => {
-        setShowImagesDialog(open);
-        if (!open) setSelectedImageIndex(null);
+      {/* Combined Media Gallery Modal */}
+      <Dialog open={showGalleryDialog} onOpenChange={(open) => {
+        setShowGalleryDialog(open);
+        if (!open) {
+          setSelectedImageIndex(null);
+          setSelectedVideoIndex(null);
+        }
       }}>
         <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 overflow-hidden bg-card border-border">
-          <DialogHeader className="p-4 border-b border-border/60">
-            <DialogTitle>All Project Images ({allImages.length})</DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {allImages.map((img, i) => (
-                <div 
-                  key={i} 
-                  onClick={() => setSelectedImageIndex(i)} 
-                  className="relative aspect-video rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors"
-                >
-                  <img src={getMediaUrl(img.path)} alt={img.label} className="object-cover w-full h-full" loading="lazy" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                    <span className="text-xs text-white font-medium">{img.label}</span>
-                  </div>
-                  <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white group-hover:hidden">
-                    {img.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Lightbox Slideshow */}
-          {selectedImageIndex !== null && allImages[selectedImageIndex] && (
-            <div className="absolute inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center animate-in fade-in-0 duration-200">
-              <button 
-                onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(null); }} 
-                className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors z-10"
+          <DialogHeader className="p-4 border-b border-border/60 flex flex-row items-center justify-between">
+            <DialogTitle>Project Media Gallery</DialogTitle>
+            
+            <div className="flex items-center bg-muted/40 p-1 rounded-lg border shadow-sm mr-8">
+              <button
+                onClick={() => setGalleryTab("images")}
+                className={cn("flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-md transition-all", galleryTab === "images" ? "bg-background text-blue-600 shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}
               >
-                <X className="w-6 h-6" />
+                <ImageIcon className="w-4 h-4" />
+                Images ({allImages.length})
               </button>
-
-              {selectedImageIndex > 0 && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex - 1); }} 
-                  className="absolute left-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
-                >
-                  <ChevronLeft className="w-8 h-8" />
-                </button>
-              )}
-
-              <div className="relative aspect-video w-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-black/40 rounded-lg overflow-hidden border border-border/40">
-                <img 
-                  src={getMediaUrl(allImages[selectedImageIndex].path)} 
-                  alt={allImages[selectedImageIndex].label} 
-                  className="w-full h-full object-contain select-none" 
-                />
-              </div>
-              
-              <div className="mt-4 text-white text-center">
-                <span className="font-semibold">{allImages[selectedImageIndex].label}</span>
-                <div className="text-xs text-white/60 mt-1">{selectedImageIndex + 1} of {allImages.length}</div>
-              </div>
-
-              {selectedImageIndex < allImages.length - 1 && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex + 1); }} 
-                  className="absolute right-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
-                >
-                  <ChevronRight className="w-8 h-8" />
-                </button>
-              )}
+              <button
+                onClick={() => setGalleryTab("videos")}
+                className={cn("flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-md transition-all", galleryTab === "videos" ? "bg-background text-purple-600 shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}
+              >
+                <VideoIcon className="w-4 h-4" />
+                Videos ({allVideos.length})
+              </button>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* View All Videos Modal */}
-      <Dialog open={showVideosDialog} onOpenChange={(open) => {
-        setShowVideosDialog(open);
-        if (!open) setSelectedVideoIndex(null);
-      }}>
-        <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 overflow-hidden bg-card border-border">
-          <DialogHeader className="p-4 border-b border-border/60">
-            <DialogTitle>All Project Videos ({allVideos.length})</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {allVideos.map((vid, i) => (
-                <div 
-                  key={i} 
-                  onClick={() => setSelectedVideoIndex(i)} 
-                  className="relative aspect-video rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors"
-                >
-                  {vid.poster ? (
-                    <img src={getMediaUrl(vid.poster)} alt={vid.label} className="object-cover w-full h-full" loading="lazy" />
-                  ) : (
-                    <div className="flex items-center justify-center w-full h-full bg-slate-900/40 text-xs text-muted-foreground">
-                      No Poster
+
+          <div className="flex-1 overflow-y-auto p-4 bg-muted/10">
+            {galleryTab === "images" ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {allImages.length === 0 && (
+                  <div className="col-span-full py-12 text-center text-muted-foreground">No images generated yet.</div>
+                )}
+                {allImages.map((img, i) => (
+                  <div
+                    key={i}
+                    onClick={() => setSelectedImageIndex(i)}
+                    className="relative aspect-video rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors shadow-sm"
+                  >
+                    <img src={getMediaUrl(img.path)} alt={img.label} className="object-cover w-full h-full" loading="lazy" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
+                      <span className="text-xs text-white font-medium">{img.label}</span>
                     </div>
-                  )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="bg-primary p-3 rounded-full shadow-lg">
-                      <Play className="w-6 h-6 text-primary-foreground fill-current" />
+                    <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white group-hover:hidden backdrop-blur-sm">
+                      {img.label}
                     </div>
                   </div>
-                  <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white group-hover:hidden">
-                    {vid.label}
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {allVideos.length === 0 && (
+                  <div className="col-span-full py-12 text-center text-muted-foreground">No videos rendered yet.</div>
+                )}
+                {allVideos.map((vid, i) => (
+                  <div
+                    key={i}
+                    onClick={() => setSelectedVideoIndex(i)}
+                    className="relative aspect-video rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors shadow-sm"
+                  >
+                    {vid.poster ? (
+                      <img src={getMediaUrl(vid.poster)} alt={vid.label} className="object-cover w-full h-full" loading="lazy" />
+                    ) : (
+                      <div className="flex items-center justify-center w-full h-full bg-slate-900/40 text-xs text-muted-foreground">
+                        No Poster
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
+                      <div className="bg-primary/90 p-3 rounded-full shadow-lg">
+                        <Play className="w-6 h-6 text-primary-foreground fill-current" />
+                      </div>
+                    </div>
+                    <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white group-hover:hidden backdrop-blur-sm">
+                      {vid.label}
+                    </div>
+                    <div className="absolute top-2 right-2 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white/80 font-medium tracking-wide">
+                      VIDEO
+                    </div>
                   </div>
-                  <div className="absolute top-2 right-2 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white/80">
-                    Video
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Fullscreen Video Player */}
-          {selectedVideoIndex !== null && allVideos[selectedVideoIndex] && (
+          {galleryTab === "videos" && selectedVideoIndex !== null && allVideos[selectedVideoIndex] && (
             <div className="absolute inset-0 z-[100] bg-black/98 flex flex-col items-center justify-center animate-in fade-in-0 duration-200">
-              <button 
-                onClick={(e) => { e.stopPropagation(); setSelectedVideoIndex(null); }} 
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedVideoIndex(null); }}
                 className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors z-10"
               >
                 <X className="w-6 h-6" />
               </button>
 
               {selectedVideoIndex > 0 && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setSelectedVideoIndex(selectedVideoIndex - 1); }} 
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSelectedVideoIndex(selectedVideoIndex - 1); }}
                   className="absolute left-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
                 >
                   <ChevronLeft className="w-8 h-8" />
@@ -812,23 +856,23 @@ export default function ProjectEditPage() {
               )}
 
               <div className="relative aspect-video w-full max-w-5xl max-h-[80vh] flex items-center justify-center bg-black rounded-lg overflow-hidden shadow-2xl">
-                <video 
-                  src={getMediaUrl(allVideos[selectedVideoIndex].path)} 
-                  controls 
-                  autoPlay 
-                  className="w-full h-full object-contain" 
-                  onClick={(e) => e.stopPropagation()} 
+                <video
+                  src={getMediaUrl(allVideos[selectedVideoIndex].path)}
+                  controls
+                  autoPlay
+                  className="w-full h-full object-contain"
+                  onClick={(e) => e.stopPropagation()}
                 />
               </div>
-              
+
               <div className="mt-4 text-white text-center">
                 <span className="font-semibold">{allVideos[selectedVideoIndex].label}</span>
                 <div className="text-xs text-white/60 mt-1">{selectedVideoIndex + 1} of {allVideos.length}</div>
               </div>
 
               {selectedVideoIndex < allVideos.length - 1 && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setSelectedVideoIndex(selectedVideoIndex + 1); }} 
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSelectedVideoIndex(selectedVideoIndex + 1); }}
                   className="absolute right-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
                 >
                   <ChevronRight className="w-8 h-8" />
@@ -838,18 +882,18 @@ export default function ProjectEditPage() {
           )}
 
           {/* Lightbox Slideshow */}
-          {selectedImageIndex !== null && allImages[selectedImageIndex] && (
+          {galleryTab === "images" && selectedImageIndex !== null && allImages[selectedImageIndex] && (
             <div className="absolute inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center animate-in fade-in-0 duration-200">
-              <button 
-                onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(null); }} 
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(null); }}
                 className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors z-10"
               >
                 <X className="w-6 h-6" />
               </button>
 
               {selectedImageIndex > 0 && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex - 1); }} 
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex - 1); }}
                   className="absolute left-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
                 >
                   <ChevronLeft className="w-8 h-8" />
@@ -857,21 +901,21 @@ export default function ProjectEditPage() {
               )}
 
               <div className="relative aspect-video w-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-black/40 rounded-lg overflow-hidden border border-border/40">
-                <img 
-                  src={getMediaUrl(allImages[selectedImageIndex].path)} 
-                  alt={allImages[selectedImageIndex].label} 
-                  className="w-full h-full object-contain select-none" 
+                <img
+                  src={getMediaUrl(allImages[selectedImageIndex].path)}
+                  alt={allImages[selectedImageIndex].label}
+                  className="w-full h-full object-contain select-none"
                 />
               </div>
-              
+
               <div className="mt-4 text-white text-center">
                 <span className="font-semibold">{allImages[selectedImageIndex].label}</span>
                 <div className="text-xs text-white/60 mt-1">{selectedImageIndex + 1} of {allImages.length}</div>
               </div>
 
               {selectedImageIndex < allImages.length - 1 && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex + 1); }} 
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(selectedImageIndex + 1); }}
                   className="absolute right-6 text-white/70 hover:text-white p-3 rounded-full hover:bg-white/10 transition-colors z-10"
                 >
                   <ChevronRight className="w-8 h-8" />

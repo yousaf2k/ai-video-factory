@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 from web_ui.backend.models.story import (
     UpdateStoryRequest, RegenerateStoryRequest,
     GenerateSceneNarrationRequest, BatchGenerateNarrationRequest,
-    SelectSceneNarrationRequest
+    SelectSceneNarrationRequest, BackgroundGenerationRequest
 )
 from web_ui.backend.services.project_service import ProjectService
 from web_ui.backend.services.generation_service import get_generation_service
@@ -447,7 +447,7 @@ async def upload_scene_background(
 
 
 @router.post("/scenes/{scene_id}/generate-background")
-async def generate_scene_background(project_id: str, scene_id: int):
+async def generate_scene_background(project_id: str, scene_id: int, request: BackgroundGenerationRequest):
     """
     Generate background image for a scene using AI
 
@@ -496,7 +496,13 @@ async def generate_scene_background(project_id: str, scene_id: int):
 
         # Start background generation task
         asyncio.create_task(generation_service.generate_scene_background(
-            project_id, scene_id, set_prompt
+            project_id=project_id, 
+            scene_id=scene_id,
+            set_prompt=set_prompt,
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt,
+            seed=request.seed,
+            workflow=request.workflow
         ))
 
         return {

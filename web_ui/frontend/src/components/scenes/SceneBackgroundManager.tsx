@@ -1,25 +1,35 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Scene } from '@/types';
+import { GenerationDialog, GenerationConfig } from '../shots/GenerationDialog';
 
 interface SceneBackgroundManagerProps {
   scene: Scene;
   projectId: string;
   onUpdate?: () => void;
+  projectType?: number;
 }
 
 export default function SceneBackgroundManager({
   scene,
   projectId,
-  onUpdate
+  onUpdate,
+  projectType
 }: SceneBackgroundManagerProps) {
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [showGenModal, setShowGenModal] = useState(false);
+  const queryClient = useQueryClient();
 
   const getMediaUrl = (path: string) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
+    const filename = path.split('/').pop();
+    if (path.includes('/backgrounds/')) {
+      return `/api/projects/${projectId}/backgrounds/${filename}`;
+    }
     return `/api/projects/${projectId}/media/${path.replace(/^output\//, '')}`;
   };
 
@@ -45,10 +55,8 @@ export default function SceneBackgroundManager({
 
       const result = await response.json();
 
-      // Trigger parent update
-      if (onUpdate) {
-        onUpdate();
-      }
+      // Invalidate project query to pull full details with its background path
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
 
       console.log('Background uploaded:', result.image_path);
     } catch (error) {
@@ -59,7 +67,9 @@ export default function SceneBackgroundManager({
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerateSubmit = async (config: GenerationConfig) => {
+    setShowGenModal(false);
+    
     if (!scene.set_prompt) {
       alert('Scene must have a set_prompt to generate background');
       return;
@@ -68,10 +78,20 @@ export default function SceneBackgroundManager({
     setGenerating(true);
 
     try {
+      const requestBody = {
+        prompt: config.promptOverride,
+        seed: config.seed === "" ? undefined : config.seed,
+        workflow: config.workflow === "default" ? undefined : config.workflow,
+      };
+
       const response = await fetch(
         `/api/projects/${projectId}/story/scenes/${scene.scene_id}/generate-background`,
         {
-          method: 'POST'
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
         }
       );
 
@@ -110,6 +130,11 @@ export default function SceneBackgroundManager({
 
   const hasBackground = !!scene.background_image_path;
   const isGenerated = scene.background_is_generated;
+  const isType2 = projectType === 2;
+
+  if (!isType2 && !hasBackground) {
+    return null; // Hide empty container for non-Type 2
+  }
 
   return (
     <div className="space-y-3">
@@ -132,9 +157,10 @@ export default function SceneBackgroundManager({
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
+        onClick={() => document.getElementById(`bg-input-${scene.scene_id}`)?.click()}
         className={`
           relative border-2 border-dashed rounded-lg p-4 text-center
-          transition-colors duration-200
+          transition-colors duration-200 cursor-pointer
           ${uploading || generating
             ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
             : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
@@ -149,15 +175,17 @@ export default function SceneBackgroundManager({
               className="w-full h-40 object-cover rounded"
             />
             <div className="flex gap-2 justify-center">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  document.getElementById(`bg-input-${scene.scene_id}`)?.click();
-                }}
-                className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
-              >
-                Replace Background
-              </button>
+              {isType2 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    document.getElementById(`bg-input-${scene.scene_id}`)?.click();
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                >
+                  Replace Background
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -194,32 +222,45 @@ export default function SceneBackgroundManager({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            document.getElementById(`bg-input-${scene.scene_id}`)?.click();
-          }}
-          disabled={uploading || generating}
-          className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
-        >
-          {uploading ? 'Uploading...' : 'Upload'}
-        </button>
+      {isType2 && (
+        <div className="flex gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              document.getElementById(`bg-input-${scene.scene_id}`)?.click();
+            }}
+            disabled={uploading || generating}
+            className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            {uploading ? 'Uploading...' : 'Upload'}
+          </button>
 
-        <button
-          onClick={handleGenerate}
-          disabled={generating || !scene.set_prompt}
-          className="flex-1 px-3 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-700 dark:hover:bg-purple-800"
-        >
-          {generating ? 'Generating...' : 'Generate AI'}
-        </button>
-      </div>
+          <button
+            onClick={() => setShowGenModal(true)}
+            disabled={generating || !scene.set_prompt}
+            className="flex-1 px-3 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-700 dark:hover:bg-purple-800"
+          >
+            {generating ? 'Generating...' : 'Generate AI'}
+          </button>
+        </div>
+      )}
 
       {!scene.set_prompt && (
         <p className="text-xs text-amber-600 dark:text-amber-400">
           ⚠️ Add a set_prompt to enable AI generation
         </p>
       )}
+
+      <GenerationDialog
+        isOpen={showGenModal}
+        onClose={() => setShowGenModal(false)}
+        type="image"
+        projectId={projectId}
+        isPending={generating}
+        defaultPromptOverride={scene.set_prompt}
+        onSubmit={handleGenerateSubmit}
+        title="Generate Scene Background"
+      />
     </div>
   );
 }

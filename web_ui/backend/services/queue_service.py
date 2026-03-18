@@ -396,6 +396,10 @@ class QueueService:
         with self._queue_lock:
             for item in self._queue:
                 if item.item_id == item_id:
+                    # Guard item state from being paused if already completed/failed/cancelled
+                    if item.status in [QueueItemStatus.COMPLETED, QueueItemStatus.FAILED, QueueItemStatus.CANCELLED]:
+                        logger.warning(f"Cannot pause item {item_id} with status {item.status}")
+                        return False
                     item.status = QueueItemStatus.PAUSED
 
                     manager.broadcast_sync('global', {

@@ -50,7 +50,7 @@ export default function QueuePage() {
 
   const hasCancellableSelected = useMemo(() => {
     return selectedItemsList.some(item => 
-      item.status === QueueItemStatus.QUEUED || item.status === QueueItemStatus.ACTIVE
+      item.status === QueueItemStatus.QUEUED || item.status === QueueItemStatus.ACTIVE || item.status === QueueItemStatus.PAUSED
     );
   }, [selectedItemsList]);
 

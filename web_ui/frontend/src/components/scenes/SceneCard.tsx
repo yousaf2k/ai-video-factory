@@ -5,6 +5,7 @@ import { useState } from "react";
 import { GripVertical, Trash2, Edit3, Check, Mic, Play, Pause, X, Loader2, ChevronDown, CheckCircle2 } from "lucide-react";
 import { Scene } from "@/types";
 import { cn } from "@/lib/utils";
+import SceneBackgroundManager from "@/components/scenes/SceneBackgroundManager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +36,7 @@ interface SceneCardProps {
   onUpdate?: (index: number, scene: Scene) => void;
   onDelete?: (index: number) => void;
   progress?: number;
+  projectType?: number;
 }
 
 export function SceneCard({
@@ -44,6 +46,7 @@ export function SceneCard({
   onUpdate,
   onDelete,
   progress,
+  projectType,
 }: SceneCardProps) {
   const params = useParams();
   const projectId = params.id as string;
@@ -161,6 +164,16 @@ export function SceneCard({
                   value={editedScene.narration}
                   onChange={(e) => setEditedScene({ ...editedScene, narration: e.target.value })}
                   className="mt-1 min-h-[60px] text-sm"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs text-muted-foreground">Set Prompt (for background generation)</label>
+                <Textarea
+                  value={editedScene.set_prompt || ""}
+                  onChange={(e) => setEditedScene({ ...editedScene, set_prompt: e.target.value })}
+                  className="mt-1 min-h-[40px] text-sm"
+                  placeholder="Describe the background explicitly..."
                 />
               </div>
 
@@ -324,6 +337,15 @@ export function SceneCard({
             <p className="text-sm italic text-foreground leading-relaxed italic">
               "{scene.narration}"
             </p>
+          </div>
+
+          <div className="mb-4 pt-2 border-t border-border/30">
+             <SceneBackgroundManager
+                scene={scene}
+                projectId={projectId}
+                onUpdate={() => onUpdate?.(index, scene)} 
+                projectType={projectType}
+             />
           </div>
 
           {isGenerating ? (

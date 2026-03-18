@@ -120,3 +120,14 @@ class BatchGenerateNarrationRequest(BaseModel):
 class SelectSceneNarrationRequest(BaseModel):
     """Request to select active narration for a scene"""
     narration_path: str = Field(..., description="Relative path of the narration variation to set as active")
+
+
+class BackgroundGenerationRequest(BaseModel):
+    """Request to generate scene background"""
+    prompt: Optional[str] = Field(default=None, description="Prompt override")
+    negative_prompt: Optional[str] = Field(default=None, description="Negative prompt")
+    seed: Optional[int] = Field(default=None, description="Generation seed")
+    width: Optional[int] = Field(default=None, description="Image width")
+    height: Optional[int] = Field(default=None, description="Image height")
+    workflow: Optional[str] = Field(default=None, description="ComfyUI workflow override")
+    image_model: Optional[str] = Field(default=None, description="Image model selection")

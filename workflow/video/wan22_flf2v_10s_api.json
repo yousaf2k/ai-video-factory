@@ -14,11 +14,11 @@
     "inputs": {
       "add_noise": "disable",
       "noise_seed": 472523231212774,
-      "steps": 4,
+      "steps": 10,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
-      "start_at_step": 2,
+      "start_at_step": 4,
       "end_at_step": 1000,
       "return_with_leftover_noise": "disable",
       "model": [
@@ -47,12 +47,12 @@
     "inputs": {
       "add_noise": "enable",
       "noise_seed": 58638737795249,
-      "steps": 4,
+      "steps": 10,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 0,
-      "end_at_step": 2,
+      "end_at_step": 4,
       "return_with_leftover_noise": "enable",
       "model": [
         "104",

@@ -182,6 +182,56 @@ async def get_project_video(project_id: str, filename: str):
         )
 
 
+@router.get("/{project_id}/backgrounds/{filename}", response_class=FileResponse)
+async def get_project_background(project_id: str, filename: str):
+    """Serve a project background image file directly"""
+    try:
+        project_dir = project_service.get_project_dir(project_id)
+        backgrounds_dir = os.path.join(project_dir, "backgrounds")
+        image_path = os.path.join(backgrounds_dir, filename)
+        
+        if not os.path.exists(image_path) or not os.path.isfile(image_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Background {filename} not found for project {project_id}"
+            )
+            
+        return FileResponse(image_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving background {filename} for project {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve background: {str(e)}"
+        )
+
+
+@router.get("/{project_id}/references/{filename}", response_class=FileResponse)
+async def get_project_reference(project_id: str, filename: str):
+    """Serve a project character reference image file directly"""
+    try:
+        project_dir = project_service.get_project_dir(project_id)
+        references_dir = os.path.join(project_dir, "references")
+        image_path = os.path.join(references_dir, filename)
+        
+        if not os.path.exists(image_path) or not os.path.isfile(image_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Reference {filename} not found for project {project_id}"
+            )
+            
+        return FileResponse(image_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving reference {filename} for project {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve reference: {str(e)}"
+        )
+
+
 @router.post("/{project_id}/thumbnail")
 async def generate_thumbnail(project_id: str, request: GenerateThumbnailRequest):
     """Generate a thumbnail for the project"""

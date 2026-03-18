@@ -3,6 +3,7 @@ Generation service - Async wrapper for core generation modules
 """
 import sys
 import os
+import json
 import re
 import glob
 import random
@@ -63,6 +64,10 @@ class GenerationService:
         self._queue_processor_task = None # This is no longer used for the main loop, but might be for other tasks
         self._queue_processor_started = False
         self._queue_processor_thread: Optional[threading.Thread] = None # New thread object
+
+    def _get_relative_path(self, path: str) -> str:
+        """Convert absolute path to relative format using ProjectManager utility"""
+        return self.project_manager._relativize_path(path)
 
     def _ensure_queue_processor_started(self):
         """Ensure background task is running"""
@@ -498,15 +503,26 @@ class GenerationService:
         items_to_add = []
         project_type = story.get('project_type', 1) if story else 1
 
+        logger.info(f"[DEBUG] add_single_shot_to_queue: request={request}")
+        if request:
+            logger.info(f"[DEBUG] add_single_shot_to_queue: image_variant={getattr(request, 'image_variant', 'N/A')}")
+            logger.info(f"[DEBUG] add_single_shot_to_queue: video_variant={getattr(request, 'video_variant', 'N/A')}")
+
+
         # Replicate batch FLFI2V splits
         if shot and shot.get('is_flfi2v') and project_type == 2:
             if generation_type == GenerationType.IMAGE:
-                # Add THEN and NOW images
-                items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.THEN_IMAGE, shot, story, request))
-                items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.NOW_IMAGE, shot, story, request))
+                image_variant = getattr(request, 'image_variant', 'both') or 'both'
+                if image_variant in ['then', 'both']:
+                    items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.THEN_IMAGE, shot, story, request))
+                if image_variant in ['now', 'both']:
+                    items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.NOW_IMAGE, shot, story, request))
             elif generation_type == GenerationType.VIDEO:
-                items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.MEETING_VIDEO, shot, story, request))
-                items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.DEPARTURE_VIDEO, shot, story, request))
+                video_variant = getattr(request, 'video_variant', 'both') or 'both'
+                if video_variant in ['meeting', 'both']:
+                    items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.MEETING_VIDEO, shot, story, request))
+                if video_variant in ['departure', 'both']:
+                    items_to_add.append(self._create_queue_item(project_id, shot_index, GenerationType.DEPARTURE_VIDEO, shot, story, request))
             else:
                 items_to_add.append(self._create_queue_item(project_id, shot_index, generation_type, shot, story, request))
         else:
@@ -905,6 +921,13 @@ class GenerationService:
                     shots[shot_index - 1]['then_image_path'] = self._get_relative_path(result_path)
                     results['then'] = shots[shot_index - 1]['then_image_path']
 
+                    # Append to general image_paths for variations tracking
+                    if 'image_paths' not in shots[shot_index - 1]:
+                        shots[shot_index - 1]['image_paths'] = []
+                    relative_path = shots[shot_index - 1]['then_image_path']
+                    if relative_path not in shots[shot_index - 1]['image_paths']:
+                        shots[shot_index - 1]['image_paths'].append(relative_path)
+
                     # Mark THEN_IMAGE queue item as completed
                     self._mark_queue_item_completed(project_id, shot_index, GenerationType.THEN_IMAGE)
 
@@ -994,6 +1017,13 @@ class GenerationService:
                     shots[shot_index - 1]['now_image_generated'] = True
                     shots[shot_index - 1]['now_image_path'] = self._get_relative_path(result_path)
                     results['now'] = shots[shot_index - 1]['now_image_path']
+
+                    # Append to general image_paths for variations tracking
+                    if 'image_paths' not in shots[shot_index - 1]:
+                        shots[shot_index - 1]['image_paths'] = []
+                    relative_path = shots[shot_index - 1]['now_image_path']
+                    if relative_path not in shots[shot_index - 1]['image_paths']:
+                        shots[shot_index - 1]['image_paths'].append(relative_path)
 
                     # Mark NOW_IMAGE queue item as completed
                     self._mark_queue_item_completed(project_id, shot_index, GenerationType.NOW_IMAGE)
@@ -1547,7 +1577,11 @@ class GenerationService:
         return results
 
     async def generate_scene_background(
-        self, project_id: str, scene_id: int, set_prompt: str
+        self, project_id: str, scene_id: int, set_prompt: str,
+        prompt: Optional[str] = None,
+        negative_prompt: Optional[str] = None,
+        seed: Optional[int] = None,
+        workflow: Optional[str] = None
     ) -> str:
         """
         Generate background image for a scene using AI
@@ -1593,19 +1627,26 @@ class GenerationService:
                 })
 
             # Generate background using standard Flux workflow
-            logger.info(f"Generating background for scene {scene_id}: {set_prompt[:60]}...")
+            # Use override if provided, otherwise fallback to story set_prompt
+            set_prompt = prompt if prompt else set_prompt # defined or story fallback
+            actual_workflow = workflow if workflow else "flux"
+
+            logger.info(f"Generating background for scene {scene_id} using prompt: {set_prompt[:60]}... (workflow: {actual_workflow})")
 
             result_path = await asyncio.to_thread(
                 self._generate_single_image,
                 project_id,
-                {'image_prompt': set_prompt, 'index': 0},
+                {'image_prompt': set_prompt, 'index': scene_id},  # Use scene_id for indexing
                 "comfyui",  # Always use ComfyUI for backgrounds
-                "flux",  # Use standard Flux workflow
-                1,  # Fixed seed for consistency
+                actual_workflow,
+                seed, # Pass direct seed down to inherit first-time logic from _generate_single_image
                 set_prompt,  # Use set_prompt directly
                 None,  # No project title for backgrounds
                 None,  # No variant
-                None  # No reference image for backgrounds
+                None,  # No reference image for backgrounds
+                GenerationType.BACKGROUND,
+                backgrounds_dir,
+                f"background_{scene_id:03d}_%03d.png"
             )
 
             if not result_path or not os.path.exists(result_path):
@@ -1622,13 +1663,18 @@ class GenerationService:
             scenes = story_data.get('scenes', [])
 
             # Find scene by scene_id
+            scene_found = False
             for i, scene in enumerate(scenes):
-                if scene.get('scene_id') == scene_id:
+                if str(scene.get('scene_id')) == str(scene_id):
                     scenes[i]['background_image_path'] = relative_path
                     scenes[i]['background_generated'] = True
                     scenes[i]['background_is_generated'] = True  # AI-generated
+                    scene_found = True
                     break
 
+            if not scene_found:
+                raise RuntimeError(f"Scene with scene_id {scene_id} not found in story.json")
+            
             # Save story
             with open(story_path, 'w', encoding='utf-8') as f:
                 json.dump(story_data, f, indent=4, ensure_ascii=False)
@@ -1877,14 +1923,17 @@ class GenerationService:
             logger.error(f"Error generating thumbnail for project {project_id}: {e}")
             raise
 
-    def _get_next_image_version(self, images_dir: str, shot_index: int, variant: str = None) -> int:
+    def _get_next_image_version(self, images_dir: str, shot_index: int, variant: str = None, generation_type: GenerationType = None) -> int:
         """Find the next available version number for a shot image.
 
         Scans for existing files like shot_001_001.png, shot_001_002.png, etc.
         For FLFI2V variants, scans for shot_001_then_001.png or shot_001_now_001.png
         Returns the next version number (starting from 1).
         """
-        if variant:
+        if generation_type == GenerationType.BACKGROUND:
+            pattern = os.path.join(images_dir, f"background_{shot_index:03d}_*.png")
+            version_re = re.compile(rf"background_{shot_index:03d}_(\d+)\.png$")
+        elif variant:
             pattern = os.path.join(images_dir, f"shot_{shot_index:03d}_{variant}_*.png")
             version_re = re.compile(rf"shot_{shot_index:03d}_{variant}_(\d+)\.png$")
         else:
@@ -1939,7 +1988,9 @@ class GenerationService:
                                project_title: Optional[str] = None,
                                variant: str = None,
                                reference_image_path: str = None,
-                               generation_type: GenerationType = None) -> str:
+                               generation_type: GenerationType = None,
+                               output_dir: Optional[str] = None,
+                               filename_override: Optional[str] = None) -> str:
         """Generate image for a single shot (synchronous)
 
         Args:
@@ -1949,24 +2000,33 @@ class GenerationService:
         from core.image_generator import generate_image
         import config
 
-        images_dir = self.project_manager.get_images_dir(project_id)
-        os.makedirs(images_dir, exist_ok=True)
+        project_dir = self.project_manager.get_project_dir(project_id)
+        images_dir = os.path.join(project_dir, "images")
+        actual_dir = output_dir if output_dir else images_dir
+        os.makedirs(actual_dir, exist_ok=True)
 
         shot_index = shot['index']
         # Use override prompt if provided, otherwise fall back to saved shot prompt
-        prompt = prompt_override.strip() if prompt_override and prompt_override.strip() else shot['image_prompt']
+        prompt = prompt_override.strip() if prompt_override and prompt_override.strip() else shot.get('image_prompt', '')
 
         # Load project to get aspect_ratio
         project_meta = self.project_manager.load_project(project_id)
         aspect_ratio = project_meta.get('aspect_ratio', '16:9')
 
         # Generate versioned filename with optional variant suffix
-        next_version = self._get_next_image_version(images_dir, shot_index, variant)
-        if variant:
+        next_version = self._get_next_image_version(actual_dir, shot_index, variant, generation_type)
+        
+        if filename_override:
+            # support versioning inside override if % format is present, or just use as is
+            if "%" in filename_override:
+                image_filename = filename_override % next_version
+            else:
+                image_filename = filename_override
+        elif variant:
             image_filename = f"shot_{shot_index:03d}_{variant}_{next_version:03d}.png"
         else:
             image_filename = f"shot_{shot_index:03d}_{next_version:03d}.png"
-        image_path = os.path.join(images_dir, image_filename)
+        image_path = os.path.join(actual_dir, image_filename)
 
         # 1st time generation for a shot uses seed 1, next generations use random
         # If specific seed provided, use it

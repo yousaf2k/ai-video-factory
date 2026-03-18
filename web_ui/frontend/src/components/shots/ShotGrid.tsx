@@ -627,51 +627,63 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
 
   return (
     <div className="relative">
-      {/* Header Actions */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 mb-4">
+        {/* Bulk Selection Toggle */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() =>
-              setSelectedIndices(filteredShots.map((s) => s.index))
-            }
-            className="flex items-center gap-1.5 text-sm px-2.5 py-1 border rounded-md hover:bg-muted transition-colors"
+            onClick={toggleSelectAll}
+            className={cn(
+              "flex items-center gap-1.5 text-sm px-3 py-1.5 border rounded-md transition-colors shadow-sm",
+              selectedIndices.length === filteredShots.length && filteredShots.length > 0
+               ? "bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+               : "bg-background hover:bg-muted text-foreground"
+            )}
+            title={selectedIndices.length === filteredShots.length ? "Deselect All" : "Select All"}
           >
-            <CheckSquare className="w-3.5 h-3.5" />
-            Select All
+            {selectedIndices.length === filteredShots.length && filteredShots.length > 0 ? (
+              <CheckSquare className="w-4 h-4" />
+            ) : (
+              <Square className="w-4 h-4 text-muted-foreground" />
+            )}
+            <span className="font-medium whitespace-nowrap">
+               Select All
+            </span>
           </button>
-          <button
-            onClick={() => setSelectedIndices([])}
-            disabled={selectedIndices.length === 0}
-            className="flex items-center gap-1.5 text-sm px-2.5 py-1 border rounded-md hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Square className="w-3.5 h-3.5" />
-            Select None
-          </button>
-
+          
           {selectedIndices.length > 0 && (
-            <span className="text-xs text-muted-foreground ml-1">
-              {selectedIndices.length} of {shots.length} selected
+            <span className="text-xs text-muted-foreground font-medium bg-muted px-2 py-1 rounded-md">
+              {selectedIndices.length} Selected
             </span>
           )}
+        </div>
 
-          <div className="h-4 w-px bg-border mx-2" />
-
+        {/* View Switchers */}
+        <div className="flex items-center gap-1 bg-muted/40 p-1 border rounded-lg shadow-sm">
           <button
             onClick={() => setViewModeOverride("image")}
-            className="flex items-center gap-1.5 text-sm px-2.5 py-1 border rounded-md hover:bg-muted transition-colors text-blue-600"
-            title="Switch all shots to image view"
+            className={cn("flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md transition-all", viewModeOverride === "image" ? "bg-background text-blue-600 shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}
+            title="Switch all shots to image gallery view"
           >
-            <ImageIcon className="w-3.5 h-3.5" />
-            All Images
+            <ImageIcon className="w-4 h-4" />
+            Images
           </button>
           <button
             onClick={() => setViewModeOverride("video")}
-            className="flex items-center gap-1.5 text-sm px-2.5 py-1 border rounded-md hover:bg-muted transition-colors text-purple-600"
-            title="Switch all shots to video view"
+             className={cn("flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md transition-all", viewModeOverride === "video" ? "bg-background text-purple-600 shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground")}
+            title="Switch all shots to video gallery view"
           >
-            <Video className="w-3.5 h-3.5" />
-            All Videos
+            <Video className="w-4 h-4" />
+            Videos
           </button>
+          {viewModeOverride && (
+             <button
+               onClick={() => setViewModeOverride(null)}
+               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 ml-1"
+               title="Clear view override"
+             >
+               <X className="w-3.5 h-3.5" />
+             </button>
+          )}
         </div>
 
         {(generatingIndices.size > 0 ||

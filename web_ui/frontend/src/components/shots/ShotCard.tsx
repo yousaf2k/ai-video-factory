@@ -55,6 +55,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { GenerationDialog } from "./GenerationDialog";
 
 interface ShotCardProps {
   shot: Shot;
@@ -119,14 +120,7 @@ export function ShotCard({
   const [showRegenModal, setShowRegenModal] = useState<
     "image" | "video" | null
   >(null);
-  const [regenForce, setRegenForce] = useState(true);
-  const [regenImageMode, setRegenImageMode] = useState("comfyui");
-  const [regenImageWorkflow, setRegenImageWorkflow] = useState("flux2");
-  const [regenVideoWorkflow, setRegenVideoWorkflow] = useState("wan22");
-  const [regenVideoMode, setRegenVideoMode] = useState("comfyui");
-  const [regenSeed, setRegenSeed] = useState<number | "">("");
-  const [regenPromptOverride, setRegenPromptOverride] = useState<string>("");
-  const [appendImagePrompt, setAppendImagePrompt] = useState<string>("default");
+  const [defaultPromptOverride, setDefaultPromptOverride] = useState("");
 
   // ... rest of the hook setup ...
   const queryClient = useQueryClient();
@@ -174,29 +168,14 @@ export function ShotCard({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  // Update default workflow when config loads
-  useEffect(() => {
-    if (globalConfig?.video_workflow) {
-      setRegenVideoWorkflow(globalConfig.video_workflow);
-    }
-  }, [globalConfig]);
-
-  // Load saved video mode preference for this project on mount
-  useEffect(() => {
-    const savedVideoMode = localStorage.getItem(`video_mode_${projectId}`);
-    if (savedVideoMode) {
-      setRegenVideoMode(savedVideoMode);
-    }
-  }, [projectId]);
-
   // Derived data for the fullscreen carousel
   // For FLFI2V shots, construct array with THEN and NOW images
   const fsImages = (() => {
     if (shot.is_flfi2v && viewMode === "image") {
-      const flfi2vImages = [];
-      if (shot.then_image_path) flfi2vImages.push(shot.then_image_path);
-      if (shot.now_image_path) flfi2vImages.push(shot.now_image_path);
-      return flfi2vImages.length > 0 ? flfi2vImages : (shot.image_paths ?? []);
+      const filtered = (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`));
+      if (filtered.length > 0) return filtered;
+      const activePath = activeImageMode === "then" ? shot.then_image_path : shot.now_image_path;
+      return activePath ? [activePath] : [];
     }
     return viewMode === "video" ? (shot.video_paths ?? []) : (shot.image_paths ?? []);
   })();
@@ -235,15 +214,15 @@ export function ShotCard({
     }
   }, [viewModeOverride]);
 
-  const hasMultipleVariations = (() => {
-    if (shot.is_flfi2v && viewMode === "image") {
-      // FLFI2V has multiple variations if both THEN and NOW images exist
-      return !!(shot.then_image_path && shot.now_image_path);
+  const variationsCount = (() => {
+    if (viewMode === "video") return shot.video_paths?.length ?? 0;
+    if (shot.is_flfi2v) {
+      return (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`)).length;
     }
-    return viewMode === "video"
-      ? (shot.video_paths?.length ?? 0) > 1
-      : (shot.image_paths?.length ?? 0) > 1;
+    return shot.image_paths?.length ?? 0;
   })();
+
+  const hasMultipleVariations = variationsCount > 1;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -289,58 +268,12 @@ export function ShotCard({
     const promptToUse = shot.is_flfi2v
       ? (activeImageMode === 'then' ? shot.then_image_prompt : shot.now_image_prompt) || shot.image_prompt
       : shot.image_prompt;
-    setRegenPromptOverride(promptToUse ?? "");
+    setDefaultPromptOverride(promptToUse ?? "");
     setShowRegenModal("image");
   };
 
   const handleRegenerateVideo = async () => {
     setShowRegenModal("video");
-  };
-
-  const handleRegenSubmit = async () => {
-    try {
-      const type = showRegenModal;
-      // Close modal immediately
-      setShowRegenModal(null);
-
-      if (type === "image") {
-        // For FLFI2V shots, only generate the currently active variant (THEN or NOW)
-        const imageVariant = shot.is_flfi2v ? activeImageMode : undefined;
-        regenerateImage.mutate({
-          shotIndex: shot.index,
-          force: regenForce,
-          imageMode: regenImageMode,
-          imageWorkflow: regenImageWorkflow,
-          seed: regenSeed === "" ? undefined : regenSeed,
-          promptOverride: regenPromptOverride.trim() || undefined,
-          imageVariant,
-        });
-        toast.info("Image regeneration started", {
-          description: `Shot ${shot.index}${shot.is_flfi2v && imageVariant ? ` (${imageVariant.toUpperCase()})` : ""} image is being generated.`,
-        });
-      } else if (type === "video") {
-        // For FLFI2V shots, only generate the currently active variant (Meeting or Departure)
-        const videoVariant = shot.is_flfi2v ? activeVideoMode : undefined;
-        regenerateVideo.mutate({
-          shotIndex: shot.index,
-          force: regenForce,
-          videoMode: regenVideoMode,
-          videoWorkflow: regenVideoMode === "comfyui" ? regenVideoWorkflow : undefined,
-          videoVariant,
-          appendImagePrompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
-        });
-        setViewMode("video");
-        toast.info("Video regeneration started", {
-          description: `Shot ${shot.index}${shot.is_flfi2v && videoVariant ? ` (${videoVariant.charAt(0).toUpperCase() + videoVariant.slice(1)})` : ""} video is being generated.`,
-        });
-      }
-      setCacheBuster(Date.now());
-    } catch (error) {
-      console.error(`Failed to trigger regeneration:`, error);
-      toast.error("Failed to start regeneration", {
-        description: "Please try again.",
-      });
-    }
   };
 
   const imageUrl = shot.is_flfi2v
@@ -550,7 +483,7 @@ export function ShotCard({
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-0.5">
+      <div className="flex flex-wrap items-center justify-between gap-y-1.5 mb-1.5">
         <div className="flex items-center gap-2">
           {/* Drag Handle */}
           <button
@@ -574,15 +507,11 @@ export function ShotCard({
               {shot.index}
             </span>
           )}
-          {shot.is_flfi2v && (
-            <span className="text-[9px] bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-0.5 rounded-full font-bold">
-              Then VS Now
-            </span>
-          )}
+
         </div>
 
         {/* Actions */}
-        <div className="flex gap-1.5 bg-muted/30 p-1 rounded-md">
+        <div className="flex flex-wrap items-center gap-1 bg-muted/30 p-1 rounded-md ml-auto">
           {/* Hidden file input for image/video upload */}
           <input
             ref={fileInputRef}
@@ -729,7 +658,7 @@ export function ShotCard({
             >
               <Layers className="w-4 h-4" />
               <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
-                {viewMode === "video" ? shot.video_paths?.length : shot.image_paths?.length}
+                {variationsCount}
               </span>
             </button>
           )}
@@ -760,7 +689,7 @@ export function ShotCard({
       <hr className="mb-1.5 border-border/80" />
 
       {/* Status & Metadata */}
-      <div className="flex items-center justify-between mb-3 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-y-1.5 mb-3 text-xs">
         <div className="flex items-center gap-2">
           <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground truncate uppercase font-semibold tracking-wider">
             {shot.camera}
@@ -1048,230 +977,56 @@ export function ShotCard({
         </div>
       )}
 
-      {/* Regeneration Modal */}
-      {showRegenModal && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-          <div className="bg-background rounded-lg shadow-xl max-w-sm w-full p-6 relative">
-            <button
-              onClick={() => setShowRegenModal(null)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      <GenerationDialog
+        isOpen={showRegenModal !== null}
+        onClose={() => setShowRegenModal(null)}
+        type={showRegenModal || "image"}
+        projectId={projectId}
+        isPending={regenerateImage.isPending || regenerateVideo.isPending}
+        defaultPromptOverride={defaultPromptOverride}
+        onSubmit={(config) => {
+          try {
+            const type = showRegenModal;
+            setShowRegenModal(null);
 
-            <h2 className="text-lg font-semibold mb-4">
-              Regenerate {showRegenModal === "image" ? "Image" : "Video"}
-            </h2>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Input
-                  type="checkbox"
-                  id="regen-force"
-                  checked={regenForce}
-                  onChange={(e) => setRegenForce(e.target.checked)}
-                  className="w-4 h-4 mr-2"
-                />
-                <label htmlFor="regen-force" className="text-sm">
-                  Force regeneration (ignore cache)
-                </label>
-              </div>
-
-              {showRegenModal === "image" && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      Generation Mode
-                    </label>
-                    <Select
-                      value={regenImageMode}
-                      onValueChange={(val) => setRegenImageMode(val)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Mode" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
-                        <SelectItem value="gemini">Gemini (Cloud)</SelectItem>
-                        <SelectItem value="geminiweb">
-                          GeminiWeb - Gemini Web (Browser)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {regenImageMode === "comfyui" && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">
-                          Workflow
-                        </label>
-                        <Select
-                          value={regenImageWorkflow}
-                          onValueChange={(val) => setRegenImageWorkflow(val)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select Workflow" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {globalConfig?.available_image_workflows?.map((wf) => (
-                              <SelectItem key={wf} value={wf}>
-                                {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                              </SelectItem>
-                            )) || (
-                                <>
-                                  <SelectItem value="flux2">Flux 2</SelectItem>
-                                  <SelectItem value="flux">Flux</SelectItem>
-                                  <SelectItem value="sdxl">SDXL</SelectItem>
-                                  <SelectItem value="default">Default</SelectItem>
-                                </>
-                              )}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">
-                          Noise Seed (Optional)
-                        </label>
-                        <Input
-                          type="number"
-                          value={regenSeed}
-                          onChange={(e) =>
-                            setRegenSeed(
-                              e.target.value === ""
-                                ? ""
-                                : parseInt(e.target.value),
-                            )
-                          }
-                          placeholder="Random"
-                        />
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          Leave blank for automatic seed (1 for 1st version,
-                          random otherwise).
-                        </p>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Prompt Override — visible for ALL image modes */}
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      Prompt Override
-                    </label>
-                    <Textarea
-                      value={regenPromptOverride}
-                      onChange={(e) => setRegenPromptOverride(e.target.value)}
-                      rows={4}
-                      placeholder="Leave blank to use the shot's saved image prompt…"
-                      className="text-xs resize-y"
-                    />
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      Edits here are one-time only — they won't change the saved shot prompt.
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {showRegenModal === "video" && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      Generation Mode
-                    </label>
-                    <Select
-                      value={regenVideoMode}
-                      onValueChange={(val) => {
-                        setRegenVideoMode(val);
-                        localStorage.setItem(`video_mode_${projectId}`, val);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Mode" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
-                        <SelectItem value="geminiweb">
-                          GeminiWeb - Gemini Web (Browser)
-                        </SelectItem>
-                        <SelectItem value="flowweb">
-                          FlowWeb - Google Flow (Browser)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {regenVideoMode === "comfyui" && (
-                    <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Video Workflow
-                      </label>
-                      <Select
-                        value={regenVideoWorkflow}
-                        onValueChange={(val) => setRegenVideoWorkflow(val)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Video Workflow" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {globalConfig?.available_video_workflows?.map((wf) => (
-                            <SelectItem key={wf} value={wf}>
-                              {wf}
-                            </SelectItem>
-                          )) || (
-                              <SelectItem value="wan22">Wan 2.2</SelectItem>
-                            )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  <div className="space-y-2 mt-4 border-t pt-4">
-                    <label className="block text-[10px] font-medium text-muted-foreground mb-1">
-                      Append Image Prompt to Motion Prompt
-                    </label>
-                    <Select
-                      value={appendImagePrompt}
-                      onValueChange={(val) => setAppendImagePrompt(val)}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Select Position" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Use Config Default</SelectItem>
-                        <SelectItem value="none">None (Do Not Append)</SelectItem>
-                        <SelectItem value="start">Start (Image + Motion)</SelectItem>
-                        <SelectItem value="end">End (Motion + Image)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setShowRegenModal(null)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleRegenSubmit}
-                disabled={
-                  regenerateImage.isPending || regenerateVideo.isPending
-                }
-                className="flex items-center gap-2"
-              >
-                {regenerateImage.isPending || regenerateVideo.isPending ? (
-                  <>
-                    <RotateCw className="w-3 h-3 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  "Start"
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+            if (type === "image") {
+              const imageVariant = shot.is_flfi2v ? activeImageMode : undefined;
+              regenerateImage.mutate({
+                shotIndex: shot.index,
+                force: config.force || false,
+                imageMode: config.mode || "comfyui",
+                imageWorkflow: config.workflow || "default",
+                seed: config.seed === "" ? undefined : config.seed,
+                promptOverride: config.promptOverride?.trim() || undefined,
+                imageVariant,
+              });
+              toast.info("Image regeneration started", {
+                description: `Shot ${shot.index}${shot.is_flfi2v && imageVariant ? ` (${imageVariant.toUpperCase()})` : ""} image is being generated.`,
+              });
+            } else if (type === "video") {
+              const videoVariant = shot.is_flfi2v ? activeVideoMode : undefined;
+              regenerateVideo.mutate({
+                shotIndex: shot.index,
+                force: config.force || false,
+                videoMode: config.mode || "comfyui",
+                videoWorkflow: config.mode === "comfyui" ? config.workflow : undefined,
+                videoVariant,
+                appendImagePrompt: config.appendImagePrompt === "default" ? undefined : config.appendImagePrompt,
+              });
+              setViewMode("video");
+              toast.info("Video regeneration started", {
+                description: `Shot ${shot.index}${shot.is_flfi2v && videoVariant ? ` (${videoVariant.charAt(0).toUpperCase() + videoVariant.slice(1)})` : ""} video is being generated.`,
+              });
+            }
+            setCacheBuster(Date.now());
+          } catch (error) {
+            console.error(`Failed to trigger regeneration:`, error);
+            toast.error("Failed to start regeneration", {
+              description: "Please try again.",
+            });
+          }
+        }}
+      />
 
       {/* Fullscreen Carousel Modal — navigates through all image_paths */}
       {fullscreenVariationIndex !== null && fsUrl && (
@@ -1338,8 +1093,18 @@ export function ShotCard({
 
       {/* Media Gallery Modal */}
       {showGalleryModal && hasMultipleVariations && (() => {
-        const paths = viewMode === "video" ? (shot.video_paths ?? []) : (shot.image_paths ?? []);
-        const activePath = viewMode === "video" ? shot.video_path : shot.image_path;
+        const paths = viewMode === "video" 
+          ? (shot.video_paths ?? []) 
+          : (shot.is_flfi2v 
+              ? (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`)) 
+              : (shot.image_paths ?? []));
+              
+        const activePath = viewMode === "video" 
+          ? shot.video_path 
+          : (shot.is_flfi2v 
+              ? (activeImageMode === "then" ? shot.then_image_path : shot.now_image_path) 
+              : shot.image_path);
+              
         const mediaType = viewMode === "video" ? "Video" : "Image";
 
         return (

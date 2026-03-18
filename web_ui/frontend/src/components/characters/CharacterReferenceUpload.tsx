@@ -31,7 +31,11 @@ export default function CharacterReferenceUpload({
   const getMediaUrl = (path: string) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
-    return `/api/projects/${projectId}/media/${path.replace(/^output\//, '')}`;
+    const filename = path.split('/').pop();
+    if (path.includes('/references/')) {
+      return `/api/projects/${projectId}/references/${filename}`;
+    }
+    return `/api/projects/${projectId}/images/${filename}`;
   };
 
   const handleUpload = useCallback(async (
@@ -120,9 +124,10 @@ export default function CharacterReferenceUpload({
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => handleDrop(e, 'then')}
+            onClick={() => document.getElementById(`then-input-${characterIndex}`)?.click()}
             className={`
               relative border-2 border-dashed rounded-lg p-4 text-center
-              transition-colors duration-200
+              transition-colors duration-200 cursor-pointer
               ${uploading.then
                 ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
@@ -186,9 +191,10 @@ export default function CharacterReferenceUpload({
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => handleDrop(e, 'now')}
+            onClick={() => document.getElementById(`now-input-${characterIndex}`)?.click()}
             className={`
               relative border-2 border-dashed rounded-lg p-4 text-center
-              transition-colors duration-200
+              transition-colors duration-200 cursor-pointer
               ${uploading.now
                 ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                 : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'

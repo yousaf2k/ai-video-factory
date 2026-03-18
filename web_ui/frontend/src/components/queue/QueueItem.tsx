@@ -119,7 +119,7 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onI
     }
   };
 
-  const canCancel = item.status === QueueItemStatus.QUEUED || item.status === QueueItemStatus.ACTIVE;
+  const canCancel = item.status === QueueItemStatus.QUEUED || item.status === QueueItemStatus.ACTIVE || item.status === QueueItemStatus.PAUSED;
   const canRequeue = item.status === QueueItemStatus.FAILED || item.status === QueueItemStatus.CANCELLED;
 
   const formatDateTime = (dateStr?: string) => {

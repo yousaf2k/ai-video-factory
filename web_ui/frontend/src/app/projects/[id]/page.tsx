@@ -13,6 +13,7 @@ import { api } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, ImageIcon, X } from "lucide-react";
+import { GenerationDialog, GenerationConfig } from "@/components/shots/GenerationDialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -27,16 +28,17 @@ import {
   TabsList, 
   TabsTrigger 
 } from "@/components/ui/tabs";
-import { 
-  Film, 
-  Image as LucideImage, 
-  Clock, 
-  Video, 
-  CheckCircle2, 
-  AlertCircle, 
-  Settings, 
+import {
+  Film,
+  Image as LucideImage,
+  Clock,
+  Video,
+  CheckCircle2,
+  AlertCircle,
+  Settings,
   Edit,
   ArrowLeft,
+  BookOpen,
   LayoutDashboard,
   Layers
 } from "lucide-react";
@@ -56,10 +58,6 @@ export default function ProjectDetailPage() {
   const [showRegenModal, setShowRegenModal] = useState<"16:9" | "9:16" | null>(
     null,
   );
-  const [regenImageMode, setRegenImageMode] = useState<string>("comfyui");
-  const [regenImageWorkflow, setRegenImageWorkflow] = useState<string>("flux2");
-  const [regenSeed, setRegenSeed] = useState<number | "">("");
-  const [regenForce, setRegenForce] = useState(true);
 
   const handleUpdateAspectRatio = async (newAspectRatio: "16:9" | "9:16") => {
     try {
@@ -77,17 +75,20 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleGenerateThumbnail = async (aspectRatio: "16:9" | "9:16") => {
+  const handleGenerateThumbnail = async (
+    aspectRatio: "16:9" | "9:16",
+    config: GenerationConfig
+  ) => {
     try {
       setGeneratingThumbnails((prev) => ({ ...prev, [aspectRatio]: true }));
       setShowRegenModal(null);
       await api.generateThumbnail(
         projectId,
         aspectRatio,
-        regenForce,
-        regenImageMode,
-        regenImageWorkflow,
-        regenSeed === "" ? undefined : regenSeed,
+        config.force || false,
+        config.mode || "comfyui",
+        config.workflow || "flux2",
+        config.seed === "" ? undefined : config.seed,
       );
       setImageVersion(Date.now());
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
@@ -196,47 +197,49 @@ export default function ProjectDetailPage() {
           </div>
         </div>
 
-        {/* Quick Stats Banner */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4">
+        {/* Quick Stats Banner (Synced with Edit Page) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
-              <Film className="w-5 h-5" />
+              <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Shots</p>
-              <p className="text-xl font-bold">{totalShotsCount}</p>
+              <p className="text-xs text-muted-foreground">Total Scenes</p>
+              <p className="text-xl font-bold">{project.story?.scenes?.length || 0}</p>
             </div>
           </div>
-          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4">
-            <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center text-blue-500">
-              <LucideImage className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Images Ready</p>
-              <p className="text-xl font-bold">
-                {imagesDoneCount}/{totalShotsCount}
-              </p>
-            </div>
-          </div>
-          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4">
-            <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center text-purple-500">
-              <Video className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Videos Ready</p>
-              <p className="text-xl font-bold">
-                {videosDoneCount}/{totalShotsCount}
-              </p>
-            </div>
-          </div>
-          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4">
+          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
             <div className="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center text-accent">
               <Clock className="w-5 h-5" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Total Duration</p>
               <p className="text-xl font-bold">
-                {project.story?.total_duration || 0}s
+                {project.story?.total_duration ? (
+                  `${Math.floor(project.story.total_duration / 60)}:${(project.story.total_duration % 60).toString().padStart(2, "0")}`
+                ) : '0:00'}
+              </p>
+            </div>
+          </div>
+          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
+            <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center text-purple-500">
+              <Film className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Planned Shots</p>
+              <p className="text-xl font-bold">{totalShotsCount}</p>
+            </div>
+          </div>
+          <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+              project.completed ? "bg-green-500/10 text-green-500" : "bg-blue-500/10 text-blue-500"
+            }`}>
+              {project.completed ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Status</p>
+              <p className={`text-xl font-bold ${project.completed ? "text-green-500" : "text-blue-500"}`}>
+                {project.completed ? "Completed" : "In Progress"}
               </p>
             </div>
           </div>
@@ -588,27 +591,41 @@ export default function ProjectDetailPage() {
                         key={idx}
                         className="bg-input/30 border border-border/50 rounded-lg p-4 hover:border-primary/50 transition-colors"
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded">
-                            Scene {idx + 1}
-                          </span>
-                          {scene.scene_duration && (
-                            <span className="text-xs text-muted-foreground">
-                              {scene.scene_duration}s
-                            </span>
+                        <div className="flex gap-4 items-start">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded">
+                                Scene {idx + 1}
+                              </span>
+                              {scene.scene_duration && (
+                                <span className="text-xs text-muted-foreground">
+                                  {scene.scene_duration}s
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-foreground mb-1">
+                              {scene.action}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {scene.location} • {scene.characters}
+                            </p>
+                            {scene.narration && (
+                              <div className="mt-3 p-3 bg-background/50 rounded border-l-2 border-secondary/50 text-sm italic text-foreground/80">
+                                "{scene.narration}"
+                              </div>
+                            )}
+                          </div>
+                          
+                          {scene.background_image_path && (
+                            <div className="w-24 h-24 sm:w-28 sm:h-28 relative rounded-lg overflow-hidden bg-muted border border-border flex-shrink-0 shadow-sm">
+                              <img
+                                src={getMediaUrl(scene.background_image_path, imageVersion)}
+                                alt={`Scene ${idx + 1} Background`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
                           )}
                         </div>
-                        <p className="text-sm font-medium text-foreground mb-1">
-                          {scene.action}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {scene.location} • {scene.characters}
-                        </p>
-                        {scene.narration && (
-                          <div className="mt-3 p-3 bg-background/50 rounded border-l-2 border-secondary/50 text-sm italic text-foreground/80">
-                            "{scene.narration}"
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -694,128 +711,18 @@ export default function ProjectDetailPage() {
     </TabsContent>
   </Tabs>
       {/* Regeneration Modal */}
-      {showRegenModal && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-          <div className="bg-background rounded-lg shadow-xl max-w-sm w-full p-6 relative">
-            <button
-              onClick={() => setShowRegenModal(null)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h2 className="text-lg font-semibold mb-4">
-              Generate Thumbnail (
-              {showRegenModal === "16:9" ? "Landscape" : "Portrait"})
-            </h2>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Input
-                  type="checkbox"
-                  id="regen-force"
-                  checked={regenForce}
-                  onChange={(e) => setRegenForce(e.target.checked)}
-                  className="w-4 h-4 mr-2"
-                />
-                <label htmlFor="regen-force" className="text-sm">
-                  Force regeneration (ignore cache)
-                </label>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">
-                  Generation Mode
-                </label>
-                <Select
-                  value={regenImageMode}
-                  onValueChange={(val) => setRegenImageMode(val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
-                    <SelectItem value="gemini">Gemini (Cloud)</SelectItem>
-                    <SelectItem value="geminiweb">
-                      GeminiWeb - Gemini Web (Browser)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {regenImageMode === "comfyui" && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      Workflow
-                    </label>
-                    <Select
-                      value={regenImageWorkflow}
-                      onValueChange={(val) => setRegenImageWorkflow(val)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Workflow" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="flux2">
-                          Flux 2 (High Quality)
-                        </SelectItem>
-                        <SelectItem value="flux">Flux (Standard)</SelectItem>
-                        <SelectItem value="sdxl">SDXL</SelectItem>
-                        <SelectItem value="default">Default</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      Noise Seed (Optional)
-                    </label>
-                    <Input
-                      type="number"
-                      value={regenSeed}
-                      onChange={(e) =>
-                        setRegenSeed(
-                          e.target.value === "" ? "" : parseInt(e.target.value),
-                        )
-                      }
-                      placeholder="Random (leave empty)"
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="flex justify-end gap-2 mt-6">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowRegenModal(null)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (showRegenModal) handleGenerateThumbnail(showRegenModal);
-                  }}
-                  disabled={Boolean(
-                    showRegenModal && generatingThumbnails[showRegenModal],
-                  )}
-                >
-                  {showRegenModal && generatingThumbnails[showRegenModal] ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />{" "}
-                      Generating...
-                    </>
-                  ) : (
-                    "Generate"
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <GenerationDialog
+        isOpen={showRegenModal !== null}
+        onClose={() => setShowRegenModal(null)}
+        type="image"
+        projectId={projectId}
+        isPending={showRegenModal ? generatingThumbnails[showRegenModal] : false}
+        onSubmit={(config) => {
+          if (showRegenModal) handleGenerateThumbnail(showRegenModal, config);
+        }}
+        title={`Generate Thumbnail (${showRegenModal === "16:9" ? "Landscape" : "Portrait"})`}
+        hidePrompt={true}
+      />
     </div>
   );
 }

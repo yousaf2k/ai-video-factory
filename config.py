@@ -424,7 +424,7 @@ IMAGE_WORKFLOWS = {
         "description": "Flux for scene background generation (standard text-to-image)"
     },
     "flux2": {
-        "workflow_path": resolve_path("workflow/image/flux2_4g_2k.json"),
+        "workflow_path": resolve_path("workflow/image/flux2_hq.json"),
         "text_node_id": "98:6",
         "neg_text_node_id": None,
         "ksampler_node_id": "98:16",
