@@ -432,6 +432,17 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
                                 'subfolder': subfolder
                             })
 
+                    # Check for gifs outputs (often used by VHS_VideoCombine)
+                    if "gifs" in node_output and len(node_output["gifs"]) > 0:
+                        for gif_info in node_output["gifs"]:
+                            filename = gif_info.get("filename", "")
+                            subfolder = gif_info.get("subfolder", "")
+                            output_files.append({
+                                'type': 'video',
+                                'filename': filename,
+                                'subfolder': subfolder
+                            })
+
                     # Check for images - but filter for video files (.mp4, .webm, etc.)
                     # ComfyUI's SaveVideo node sometimes outputs to the "images" field
                     if "images" in node_output and len(node_output["images"]) > 0:

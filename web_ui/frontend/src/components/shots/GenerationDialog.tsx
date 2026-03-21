@@ -21,6 +21,7 @@ export interface GenerationConfig {
   seed?: number | "";
   promptOverride?: string;
   appendImagePrompt?: string; // e.g. "default", "none", "start", "end"
+  generateSoundFX?: boolean;
 }
 
 interface GenerationDialogProps {
@@ -59,6 +60,7 @@ export function GenerationDialog({
 
   // Video Specific State
   const [appendImagePrompt, setAppendImagePrompt] = useState("default");
+  const [generateSoundFX, setGenerateSoundFX] = useState(false);
 
   // Reset or initialize state
   useEffect(() => {
@@ -67,6 +69,7 @@ export function GenerationDialog({
       setSeed("");
       setPromptOverride(defaultPromptOverride);
       setAppendImagePrompt("default");
+      setGenerateSoundFX(false);
       
       if (type === "image") {
         setMode("comfyui");
@@ -97,6 +100,7 @@ export function GenerationDialog({
       seed: type === "image" ? seed : undefined,
       promptOverride: type === "image" ? promptOverride : undefined,
       appendImagePrompt: type === "video" ? appendImagePrompt : undefined,
+      generateSoundFX: type === "video" ? generateSoundFX : undefined,
     });
   };
 
@@ -280,6 +284,19 @@ export function GenerationDialog({
                     <SelectItem value="end">End (Motion + Image)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Input
+                  type="checkbox"
+                  id="regen-soundfx"
+                  checked={generateSoundFX}
+                  onChange={(e) => setGenerateSoundFX(e.target.checked)}
+                  className="w-4 h-4 mr-2"
+                />
+                <label htmlFor="regen-soundfx" className="text-sm">
+                  🔊 Generate Sound FX after video
+                </label>
               </div>
             </>
           )}

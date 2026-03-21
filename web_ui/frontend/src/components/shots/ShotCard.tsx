@@ -24,6 +24,7 @@ import {
   Copy,
   ClipboardCheck,
   GripVertical,
+  Volume2,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -40,6 +41,7 @@ import {
   useSelectVideo,
   useDeleteVariationVideo,
   useUploadShotVideo,
+  useGenerateSoundFX,
 } from "@/hooks/useShots";
 import { useAgents, useConfig } from "@/hooks/useAgents";
 import { useQueryClient } from "@tanstack/react-query";
@@ -94,7 +96,7 @@ export function ShotCard({
 }: ShotCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);
-  const [viewMode, setViewMode] = useState<"image" | "video">("image");
+  const [viewMode, setViewMode] = useState<"image" | "video" | "soundfx">("image");
 
   // FLFI2V state management
   const [activeImageMode, setActiveImageMode] = useState<"then" | "now">("now");
@@ -106,6 +108,17 @@ export function ShotCard({
       setCacheBuster(Date.now());
     }
   }, [activeVideoMode, activeImageMode, shot.is_flfi2v]);
+
+  const prevSoundFXGenerated = useRef(shot.soundfx_generated);
+
+  // Auto-switch to soundfx view when sound FX is newly generated or finished
+  useEffect(() => {
+    if (shot.soundfx_generated && !prevSoundFXGenerated.current) {
+      setViewMode("soundfx");
+      setCacheBuster(Date.now());
+    }
+    prevSoundFXGenerated.current = shot.soundfx_generated;
+  }, [shot.soundfx_generated]);
 
   // Update editedShot when shot prop changes (e.g., after regeneration)
   useEffect(() => {
@@ -131,6 +144,7 @@ export function ShotCard({
   const removeWatermark = useRemoveWatermark(projectId);
   const uploadShotImage = useUploadShotImage(projectId);
   const uploadShotVideo = useUploadShotVideo(projectId);
+  const generateSoundFX = useGenerateSoundFX(projectId);
   const deleteVariation = useDeleteVariationImage(projectId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -177,6 +191,7 @@ export function ShotCard({
       const activePath = activeImageMode === "then" ? shot.then_image_path : shot.now_image_path;
       return activePath ? [activePath] : [];
     }
+    if (viewMode === "soundfx") return [shot.soundfx_path || ""];
     return viewMode === "video" ? (shot.video_paths ?? []) : (shot.image_paths ?? []);
   })();
   const fsTotal = fsImages.length;
@@ -216,6 +231,7 @@ export function ShotCard({
 
   const variationsCount = (() => {
     if (viewMode === "video") return shot.video_paths?.length ?? 0;
+    if (viewMode === "soundfx") return 1;
     if (shot.is_flfi2v) {
       return (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`)).length;
     }
@@ -290,6 +306,7 @@ export function ShotCard({
         : shot.departure_video_path || shot.meeting_video_path || shot.video_path
     )
     : getMediaUrl(shot.video_path);
+  const soundfxUrl = getMediaUrl(shot.soundfx_path || null);
 
   // Append cache-busting param so browser fetches the latest file from disk
   const bustCache = (url: string) =>
@@ -301,6 +318,7 @@ export function ShotCard({
     ? bustCache(getMediaUrl(fsImages[fullscreenVariationIndex]))
     : null;
   const cachedVideoUrl = bustCache(videoUrl);
+  const cachedSoundfxUrl = bustCache(soundfxUrl);
 
   if (isEditing) {
     return (
@@ -662,6 +680,24 @@ export function ShotCard({
               </span>
             </button>
           )}
+          <button
+            onClick={async () => {
+              try {
+                await generateSoundFX.mutateAsync({ shotIndex: shot.index, force: true });
+                toast.info("Sound FX generation started", {
+                  description: `Shot ${shot.index} sound FX is being generated.`,
+                });
+              } catch (error) {
+                console.error("Failed to generate sound FX:", error);
+                toast.error("Failed to generate sound FX");
+              }
+            }}
+            disabled={generateSoundFX.isPending || !(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)}
+            className="p-1 hover:bg-orange-50 text-orange-600 rounded disabled:opacity-50"
+            title="Generate Sound FX"
+          >
+            <Volume2 className={cn("w-4 h-4", generateSoundFX.isPending && "animate-pulse")} />
+          </button>
 
           <div className="w-px h-6 bg-border mx-1 my-auto"></div>
 
@@ -776,6 +812,22 @@ export function ShotCard({
               ? "✓"
               : "○"}
           </button>
+          
+          {shot.soundfx_generated && (
+            <button
+              onClick={() => setViewMode("soundfx")}
+              className={cn(
+                "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
+                viewMode === "soundfx"
+                  ? "bg-purple-500 text-white font-semibold"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              title="Sound FX Video Rendered - Click to view"
+            >
+              <Volume2 className="w-3 h-3" />
+              "✓"
+            </button>
+          )}
         </div>
       </div>
 
@@ -830,7 +882,17 @@ export function ShotCard({
               )}
             </div>
           ) : null}
-          {viewMode === "video" && cachedVideoUrl ? (
+          {viewMode === "soundfx" && cachedSoundfxUrl ? (
+            <video
+              key="soundfx"
+              src={cachedSoundfxUrl}
+              controls
+              muted={false}
+              loop
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          ) : viewMode === "video" && cachedVideoUrl ? (
             <video
               key={shot.is_flfi2v ? activeVideoMode : shot.video_path}
               src={cachedVideoUrl}
@@ -1012,6 +1074,7 @@ export function ShotCard({
                 videoWorkflow: config.mode === "comfyui" ? config.workflow : undefined,
                 videoVariant,
                 appendImagePrompt: config.appendImagePrompt === "default" ? undefined : config.appendImagePrompt,
+                generateSoundFX: config.generateSoundFX || false,
               });
               setViewMode("video");
               toast.info("Video regeneration started", {
@@ -1034,7 +1097,7 @@ export function ShotCard({
           className="fixed inset-0 bg-black/92 z-[70] flex items-center justify-center p-4"
           onClick={closeFullscreen}
         >
-          {viewMode === "video" ? (
+          {viewMode === "video" || viewMode === "soundfx" ? (
             <video
               src={fsUrl}
               autoPlay

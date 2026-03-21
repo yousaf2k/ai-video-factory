@@ -17,7 +17,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
     RegenerateVideoRequest, BatchRegenerateRequest, ReplanShotsRequest,
-    SelectImageRequest, SelectVideoRequest, RemoveWatermarkRequest
+    SelectImageRequest, SelectVideoRequest, RemoveWatermarkRequest,
+    RegenerateSoundFXRequest
 )
 from web_ui.backend.services.project_service import ProjectService
 from web_ui.backend.services.generation_service import get_generation_service
@@ -551,6 +552,27 @@ async def regenerate_shot_video(project_id: str, shot_index: int, request: Regen
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to regenerate video: {str(e)}"
+        )
+
+
+@router.post("/{shot_index}/generate-soundfx")
+async def generate_shot_soundfx(project_id: str, shot_index: int, request: RegenerateSoundFXRequest):
+    """Generate sound effects for a shot video using MMAudio"""
+    try:
+        from web_ui.backend.models.queue import GenerationType
+        result_items = generation_service.add_single_shot_to_queue(
+            project_id, shot_index, GenerationType.SOUNDFX, request
+        )
+        return {
+            "status": "queued", 
+            "message": f"Queued sound FX generation for shot {shot_index}",
+            "item_count": len(result_items)
+        }
+    except Exception as e:
+        logger.error(f"Error generating sound FX: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate sound FX: {str(e)}"
         )
 
 

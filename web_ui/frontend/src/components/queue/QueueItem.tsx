@@ -96,6 +96,8 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onF
         return 'Narration';
       case GenerationType.BACKGROUND:
         return 'Background';
+      case GenerationType.SOUNDFX:
+        return 'Sound FX';
       default:
         return 'Unknown';
     }
@@ -115,6 +117,8 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onF
         return 'bg-green-100 text-green-700';
       case GenerationType.BACKGROUND:
         return 'bg-orange-100 text-orange-700';
+      case GenerationType.SOUNDFX:
+        return 'bg-yellow-100 text-yellow-700';
       default:
         return 'bg-gray-100 text-gray-700';
     }

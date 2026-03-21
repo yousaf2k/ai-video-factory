@@ -130,6 +130,8 @@ class GenerationService:
                         await self._process_narration_generation(item)
                     elif item.generation_type == GenerationType.BACKGROUND:
                         await self._process_background_generation(item)
+                    elif item.generation_type == GenerationType.SOUNDFX:
+                        await self._process_soundfx_generation(item)
                     else:
                         logger.warning(f"Unknown generation type: {item.generation_type}")
                         queue_service.mark_failed(item.item_id, f"Unknown generation type: {item.generation_type}")
@@ -267,6 +269,8 @@ class GenerationService:
                     await self._process_narration_generation(item)
                 elif item.generation_type == GenerationType.BACKGROUND:
                     await self._process_background_generation(item)
+                elif item.generation_type == GenerationType.SOUNDFX:
+                    await self._process_soundfx_generation(item)
                 else:
                     logger.warning(f"Unknown generation type on force start: {item.generation_type}")
             except Exception as e:
@@ -306,6 +310,22 @@ class GenerationService:
             )
 
             logger.info(f"Completed video generation for queue item {item.item_id}")
+
+            # Auto-chain: if generate_soundfx flag is set, queue a SOUNDFX item
+            if getattr(item, 'generate_soundfx', False):
+                logger.info(f"Auto-chaining sound FX generation for shot {item.shot_index} after video completion")
+                try:
+                    queue_service = get_queue_service()
+                    shots = self.project_manager.get_shots(item.project_id)
+                    story = self.project_manager.get_story(item.project_id)
+                    shot = shots[item.shot_index - 1] if item.shot_index <= len(shots) else None
+                    sfx_item = self._create_queue_item(
+                        item.project_id, item.shot_index, GenerationType.SOUNDFX, shot, story
+                    )
+                    queue_service.add_items([sfx_item])
+                    logger.info(f"Queued auto-chain SOUNDFX item for shot {item.shot_index}")
+                except Exception as sfx_err:
+                    logger.error(f"Failed to auto-chain sound FX for shot {item.shot_index}: {sfx_err}")
         except Exception as e:
             logger.error(f"Error processing video generation for {item.item_id}: {e}")
             raise
@@ -321,6 +341,23 @@ class GenerationService:
         # TODO: Implement background generation
         logger.warning(f"Background generation not yet implemented for item {item.item_id}")
         raise NotImplementedError("Background generation not yet implemented")
+
+    async def _process_soundfx_generation(self, item: QueueItem):
+        """Process sound FX generation for a queue item"""
+        try:
+            project_meta = self.project_manager.get_project(item.project_id)
+            project_title = project_meta.get('title', item.project_id) if project_meta else item.project_id
+
+            await self.generate_soundfx(
+                item.project_id,
+                item.shot_index,
+                force=True
+            )
+
+            logger.info(f"Completed sound FX generation for queue item {item.item_id}")
+        except Exception as e:
+            logger.error(f"Error processing sound FX generation for {item.item_id}: {e}")
+            raise
 
     def cancel_project(self, project_id: str):
         """Mark a project as cancelled to halt background queue processing."""
@@ -432,7 +469,8 @@ class GenerationService:
             video_workflow=getattr(request, 'video_workflow', None) if request else None,
             image_variant=getattr(request, 'image_variant', None) if request else None,
             video_variant=getattr(request, 'video_variant', None) if request else None,
-            append_image_prompt=getattr(request, 'append_image_prompt', None) if request else None
+            append_image_prompt=getattr(request, 'append_image_prompt', None) if request else None,
+            generate_soundfx=getattr(request, 'generate_soundfx', False) if request else False
         )
 
     def _get_queue_item_id(
@@ -1350,6 +1388,217 @@ class GenerationService:
                 "shot_id": shot.get('id')
             })
             raise
+
+    async def generate_soundfx(
+        self, project_id: str, shot_index: int, force: bool = False
+    ) -> str:
+        """
+        Generate sound effects for a shot's video using MMAudio ComfyUI workflow.
+
+        Args:
+            project_id: Project identifier
+            shot_index: Shot number (1-based)
+            force: Force regeneration even if sound FX already exists
+
+        Returns:
+            Path to generated video with sound effects
+        """
+        try:
+            shots = self.project_manager.get_shots(project_id)
+
+            if shot_index < 1 or shot_index > len(shots):
+                raise ValueError(f"Shot {shot_index} not found")
+
+            shot = shots[shot_index - 1]
+
+            # Check if video exists
+            video_path = shot.get('video_path')
+            if not video_path:
+                raise ValueError(f"Shot {shot_index} has no video, cannot generate sound FX")
+
+            # Check if already exists and not forcing
+            if not force and shot.get('soundfx_generated', False):
+                logger.info(f"Shot {shot_index} already has sound FX, skipping")
+                return shot.get('soundfx_path')
+
+            logger.info(f"Generating sound FX for shot {shot_index}")
+
+            # Mark queue item as active
+            self._mark_queue_item_active(project_id, shot_index, GenerationType.SOUNDFX)
+
+            # Broadcast initial 0% progress
+            manager.broadcast_sync(project_id, {
+                "type": "progress",
+                "project_id": project_id,
+                "shot_index": shot_index,
+                "shot_id": shot.get('id'),
+                "generation_type": "soundfx",
+                "progress": 0
+            })
+
+            # Run in thread pool to avoid blocking
+            soundfx_path = await asyncio.to_thread(
+                self._generate_soundfx_comfyui,
+                project_id,
+                shot
+            )
+
+            # Update shot with soundfx path
+            shots = self.project_manager.get_shots(project_id)
+            shots[shot_index - 1]['soundfx_path'] = self.project_manager._relativize_path(soundfx_path)
+            shots[shot_index - 1]['soundfx_generated'] = True
+            self.project_manager._save_shots(project_id, shots)
+
+            # Mark queue item as completed
+            self._mark_queue_item_completed(project_id, shot_index, GenerationType.SOUNDFX)
+
+            # Broadcast completion
+            manager.broadcast_sync(project_id, {
+                "type": "completed",
+                "project_id": project_id,
+                "shot_index": shot_index,
+                "shot_id": shot.get('id'),
+                "generation_type": "soundfx"
+            })
+
+            logger.info(f"Shot {shot_index} sound FX generated: {soundfx_path}")
+            return soundfx_path
+
+        except Exception as e:
+            logger.error(f"Error generating sound FX for shot {shot_index}: {e}")
+            # Mark queue item as failed
+            self._mark_queue_item_failed(project_id, shot_index, GenerationType.SOUNDFX, str(e))
+            # Broadcast cancelled event to clear loading state
+            manager.broadcast_sync(project_id, {
+                "type": "cancelled",
+                "project_id": project_id,
+                "shot_index": shot_index,
+                "shot_id": shots[shot_index - 1].get('id') if shot_index <= len(shots) else None,
+                "generation_type": "soundfx",
+                "error": str(e)
+            })
+            raise
+
+    def _generate_soundfx_comfyui(self, project_id: str, shot: Dict[str, Any]) -> str:
+        """Generate sound effects for a shot video using MMAudio ComfyUI workflow (synchronous).
+
+        Loads the workflow/soundfx/mmaudio.json template, uploads the shot video
+        to ComfyUI, sets the prompt, submits, waits, and copies the output.
+        """
+        import shutil
+        import config
+        import requests as http_requests
+        from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
+
+        shot_index = shot['index']
+        videos_dir = self.project_manager.get_videos_dir(project_id)
+        os.makedirs(videos_dir, exist_ok=True)
+
+        # Resolve video path
+        video_rel_path = shot.get('video_path', '')
+        video_abs_path = config.resolve_path(video_rel_path)
+
+        if not os.path.exists(video_abs_path):
+            raise RuntimeError(f"Video file not found for shot {shot_index}: {video_abs_path}")
+
+        # Upload video to ComfyUI input folder
+        comfy_url = getattr(config, 'COMFY_URL', 'http://127.0.0.1:8188')
+        video_filename = os.path.basename(video_abs_path)
+        upload_url = f"{comfy_url}/upload/image"
+        with open(video_abs_path, 'rb') as f:
+            resp = http_requests.post(
+                upload_url,
+                files={"image": (video_filename, f, "video/mp4")},
+                data={"subfolder": "", "type": "input"}
+            )
+        if resp.status_code != 200:
+            raise RuntimeError(f"Failed to upload video to ComfyUI: {resp.text}")
+        uploaded_name = resp.json().get('name', video_filename)
+        logger.info(f"Uploaded video to ComfyUI input: {uploaded_name}")
+
+        # Load mmaudio workflow template
+        workflow_path = os.path.join(config.PROJECT_ROOT, 'workflow', 'soundfx', 'mmaudio.json')
+        with open(workflow_path, 'r', encoding='utf-8') as f:
+            wf = json.load(f)
+
+        # Set inputs on the workflow nodes
+        # Node 91: VHS_LoadVideo - set the video input
+        if '91' in wf:
+            wf['91']['inputs']['video'] = uploaded_name
+
+        # Node 92: MMAudioSampler - set the prompt (use motion prompt as scene audio description)
+        if '92' in wf:
+            prompt_text = shot.get('motion_prompt', '')
+            wf['92']['inputs']['prompt'] = prompt_text
+
+        # Node 97: VHS_VideoCombine - set filename prefix
+        if '97' in wf:
+            wf['97']['inputs']['filename_prefix'] = f"soundfx_{shot_index:03d}"
+
+        # Submit to ComfyUI
+        result = submit(wf)
+        prompt_id = result.get('prompt_id')
+        if not prompt_id:
+            raise RuntimeError(f"No prompt_id returned for sound FX shot {shot_index}")
+
+        logger.info(f"Sound FX submitted for shot {shot_index}: prompt_id={prompt_id}")
+
+        last_reported_progress = -1
+
+        def on_step_progress(current, total):
+            nonlocal last_reported_progress
+            # Check for cancellation
+            if project_id in self.cancelled_shots and shot_index in self.cancelled_shots[project_id]:
+                raise InterruptedError(f"Shot {shot_index} sound FX was cancelled")
+            if project_id in self.cancelled_projects:
+                raise InterruptedError(f"Project {project_id} was cancelled")
+
+            progress = int((current / total) * 100) if total > 0 else 0
+            if progress == last_reported_progress:
+                return
+            last_reported_progress = progress
+
+            self._update_queue_item_progress(project_id, shot_index, GenerationType.SOUNDFX, progress)
+
+            manager.broadcast_sync(project_id, {
+                "type": "progress",
+                "project_id": project_id,
+                "shot_index": shot_index,
+                "shot_id": shot.get('id'),
+                "generation_type": "soundfx",
+                "progress": progress
+            })
+
+        # Wait for completion with progress callback
+        wait_result = wait_for_prompt_completion_with_progress(
+            prompt_id,
+            progress_callback=on_step_progress,
+            timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
+        )
+
+        if not wait_result.get('success'):
+            raise RuntimeError(f"Sound FX generation failed for shot {shot_index}: {wait_result.get('error')}")
+
+        # Get output files
+        outputs = wait_result.get('outputs', [])
+        video_outputs = [o for o in outputs if o['type'] == 'video']
+
+        if not video_outputs:
+            raise RuntimeError(f"No video output for sound FX shot {shot_index}")
+
+        # Copy output to project folder
+        video_info = video_outputs[0]
+        base_name, ext = os.path.splitext(video_filename)
+        sfx_filename = f"{base_name}_sfx{ext}"
+        sfx_save_path = os.path.join(videos_dir, sfx_filename)
+
+        source_path = get_output_file_path(video_info)
+        if os.path.exists(source_path):
+            shutil.copy2(source_path, sfx_save_path)
+            logger.info(f"Sound FX video copied: {sfx_filename} ({os.path.getsize(sfx_save_path):,} bytes)")
+            return sfx_save_path
+        else:
+            raise RuntimeError(f"Sound FX source file not found: {source_path}")
 
     def _find_next_shot_for_departure(self, current_shot: dict, all_shots: list, story: dict) -> dict:
         """

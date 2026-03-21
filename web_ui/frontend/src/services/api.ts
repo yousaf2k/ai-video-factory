@@ -162,14 +162,26 @@ class ApiClient {
     videoMode?: string,
     videoWorkflow?: string,
     videoVariant?: string,
-    appendImagePrompt?: string
+    appendImagePrompt?: string,
+    generateSoundFX?: boolean
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/regenerate-video`, {
       force,
       video_mode: videoMode,
       video_workflow: videoWorkflow,
       video_variant: videoVariant || undefined,
-      append_image_prompt: appendImagePrompt
+      append_image_prompt: appendImagePrompt,
+      generate_soundfx: generateSoundFX || false
+    });
+  }
+
+  async generateSoundFX(
+    projectId: string,
+    shotIndex: number,
+    force: boolean = false
+  ): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/generate-soundfx`, {
+      force
     });
   }
 
@@ -325,6 +337,7 @@ class ApiClient {
       video_workflow?: string;
       queue_setting?: string;
       append_image_prompt?: string;
+      generate_soundfx?: boolean;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/projects/${projectId}/shots/batch-regenerate`, data);

@@ -148,6 +148,9 @@ export interface Shot {
   departure_video_prompt?: string;
   departure_video_path?: string;
   departure_video_rendered?: boolean;
+  // Sound FX fields
+  soundfx_path?: string;
+  soundfx_generated?: boolean;
 }
 export interface CreateProjectRequest {
   idea: string;
@@ -254,7 +257,8 @@ export enum GenerationType {
   MEETING_VIDEO = "meeting_video",
   DEPARTURE_VIDEO = "departure_video",
   NARRATION = "narration",
-  BACKGROUND = "background"
+  BACKGROUND = "background",
+  SOUNDFX = "soundfx"
 }
 
 export enum QueueItemStatus {

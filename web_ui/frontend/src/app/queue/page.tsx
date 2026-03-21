@@ -141,6 +141,7 @@ export default function QueuePage() {
         if (typeFilter === 'video' && !isVideo) return false;
         if (typeFilter === 'narration' && item.generation_type !== GenerationType.NARRATION) return false;
         if (typeFilter === 'background' && item.generation_type !== GenerationType.BACKGROUND) return false;
+        if (typeFilter === 'soundfx' && item.generation_type !== GenerationType.SOUNDFX) return false;
       }
 
       return true;
