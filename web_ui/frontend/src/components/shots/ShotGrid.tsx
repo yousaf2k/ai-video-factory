@@ -307,6 +307,36 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
     }
   };
 
+  const isSceneSelected = (groupShots: Shot[]) => {
+    if (groupShots.length === 0) return false;
+    return groupShots.every((s) => selectedIndices.includes(s.index));
+  };
+
+  const isSceneIndeterminate = (groupShots: Shot[]) => {
+    const selectedCount = groupShots.filter((s) =>
+      selectedIndices.includes(s.index)
+    ).length;
+    return selectedCount > 0 && selectedCount < groupShots.length;
+  };
+
+  const toggleSelectScene = (groupShots: Shot[], selected: boolean) => {
+    const shotIndices = groupShots.map((s) => s.index);
+    if (selected) {
+      setSelectedIndices((prev) => prev.filter((i) => !shotIndices.includes(i)));
+    } else {
+      setSelectedIndices((prev) => {
+        const next = [...prev];
+        shotIndices.forEach((idx) => {
+          if (!next.includes(idx)) {
+            next.push(idx);
+          }
+        });
+        return next;
+      });
+    }
+  };
+
+
   const handleBatchSubmit = useCallback(async () => {
     if (selectedIndices.length === 0 || !showBatchModal) return;
 
@@ -892,9 +922,28 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
                   <div className="flex flex-col gap-3 pb-4 border-b">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3">
+                        <button
+                          onClick={() => toggleSelectScene(groupShots, isSceneSelected(groupShots))}
+                          className={cn(
+                            "flex items-center gap-1.5 text-sm p-1 hover:bg-muted rounded transition-colors mt-0.5",
+                            isSceneSelected(groupShots) ? "text-primary" : "text-muted-foreground"
+                          )}
+                          title={isSceneSelected(groupShots) ? "Deselect Scene" : "Select Scene"}
+                        >
+                          {isSceneSelected(groupShots) ? (
+                            <CheckSquare className="w-4 h-4" />
+                          ) : isSceneIndeterminate(groupShots) ? (
+                            <div className="w-4 h-4 border border-input rounded flex items-center justify-center">
+                              <div className="w-2 h-0.5 bg-primary" />
+                            </div>
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
                         <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
                           {sIdx !== null ? `Scene ${sIdx + 1}` : "Unmatched Shots"}
                         </span>
+
                         {scene && (
                           <div className="flex flex-col gap-1">
                             <h3 className="text-xl font-bold tracking-tight">

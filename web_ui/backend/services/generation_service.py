@@ -101,16 +101,26 @@ class GenerationService:
 
         with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "a") as f: f.write("[DEBUG] loop: started\n")
 
-        # Get concurrency limit
-        limit = getattr(config, 'CONCURRENT_GENERATION_LIMIT', 2)
-        semaphore = asyncio.Semaphore(limit)
-        logger.info(f"Queue processor started with concurrency limit of {limit}")
+        # Get concurrency limits from config
+        limits = getattr(config, 'CONCURRENT_GENERATION_LIMITS', {})
+        default_limit = limits.get('default', getattr(config, 'CONCURRENT_GENERATION_LIMIT', 1))
 
-        async def process_single_item(item: QueueItem):
-            """Process a single queue item with semaphore control"""
-            async with semaphore:
+        def get_limit_for_engine(engine: str) -> int:
+            return limits.get(engine, default_limit)
+
+        semaphores = {}
+        def get_semaphore(engine: str):
+            if engine not in semaphores:
+                semaphores[engine] = asyncio.Semaphore(get_limit_for_engine(engine))
+            return semaphores[engine]
+
+        logger.info(f"Queue processor started with per-engine concurrency limits: {limits}")
+
+        async def process_single_item(item: QueueItem, engine: str):
+            """Process a single queue item with per-engine semaphore control"""
+            async with get_semaphore(engine):
                 try:
-                    logger.info(f"Processing queue item {item.item_id}: {item.generation_type.value} for shot {item.shot_index}")
+                    logger.info(f"Processing queue item {item.item_id}: {item.generation_type.value} for shot {item.shot_index} on {engine}")
                     print(f"[DEBUG] getting queue_service", flush=True)
                     # Mark as active
                     queue_service = get_queue_service()
@@ -148,8 +158,22 @@ class GenerationService:
                         
                     queue_service.mark_failed(item.item_id, str(e))
 
-        # Track active tasks
-        active_tasks = set()
+        def _get_item_engine(item: QueueItem) -> str:
+            if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]:
+                return item.image_mode or getattr(config, 'IMAGE_GENERATION_MODE', 'comfyui')
+            elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
+                return item.video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
+            elif item.generation_type == GenerationType.NARRATION:
+                return getattr(config, 'TTS_METHOD', 'local')
+            return 'other'
+
+        # Track active tasks by engine
+        active_tasks_by_engine = {
+            'comfyui': set(),
+            'geminiweb': set(),
+            'gemini': set(),
+            'other': set()
+        }
 
         while self._queue_processor_running:
             try:
@@ -162,27 +186,79 @@ class GenerationService:
                     continue
 
                 # Clean up completed tasks
-                active_tasks = {task for task in active_tasks if not task.done()}
+                for engine in list(active_tasks_by_engine.keys()):
+                    active_tasks_by_engine[engine] = {task for task in active_tasks_by_engine[engine] if not task.done()}
 
-                # Check if we've reached concurrency limit
-                if len(active_tasks) >= limit:
-                    await asyncio.sleep(0.5)
-                    continue
-
-                # Get next queued items (up to available slots)
+                # Get next queued items
                 queued_items = queue_service.get_queue(status=QueueItemStatus.QUEUED)
-                available_slots = limit - len(active_tasks)
 
                 if not queued_items:
                     # No items to process, wait a bit
                     await asyncio.sleep(0.5)
                     continue
 
-                # Start processing items (up to available slots)
-                items_to_process = queued_items[:available_slots]
-                for item in items_to_process:
-                    task = asyncio.create_task(process_single_item(item))
-                    active_tasks.add(task)
+                available_slots_by_engine = {
+                    engine: max(0, get_limit_for_engine(engine) - len(tasks))
+                    for engine, tasks in active_tasks_by_engine.items()
+                }
+
+                # Evaluate items checking dependencies and engine slots
+                items_to_process = []
+                project_shots_cache = {}
+                from web_ui.backend.models.queue import PriorityUpdateRequest
+                
+                for item in queued_items:
+                    engine = _get_item_engine(item)
+                    if engine not in available_slots_by_engine:
+                        available_slots_by_engine[engine] = max(0, get_limit_for_engine(engine) - len(active_tasks_by_engine.get(engine, set())))
+                        if engine not in active_tasks_by_engine:
+                            active_tasks_by_engine[engine] = set()
+
+                    if available_slots_by_engine[engine] <= 0:
+                        continue
+                        
+                    is_ready = True
+                    skip_reason = None
+                    
+                    if item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO, GenerationType.THEN_IMAGE]:
+                        if item.project_id not in project_shots_cache:
+                            project_shots_cache[item.project_id] = self.project_manager.get_shots(item.project_id)
+                        
+                        shots = project_shots_cache[item.project_id]
+                        if shots and item.shot_index is not None and 0 < item.shot_index <= len(shots):
+                            shot = shots[item.shot_index - 1]
+                            
+                            if item.generation_type == GenerationType.VIDEO:
+                                if not shot.get('image_generated', False):
+                                    is_ready = False
+                                    skip_reason = "Base image not generated"
+                            elif item.generation_type in [GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
+                                if not (shot.get('now_image_generated', False) and shot.get('then_image_generated', False)):
+                                    is_ready = False
+                                    skip_reason = "THEN or NOW images not generated"
+                            elif item.generation_type == GenerationType.THEN_IMAGE:
+                                if not shot.get('now_image_generated', False):
+                                    is_ready = False
+                                    skip_reason = "NOW image not generated"
+                                    
+                    if is_ready:
+                        items_to_process.append((item, engine))
+                        available_slots_by_engine[engine] -= 1
+                    else:
+                        logger.info(f"Skipping queue item {item.item_id} ({item.generation_type.value} for shot {item.shot_index}) - {skip_reason}. Pushing to bottom.")
+                        # Move to bottom of queue
+                        current_queue = queue_service.get_queue()
+                        max_prio = 0
+                        if current_queue:
+                            max_prio = max(i.priority for i in current_queue)
+                        
+                        queue_service.update_priority(item.item_id, PriorityUpdateRequest(priority=max_prio + 10))
+
+                for item, engine in items_to_process:
+                    task = asyncio.create_task(process_single_item(item, engine))
+                    if engine not in active_tasks_by_engine:
+                        active_tasks_by_engine[engine] = set()
+                    active_tasks_by_engine[engine].add(task)
 
                 # Small delay before checking for more items
                 await asyncio.sleep(0.1)
@@ -192,9 +268,10 @@ class GenerationService:
                 await asyncio.sleep(1)
 
         # Wait for remaining tasks to complete
-        if active_tasks:
-            logger.info(f"Waiting for {len(active_tasks)} active tasks to complete...")
-            await asyncio.gather(*active_tasks, return_exceptions=True)
+        all_active = [task for engine_tasks in active_tasks_by_engine.values() for task in engine_tasks]
+        if all_active:
+            logger.info(f"Waiting for {len(all_active)} active tasks to complete...")
+            await asyncio.gather(*all_active, return_exceptions=True)
 
         logger.info("Queue processor stopped")
 

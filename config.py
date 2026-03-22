@@ -25,8 +25,16 @@ SHOT_GENERATION_BATCH_SIZE = int(os.getenv("SHOT_GENERATION_BATCH_SIZE", "1"))  
 # Recommended: 3-5 for most APIs, 1-2 for free tier accounts
 MAX_PARALLEL_BATCH_THREADS = int(os.getenv("MAX_PARALLEL_BATCH_THREADS", "5"))  # Default: 5 parallel threads
 
-# Maximum concurrent generations in the background queue (useful for local GPUs and API limits)
-# Set to 1-4 depending on your GPU VRAM or queue backend capability
+# Maximum concurrent generations in the background queue per engine type
+# This allows separate limits for different backends (useful for local GPUs vs cloud APIs)
+CONCURRENT_GENERATION_LIMITS = {
+    "comfyui": int(os.getenv("CONCURRENT_COMFYUI_LIMIT", "1")),     # ComfyUI is VRAM heavy
+    "gemini": int(os.getenv("CONCURRENT_GEMINI_LIMIT", "2")),       # Gemini API can handle more
+    "geminiweb": int(os.getenv("CONCURRENT_GEMINIWEB_LIMIT", "1")), # Browser automation is heavy
+    "default": int(os.getenv("CONCURRENT_DEFAULT_LIMIT", "1"))      # Fallback for other engines
+}
+
+# Legacy limit for backwards compatibility
 CONCURRENT_GENERATION_LIMIT = int(os.getenv("CONCURRENT_GENERATION_LIMIT", "1"))  # Default: 1 concurrent generations
 
 # ==========================================
