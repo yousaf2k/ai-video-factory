@@ -9,7 +9,7 @@ Generate a cinematic narrative for a "Then vs Now" reunion for a specific movie.
 3. **THEN vs NOW Dynamics**: Each character should be described in both their original (THEN) and current (NOW) forms.
 4. **Segment Structure**: Each character featured must have exactly two video segments:
    - **Meeting**: Arrival at the set, rediscovering the iconic location, or meeting another character/crew member.
-   - **Departure / Transition**: Leaving the set, a reflective moment, or a cross-fade to a different location.
+   - **Departure / Transition**: Leaving the set, a reflective moment, or a **smooth physical camera pan to the right, revealing the adjacent set**.
 5. **Ensemble Support**: Support 8–25 characters per movie. (For shorter videos, focus on the core cast).
 
 ## Video Duration Planning
@@ -133,11 +133,13 @@ Group characters into 2-4 logical scenes based on:
 ```json
 {
   "project_type": 2,
-  "title": "Movie Name: The Reunion",
+  "title": "Movie Name (Year): The Reunion",
   "description": "Short description of the original movie plot here (e.g. A mafia boss passes control to his son)",
   "tags": ["reunion", "then vs now", "behind the scenes"],
   "thumbnail_prompt_16_9": "Close-up selfie of the most prominent character from [Movie Title] — Then + Now, smiling and taking a selfie together on the filming set. NOW version of the character holding the smartphone (iPhone 15 Pro Max with titanium frame and triple camera system clearly visible) for the selfie. Both characters visible: younger THEN version on left, older NOW version on right holding phone. Visible cameras, lighting rigs, scaffolding in background. A few production crew members moving naturally, slightly blurred. Cinematic, photorealistic, ultra-realistic textures, vibrant colors, high-quality YouTube thumbnail style. Natural depth-of-field emphasizing THEN and NOW, soft cinematic lighting, hyper-realistic skin, fun and nostalgic atmosphere. 16:9 horizontal composition.",
   "thumbnail_prompt_9_16": "Vertical close-up selfie of the most prominent character from [Movie Title] — Then + Now, smiling and taking a selfie together on the filming set. NOW version holding iPhone 15 Pro Max visible in frame for selfie. Younger THEN version visible beside older NOW version. Production equipment (cameras, lights, rigging) and crew members in background, slightly blurred. Cinematic, photorealistic, ultra-realistic textures, vibrant colors, high-quality YouTube thumbnail style. Natural depth-of-field emphasizing both characters, soft cinematic lighting, hyper-realistic skin, fun and nostalgic atmosphere. 9:16 vertical composition.",
+  "poster_thumbnail_prompt_16_9": "Cinematic movie poster with 'THEN VS NOW' text, split-screen showing [Character Name] in [Year] on the left and modern [Actor Name] on the [Set Location] on the right, high-contrast cinematic lighting.",
+  "poster_thumbnail_prompt_9_16": "Vertical movie poster with 'THEN VS NOW' text, [Character Name] in iconic [Pose], juxtaposed with their modern self standing in the [Set Location] layout, dramatic lighting.",
   "style": "cinematic ensemble reunion, production set aesthetic",
   "movie_metadata": {
     "year": 1972,
@@ -488,6 +490,34 @@ Bright daylight, cinematic, photorealistic, vibrant colors, fun nostalgic atmosp
 
 ---
 
+## MOVIE POSTER THUMBNAIL GUIDELINES
+
+This section defines specifications for an alternative illustrative/dramatic thumbnail style resembling a theoretical cinematic movie poster that explicitly utilizes **Text Overlay** for direct visual contrast.
+
+### Key Rules for Poster Prompts:
+1. **TEXT INCLUSION**: You **ARE** required to include textual overlay descriptions such as "Cinematic movie poster with 'THEN VS NOW' text" or "'[X] YEARS LATER' text in sleek font".
+2. **Composition Style**: Use split-screens, reflection tricks (e.g., character looking into a pool), or dramatic side-by-side juxtaposition of the character in iconic poses vs modern state.
+3. **Lighting**: High dramatic contrast, stylized color grading (e.g. blue & amber), movie-poster visual framing.
+
+### Format Specifications
+
+#### 16:9 Poster (Horizontal)
+**Structure Template:**
+`Cinematic movie poster style with 'THEN VS NOW' text, split screen showing [Character Name] in [Year] on the left and modern [Actor Name] on the [Set Location] set on the right, high-contrast cinematic lighting.`
+
+#### 9:16 Poster (Vertical)
+**Structure Template:**
+`Vertical movie poster with 'THEN VS NOW' text, [Character Name] in iconic [Pose/Attire], juxtaposed with their modern self standing in the [Set Condition], dramatic lighting.`
+
+### Examples by Pattern:
+
+*   **Split Screen Pattern**: `Cinematic movie poster with 'THEN VS NOW' text, split screen showing [Character Name] in [Year] on the left and a modern, silver-haired [Actor Name] on the [Set Name] set on the right`
+*   **Juxtaposition Pattern**: `Vertical movie poster with 'THEN VS NOW' text, [Character Name] in their iconic [Pose], juxtaposed with their modern self standing in the ruins of the [Set Name] set`
+*   **Reflection Pattern**: `Vertical poster: An older [Character Name] looking into a pool of water where their younger [Year] self's face is reflected, 'THEN VS NOW' text, blue and amber cinematic lighting`
+*   **Time Period Pattern**: `Cinematic split-screen: Left side shows a [Year] [Character Name] with [Iconic Asset], right side shows an older [Actor Name] standing in the dusty, abandoned [Set Name], text '[X] YEARS LATER' in sleek font`
+
+---
+
 ## ANIMATION / MOTION PROMPT GUIDELINES
 
 This section defines the exact specifications for generating video animations (motion prompts) for Meeting and Departure scenes.
@@ -575,8 +605,8 @@ golden sunlight through windows, romantic nostalgic atmosphere.
 START: Both characters standing together after the meeting
 ACTION: They walk to the right side of frame
 INTERACTION: Smiling and talking in friendly conversation
-CAMERA: Smooth tracking shot following their movement
-EXIT: They walk out of scene together
+CAMERA: Smooth tracking shot tracking right, transitioning into a **continuous rightward pan with NO fades or dissolves**, sweeping past the current set limits to reveal the adjacent set area.
+EXIT: They walk out, and the camera reveals the next scene set layout.
 DURATION: 15-30 seconds
 ```
 
@@ -584,7 +614,8 @@ DURATION: 15-30 seconds
 - ✅ **Starting position:** Both characters together in frame
 - ✅ **Movement:** Walk together to the right side
 - ✅ **Conversation:** Smiling and talking naturally
-- ✅ **Camera tracking:** Smooth follow shot
+- ✅ **Camera tracking:** Smooth tracking that continues into a **continuous horizontal pan to the right**.
+- ✅ **Physical Transition:** Sweeps past the set edge/scaffolding to reveal the adjacent set. **NO cross-fades, dissolves, or sudden merges.**
 - ✅ **Background:** Production set visible as they exit
 - ✅ **Crew:** Natural crew movement in background
 - ✅ **Lighting:** Warm, hopeful, closure
@@ -593,21 +624,21 @@ DURATION: 15-30 seconds
 **Motion Prompt Template:**
 ```
 TRANSITION: Both characters (THEN and NOW versions) walk together to the right
-side of frame, smiling and talking to each other in friendly conversation. Camera
-follows their movement with smooth tracking shot as they exit the scene. Production
-set and equipment visible in background, crew members working naturally. Warm
-lighting, joyful atmosphere, natural walking animation, sense of closure and
-continued friendship.
+side of frame, smiling and talking. Camera follows with a smooth tracking shot
+that continues into a **continuous horizontal pan to the right with no fades or dissolves**,
+sweeping past the edge of the current set to reveal the adjacent film set area.
+Production equipment visible, crew working naturally. Warm lighting, joyful atmosphere,
+natural walking animation, smooth continuous camera movement reveal.
 ```
 
 **Scene Action Template:**
 ```
 [Departure/TRANSITION] Both characters (THEN on left, NOW on right) walk together
-to the right side of frame, smiling and talking to each other in friendly
-conversation. Camera follows their movement with smooth tracking as they exit the
-scene together. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL
-FRAMING, TRIPOD PERSPECTIVE. Production set and equipment visible, crew members
-working naturally in background.
+to the right side of frame, smiling and talking. Camera follows with smooth tracking,
+transitioning into a **continuous rightward pan with no cuts or fades**, sweeping
+past the current set limits to reveal the adjoining scene set layout.
+STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL FRAMING,
+TRIPOD PERSPECTIVE. Production set and equipment visible in background.
 ```
 
 **Examples:**
@@ -710,6 +741,7 @@ friendship transcending time.
 5. **Composition Lock**: ALWAYS include the mandatory composition block in scene descriptions.
 6. **Production Atmosphere**: Include visible film equipment and crew to create authentic behind-the-scenes feel.
 7. **NO ON-SCREEN TEXT (CRITICAL)**: ABSOLUTELY DO NOT describe, request, or generate any text, labels, subtitles, tags, or captions (e.g., "THEN" or "NOW") inside the image or motion prompts. Imagery must be strictly visual, without any letters or writing on top of the environment or characters.
+8. **Title Format**: The root `title` field MUST include the movie name and its release year in parentheses, for example: "Matrix Reloaded (2003): The Reunion".
 
 ## Input
 The user will provide a MOVIE NAME. Expand this into a full "Then vs Now" reunion narrative following the format above.

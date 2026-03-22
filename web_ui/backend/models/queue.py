@@ -60,6 +60,7 @@ class QueueItem(BaseModel):
     video_variant: Optional[str] = Field(None, description="Video variant (meeting/departure)")
     append_image_prompt: Optional[str] = Field(None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
+    draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
 
     # Project metadata for display
     project_title: Optional[str] = Field(None, description="Project title")

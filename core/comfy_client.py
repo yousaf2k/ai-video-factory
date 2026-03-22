@@ -241,10 +241,11 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                         if current_time - start_time > queue_timeout:
                             return {'success': False, 'error': f'Queue timeout after {int(current_time - start_time)}s', 'outputs': []}
 
-                    # Occasionally check history manually as fallback
-                    if current_time - last_history_check > 1.0:
+                    # Occasionally check history and queue manually as fallback
+                    if current_time - last_history_check > 3.0:
                         last_history_check = current_time
                         try:
+                            # 1. Check history
                             hist_result = await asyncio.to_thread(http_session.get, f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
                             if hist_result.status_code == 200:
                                 history = hist_result.json()
@@ -253,8 +254,27 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                                     if progress_callback:
                                         progress_callback(100, 100)
                                     return wait_for_prompt_completion(prompt_id, timeout=5)
-                        except:
-                            pass
+
+                            # 2. Not in history, check queue
+                            queue_result = await asyncio.to_thread(http_session.get, f"{config.COMFY_URL}/queue", timeout=2)
+                            if queue_result.status_code == 200:
+                                queue_data = queue_result.json()
+                                queue_running = queue_data.get("queue_running", [])
+                                queue_pending = queue_data.get("queue_pending", [])
+                                
+                                is_in_queue = False
+                                for item in queue_running + queue_pending:
+                                    if len(item) > 1 and item[1] == prompt_id:
+                                        is_in_queue = True
+                                        break
+                                        
+                                if not is_in_queue:
+                                    logger.info(f"Prompt {prompt_id} not in history or queue. Assuming canceled.")
+                                    return {'success': False, 'error': f'Prompt {prompt_id} was canceled or removed from queue.', 'outputs': []}
+                        except Exception as poll_err:
+                            if isinstance(poll_err, InterruptedError):
+                                raise poll_err
+                            logger.debug(f"Fallback poll failed: {poll_err}")
 
                     try:
                         message_raw = await asyncio.wait_for(websocket.recv(), timeout=2.0)
@@ -311,6 +331,8 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                     except asyncio.TimeoutError:
                         continue
         except Exception as e:
+            if isinstance(e, InterruptedError):
+                raise e
             logger.error(f"WebSocket error in comfy_client: {e}")
             # Fallback to polling if WebSocket fails
             return wait_for_prompt_completion(prompt_id, timeout=timeout)

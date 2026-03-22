@@ -7,7 +7,7 @@ import config
 # Set up logging
 logger = logging.getLogger(__name__)
 
-def load_workflow(path, video_length_seconds=None, aspect_ratio=None):
+def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_res_video=False):
     """Load workflow and optionally set video length and dimensions"""
     if not os.path.isabs(path):
         # Resolve relative to the project root (one level up from core/)
@@ -20,7 +20,7 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None):
     # Get dimensions from config (use video dimensions for video workflow)
     if aspect_ratio is None:
         aspect_ratio = config.VIDEO_ASPECT_RATIO
-    width, height = config.calculate_video_dimensions(aspect_ratio=aspect_ratio)
+    width, height = config.calculate_video_dimensions(aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video)
 
     # Get workflow settings for node IDs
     work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
@@ -89,8 +89,8 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None):
                     node_data["inputs"]["filename_prefix"] = widgets[3]
                     if len(widgets) >= 5:
                         node_data["inputs"]["save_output"] = widgets[4]
-                # For WanImageToVideo, widgets_values contains [width, height, frames, batch_size]
-                elif node_type == "WanImageToVideo" and len(widgets) >= 4:
+                # For WanImageToVideo or WanFirstLastFrameToVideo, widgets_values contains [width, height, frames, batch_size]
+                elif node_type in ["WanImageToVideo", "WanFirstLastFrameToVideo"] and len(widgets) >= 4:
                     # Use config dimensions instead of hardcoded values
                     node_data["inputs"]["width"] = width
                     node_data["inputs"]["height"] = height
@@ -157,19 +157,26 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None):
         # Already in API format - set dimensions and video length
         wf = copy.deepcopy(workflow)
 
-        # Set dimensions in WanImageToVideo node
-        if wan_video_node_id and wan_video_node_id in wf:
-            wan_node = wf[wan_video_node_id]
-            if wan_node.get('class_type') == 'WanImageToVideo':
-                wan_node['inputs']['width'] = width
-                wan_node['inputs']['height'] = height
+        # Set dimensions in WanImageToVideo or WanFirstLastFrameToVideo node dynamically
+        wan_node_id = None
+        for node_id, node in wf.items():
+            # Check if node has class_type to avoid errors
+            if isinstance(node, dict) and 'class_type' in node:
+                if node.get('class_type') in ['WanImageToVideo', 'WanFirstLastFrameToVideo']:
+                    wan_node_id = node_id
+                    break
 
-                # Set video length if specified
-                if video_length_seconds:
-                    frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
-                    wan_node['inputs']['length'] = frames
-                    print(f"[INFO] Set video length: {video_length_seconds}s ({frames-1}+1 frames at {config.VIDEO_FPS}fps)")
-                    print(f"[INFO] Set dimensions: {width}x{height} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
+        if wan_node_id:
+            wan_node = wf[wan_node_id]
+            wan_node['inputs']['width'] = width
+            wan_node['inputs']['height'] = height
+
+            # Set video length if specified
+            if video_length_seconds:
+                frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
+                wan_node['inputs']['length'] = frames
+                print(f"[INFO] Set video length: {video_length_seconds}s ({frames-1}+1 frames at {config.VIDEO_FPS}fps)")
+                print(f"[INFO] Set dimensions: {width}x{height} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
 
         return wf
 

@@ -55,9 +55,10 @@ export default function ProjectDetailPage() {
   const [isUpdatingAspectRatio, setIsUpdatingAspectRatio] = useState(false);
 
   // Regeneration Modal State
-  const [showRegenModal, setShowRegenModal] = useState<"16:9" | "9:16" | null>(
-    null,
-  );
+  const [showRegenModal, setShowRegenModal] = useState<{
+    aspect: "16:9" | "9:16";
+    isPoster: boolean;
+  } | null>(null);
 
   const handleUpdateAspectRatio = async (newAspectRatio: "16:9" | "9:16") => {
     try {
@@ -77,10 +78,12 @@ export default function ProjectDetailPage() {
 
   const handleGenerateThumbnail = async (
     aspectRatio: "16:9" | "9:16",
-    config: GenerationConfig
+    config: GenerationConfig,
+    isPoster: boolean = false
   ) => {
+    const key = `${aspectRatio}${isPoster ? "-poster" : ""}`;
     try {
-      setGeneratingThumbnails((prev) => ({ ...prev, [aspectRatio]: true }));
+      setGeneratingThumbnails((prev) => ({ ...prev, [key]: true }));
       setShowRegenModal(null);
       await api.generateThumbnail(
         projectId,
@@ -89,6 +92,7 @@ export default function ProjectDetailPage() {
         config.mode || "comfyui",
         config.workflow || "flux2",
         config.seed === "" ? undefined : config.seed,
+        isPoster
       );
       setImageVersion(Date.now());
       queryClient.invalidateQueries({ queryKey: ["project", projectId] });
@@ -97,7 +101,7 @@ export default function ProjectDetailPage() {
       console.error(`Failed to generate ${aspectRatio} thumbnail:`, error);
       alert("Failed to generate thumbnail. Please check the logs.");
     } finally {
-      setGeneratingThumbnails((prev) => ({ ...prev, [aspectRatio]: false }));
+      setGeneratingThumbnails((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -489,7 +493,7 @@ export default function ProjectDetailPage() {
                               variant="secondary"
                               size="sm"
                               className="gap-2 shadow-lg"
-                              onClick={() => setShowRegenModal("16:9")}
+                              onClick={() => setShowRegenModal({ aspect: "16:9", isPoster: false })}
                               disabled={generatingThumbnails["16:9"]}
                             >
                               {generatingThumbnails["16:9"] ? (
@@ -545,7 +549,7 @@ export default function ProjectDetailPage() {
                               variant="secondary"
                               size="sm"
                               className="gap-2 shadow-lg"
-                              onClick={() => setShowRegenModal("9:16")}
+                              onClick={() => setShowRegenModal({ aspect: "9:16", isPoster: false })}
                               disabled={generatingThumbnails["9:16"]}
                             >
                               {generatingThumbnails["9:16"] ? (
@@ -577,6 +581,76 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Movie Poster style Thumbnails */}
+                    {(project.story.poster_thumbnail_prompt_16_9 || project.story.poster_thumbnail_prompt_9_16) && (
+                      <div className="mt-6 pt-6 border-t border-border/50">
+                        <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
+                          Movie Poster Style Assets
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* 16:9 Poster */}
+                            <div className="flex flex-col gap-3 group">
+                              <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
+                                {project.poster_thumbnail_url ? (
+                                  <img
+                                    src={getMediaUrl(project.poster_thumbnail_url, imageVersion)}
+                                    alt="16:9 Poster"
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
+                                    <ImageIcon className="w-8 h-8 opacity-40 mb-2" />
+                                    <span className="text-sm font-medium">Coming Soon</span>
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="gap-2 shadow-lg"
+                                    onClick={() => setShowRegenModal({ aspect: "16:9", isPoster: true })}
+                                    disabled={generatingThumbnails["16:9-poster"]}
+                                  >
+                                    {generatingThumbnails["16:9-poster"] ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />} Generate
+                                  </Button>
+                                </div>
+                              </div>
+                              <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{project.story.poster_thumbnail_prompt_16_9}</p>
+                            </div>
+
+                            {/* 9:16 Poster */}
+                            <div className="flex flex-col gap-3 group">
+                              <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
+                                {project.poster_thumbnail_url_9_16 ? (
+                                  <img
+                                    src={getMediaUrl(project.poster_thumbnail_url_9_16, imageVersion)}
+                                    alt="9:16 Poster"
+                                    className="w-full h-full object-contain max-w-[56.25%] mx-auto bg-black"
+                                  />
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
+                                    <ImageIcon className="w-8 h-8 opacity-40 mb-2" />
+                                    <span className="text-sm font-medium">Coming Soon</span>
+                                  </div>
+                                )}
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="gap-2 shadow-lg"
+                                    onClick={() => setShowRegenModal({ aspect: "9:16", isPoster: true })}
+                                    disabled={generatingThumbnails["9:16-poster"]}
+                                  >
+                                    {generatingThumbnails["9:16-poster"] ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />} Generate
+                                  </Button>
+                                </div>
+                              </div>
+                              <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{project.story.poster_thumbnail_prompt_9_16}</p>
+                            </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -609,6 +683,15 @@ export default function ProjectDetailPage() {
                             <p className="text-xs text-muted-foreground">
                               {scene.location} • {scene.characters}
                             </p>
+                            {scene.background_image_path && (
+                              <div className="w-full aspect-video max-h-[300px] relative rounded-xl overflow-hidden bg-muted border border-border flex-shrink-0 shadow-md my-3 transition-all hover:scale-[1.01]">
+                                <img
+                                  src={getMediaUrl(scene.background_image_path, imageVersion)}
+                                  alt={`Scene ${idx + 1} Background`}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
                             {scene.set_prompt && (
                               <p className="text-xs text-muted-foreground mt-1 bg-secondary/10 p-1.5 rounded border border-border/20">
                                 <span className="font-semibold text-foreground/80">Set Prompt:</span> {scene.set_prompt}
@@ -620,16 +703,6 @@ export default function ProjectDetailPage() {
                               </div>
                             )}
                           </div>
-                          
-                          {scene.background_image_path && (
-                            <div className="w-24 h-24 sm:w-28 sm:h-28 relative rounded-lg overflow-hidden bg-muted border border-border flex-shrink-0 shadow-sm">
-                              <img
-                                src={getMediaUrl(scene.background_image_path, imageVersion)}
-                                alt={`Scene ${idx + 1} Background`}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          )}
                         </div>
                       </div>
                     ))}
@@ -721,11 +794,11 @@ export default function ProjectDetailPage() {
         onClose={() => setShowRegenModal(null)}
         type="image"
         projectId={projectId}
-        isPending={showRegenModal ? generatingThumbnails[showRegenModal] : false}
+        isPending={showRegenModal ? generatingThumbnails[`${showRegenModal.aspect}${showRegenModal.isPoster ? "-poster" : ""}`] : false}
         onSubmit={(config) => {
-          if (showRegenModal) handleGenerateThumbnail(showRegenModal, config);
+          if (showRegenModal) handleGenerateThumbnail(showRegenModal.aspect, config, showRegenModal.isPoster);
         }}
-        title={`Generate Thumbnail (${showRegenModal === "16:9" ? "Landscape" : "Portrait"})`}
+        title={`Generate ${showRegenModal?.isPoster ? "Poster" : "Selfie"} Thumbnail (${showRegenModal?.aspect === "16:9" ? "Landscape" : "Portrait"})`}
         hidePrompt={true}
       />
     </div>

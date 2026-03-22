@@ -489,8 +489,8 @@ export default function ProjectEditPage() {
                 {story.characters.map((character, idx) => (
                   <div key={idx} className="border border-border/50 rounded-xl p-5 bg-background shadow-sm hover:border-primary/30 transition-colors">
                     <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                       <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs">{idx + 1}</span>
-                       {character.name}
+                      <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs">{idx + 1}</span>
+                      {character.name}
                     </h3>
                     <CharacterReferenceUpload
                       character={character}
@@ -578,6 +578,7 @@ export default function ProjectEditPage() {
               shots={shots || []}
               projectId={projectId}
               scenes={project?.story?.scenes}
+              aspectRatio={project?.aspect_ratio || "16:9"}
             />
           </div>
 
@@ -760,7 +761,7 @@ export default function ProjectEditPage() {
         <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-0 overflow-hidden bg-card border-border">
           <DialogHeader className="p-4 border-b border-border/60 flex flex-row items-center justify-between">
             <DialogTitle>Project Media Gallery</DialogTitle>
-            
+
             <div className="flex items-center bg-muted/40 p-1 rounded-lg border shadow-sm mr-8">
               <button
                 onClick={() => setGalleryTab("images")}
@@ -786,11 +787,11 @@ export default function ProjectEditPage() {
                   <div className="col-span-full py-12 text-center text-muted-foreground">No images generated yet.</div>
                 )}
                 {allImages.map((img, i) => (
-                  <div
-                    key={i}
-                    onClick={() => setSelectedImageIndex(i)}
-                    className="relative aspect-video rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors shadow-sm"
-                  >
+                    <div
+                      key={i}
+                      onClick={() => setSelectedImageIndex(i)}
+                      className={`relative rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors shadow-sm ${project?.aspect_ratio === "9:16" ? "aspect-[9/16]" : "aspect-video"}`}
+                    >
                     <img src={getMediaUrl(img.path)} alt={img.label} className="object-cover w-full h-full" loading="lazy" />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
                       <span className="text-xs text-white font-medium">{img.label}</span>
@@ -810,7 +811,7 @@ export default function ProjectEditPage() {
                   <div
                     key={i}
                     onClick={() => setSelectedVideoIndex(i)}
-                    className="relative aspect-video rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors shadow-sm"
+                    className={`relative rounded-lg overflow-hidden border border-border/50 group bg-black/20 cursor-pointer hover:border-primary/50 transition-colors shadow-sm ${project?.aspect_ratio === "9:16" ? "aspect-[9/16]" : "aspect-video"}`}
                   >
                     {vid.poster ? (
                       <img src={getMediaUrl(vid.poster)} alt={vid.label} className="object-cover w-full h-full" loading="lazy" />
@@ -855,7 +856,7 @@ export default function ProjectEditPage() {
                 </button>
               )}
 
-              <div className="relative aspect-video w-full max-w-5xl max-h-[80vh] flex items-center justify-center bg-black rounded-lg overflow-hidden shadow-2xl">
+              <div className={`relative w-full max-w-5xl max-h-[80vh] flex items-center justify-center bg-black rounded-lg overflow-hidden shadow-2xl ${project?.aspect_ratio === "9:16" ? "aspect-[9/16]" : "aspect-video"}`}>
                 <video
                   src={getMediaUrl(allVideos[selectedVideoIndex].path)}
                   controls
@@ -900,7 +901,7 @@ export default function ProjectEditPage() {
                 </button>
               )}
 
-              <div className="relative aspect-video w-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-black/40 rounded-lg overflow-hidden border border-border/40">
+              <div className={`relative w-full max-w-6xl max-h-[80vh] flex items-center justify-center bg-black/40 rounded-lg overflow-hidden border border-border/40 ${project?.aspect_ratio === "9:16" ? "aspect-[9/16]" : "aspect-video"}`}>
                 <img
                   src={getMediaUrl(allImages[selectedImageIndex].path)}
                   alt={allImages[selectedImageIndex].label}

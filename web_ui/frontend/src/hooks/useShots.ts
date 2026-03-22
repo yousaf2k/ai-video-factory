@@ -59,8 +59,8 @@ export function useRegenerateVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX }: { shotIndex: number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean }) =>
-      api.regenerateShotVideo(projectId, shotIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX),
+    mutationFn: ({ shotIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo }: { shotIndex: number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean }) =>
+      api.regenerateShotVideo(projectId, shotIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -95,6 +95,7 @@ export function useBatchRegenerate(projectId: string) {
       image_mode?: string;
       image_workflow?: string;
       video_workflow?: string;
+      draft_low_res_video?: boolean;
     }) => api.batchRegenerate(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });

@@ -210,8 +210,8 @@ class GenerationService:
                 image_variant = None
 
             # Get project title
-            project_meta = self.project_manager.get_project(item.project_id)
-            project_title = project_meta.get('title', item.project_id) if project_meta else item.project_id
+            story = self.project_manager.get_story(item.project_id)
+            project_title = story.get('title', item.project_id) if story else item.project_id
 
             logger.info(f"ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}")
             print(f"[DEBUG] ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}", flush=True)
@@ -294,8 +294,8 @@ class GenerationService:
                 video_variant = None
 
             # Get project title
-            project_meta = self.project_manager.get_project(item.project_id)
-            project_title = project_meta.get('title', item.project_id) if project_meta else item.project_id
+            story = self.project_manager.get_story(item.project_id)
+            project_title = story.get('title', item.project_id) if story else item.project_id
 
             # Call regenerate_shot_video with overrides from the queue item
             await self.regenerate_shot_video(
@@ -306,7 +306,8 @@ class GenerationService:
                 video_workflow=item.video_workflow,
                 project_title=project_title,
                 video_variant=video_variant,
-                append_image_prompt=item.append_image_prompt
+                append_image_prompt=item.append_image_prompt,
+                draft_low_res_video=getattr(item, 'draft_low_res_video', False)
             )
 
             logger.info(f"Completed video generation for queue item {item.item_id}")
@@ -345,8 +346,8 @@ class GenerationService:
     async def _process_soundfx_generation(self, item: QueueItem):
         """Process sound FX generation for a queue item"""
         try:
-            project_meta = self.project_manager.get_project(item.project_id)
-            project_title = project_meta.get('title', item.project_id) if project_meta else item.project_id
+            story = self.project_manager.get_story(item.project_id)
+            project_title = story.get('title', item.project_id) if story else item.project_id
 
             await self.generate_soundfx(
                 item.project_id,
@@ -435,9 +436,9 @@ class GenerationService:
         Returns:
             QueueItem object
         """
-        # Get project metadata for display
-        project_meta = self.project_manager.get_project(project_id)
-        project_title = project_meta.get('title', project_id) if project_meta else project_id
+        # Get project title
+        story = self.project_manager.get_story(project_id)
+        project_title = story.get('title', project_id) if story else project_id
 
         # Extract shot details if available
         shot_id = shot.get('id') if shot else None
@@ -470,7 +471,8 @@ class GenerationService:
             image_variant=getattr(request, 'image_variant', None) if request else None,
             video_variant=getattr(request, 'video_variant', None) if request else None,
             append_image_prompt=getattr(request, 'append_image_prompt', None) if request else None,
-            generate_soundfx=getattr(request, 'generate_soundfx', False) if request else False
+            generate_soundfx=getattr(request, 'generate_soundfx', False) if request else False,
+            draft_low_res_video=getattr(request, 'draft_low_res_video', False) if request else False
         )
 
     def _get_queue_item_id(
@@ -1176,9 +1178,10 @@ class GenerationService:
                         
                         # Append framing instructions for reference image composition
                         edit_instructions = (
-                            "Remove the right side of the image showing the adult/now version of the person from this reference image. "
-                            "Make the left side the new younger/then version, looking directly into camera with happy, cheerful smiling expressions. "
-                            "No change in background, no side angle, no profile view, no tilt."
+                            "Remove only the person standing on the right side of this reference image. "
+                            "No change in background set or environment, no side angle, no profile view, no tilt."
+                            "Make the left person looking directly into camera in center of the frame with happy, cheerful smiling expressions. "
+                            "Do NOT remove or change any background crew members, equipment, or props. "
                         )
                         # Use edit instructions directly as the prompt to avoid mixing with LLM prompt
                         then_prompt = edit_instructions
@@ -1279,7 +1282,7 @@ class GenerationService:
         self, project_id: str, shot_index: int, force: bool = False,
         video_mode: Optional[str] = None, video_workflow: Optional[str] = None,
         project_title: Optional[str] = None, video_variant: str = None,
-        append_image_prompt: Optional[str] = None
+        append_image_prompt: Optional[str] = None, draft_low_res_video: bool = False
     ) -> str:
         """
         Regenerate video for a single shot
@@ -1311,7 +1314,8 @@ class GenerationService:
             if shot.get('is_flfi2v') and project_type == 2:
                 results = await self._regenerate_flfi2v_videos(
                     project_id, shot_index, shot, force,
-                    video_mode, video_workflow, project_title, video_variant
+                    video_mode, video_workflow, project_title, video_variant,
+                    draft_low_res_video=draft_low_res_video
                 )
                 # Return the meeting video path for backward compatibility
                 # (UI will use meeting_video_path/departure_video_path for FLFI2V shots)
@@ -1357,7 +1361,8 @@ class GenerationService:
                 video_mode,
                 video_workflow,
                 project_title,
-                append_image_prompt
+                append_image_prompt,
+                draft_low_res_video=draft_low_res_video
             )
 
             # Mark as rendered
@@ -1783,7 +1788,7 @@ class GenerationService:
     async def _regenerate_flfi2v_videos(
         self, project_id: str, shot_index: int, shot: dict,
         force: bool, video_mode: Optional[str], video_workflow: Optional[str],
-        project_title: Optional[str], video_variant: str
+        project_title: Optional[str], video_variant: str, draft_low_res_video: bool = False
     ) -> dict:
         """Regenerate meeting and/or departure videos for FLFI2V shot"""
         shots = self.project_manager.get_shots(project_id)
@@ -1848,7 +1853,8 @@ class GenerationService:
                         video_filename,
                         meeting_seed,
                         None,  # last_frame_image_path
-                        GenerationType.MEETING_VIDEO  # generation_type for queue tracking
+                        GenerationType.MEETING_VIDEO,  # generation_type for queue tracking
+                        draft_low_res_video=draft_low_res_video
                     )
 
                     shots[shot_index - 1]['meeting_video_rendered'] = True
@@ -1950,7 +1956,8 @@ class GenerationService:
                         video_filename,
                         departure_seed,
                         last_frame_image,
-                        GenerationType.DEPARTURE_VIDEO  # generation_type for queue tracking
+                        GenerationType.DEPARTURE_VIDEO,  # generation_type for queue tracking
+                        draft_low_res_video=draft_low_res_video
                     )
 
                     shots[shot_index - 1]['departure_video_rendered'] = True
@@ -2275,7 +2282,8 @@ class GenerationService:
 
     async def generate_thumbnail(
         self, project_id: str, aspect_ratio: str = "16:9", force: bool = False,
-        image_mode: str = None, image_workflow: str = None, seed: int = None
+        image_mode: str = None, image_workflow: str = None, seed: int = None,
+        is_poster: bool = False
     ) -> str:
         """Generate a thumbnail image for the project"""
         try:
@@ -2294,22 +2302,26 @@ class GenerationService:
                 import json
                 story = json.load(f)
                 
-            prompt = story.get(f'thumbnail_prompt_{aspect_ratio.replace(":", "_")}')
+            prompt_key = f'poster_thumbnail_prompt_{aspect_ratio.replace(":", "_")}' if is_poster else f'thumbnail_prompt_{aspect_ratio.replace(":", "_")}'
+            prompt = story.get(prompt_key)
             if not prompt:
                 prompt = story.get('title', project_meta.get('idea', 'A cinematic thumbnail'))
                 
             images_dir = self.project_manager.get_images_dir(project_id)
             os.makedirs(images_dir, exist_ok=True)
             
-            filename = f"thumbnail_{aspect_ratio.replace(':', '_')}.png"
+            prefix = "poster_thumbnail" if is_poster else "thumbnail"
+            filename = f"{prefix}_{aspect_ratio.replace(':', '_')}.png"
             image_path = os.path.join(images_dir, filename)
             
             if not force and os.path.exists(image_path):
-                if aspect_ratio == "16:9" and "thumbnail_url" not in project_meta:
-                    project_meta['thumbnail_url'] = f"/api/projects/{project_id}/images/{filename}"
+                key = 'poster_thumbnail_url' if is_poster else 'thumbnail_url'
+                key_916 = 'poster_thumbnail_url_9_16' if is_poster else 'thumbnail_url_9_16'
+                if aspect_ratio == "16:9" and key not in project_meta:
+                    project_meta[key] = f"/api/projects/{project_id}/images/{filename}"
                     self.project_manager._save_meta(project_id, project_meta)
-                elif aspect_ratio == "9:16" and "thumbnail_url_9_16" not in project_meta:
-                    project_meta['thumbnail_url_9_16'] = f"/api/projects/{project_id}/images/{filename}"
+                elif aspect_ratio == "9:16" and key_916 not in project_meta:
+                    project_meta[key_916] = f"/api/projects/{project_id}/images/{filename}"
                     self.project_manager._save_meta(project_id, project_meta)
                 return image_path
                 
@@ -2336,11 +2348,13 @@ class GenerationService:
                 step_progress_callback=on_step_progress
             )
             
+            key = 'poster_thumbnail_url' if is_poster else 'thumbnail_url'
+            key_916 = 'poster_thumbnail_url_9_16' if is_poster else 'thumbnail_url_9_16'
             if aspect_ratio == "16:9":
-                project_meta['thumbnail_url'] = f"/api/projects/{project_id}/images/{filename}"
+                project_meta[key] = f"/api/projects/{project_id}/images/{filename}"
                 self.project_manager._save_meta(project_id, project_meta)
             elif aspect_ratio == "9:16":
-                project_meta['thumbnail_url_9_16'] = f"/api/projects/{project_id}/images/{filename}"
+                project_meta[key_916] = f"/api/projects/{project_id}/images/{filename}"
                 self.project_manager._save_meta(project_id, project_meta)
 
             manager.broadcast_sync(project_id, {
@@ -2518,7 +2532,8 @@ class GenerationService:
                                video_mode: Optional[str] = None,
                                workflow_path: Optional[str] = None,
                                project_title: Optional[str] = None,
-                               append_image_prompt: Optional[str] = None) -> str:
+                               append_image_prompt: Optional[str] = None,
+                               draft_low_res_video: bool = False) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
@@ -2609,7 +2624,7 @@ class GenerationService:
 
             # Load and compile workflow for this shot
             shot_length = getattr(config, 'DEFAULT_SHOT_LENGTH', 5)
-            template = load_workflow(workflow_path, video_length_seconds=shot_length, aspect_ratio=aspect_ratio)
+            template = load_workflow(workflow_path, video_length_seconds=shot_length, aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video)
             wf = compile_workflow(template, shot, video_length_seconds=shot_length)
 
             # Submit to ComfyUI
@@ -2687,7 +2702,8 @@ class GenerationService:
         workflow_name: Optional[str], project_title: Optional[str],
         video_filename: str, seed: Optional[int] = None,
         last_frame_image_path: Optional[str] = None,
-        generation_type: GenerationType = None
+        generation_type: GenerationType = None,
+        draft_low_res_video: bool = False
     ) -> str:
         """Generate FLFI2V video for a single shot (synchronous)
 
@@ -2728,7 +2744,7 @@ class GenerationService:
         workflow_description = workflow_config.get('description', 'No description')
         logger.info(f"Using FLFI2V video workflow: {workflow_name} ({workflow_description})")
 
-        template = load_workflow(workflow_path, aspect_ratio=aspect_ratio)
+        template = load_workflow(workflow_path, aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video)
         wf = copy.deepcopy(template)
 
         # Get node IDs from config

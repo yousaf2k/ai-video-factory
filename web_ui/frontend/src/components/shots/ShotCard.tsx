@@ -48,6 +48,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import { cn, getMediaUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -75,6 +76,7 @@ interface ShotCardProps {
   onDelete?: () => void;
   viewModeOverride?: "image" | "video" | null;
   scenes?: any[];
+  aspectRatio?: string;
 }
 
 export function ShotCard({
@@ -93,6 +95,7 @@ export function ShotCard({
   onDelete,
   viewModeOverride,
   scenes,
+  aspectRatio = "16:9",
 }: ShotCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);
@@ -186,7 +189,7 @@ export function ShotCard({
   // For FLFI2V shots, construct array with THEN and NOW images
   const fsImages = (() => {
     if (shot.is_flfi2v && viewMode === "image") {
-      const filtered = (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`));
+      const filtered = (shot.image_paths ?? []).filter(p => activeImageMode === "then" ? p.includes("_then_") : !p.includes("_then_"));
       if (filtered.length > 0) return filtered;
       const activePath = activeImageMode === "then" ? shot.then_image_path : shot.now_image_path;
       return activePath ? [activePath] : [];
@@ -233,7 +236,7 @@ export function ShotCard({
     if (viewMode === "video") return shot.video_paths?.length ?? 0;
     if (viewMode === "soundfx") return 1;
     if (shot.is_flfi2v) {
-      return (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`)).length;
+      return (shot.image_paths ?? []).filter(p => activeImageMode === "then" ? p.includes("_then_") : !p.includes("_then_")).length;
     }
     return shot.image_paths?.length ?? 0;
   })();
@@ -513,11 +516,10 @@ export function ShotCard({
             <GripVertical className="w-4 h-4" />
           </button>
           {selectable && (
-            <input
-              type="checkbox"
+            <Checkbox
               checked={selected}
-              onChange={(e) => onSelectChange?.(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
+              onCheckedChange={(checked) => onSelectChange?.(checked === true)}
+              className="mr-1"
             />
           )}
           {showIndex && (
@@ -812,7 +814,7 @@ export function ShotCard({
               ? "✓"
               : "○"}
           </button>
-          
+
           {shot.soundfx_generated && (
             <button
               onClick={() => setViewMode("soundfx")}
@@ -833,7 +835,10 @@ export function ShotCard({
 
       {/* Media Preview */}
       <div className="mb-3 relative group">
-        <div className="aspect-video bg-muted rounded overflow-hidden flex items-center justify-center relative">
+        <div className={cn(
+          "bg-muted rounded overflow-hidden flex items-center justify-center relative",
+          aspectRatio === "9:16" ? "aspect-[9/16]" : "aspect-video"
+        )}>
           {isGenerating ? (
             <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm p-2 flex flex-col gap-1 z-10 text-xs text-white rounded-b-lg border-t border-white/10">
               <div className="flex items-center justify-between font-medium">
@@ -857,8 +862,8 @@ export function ShotCard({
                 </div>
               </div>
               <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
-                <div 
-                  className="bg-primary h-full transition-all duration-300 ease-in-out" 
+                <div
+                  className="bg-primary h-full transition-all duration-300 ease-in-out"
                   style={{ width: `${progress !== undefined ? progress : 0}%` }}
                 />
               </div>
@@ -1075,6 +1080,7 @@ export function ShotCard({
                 videoVariant,
                 appendImagePrompt: config.appendImagePrompt === "default" ? undefined : config.appendImagePrompt,
                 generateSoundFX: config.generateSoundFX || false,
+                draftLowResVideo: config.draftLowResVideo || false,
               });
               setViewMode("video");
               toast.info("Video regeneration started", {
@@ -1156,18 +1162,18 @@ export function ShotCard({
 
       {/* Media Gallery Modal */}
       {showGalleryModal && hasMultipleVariations && (() => {
-        const paths = viewMode === "video" 
-          ? (shot.video_paths ?? []) 
-          : (shot.is_flfi2v 
-              ? (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`)) 
-              : (shot.image_paths ?? []));
-              
-        const activePath = viewMode === "video" 
-          ? shot.video_path 
-          : (shot.is_flfi2v 
-              ? (activeImageMode === "then" ? shot.then_image_path : shot.now_image_path) 
-              : shot.image_path);
-              
+        const paths = viewMode === "video"
+          ? (shot.video_paths ?? [])
+          : (shot.is_flfi2v
+            ? (shot.image_paths ?? []).filter(p => activeImageMode === "then" ? p.includes("_then_") : !p.includes("_then_"))
+            : (shot.image_paths ?? []));
+
+        const activePath = viewMode === "video"
+          ? shot.video_path
+          : (shot.is_flfi2v
+            ? (activeImageMode === "then" ? shot.then_image_path : shot.now_image_path)
+            : shot.image_path);
+
         const mediaType = viewMode === "video" ? "Video" : "Image";
 
         return (
@@ -1200,7 +1206,10 @@ export function ShotCard({
                             : "border-transparent hover:border-muted-foreground/30",
                         )}
                       >
-                        <div className="aspect-video bg-muted flex items-center justify-center">
+                        <div className={cn(
+                          "bg-muted flex items-center justify-center",
+                          aspectRatio === "9:16" ? "aspect-[9/16]" : "aspect-video"
+                        )}>
                           {viewMode === "video" ? (
                             <video
                               src={cachedUrl}

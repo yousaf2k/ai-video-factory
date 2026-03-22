@@ -218,13 +218,14 @@ def calculate_image_dimensions(aspect_ratio=None, resolution=None):
     return _calculate_image_dims(aspect_ratio, resolution)
 
 
-def calculate_video_dimensions(aspect_ratio=None, resolution=None):
+def calculate_video_dimensions(aspect_ratio=None, resolution=None, draft_low_res_video=False):
     """
     Calculate video width and height from aspect ratio and resolution.
     
     Args:
         aspect_ratio: String like "16:9", "9:16", "1:1", "4:3", "3:4" (uses VIDEO_ASPECT_RATIO if None)
         resolution: String like "512", "720", "1024", "1080", "1280", "2048" (uses VIDEO_RESOLUTION if None)
+        draft_low_res_video: Generate at half resolution
     
     Returns:
         Tuple of (width, height) as integers
@@ -235,7 +236,7 @@ def calculate_video_dimensions(aspect_ratio=None, resolution=None):
         resolution = VIDEO_RESOLUTION
     
     from core.config_utils import calculate_video_dimensions as _calculate_video_dims
-    return _calculate_video_dims(aspect_ratio, resolution)
+    return _calculate_video_dims(aspect_ratio, resolution, draft_low_res_video=draft_low_res_video)
 
 # ==========================================
 # COMFYUI CONFIGURATION

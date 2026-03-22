@@ -105,7 +105,6 @@ def _wait_for_response_complete(page, timeout: int = 180):
             continue
         
         # Also check for the thinking/loading indicators
-        thinking = page.query_selector('.thoughts-header-button, .loading-indicator, .thinking-indicator')
         # The thinking button exists but check if actively spinning
         loading_dots = page.query_selector('div.loading-dots, span.loading')
         if loading_dots and loading_dots.is_visible():

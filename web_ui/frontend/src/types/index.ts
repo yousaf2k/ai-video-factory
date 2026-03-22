@@ -61,6 +61,8 @@ export interface Project {
   stats: ProjectStats;
   thumbnail_url?: string;
   thumbnail_url_9_16?: string;
+  poster_thumbnail_url?: string;
+  poster_thumbnail_url_9_16?: string;
   aspect_ratio?: string;
   story?: Story;
   shots?: Shot[];
@@ -77,6 +79,8 @@ export interface ProjectListItem {
   videos_rendered: number;
   thumbnail_url?: string;
   thumbnail_url_9_16?: string;
+  poster_thumbnail_url?: string;
+  poster_thumbnail_url_9_16?: string;
   aspect_ratio?: string;
   story?: Story;
 }
@@ -87,6 +91,8 @@ export interface Story {
   tags?: string[];
   thumbnail_prompt_16_9?: string;
   thumbnail_prompt_9_16?: string;
+  poster_thumbnail_prompt_16_9?: string;
+  poster_thumbnail_prompt_9_16?: string;
   style: string;
   master_script?: string;
   total_duration?: number;

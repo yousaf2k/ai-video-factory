@@ -101,6 +101,7 @@ class RegenerateVideoRequest(BaseModel):
     video_variant: Optional[str] = Field(default=None, description="Video variant for FLFI2V: 'meeting', 'departure', or 'both'")
     append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
+    draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
 
 
 class BatchRegenerateRequest(BaseModel):
@@ -118,6 +119,7 @@ class BatchRegenerateRequest(BaseModel):
     queue_setting: Optional[str] = Field(default="all_images_then_videos", description="Queue order: 'image_then_video' or 'all_images_then_videos'")
     append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
+    draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
 
 
 

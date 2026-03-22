@@ -61,9 +61,10 @@ interface ShotGridProps {
   shots: Shot[];
   projectId: string;
   scenes?: Scene[];
+  aspectRatio?: string;
 }
 
-export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
+export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<
     "image" | "video" | "both" | "narration" | null
@@ -637,7 +638,7 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
 
   return (
     <div className="relative">
-      <div className="flex flex-wrap items-center justify-between gap-y-2 mb-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-4">
         {/* Bulk Selection Toggle */}
         <div className="flex items-center gap-2">
           <button
@@ -700,7 +701,7 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
           Object.keys(shotProgress).length > 0) && (
             <button
               onClick={handleCancelAll}
-              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors ml-auto"
             >
               <XCircle className="w-4 h-4" />
               Cancel All Generation
@@ -995,9 +996,10 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
                         queuedIndices.has(shot.index) && !isCurrentlyGenerating;
                       return (
                         <ShotCard
-                          key={`${progressKey}-${shot.image_path}`}
+                          key={progressKey}
                           shot={shot}
                           projectId={projectId}
+                          aspectRatio={aspectRatio}
                           selectable={true}
                           selected={selectedIndices.includes(shot.index)}
                           onSelectChange={(selected: boolean) =>

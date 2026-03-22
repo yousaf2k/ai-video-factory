@@ -19,6 +19,7 @@ class GenerateThumbnailRequest(BaseModel):
     image_mode: Optional[str] = None
     image_workflow: Optional[str] = None
     seed: Optional[int] = None
+    is_poster: bool = False
 
 from web_ui.backend.services.project_service import ProjectService
 
@@ -270,7 +271,8 @@ async def generate_thumbnail(project_id: str, request: GenerateThumbnailRequest)
             force=request.force,
             image_mode=request.image_mode,
             image_workflow=request.image_workflow,
-            seed=request.seed
+            seed=request.seed,
+            is_poster=request.is_poster
         )
         
         filename = os.path.basename(image_path)

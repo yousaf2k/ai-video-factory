@@ -103,7 +103,7 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
 
             for node_id, node_data in api_format.items():
                 class_type = node_data.get("class_type", "")
-                if class_type == "EmptySD3LatentImage":
+                if class_type in ["EmptySD3LatentImage", "EmptyLatentImage"]:
                     node_data["inputs"]["width"] = width
                     node_data["inputs"]["height"] = height
                 elif class_type == "ModelSamplingFlux":
@@ -264,7 +264,7 @@ def _convert_workflow_to_api_format(workflow, width=None, height=None):
                 elif node_type == "RandomNoise":
                     if len(widgets) >= 1:
                         node_data["inputs"]["noise_seed"] = widgets[0]
-                elif node_type == "EmptySD3LatentImage":
+                elif node_type in ["EmptySD3LatentImage", "EmptyLatentImage"]:
                     if len(widgets) >= 3:
                         # Use config dimensions instead of hardcoded values
                         node_data["inputs"]["width"] = width

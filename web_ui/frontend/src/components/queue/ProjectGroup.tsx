@@ -65,9 +65,16 @@ export function ProjectGroup({
           )}
 
           {/* Project title */}
-          <span className="font-medium text-foreground">
-            {projectTitle}
-          </span>
+          <div className="flex flex-col items-start">
+            <span className="font-medium text-foreground">
+              {projectTitle}
+            </span>
+            {projectTitle !== projectId && (
+              <span className="text-xs text-muted-foreground mt-0.5">
+                {projectId}
+              </span>
+            )}
+          </div>
 
           {/* Badge with item count */}
           <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded-full text-xs font-medium">

@@ -22,6 +22,7 @@ export interface GenerationConfig {
   promptOverride?: string;
   appendImagePrompt?: string; // e.g. "default", "none", "start", "end"
   generateSoundFX?: boolean;
+  draftLowResVideo?: boolean;
 }
 
 interface GenerationDialogProps {
@@ -58,9 +59,9 @@ export function GenerationDialog({
   const [seed, setSeed] = useState<number | "">("");
   const [promptOverride, setPromptOverride] = useState(defaultPromptOverride);
 
-  // Video Specific State
   const [appendImagePrompt, setAppendImagePrompt] = useState("default");
   const [generateSoundFX, setGenerateSoundFX] = useState(false);
+  const [draftLowResVideo, setDraftLowResVideo] = useState(false);
 
   // Reset or initialize state
   useEffect(() => {
@@ -70,6 +71,7 @@ export function GenerationDialog({
       setPromptOverride(defaultPromptOverride);
       setAppendImagePrompt("default");
       setGenerateSoundFX(false);
+      setDraftLowResVideo(false);
       
       if (type === "image") {
         setMode("comfyui");
@@ -101,6 +103,7 @@ export function GenerationDialog({
       promptOverride: type === "image" ? promptOverride : undefined,
       appendImagePrompt: type === "video" ? appendImagePrompt : undefined,
       generateSoundFX: type === "video" ? generateSoundFX : undefined,
+      draftLowResVideo: type === "video" ? draftLowResVideo : undefined,
     });
   };
 
@@ -296,6 +299,19 @@ export function GenerationDialog({
                 />
                 <label htmlFor="regen-soundfx" className="text-sm">
                   🔊 Generate Sound FX after video
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Input
+                  type="checkbox"
+                  id="regen-lowres"
+                  checked={draftLowResVideo}
+                  onChange={(e) => setDraftLowResVideo(e.target.checked)}
+                  className="w-4 h-4 mr-2"
+                />
+                <label htmlFor="regen-lowres" className="text-sm">
+                  📉 Draft Low Res Video
                 </label>
               </div>
             </>

@@ -164,7 +164,6 @@ def _wait_for_response_complete(page, timeout: int = 180):
             continue
             
         # Also check for the thinking/loading indicators
-        thinking = page.query_selector('.thoughts-header-button, .loading-indicator, .thinking-indicator')
         loading_dots = page.query_selector('div.loading-dots, span.loading')
         spinner_selectors = [
             '.loading-indicator', '.response-loading', 'mat-progress-bar', 
@@ -173,9 +172,6 @@ def _wait_for_response_complete(page, timeout: int = 180):
         
         still_loading = False
         if loading_dots and loading_dots.is_visible():
-            still_loading = True
-        elif thinking and thinking.is_visible():
-            # Check if active or just exists
             still_loading = True
         else:
             for sel in spinner_selectors:

@@ -82,7 +82,7 @@ def calculate_image_dimensions(aspect_ratio="16:9", resolution="2048"):
     return width, height
 
 
-def calculate_video_dimensions(aspect_ratio="16:9", resolution="1280"):
+def calculate_video_dimensions(aspect_ratio="16:9", resolution="1280", draft_low_res_video=False):
     """
     Calculate video width and height from aspect ratio and resolution.
 
@@ -90,6 +90,7 @@ def calculate_video_dimensions(aspect_ratio="16:9", resolution="1280"):
         aspect_ratio: String like "16:9", "9:16", "1:1", "4:3", "3:4"
         resolution: String like "512", "720", "1024", "1080", "1280", "2048"
                    (width for landscape, height for portrait)
+        draft_low_res_video: Generate at half resolution rounded up to multiple of 16
 
     Returns:
         Tuple of (width, height) as integers
@@ -116,9 +117,16 @@ def calculate_video_dimensions(aspect_ratio="16:9", resolution="1280"):
         height = res
         width = int(res * ar_w / ar_h)
 
-    # Ensure dimensions are multiples of 8 (required by most AI models)
-    width = (width // 8) * 8
-    height = (height // 8) * 8
+    if draft_low_res_video:
+        # Halve resolution and round UP to next multiple of 16
+        width = width // 2
+        height = height // 2
+        width = ((width + 15) // 16) * 16
+        height = ((height + 15) // 16) * 16
+    else:
+        # Ensure dimensions are multiples of 8 (required by most AI models)
+        width = (width // 8) * 8
+        height = (height // 8) * 8
 
     return width, height
 
