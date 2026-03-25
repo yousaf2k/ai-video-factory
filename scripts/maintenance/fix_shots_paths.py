@@ -129,7 +129,8 @@ if __name__ == "__main__":
         project_path = sys.argv[1]
     else:
         # Default to the project mentioned in the error
-        project_path = r"E:\output\projects\project_20260314_020256"
+        import config
+        project_path = config.resolve_path(os.path.join("projects", "project_20260314_020256"))
 
     print(f"Fixing paths in: {project_path}")
     fix_shot_paths(project_path)

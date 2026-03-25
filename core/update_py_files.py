@@ -38,7 +38,7 @@ def update_file_content(file_path):
     return False
 
 def main():
-    root_dir = r"c:\AI\ai_video_factory_v1"
+    root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     updated_files = []
 
     for dirpath, dirnames, filenames in os.walk(root_dir):

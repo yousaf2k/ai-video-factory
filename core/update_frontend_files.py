@@ -1,13 +1,14 @@
 import os
 
 # List of files containing /api/projects that need to be updated
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 files_to_update = [
-    r"c:\AI\ai_video_factory_v1\web_ui\frontend\src\services\api.ts",
-    r"c:\AI\ai_video_factory_v1\web_ui\frontend\src\lib\utils.ts",
-    r"c:\AI\ai_video_factory_v1\web_ui\frontend\src\components\scenes\SceneCard.tsx",
-    r"c:\AI\ai_video_factory_v1\web_ui\frontend\src\components\scenes\SceneBackgroundManager.tsx",
-    r"c:\AI\ai_video_factory_v1\web_ui\frontend\src\components\queue\QueueItem.tsx",
-    r"c:\AI\ai_video_factory_v1\web_ui\frontend\src\components\characters\CharacterReferenceUpload.tsx"
+    os.path.join(project_root, "web_ui", "frontend", "src", "services", "api.ts"),
+    os.path.join(project_root, "web_ui", "frontend", "src", "lib", "utils.ts"),
+    os.path.join(project_root, "web_ui", "frontend", "src", "components", "scenes", "SceneCard.tsx"),
+    os.path.join(project_root, "web_ui", "frontend", "src", "components", "scenes", "SceneBackgroundManager.tsx"),
+    os.path.join(project_root, "web_ui", "frontend", "src", "components", "queue", "QueueItem.tsx"),
+    os.path.join(project_root, "web_ui", "frontend", "src", "components", "characters", "CharacterReferenceUpload.tsx")
 ]
 
 for path in files_to_update:

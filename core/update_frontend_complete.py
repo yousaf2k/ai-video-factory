@@ -1,7 +1,7 @@
 import os
 import re
 
-base_dir = r"c:\AI\ai_video_factory_v1\web_ui\frontend\src"
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "web_ui", "frontend", "src"))
 
 def replace_in_file(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:

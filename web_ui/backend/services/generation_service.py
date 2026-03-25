@@ -1113,7 +1113,9 @@ class GenerationService:
                     if set_prompt:
                         now_prompt = f"{now_prompt}. Background: {set_prompt}"
                     
-                    with open(r"E:\output\debug_now_prompt.txt", "w", encoding="utf-8") as f:
+                    import config
+                    debug_file = config.resolve_path("debug_now_prompt.txt")
+                    with open(debug_file, "w", encoding="utf-8") as f:
                         f.write(f"PROMPT OVERRIDE: {prompt_override}\n")
                         f.write(f"SET PROMPT: {set_prompt}\n")
                         f.write(f"FINAL NOW PROMPT: {now_prompt}\n")
@@ -1198,7 +1200,9 @@ class GenerationService:
                     })
                 except Exception as e:
                     import traceback
-                    with open(r"E:\output\debug_now_prompt.txt", "a", encoding="utf-8") as f:
+                    import config
+                    debug_file = config.resolve_path("debug_now_prompt.txt")
+                    with open(debug_file, "a", encoding="utf-8") as f:
                         f.write(f"\n[EXCEPTION DURING NOW GENERATION]\n")
                         f.write(f"Error: {e}\n")
                         f.write(traceback.format_exc())

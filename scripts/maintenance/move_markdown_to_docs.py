@@ -10,7 +10,7 @@ def move_markdown_files():
     """Move all .md files from root to docs/ directory"""
 
     # Define paths
-    project_root = Path(r'C:\AI\ai_video_factory')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     docs_dir = project_root / 'docs'
 
     # Create docs directory if it doesn't exist
