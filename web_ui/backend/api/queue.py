@@ -131,8 +131,6 @@ async def reorder_queue(request: ReorderRequest):
 async def cancel_queue_item(item_id: str):
     """
     Cancel a specific queue item.
-
-    If the item is currently active, an interrupt will be sent to ComfyUI.
     """
     try:
         # If the item is active, we need to know BEFORE we change its status
@@ -143,10 +141,12 @@ async def cancel_queue_item(item_id: str):
         if not success:
             raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
 
-        # If item was active, interrupt ComfyUI generation
         if is_active:
-            from core.comfy_client import interrupt_generation
-            interrupt_generation()
+            from web_ui.backend.services.generation_service import get_generation_service
+            gen_service = get_generation_service()
+            if gen_service.is_item_running(item_id) and gen_service.get_item_engine(item) == 'comfyui':
+                from core.comfy_client import interrupt_generation
+                interrupt_generation()
 
         return {"message": "Item cancelled successfully"}
     except HTTPException:
@@ -159,8 +159,6 @@ async def cancel_queue_item(item_id: str):
 async def pause_queue_item(item_id: str):
     """
     Pause a specific queue item.
-
-    If the item is currently active, an interrupt will be sent to ComfyUI.
     """
     try:
         item = queue_service.get_item(item_id)
@@ -170,10 +168,12 @@ async def pause_queue_item(item_id: str):
         if not success:
             raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
 
-        # If item was active, interrupt ComfyUI generation
         if is_active:
-            from core.comfy_client import interrupt_generation
-            interrupt_generation()
+            from web_ui.backend.services.generation_service import get_generation_service
+            gen_service = get_generation_service()
+            if gen_service.is_item_running(item_id) and gen_service.get_item_engine(item) == 'comfyui':
+                from core.comfy_client import interrupt_generation
+                interrupt_generation()
 
         return {"message": "Item paused successfully"}
     except HTTPException:
@@ -230,7 +230,10 @@ async def bulk_pause_items(request: BulkActionRequest):
     """
     try:
         paused_count = 0
-        active_interrupted = False
+        comfyui_interrupted = False
+
+        from web_ui.backend.services.generation_service import get_generation_service
+        gen_service = get_generation_service()
 
         for item_id in request.item_ids:
             item = queue_service.get_item(item_id)
@@ -238,10 +241,10 @@ async def bulk_pause_items(request: BulkActionRequest):
                 is_active = item.status == QueueItemStatus.ACTIVE
                 if queue_service.mark_paused(item_id):
                     paused_count += 1
-                    if is_active:
-                        active_interrupted = True
+                    if is_active and gen_service.is_item_running(item_id) and gen_service.get_item_engine(item) == 'comfyui':
+                        comfyui_interrupted = True
 
-        if active_interrupted:
+        if comfyui_interrupted:
             from core.comfy_client import interrupt_generation
             interrupt_generation()
 

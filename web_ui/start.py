@@ -15,6 +15,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import config
 
 
+def ensure_base_directories():
+    """Ensure all required base directories exist"""
+    base_dirs = [
+        getattr(config, 'ABS_OUTPUT_DIR', 'output'),
+        getattr(config, 'LOG_DIR', 'logs'),
+        os.path.join(getattr(config, 'ABS_OUTPUT_DIR', 'output'), "images"),
+        os.path.join(getattr(config, 'ABS_OUTPUT_DIR', 'output'), "videos")
+    ]
+    
+    for directory in base_dirs:
+        if not os.path.exists(directory):
+            print(f"Creating directory: {directory}")
+            os.makedirs(directory, exist_ok=True)
+
+
 def check_port_available(port):
     """Check if a port is available"""
     import socket
@@ -79,6 +94,9 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Ensure all base directories exist
+    ensure_base_directories()
 
     # Check if both options are provided
     if args.backend_only and args.frontend_only:

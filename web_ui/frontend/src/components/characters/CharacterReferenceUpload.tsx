@@ -115,6 +115,22 @@ export default function CharacterReferenceUpload({
         </span>
       </div>
 
+      {/* Age Display */}
+      {(character.then_age || character.now_age) && (
+        <div className="flex gap-2">
+          {character.then_age && (
+            <div className="text-xs font-medium px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+              Then: {character.then_age} years
+            </div>
+          )}
+          {character.now_age && (
+            <div className="text-xs font-medium px-2 py-1 rounded bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">
+              Now: {character.now_age} years
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         {/* THEN Reference */}
         <div className="space-y-2">

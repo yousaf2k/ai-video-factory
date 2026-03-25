@@ -74,8 +74,13 @@ export function GenerationDialog({
       setDraftLowResVideo(false);
       
       if (type === "image") {
-        setMode("comfyui");
-        if (globalConfig?.available_image_workflows?.length) {
+        const savedImageMode = localStorage.getItem(`image_mode_${projectId}`) || "comfyui";
+        setMode(savedImageMode);
+        
+        const savedImageWf = localStorage.getItem(`image_workflow_${projectId}`);
+        if (savedImageWf && (!globalConfig?.available_image_workflows || globalConfig.available_image_workflows.includes(savedImageWf))) {
+          setWorkflow(savedImageWf);
+        } else if (globalConfig?.available_image_workflows?.length) {
           setWorkflow(globalConfig.available_image_workflows[0]);
         } else {
           setWorkflow("flux2");
@@ -83,11 +88,24 @@ export function GenerationDialog({
       } else {
         const savedVideoMode = localStorage.getItem(`video_mode_${projectId}`) || "comfyui";
         setMode(savedVideoMode);
-        if (globalConfig?.available_video_workflows?.length) {
+        
+        const savedVideoWf = localStorage.getItem(`video_workflow_${projectId}`);
+        if (savedVideoWf && (!globalConfig?.available_video_workflows || globalConfig.available_video_workflows.includes(savedVideoWf))) {
+          setWorkflow(savedVideoWf);
+        } else if (globalConfig?.available_video_workflows?.length) {
           setWorkflow(globalConfig.available_video_workflows[0]);
         } else {
           setWorkflow("wan22");
         }
+        
+        const savedAppend = localStorage.getItem(`video_append_${projectId}`);
+        if (savedAppend) setAppendImagePrompt(savedAppend);
+        
+        const savedSoundFX = localStorage.getItem(`video_soundfx_${projectId}`);
+        if (savedSoundFX) setGenerateSoundFX(savedSoundFX === "true");
+        
+        const savedDraft = localStorage.getItem(`video_draft_${projectId}`);
+        if (savedDraft) setDraftLowResVideo(savedDraft === "true");
       }
     }
   }, [isOpen, type, projectId, globalConfig]);
@@ -141,7 +159,13 @@ export function GenerationDialog({
                 <label className="block text-xs font-medium text-muted-foreground mb-1">
                   Generation Mode
                 </label>
-                <Select value={mode} onValueChange={setMode}>
+                <Select
+                  value={mode}
+                  onValueChange={(val) => {
+                    setMode(val);
+                    localStorage.setItem(`image_mode_${projectId}`, val);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select Mode" />
                   </SelectTrigger>
@@ -161,7 +185,13 @@ export function GenerationDialog({
                     <label className="block text-xs font-medium text-muted-foreground mb-1">
                       Workflow
                     </label>
-                    <Select value={workflow} onValueChange={setWorkflow}>
+                    <Select
+                      value={workflow}
+                      onValueChange={(val) => {
+                        setWorkflow(val);
+                        localStorage.setItem(`image_workflow_${projectId}`, val);
+                      }}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select Workflow" />
                       </SelectTrigger>
@@ -255,7 +285,13 @@ export function GenerationDialog({
                   <label className="block text-xs font-medium text-muted-foreground mb-1">
                     Video Workflow
                   </label>
-                  <Select value={workflow} onValueChange={setWorkflow}>
+                  <Select
+                    value={workflow}
+                    onValueChange={(val) => {
+                      setWorkflow(val);
+                      localStorage.setItem(`video_workflow_${projectId}`, val);
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select Video Workflow" />
                     </SelectTrigger>
@@ -276,7 +312,13 @@ export function GenerationDialog({
                 <label className="block text-[10px] font-medium text-muted-foreground mb-1">
                   Append Image Prompt to Motion Prompt
                 </label>
-                <Select value={appendImagePrompt} onValueChange={setAppendImagePrompt}>
+                <Select
+                  value={appendImagePrompt}
+                  onValueChange={(val) => {
+                    setAppendImagePrompt(val);
+                    localStorage.setItem(`video_append_${projectId}`, val);
+                  }}
+                >
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue placeholder="Select Position" />
                   </SelectTrigger>
@@ -294,7 +336,10 @@ export function GenerationDialog({
                   type="checkbox"
                   id="regen-soundfx"
                   checked={generateSoundFX}
-                  onChange={(e) => setGenerateSoundFX(e.target.checked)}
+                  onChange={(e) => {
+                    setGenerateSoundFX(e.target.checked);
+                    localStorage.setItem(`video_soundfx_${projectId}`, e.target.checked.toString());
+                  }}
                   className="w-4 h-4 mr-2"
                 />
                 <label htmlFor="regen-soundfx" className="text-sm">
@@ -307,7 +352,10 @@ export function GenerationDialog({
                   type="checkbox"
                   id="regen-lowres"
                   checked={draftLowResVideo}
-                  onChange={(e) => setDraftLowResVideo(e.target.checked)}
+                  onChange={(e) => {
+                    setDraftLowResVideo(e.target.checked);
+                    localStorage.setItem(`video_draft_${projectId}`, e.target.checked.toString());
+                  }}
                   className="w-4 h-4 mr-2"
                 />
                 <label htmlFor="regen-lowres" className="text-sm">

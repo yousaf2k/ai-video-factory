@@ -132,11 +132,13 @@ class ReplanShotsRequest(BaseModel):
 class SelectImageRequest(BaseModel):
     """Request to select a specific image as the active one for a shot"""
     image_path: str = Field(..., description="Path of the image to set as active")
+    variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then' or 'now'")
 
 
 class SelectVideoRequest(BaseModel):
     """Request to select a specific video as the active one for a shot"""
     video_path: str = Field(..., description="Path of the video to set as active")
+    variant: Optional[str] = Field(default=None, description="Video variant for FLFI2V: 'meeting' or 'departure'")
 
 
 class RemoveWatermarkRequest(BaseModel):

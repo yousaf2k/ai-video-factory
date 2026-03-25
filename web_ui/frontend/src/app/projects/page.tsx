@@ -70,7 +70,7 @@ export default function ProjectsPage() {
   const [totalDuration, setTotalDuration] = useState(600);
   const [promptsFile, setPromptsFile] = useState("");
   const [usePromptsFile, setUsePromptsFile] = useState(false);
-  const [selectedAspectRatio, setSelectedAspectRatio] = useState<"16:9" | "9:16">("16:9");
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<"16:9" | "9:16" | "21:8">("16:9");
   const [generatingThumbnails, setGeneratingThumbnails] = useState<
     Record<string, boolean>
   >({});
@@ -480,13 +480,14 @@ export default function ProjectsPage() {
                       </label>
                       <Select
                         value={selectedAspectRatio}
-                        onValueChange={(val) => setSelectedAspectRatio(val as "16:9" | "9:16")}
+                        onValueChange={(val) => setSelectedAspectRatio(val as "16:9" | "9:16" | "21:8")}
                       >
                         <SelectTrigger className="bg-background">
                           <SelectValue placeholder="Select Aspect Ratio" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="16:9">16:9 (Landscape - YouTube)</SelectItem>
+                          <SelectItem value="21:8">21:8 (Cinematic Ultrawide)</SelectItem>
                           <SelectItem value="9:16">9:16 (Portrait - TikTok/Reels)</SelectItem>
                         </SelectContent>
                       </Select>

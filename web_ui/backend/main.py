@@ -96,14 +96,15 @@ async def websocket_endpoint(websocket: WebSocket, project_id: str):
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
-    with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "w") as f: f.write("[DEBUG] Startup: event triggered\n")
+    import config
+    debug_file = config.resolve_path("startup_debug.txt")
+    with open(debug_file, "w") as f: f.write("[DEBUG] Startup: event triggered\n")
     print("[DEBUG] Startup: Event triggered")
     print("[DEBUG] Startup: Initializing ConnectionManager")
     from web_ui.backend.websocket.manager import manager
     manager.set_loop(asyncio.get_running_loop())
 
     print("[DEBUG] Startup: Ensuring output directories exist")
-    import config
     projects_dir = config.ABS_PROJECTS_DIR
     os.makedirs(projects_dir, exist_ok=True)
     
@@ -122,7 +123,8 @@ async def startup_event():
     print("[DEBUG] Startup: Scheduled deferred queue processor start")
     logger.info("Generation Queue Processor started on startup")
     
-    with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "a") as f: f.write("[DEBUG] Startup: Completed startup_event\n")
+    debug_file = config.resolve_path("startup_debug.txt")
+    with open(debug_file, "a") as f: f.write("[DEBUG] Startup: Completed startup_event\n")
     
     # Note: Projects assets (images/videos) are now served dynamically 
     # via endpoints in projects.py to support newly created projects

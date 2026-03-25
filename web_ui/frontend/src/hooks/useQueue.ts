@@ -20,6 +20,15 @@ interface UseQueueOptions {
   enabled?: boolean;
 }
 
+const recentNotifications = new Set<string>();
+
+const debounceToast = (key: string, fn: () => void) => {
+  if (recentNotifications.has(key)) return;
+  recentNotifications.add(key);
+  setTimeout(() => recentNotifications.delete(key), 1000);
+  fn();
+};
+
 export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
@@ -155,13 +164,15 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     // Show toast notifications for important events
     switch (message.type) {
       case 'queue.item_failed':
-        toast.error(`Generation failed: ${message.data.error_message || 'Unknown error'}`);
+        debounceToast(`failed-${message.data?.item_id || 'all'}`, () => {
+          toast.error(`Generation failed: ${message.data?.error_message || 'Unknown error'}`);
+        });
         break;
       case 'queue.paused':
-        toast.info('Queue paused');
+        debounceToast('paused', () => toast.info('Queue paused'));
         break;
       case 'queue.resumed':
-        toast.info('Queue resumed');
+        debounceToast('resumed', () => toast.info('Queue resumed'));
         break;
     }
   }, [queryClient, projectId]);

@@ -83,6 +83,11 @@ class QueueService:
 
                 # Clean up completed/cancelled/failed items on startup
                 # (keep them for statistics but don't reprocess)
+                for item in self._queue:
+                    if item.status == QueueItemStatus.ACTIVE:
+                        logger.info(f"Resetting orphan active item {item.item_id} to QUEUED on startup")
+                        item.status = QueueItemStatus.QUEUED
+
                 logger.info(f"Loaded {len(self._queue)} items from {self._persistence_path}")
             else:
                 logger.info("No existing queue state found, starting fresh")
@@ -170,7 +175,7 @@ class QueueService:
 
             # Broadcast statistics update
             self._broadcast_statistics()
-            # self._save_queue()
+            self._save_queue()
 
             logger.info(f"Added {len(items)} items to queue")
             return items
@@ -194,7 +199,7 @@ class QueueService:
                         'data': {'item_id': item_id}
                     })
                     self._broadcast_statistics()
-                    # self._save_queue()
+                    self._save_queue()
                     logger.info(f"Removed item {item_id} from queue")
                     return True
             return False
@@ -223,7 +228,7 @@ class QueueService:
                             'priority': request.priority
                         }
                     })
-                    # self._save_queue()
+                    self._save_queue()
                     logger.info(f"Updated priority for item {item_id} to {request.priority}")
                     return True
             return False
@@ -262,7 +267,7 @@ class QueueService:
                 'type': 'queue.reordered',
                 'data': {'item_ids': request.item_ids}
             })
-            # self._save_queue()
+            self._save_queue()
             logger.info(f"Reordered queue with {len(request.item_ids)} items")
             return True
 
@@ -319,7 +324,7 @@ class QueueService:
                 if item.item_id == item_id and item.status == QueueItemStatus.QUEUED:
                     item.status = QueueItemStatus.ACTIVE
                     item.started_at = datetime.utcnow()
-                    # self._save_queue()
+                    self._save_queue()
 
                     manager.broadcast_sync('global', {
                         'type': 'queue.item_started',
@@ -347,7 +352,7 @@ class QueueService:
                     item.status = QueueItemStatus.COMPLETED
                     item.completed_at = datetime.utcnow()
                     item.progress = progress
-                    # self._save_queue()
+                    self._save_queue()
 
                     manager.broadcast_sync('global', {
                         'type': 'queue.item_completed',
@@ -379,6 +384,7 @@ class QueueService:
                         'data': item.model_dump(mode='json')
                     })
                     self._broadcast_statistics()
+                    self._save_queue()
                     logger.info(f"Marked item {item_id} as cancelled")
                     return True
             return False
@@ -407,6 +413,7 @@ class QueueService:
                         'data': item.model_dump(mode='json')
                     })
                     self._broadcast_statistics()
+                    self._save_queue()
                     logger.info(f"Marked item {item_id} as paused")
                     return True
             return False
@@ -434,6 +441,7 @@ class QueueService:
                         'data': item.model_dump(mode='json')
                     })
                     self._broadcast_statistics()
+                    self._save_queue()
                     logger.warning(f"Marked item {item_id} as failed: {error_message}")
                     return True
             return False
@@ -488,6 +496,7 @@ class QueueService:
                         'data': item.model_dump(mode='json')
                     })
                     self._broadcast_statistics()
+                    self._save_queue()
                     logger.info(f"Requeued item {item_id}")
                     return True
             return False
@@ -512,6 +521,7 @@ class QueueService:
                         'data': item.model_dump(mode='json')
                     })
                     self._broadcast_statistics()
+                    self._save_queue()
                     logger.info(f"Resumed item {item_id}")
                     return True
             return False
@@ -578,6 +588,7 @@ class QueueService:
                     'data': {'count': removed_count}
                 })
                 self._broadcast_statistics()
+                self._save_queue()
                 logger.info(f"Cleared {removed_count} completed items from queue")
 
             return removed_count
@@ -603,6 +614,7 @@ class QueueService:
                     'data': {'count': removed_count}
                 })
                 self._broadcast_statistics()
+                self._save_queue()
                 logger.info(f"Cleared {removed_count} failed items from queue")
 
             return removed_count
@@ -628,6 +640,7 @@ class QueueService:
                     'data': {'count': removed_count}
                 })
                 self._broadcast_statistics()
+                self._save_queue()
                 logger.info(f"Cleared {removed_count} cancelled items from queue")
 
             return removed_count

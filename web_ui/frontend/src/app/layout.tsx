@@ -54,7 +54,7 @@ export default function RootLayout({
             </main>
           </div>
           <Toaster
-            position="top-right"
+            position="bottom-right"
             toastOptions={{
               style: {
                 border: "2px solid",

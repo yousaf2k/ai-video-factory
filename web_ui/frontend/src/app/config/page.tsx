@@ -5,9 +5,10 @@
 
 import { useState, useEffect } from "react";
 import { useConfig, useUpdateConfig } from "@/hooks/useAgents";
-import { Save, RefreshCw } from "lucide-react";
+import { Save, RefreshCw, ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/select";
 
 export default function ConfigPage() {
+  const router = useRouter();
   const { data: config, isLoading, error } = useConfig();
   const updateConfigMutation = useUpdateConfig();
 
@@ -31,6 +33,7 @@ export default function ConfigPage() {
     gemini_api_key: "",
     openai_api_key: "",
     elevenlabs_api_key: "",
+    playwright_browser: "",
   });
 
   useEffect(() => {
@@ -46,6 +49,7 @@ export default function ConfigPage() {
         gemini_api_key: "", // Don't populate sensitive keys from GET
         openai_api_key: "",
         elevenlabs_api_key: "",
+        playwright_browser: config.playwright_browser || "chromium",
       });
     }
   }, [config]);
@@ -84,18 +88,26 @@ export default function ConfigPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Global Configuration</h1>
-        <p className="text-muted-foreground">
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="max-w-2xl mx-auto mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h1 className="text-3xl font-bold">Global Configuration</h1>
+        </div>
+        <p className="text-muted-foreground ml-12">
           System-wide settings for the AI Video Factory
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-2xl space-y-8">
+      <form onSubmit={handleSubmit} className="max-w-2xl mx-auto space-y-8">
         {/* Core Settings */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold border-b pb-2">Core Settings</h2>
+        <section className="bg-card border border-border/50 rounded-xl p-6 shadow-sm space-y-4 backdrop-blur-md">
+          <h2 className="text-xl font-bold flex items-center gap-2 border-b pb-3">
+            <span className="w-2 h-6 bg-primary rounded-full" />
+            Core Settings
+          </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -123,6 +135,31 @@ export default function ConfigPage() {
 
             <div>
               <label className="block text-sm font-medium mb-1">
+                Playwright Browser (GeminiWeb)
+              </label>
+              <Select
+                value={formData.playwright_browser}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, playwright_browser: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Browser" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="chromium">Chromium (Default)</SelectItem>
+                  <SelectItem value="chrome">Google Chrome</SelectItem>
+                  <SelectItem value="msedge">Microsoft Edge</SelectItem>
+                  <SelectItem value="firefox">Firefox</SelectItem>
+                  <SelectItem value="webkit">WebKit (Safari)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/30 pt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
                 Image Mode
               </label>
               <Select
@@ -143,9 +180,7 @@ export default function ConfigPage() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">
                 Image Workflow (ComfyUI)
@@ -168,7 +203,9 @@ export default function ConfigPage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/30 pt-4">
             <div>
               <label className="block text-sm font-medium mb-1">
                 Video Mode
@@ -183,7 +220,6 @@ export default function ConfigPage() {
                   <SelectValue placeholder="Select Video Mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* Later on, we can add Luma/Minimax etc. For now ComfyUI is the primary */}
                   <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
                   <SelectItem value="geminiweb">GeminiWeb (Browser)</SelectItem>
                   <SelectItem value="flowweb">FlowWeb (Browser)</SelectItem>
@@ -215,40 +251,45 @@ export default function ConfigPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              ComfyUI URL
-            </label>
-            <Input
-              type="text"
-              value={formData.comfy_url}
-              onChange={(e) =>
-                setFormData({ ...formData, comfy_url: e.target.value })
-              }
-              placeholder="http://127.0.0.1:8188"
-            />
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/30 pt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                ComfyUI URL
+              </label>
+              <Input
+                type="text"
+                value={formData.comfy_url}
+                onChange={(e) =>
+                  setFormData({ ...formData, comfy_url: e.target.value })
+                }
+                placeholder="http://127.0.0.1:8188"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Default Target Video Length (seconds)
-            </label>
-            <Input
-              type="number"
-              value={formData.target_video_length}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  target_video_length: parseInt(e.target.value),
-                })
-              }
-            />
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Default Target Video Length (seconds)
+              </label>
+              <Input
+                type="number"
+                value={formData.target_video_length}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    target_video_length: parseInt(e.target.value),
+                  })
+                }
+              />
+            </div>
           </div>
         </section>
 
         {/* API Keys */}
-        <section className="space-y-4">
-          <h2 className="text-xl font-semibold border-b pb-2">API Keys</h2>
+        <section className="bg-card border border-border/50 rounded-xl p-6 shadow-sm space-y-4 backdrop-blur-md">
+          <h2 className="text-xl font-bold flex items-center gap-2 border-b pb-3">
+            <span className="w-2 h-6 bg-accent rounded-full" />
+            API Keys
+          </h2>
           <p className="text-xs text-muted-foreground italic">
             Note: Keys are saved to the .env file. Leave blank to keep existing
             values.

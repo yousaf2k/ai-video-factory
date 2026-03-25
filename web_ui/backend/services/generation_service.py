@@ -58,6 +58,9 @@ class GenerationService:
         # Track active queue items for progress updates
         # Maps (project_id, shot_index, generation_type) -> item_id
         self.active_queue_items: dict[str, str] = {}
+        
+        # Tracks true executing python-side tasks
+        self.running_item_ids: set[str] = set()
 
         # Queue processor state
         self._queue_processor_running = False
@@ -65,13 +68,30 @@ class GenerationService:
         self._queue_processor_started = False
         self._queue_processor_thread: Optional[threading.Thread] = None # New thread object
 
+    def is_item_running(self, item_id: str) -> bool:
+        """Check if an item is physically doing backend work right now"""
+        return item_id in getattr(self, 'running_item_ids', set())
+
+    @staticmethod
+    def get_item_engine(item: QueueItem) -> str:
+        """Resolve which engine will process this item"""
+        import config
+        if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]:
+            return item.image_mode or getattr(config, 'IMAGE_GENERATION_MODE', 'comfyui')
+        elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
+            return item.video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
+        elif item.generation_type == GenerationType.NARRATION:
+            return getattr(config, 'TTS_METHOD', 'local')
+        return 'other'
+
     def _get_relative_path(self, path: str) -> str:
         """Convert absolute path to relative format using ProjectManager utility"""
         return self.project_manager._relativize_path(path)
 
     def _ensure_queue_processor_started(self):
         """Ensure background task is running"""
-        # with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "a") as f: f.write("[DEBUG] inside _ensure_queue_processor_started\n")
+        # debug_file = config.resolve_path("startup_debug.txt")
+        # with open(debug_file, "a") as f: f.write("[DEBUG] inside _ensure_queue_processor_started\n")
 
         if self._queue_processor_started:
             return
@@ -99,7 +119,8 @@ class GenerationService:
         """Background loop that processes queue items with concurrency limit"""
         import config
 
-        with open(r"c:\AI\ai_video_factory_v1\startup_debug.txt", "a") as f: f.write("[DEBUG] loop: started\n")
+        debug_file = config.resolve_path("startup_debug.txt")
+        with open(debug_file, "a") as f: f.write("[DEBUG] loop: started\n")
 
         # Get concurrency limits from config
         limits = getattr(config, 'CONCURRENT_GENERATION_LIMITS', {})
@@ -119,6 +140,7 @@ class GenerationService:
         async def process_single_item(item: QueueItem, engine: str):
             """Process a single queue item with per-engine semaphore control"""
             async with get_semaphore(engine):
+                self.running_item_ids.add(item.item_id)
                 try:
                     logger.info(f"Processing queue item {item.item_id}: {item.generation_type.value} for shot {item.shot_index} on {engine}")
                     print(f"[DEBUG] getting queue_service", flush=True)
@@ -157,15 +179,8 @@ class GenerationService:
                         return
                         
                     queue_service.mark_failed(item.item_id, str(e))
-
-        def _get_item_engine(item: QueueItem) -> str:
-            if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]:
-                return item.image_mode or getattr(config, 'IMAGE_GENERATION_MODE', 'comfyui')
-            elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
-                return item.video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
-            elif item.generation_type == GenerationType.NARRATION:
-                return getattr(config, 'TTS_METHOD', 'local')
-            return 'other'
+                finally:
+                    self.running_item_ids.discard(item.item_id)
 
         # Track active tasks by engine
         active_tasks_by_engine = {
@@ -208,7 +223,7 @@ class GenerationService:
                 from web_ui.backend.models.queue import PriorityUpdateRequest
                 
                 for item in queued_items:
-                    engine = _get_item_engine(item)
+                    engine = self.get_item_engine(item)
                     if engine not in available_slots_by_engine:
                         available_slots_by_engine[engine] = max(0, get_limit_for_engine(engine) - len(active_tasks_by_engine.get(engine, set())))
                         if engine not in active_tasks_by_engine:
@@ -293,6 +308,13 @@ class GenerationService:
             logger.info(f"ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}")
             print(f"[DEBUG] ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}", flush=True)
             
+            def save_prompt_id(pid):
+                item.comfyui_prompt_id = pid
+                queue_service = get_queue_service()
+                if item.status != QueueItemStatus.CANCELLED:
+                    queue_service.update_item(item)
+                    logger.debug(f"Saved ComfyUI prompt ID {pid} for item {item.item_id}")
+
             # Call regenerate_shot_image with overrides from the queue item
             await self.regenerate_shot_image(
                 item.project_id,
@@ -303,7 +325,9 @@ class GenerationService:
                 prompt_override=item.prompt_override,
                 project_title=project_title,
                 image_variant=image_variant,
-                seed=item.seed
+                seed=item.seed,
+                prompt_id_callback=save_prompt_id,
+                existing_prompt_id=item.comfyui_prompt_id
             )
 
             logger.info(f"Completed image generation for queue item {item.item_id}")
@@ -374,6 +398,13 @@ class GenerationService:
             story = self.project_manager.get_story(item.project_id)
             project_title = story.get('title', item.project_id) if story else item.project_id
 
+            def save_prompt_id(pid):
+                item.comfyui_prompt_id = pid
+                queue_service = get_queue_service()
+                if item.status != QueueItemStatus.CANCELLED:
+                    queue_service.update_item(item)
+                    logger.debug(f"Saved ComfyUI video prompt ID {pid} for item {item.item_id}")
+
             # Call regenerate_shot_video with overrides from the queue item
             await self.regenerate_shot_video(
                 item.project_id,
@@ -384,7 +415,9 @@ class GenerationService:
                 project_title=project_title,
                 video_variant=video_variant,
                 append_image_prompt=item.append_image_prompt,
-                draft_low_res_video=getattr(item, 'draft_low_res_video', False)
+                draft_low_res_video=getattr(item, 'draft_low_res_video', False),
+                prompt_id_callback=save_prompt_id,
+                existing_prompt_id=item.comfyui_prompt_id
             )
 
             logger.info(f"Completed video generation for queue item {item.item_id}")
@@ -864,7 +897,8 @@ class GenerationService:
         self, project_id: str, shot_index: int, force: bool = False,
         image_mode: Optional[str] = None, image_workflow: Optional[str] = None,
         seed: Optional[int] = None, prompt_override: Optional[str] = None,
-        project_title: Optional[str] = None, image_variant: str = None
+        project_title: Optional[str] = None, image_variant: str = None,
+        prompt_id_callback=None, existing_prompt_id=None
     ) -> str:
         """
         Regenerate image for a single shot
@@ -973,7 +1007,12 @@ class GenerationService:
                 prompt_override,
                 project_title,
                 None,  # No variant for standard shots
-                reference_images
+                reference_images,
+                None,  # generation_type
+                None,  # output_dir
+                None,  # filename_override
+                prompt_id_callback,
+                existing_prompt_id
             )
 
             # Mark as generated
@@ -1237,8 +1276,6 @@ class GenerationService:
                         import config
                         if current_now:
                             then_reference_to_use.append(config.resolve_path(current_now))
-                        if then_reference:
-                            then_reference_to_use.append(config.resolve_path(then_reference))
                         if not then_reference_to_use:
                             then_reference_to_use = None
                             then_reference_to_use = None
@@ -1264,12 +1301,7 @@ class GenerationService:
                         then_prompt = edit_instructions
 
                     then_workflow = image_workflow
-                    # Auto-switch to IP-Adapter workflow ONLY for ComfyUI mode with reference
-                    actual_mode = image_mode or config.IMAGE_GENERATION_MODE
-                    if then_reference and actual_mode == "comfyui":
-                        if not then_workflow or then_workflow == "flux":
-                            then_workflow = "flux_ipadapter_then"
-                            logger.info(f"Using IP-Adapter workflow for THEN with reference: {then_reference}")
+                    # IP-Adapter disabled for THEN to avoid attaching character face reference
 
                     # Generate
                     result_path = await asyncio.to_thread(
@@ -1359,7 +1391,8 @@ class GenerationService:
         self, project_id: str, shot_index: int, force: bool = False,
         video_mode: Optional[str] = None, video_workflow: Optional[str] = None,
         project_title: Optional[str] = None, video_variant: str = None,
-        append_image_prompt: Optional[str] = None, draft_low_res_video: bool = False
+        append_image_prompt: Optional[str] = None, draft_low_res_video: bool = False,
+        prompt_id_callback=None, existing_prompt_id=None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -1439,7 +1472,9 @@ class GenerationService:
                 video_workflow,
                 project_title,
                 append_image_prompt,
-                draft_low_res_video=draft_low_res_video
+                draft_low_res_video=draft_low_res_video,
+                prompt_id_callback=prompt_id_callback,
+                existing_prompt_id=existing_prompt_id
             )
 
             # Mark as rendered
@@ -2394,11 +2429,15 @@ class GenerationService:
             if not force and os.path.exists(image_path):
                 key = 'poster_thumbnail_url' if is_poster else 'thumbnail_url'
                 key_916 = 'poster_thumbnail_url_9_16' if is_poster else 'thumbnail_url_9_16'
+                key_218 = 'poster_thumbnail_url_21_8' if is_poster else 'thumbnail_url_21_8'
                 if aspect_ratio == "16:9" and key not in project_meta:
                     project_meta[key] = f"/api/projects/{project_id}/images/{filename}"
                     self.project_manager._save_meta(project_id, project_meta)
                 elif aspect_ratio == "9:16" and key_916 not in project_meta:
                     project_meta[key_916] = f"/api/projects/{project_id}/images/{filename}"
+                    self.project_manager._save_meta(project_id, project_meta)
+                elif aspect_ratio == "21:8" and key_218 not in project_meta:
+                    project_meta[key_218] = f"/api/projects/{project_id}/images/{filename}"
                     self.project_manager._save_meta(project_id, project_meta)
                 return image_path
                 
@@ -2427,11 +2466,15 @@ class GenerationService:
             
             key = 'poster_thumbnail_url' if is_poster else 'thumbnail_url'
             key_916 = 'poster_thumbnail_url_9_16' if is_poster else 'thumbnail_url_9_16'
+            key_218 = 'poster_thumbnail_url_21_8' if is_poster else 'thumbnail_url_21_8'
             if aspect_ratio == "16:9":
                 project_meta[key] = f"/api/projects/{project_id}/images/{filename}"
                 self.project_manager._save_meta(project_id, project_meta)
             elif aspect_ratio == "9:16":
                 project_meta[key_916] = f"/api/projects/{project_id}/images/{filename}"
+                self.project_manager._save_meta(project_id, project_meta)
+            elif aspect_ratio == "21:8":
+                project_meta[key_218] = f"/api/projects/{project_id}/images/{filename}"
                 self.project_manager._save_meta(project_id, project_meta)
 
             manager.broadcast_sync(project_id, {
@@ -2513,7 +2556,9 @@ class GenerationService:
                                reference_image_path: str = None,
                                generation_type: GenerationType = None,
                                output_dir: Optional[str] = None,
-                               filename_override: Optional[str] = None) -> str:
+                               filename_override: Optional[str] = None,
+                               prompt_id_callback=None,
+                               existing_prompt_id=None) -> str:
         """Generate image for a single shot (synchronous)
 
         Args:
@@ -2597,7 +2642,9 @@ class GenerationService:
             workflow_name=workflow_name, # If None, uses config.IMAGE_WORKFLOW
             step_progress_callback=on_step_progress,
             project_title=project_title,
-            reference_image_path=reference_image_path  # Pass reference image for IP-Adapter
+            reference_image_path=reference_image_path,  # Pass reference image for IP-Adapter
+            prompt_id_callback=prompt_id_callback,
+            existing_prompt_id=existing_prompt_id
         )
 
         if not result_path or not os.path.exists(result_path):
@@ -2610,7 +2657,9 @@ class GenerationService:
                                workflow_path: Optional[str] = None,
                                project_title: Optional[str] = None,
                                append_image_prompt: Optional[str] = None,
-                               draft_low_res_video: bool = False) -> str:
+                               draft_low_res_video: bool = False,
+                               prompt_id_callback=None,
+                               existing_prompt_id=None) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
@@ -2701,16 +2750,49 @@ class GenerationService:
 
             # Load and compile workflow for this shot
             shot_length = getattr(config, 'DEFAULT_SHOT_LENGTH', 5)
-            template = load_workflow(workflow_path, video_length_seconds=shot_length, aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video)
-            wf = compile_workflow(template, shot, video_length_seconds=shot_length)
 
-            # Submit to ComfyUI
-            result = submit(wf)
-            prompt_id = result.get('prompt_id')
-            if not prompt_id:
-                raise RuntimeError(f"No prompt_id returned for shot {shot_index}")
+            # DEEP RESUME CHECK
+            skip_submit = False
+            if existing_prompt_id:
+                logger.info(f"Deep Resume: Attempting to reconnect to ComfyUI video prompt '{existing_prompt_id}'")
+                try:
+                    from core.comfy_client import http_session
+                    h_resp = http_session.get(f"{config.COMFY_URL}/history/{existing_prompt_id}", timeout=5)
+                    q_resp = http_session.get(f"{config.COMFY_URL}/queue", timeout=5)
+                    is_valid = False
+                    if h_resp.status_code == 200 and existing_prompt_id in h_resp.json():
+                        is_valid = True
+                    elif q_resp.status_code == 200:
+                        q_data = q_resp.json()
+                        for q_item in q_data.get("queue_running", []) + q_data.get("queue_pending", []):
+                            if len(q_item) > 1 and q_item[1] == existing_prompt_id:
+                                is_valid = True
+                                break
+                    if is_valid:
+                        logger.info(f"Deep Resume: Prompt '{existing_prompt_id}' is still active! Re-attaching...")
+                        prompt_id = existing_prompt_id
+                        skip_submit = True
+                    else:
+                        logger.info(f"Deep Resume: Prompt '{existing_prompt_id}' not found. Submitting new generation.")
+                except Exception as e:
+                    logger.warning(f"Deep Resume validation failed: {e}. Submitting new generation.")
 
-            logger.info(f"Video submitted for shot {shot_index}: prompt_id={prompt_id}")
+            if not skip_submit:
+                template = load_workflow(workflow_path, video_length_seconds=shot_length, aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video)
+                wf = compile_workflow(template, shot, video_length_seconds=shot_length)
+
+                # Submit to ComfyUI
+                result = submit(wf)
+                prompt_id = result.get('prompt_id')
+                if not prompt_id:
+                    raise RuntimeError(f"No prompt_id returned for shot {shot_index}")
+                logger.info(f"Video submitted for shot {shot_index}: prompt_id={prompt_id}")
+                
+                if prompt_id_callback:
+                    try:
+                        prompt_id_callback(prompt_id)
+                    except Exception as e:
+                        logger.error(f"Error in prompt_id_callback: {e}")
 
             last_reported_progress = -1
 

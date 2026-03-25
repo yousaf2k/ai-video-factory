@@ -45,9 +45,9 @@ def _get_mask(b64_str: str):
     return cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
 
 
-def _create_browser_context(playwright_instance):
+def _create_browser_context(playwright_instance, profile_dir=None):
     """Create a persistent browser context with the configured browser."""
-    chrome_profile = getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
+    chrome_profile = profile_dir or getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
     os.makedirs(chrome_profile, exist_ok=True)
     
     browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
@@ -77,6 +77,7 @@ def _create_browser_context(playwright_instance):
                 '--disable-blink-features=AutomationControlled',
                 '--no-first-run',
                 '--no-default-browser-check',
+                '--disable-features=OptimizationGuideModelExecution,OptimizationGuideOnDeviceModel',
             ]
         else:
             launch_args = []
@@ -270,66 +271,54 @@ def _inject_text_into_input(page, input_element, text: str) -> bool:
     Returns:
         True if text was injected successfully, False otherwise
     """
-    input_element.click()
-    time.sleep(0.3)
+    # ── Attempt 1: Fast Keyboard Insert (Universal & Robust) ──────────────────
+    try:
+        page.evaluate("(el) => el.focus()", input_element)
+        time.sleep(0.2)
+        page.keyboard.press('Control+A')
+        page.keyboard.press('Delete')
+        time.sleep(0.1)
+        # Use insert_text for instantaneous content deployment
+        page.keyboard.insert_text(text)
+        time.sleep(0.3)
+        actual = input_element.inner_text().strip()
+        if len(actual) >= max(10, len(text) // 2):
+            logger.info("Prompt injected via keyboard.insert_text()")
+            return True
+        logger.debug(f"keyboard.insert_text() left box empty (got {len(actual)} chars), trying alternative")
+    except Exception as e:
+        logger.debug(f"keyboard.insert_text() failed: {e}, trying alternative")
 
-    # ── Attempt 1: native fill() ─────────────────────────────────────────────
+    # ── Attempt 2: native fill() ─────────────────────────────────────────────
     try:
         input_element.fill(text)
-        time.sleep(0.5)
+        time.sleep(0.3)
         actual = input_element.inner_text().strip()
         if len(actual) >= max(10, len(text) // 2):
             logger.info("Prompt injected via fill()")
             return True
-        logger.debug(f"fill() left box mostly empty (got {len(actual)} chars), trying JS injection")
-    except Exception as e:
-        logger.debug(f"fill() failed: {e}, trying JS injection")
+    except Exception:
+        pass
 
-    # ── Attempt 2: JS innerHTML + input event (for Quill / ProseMirror) ──────
+    # ── Attempt 3: JS innerHTML ──────────────────────────────────────────────
     try:
-        # Escape backticks so the string is safe inside a JS template literal
         escaped = text.replace('`', '\\`').replace('$', '\\$')
         page.evaluate(f"""
             (el) => {{
                 el.focus();
-                // Set the raw text content (works for div[contenteditable])
                 el.innerText = `{escaped}`;
-                // Move cursor to the end so the editor knows where to continue
-                const range = document.createRange();
-                const sel   = window.getSelection();
-                range.selectNodeContents(el);
-                range.collapse(false);
-                sel.removeAllRanges();
-                sel.addRange(range);
-                // Fire all events the framework listens to
                 ['input', 'keydown', 'keyup', 'change'].forEach(name => {{
                     el.dispatchEvent(new Event(name, {{ bubbles: true }}));
                 }});
             }}
         """, input_element)
-        time.sleep(0.5)
+        time.sleep(0.3)
         actual = input_element.inner_text().strip()
         if len(actual) >= max(10, len(text) // 2):
-            logger.info("Prompt injected via JS innerHTML + events")
+            logger.info("Prompt injected via JS innerText")
             return True
-        logger.warning(f"JS injection also unreliable (got {len(actual)}/{len(text)} chars)")
-    except Exception as e:
-        logger.error(f"JS injection failed: {e}")
-
-    # ── Attempt 3: keyboard type (slow but universally reliable) ─────────────
-    try:
-        input_element.click()
-        page.keyboard.press('Control+A')
-        page.keyboard.press('Delete')
-        time.sleep(0.2)
-        page.keyboard.type(text, delay=5)
-        time.sleep(0.5)
-        actual = input_element.inner_text().strip()
-        if len(actual) >= max(10, len(text) // 2):
-            logger.info("Prompt injected via keyboard.type()")
-            return True
-    except Exception as e:
-        logger.error(f"keyboard.type() injection failed: {e}")
+    except Exception:
+        pass
 
     return False
 
@@ -672,7 +661,7 @@ def _remove_watermark(image_path: str):
         logger.error(f"Error in precise watermark restoration: {e}")
 
 
-def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: str = None, reference_image_path: str = None) -> Optional[str]:
+def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: str = None, reference_image_path: str = None, profile_dir: str = None) -> Optional[str]:
     """Main entry point — run Playwright and generate an image."""
     from playwright.sync_api import sync_playwright
 
@@ -684,14 +673,14 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
     logger.debug(f"  Aspect ratio: {aspect_ratio or config.IMAGE_ASPECT_RATIO}")
 
     with sync_playwright() as playwright_instance:
-        context = _create_browser_context(playwright_instance)
-        page = context.new_page()
+        context = _create_browser_context(playwright_instance, profile_dir)
+        page = context.pages[0] if context.pages else context.new_page()
 
         try:
             logger.info(f"Navigating to {gemini_url}")
             # Increase navigation buffer to respect GEMINIWEB_TIMEOUT loaded above
             page.goto(gemini_url, wait_until='domcontentloaded', timeout=timeout * 1000)
-            time.sleep(5)
+            time.sleep(2)
 
             # ── Ensure correct chat ──────────────────────────────────────────
             if project_title:
@@ -731,15 +720,14 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 'textarea',
             ]
             input_element = None
-            for selector in input_selectors:
-                try:
-                    el = page.wait_for_selector(selector, timeout=8000, state='visible')
-                    if el:
-                        input_element = el
-                        logger.info(f"Found input element: {selector}")
-                        break
-                except Exception:
-                    continue
+            try:
+                combined_selector = ", ".join(input_selectors)
+                el = page.wait_for_selector(combined_selector, timeout=12000, state='visible')
+                if el:
+                    input_element = el
+                    logger.info("Found input element")
+            except Exception:
+                pass
 
             if not input_element:
                 logger.error("Could not find the chat input field")
@@ -823,16 +811,15 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 'button[aria-label="Send"]',
             ]
             sent = False
-            for selector in send_selectors:
-                try:
-                    send_btn = page.wait_for_selector(selector, timeout=5000, state='visible')
-                    if send_btn:
-                        send_btn.click()
-                        sent = True
-                        logger.info(f"Clicked send button: {selector}")
-                        break
-                except Exception:
-                    continue
+            try:
+                combined_send = ", ".join(send_selectors)
+                send_btn = page.wait_for_selector(combined_send, timeout=5000, state='visible')
+                if send_btn:
+                    send_btn.click()
+                    sent = True
+                    logger.info("Clicked send button")
+            except Exception:
+                pass
             if not sent:
                 page.keyboard.press('Enter')
 
@@ -908,10 +895,11 @@ if __name__ == "__main__":
     parser.add_argument("--aspect-ratio", default=None)
     parser.add_argument("--project-title", default=None)
     parser.add_argument("--reference-image", action="append", default=[])
+    parser.add_argument("--profile-dir", default=None)
     args = parser.parse_args()
 
     # Pass the list directly
-    result = run(args.prompt, args.output_path, args.aspect_ratio, args.project_title, args.reference_image)
+    result = run(args.prompt, args.output_path, args.aspect_ratio, args.project_title, args.reference_image, args.profile_dir)
     if result:
         print(f"SUCCESS:{result}")
         sys.exit(0)

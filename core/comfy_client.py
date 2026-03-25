@@ -272,7 +272,7 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                                     logger.info(f"Prompt {prompt_id} not in history or queue. Assuming canceled.")
                                     return {'success': False, 'error': f'Prompt {prompt_id} was canceled or removed from queue.', 'outputs': []}
                         except Exception as poll_err:
-                            if isinstance(poll_err, InterruptedError):
+                            if isinstance(poll_err, InterruptedError) or "cannot schedule new futures after shutdown" in str(poll_err):
                                 raise poll_err
                             logger.debug(f"Fallback poll failed: {poll_err}")
 

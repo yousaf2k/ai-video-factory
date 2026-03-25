@@ -33,6 +33,7 @@ class UpdateConfigRequest(BaseModel):
     elevenlabs_api_key: Optional[str] = None
     video_workflow: Optional[str] = None
     image_workflow: Optional[str] = None
+    playwright_browser: Optional[str] = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -112,6 +113,10 @@ async def get_config():
             "default_max_shots": getattr(config, 'DEFAULT_MAX_SHOTS', 0),
             "available_video_workflows": list(getattr(config, 'VIDEO_WORKFLOWS', {}).keys()),
             "available_image_workflows": list(getattr(config, 'IMAGE_WORKFLOWS', {}).keys()),
+            "playwright_browser": (
+                getattr(config, 'PLAYWRIGHT_CHANNEL', '') if getattr(config, 'PLAYWRIGHT_CHANNEL', '') in ['chrome', 'msedge'] 
+                else getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium')
+            ),
         }
 
         return safe_config
@@ -145,17 +150,29 @@ async def update_config(request: UpdateConfigRequest):
             updates["VIDEO_WORKFLOW"] = request.video_workflow
         if hasattr(request, 'image_workflow') and request.image_workflow is not None:
             updates["IMAGE_WORKFLOW"] = request.image_workflow
+        if hasattr(request, 'playwright_browser') and request.playwright_browser is not None:
+            browser = request.playwright_browser
+            if browser in ["chrome", "msedge"]:
+                updates["PLAYWRIGHT_BROWSER"] = "chromium"
+                updates["PLAYWRIGHT_CHANNEL"] = browser
+            else:
+                updates["PLAYWRIGHT_BROWSER"] = browser
+                updates["PLAYWRIGHT_CHANNEL"] = ""
         if request.elevenlabs_api_key is not None:
             updates["ELEVENLABS_API_KEY"] = request.elevenlabs_api_key
 
         if updates:
-            update_env_config(updates)
+            import os
+            env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.env"))
+            update_env_config(updates, env_path=env_path)
             
-            # Reload config in the current process (limited effect but good for some values)
+            # Reload config in the current process and environment for subprocesses
             import config
+            import os
             for key, value in updates.items():
                 if hasattr(config, key):
                     setattr(config, key, value)
+                os.environ[key] = str(value)
             
         return {"status": "success", "message": "Configuration updated. Restart may be required for some changes."}
 
@@ -259,14 +276,25 @@ async def launch_browser():
                     except (ImportError, AttributeError):
                         pass
                         
-                    # Use profile path from config
-                    profile_path = getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
+                    # Determine profile path dynamically to avoid cached GEMINIWEB_CHROME_PROFILE
+                    browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
+                    profile_name = "chrome_profile"
+                    if browser_type_name == "firefox":
+                        profile_name = "firefox_profile"
+                    elif browser_type_name == "webkit":
+                        profile_name = "webkit_profile"
+                    else:
+                        channel = getattr(config, 'PLAYWRIGHT_CHANNEL', 'chrome')
+                        if "msedge" in channel:
+                            profile_name = "edge_profile"
+                            
+                    output_dir = getattr(config, 'OUTPUT_DIR', 'output')
+                    profile_path = os.path.abspath(os.path.join(output_dir, profile_name))
                     os.makedirs(profile_path, exist_ok=True)
                         
                     logger.info(f"Launching browser with profile: {profile_path}")
                     
                     # Launch persistent context with same settings as image generation
-                    browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
                     browser_type = getattr(p, browser_type_name, p.chromium)
                     
                     # Channel and args depend on browser type

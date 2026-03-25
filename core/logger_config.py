@@ -12,7 +12,7 @@ import config
 def _ensure_log_directory():
     """Create logs directory if it doesn't exist"""
     log_dir = getattr(config, 'LOG_DIR', 'logs')
-    Path(log_dir).mkdir(exist_ok=True)
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
     return log_dir
 
 

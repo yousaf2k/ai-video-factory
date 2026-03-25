@@ -605,35 +605,53 @@ async def batch_regenerate(project_id: str, request: BatchRegenerateRequest, bac
 async def select_shot_image(project_id: str, shot_index: int, request: SelectImageRequest):
     """Select a specific image as the active one for a shot"""
     try:
-        shots = await get_shots(project_id)
+        def modify_shot(shots):
+            if shot_index < 1 or shot_index > len(shots):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Shot {shot_index} not found"
+                )
+            shot = shots[shot_index - 1]
+            
+            image_paths = shot.get('image_paths', [])
+            # Skip validation check for backwards compatibility or if not full paths
+            if request.image_path not in image_paths and len(image_paths) > 0:
+                 # Check resolve_path match just in case absolute/relative mismatch
+                 from config import resolve_path
+                 if resolve_path(request.image_path) not in [resolve_path(p) for p in image_paths]:
+                     raise HTTPException(
+                         status_code=status.HTTP_400_BAD_REQUEST,
+                         detail=f"Image path not found in shot's image_paths"
+                     )
 
-        if shot_index < 1 or shot_index > len(shots):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Shot {shot_index} not found"
-            )
+            # Variant heuristic if missing from request
+            variant = request.variant
+            if not variant:
+                if '_then_' in request.image_path:
+                    variant = 'then'
+                elif '_now_' in request.image_path:
+                    variant = 'now'
 
-        shot = shots[shot_index - 1]
+            if variant == 'then' and shot.get('is_flfi2v'):
+                shot['then_image_path'] = request.image_path
+                shot['then_image_generated'] = True
+            elif variant == 'now' and shot.get('is_flfi2v'):
+                shot['now_image_path'] = request.image_path
+                shot['now_image_generated'] = True
+            else:
+                shot['image_path'] = request.image_path
 
-        # Verify the requested path exists in image_paths
-        image_paths = shot.get('image_paths', [])
-        if request.image_path not in image_paths:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Image path not found in shot's image_paths"
-            )
-
-        # Update the active image_path
-        shot['image_path'] = request.image_path
-
-        # Save updated shots
-        project_dir = project_service.get_project_dir(project_id)
-        shots_path = os.path.join(project_dir, "shots.json")
-
-        with open(shots_path, 'w', encoding='utf-8') as f:
-            json.dump(shots, f, indent=2, ensure_ascii=False)
-
+        # Atomically update
+        project_service.project_manager.update_shots_safely(project_id, modify_shot)
         return {"status": "success", "image_path": request.image_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error selecting image for shot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to select image: {str(e)}"
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -723,35 +741,50 @@ async def delete_shot_image_variation(project_id: str, shot_index: int, image_pa
 async def select_shot_video(project_id: str, shot_index: int, request: SelectVideoRequest):
     """Select a specific video as the active one for a shot"""
     try:
-        shots = await get_shots(project_id)
+        def modify_shot(shots):
+            if shot_index < 1 or shot_index > len(shots):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Shot {shot_index} not found"
+                )
+            shot = shots[shot_index - 1]
+            
+            video_paths = shot.get('video_paths', [])
+            if request.video_path not in video_paths and len(video_paths) > 0:
+                 from config import resolve_path
+                 if resolve_path(request.video_path) not in [resolve_path(p) for p in video_paths]:
+                     raise HTTPException(
+                         status_code=status.HTTP_400_BAD_REQUEST,
+                         detail=f"Video path not found in shot's video_paths"
+                     )
 
-        if shot_index < 1 or shot_index > len(shots):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Shot {shot_index} not found"
-            )
+            variant = request.variant
+            if not variant:
+                if '_meeting_' in request.video_path:
+                    variant = 'meeting'
+                elif '_departure_' in request.video_path:
+                    variant = 'departure'
 
-        shot = shots[shot_index - 1]
+            if variant == 'meeting' and shot.get('is_flfi2v'):
+                shot['meeting_video_path'] = request.video_path
+                shot['meeting_video_rendered'] = True
+            elif variant == 'departure' and shot.get('is_flfi2v'):
+                shot['departure_video_path'] = request.video_path
+                shot['departure_video_rendered'] = True
+            else:
+                shot['video_path'] = request.video_path
 
-        # Verify the requested path exists in video_paths
-        video_paths = shot.get('video_paths', [])
-        if request.video_path not in video_paths:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Video path not found in shot's video_paths"
-            )
-
-        # Update the active video_path
-        shot['video_path'] = request.video_path
-
-        # Save updated shots
-        project_dir = project_service.get_project_dir(project_id)
-        shots_path = os.path.join(project_dir, "shots.json")
-
-        with open(shots_path, 'w', encoding='utf-8') as f:
-            json.dump(shots, f, indent=2, ensure_ascii=False)
-
+        # Atomically update
+        project_service.project_manager.update_shots_safely(project_id, modify_shot)
         return {"status": "success", "video_path": request.video_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error selecting video for shot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to select video: {str(e)}"
+        )
     except HTTPException:
         raise
     except Exception as e:
