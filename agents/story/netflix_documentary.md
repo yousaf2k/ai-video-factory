@@ -9,6 +9,7 @@ You are creating a story for a **{VIDEO_LENGTH}-second video**.
 You MUST assign a `scene_duration` (in seconds) to each scene.
 
 **Rules**:
+
 1. Each scene must have `scene_duration` field (integer, in seconds)
 2. Sum of all scene_duration must equal {VIDEO_LENGTH}
 3. Minimum scene duration: 15 seconds
@@ -25,15 +26,29 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ```json
 {
   "title": "Documentary title here",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "Netflix dramatic documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A retired detective, sharp eyes, graying temples, intense expression, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A retired detective, full body view, standing in a dimly lit office, wearing a rumpled suit and fedora, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Husky male voice, measured, mysterious')",
+      "personality": "Personality traits (e.g., 'Obsessive, observant, scarred by experience')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Describe setting/environment with cinematic detail",
       "characters": "Who is in the scene and their emotional state",
       "action": "What happens - focus on tension, discovery, or revelation",
       "emotion": "Primary emotion - suspense, shock, awe, curiosity, triumph",
-      "narration": "Gripping narration (2-3 sentences) that builds mystery, reveals information, or delivers emotional payoff",
-      "scene_duration": 45  // Duration in seconds
+      "narration": "Gripping narration that builds mystery, reveals information, or delivers emotional payoff. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
+      "scene_duration": 45
     }
   ]
 }
@@ -42,25 +57,29 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ## Scene Structure
 
 **Opening Hook (Scenes 1-2)**:
+
 - Start with mystery or intrigue
 - Pose a compelling question
 - Introduce key characters or subjects
 - Create immediate emotional investment
 
-**Rising Action (Scenes 3-5)**:
+**Rising Action (Scenes 3-6)**:
+
 - Build layers of mystery
 - Reveal clues gradually
 - Introduce conflicts or challenges
 - Deepen viewer curiosity
 - Heighten emotional stakes
 
-**Climax/Revelation (Scenes 6-7)**:
+**Climax/Revelation (Scenes 7-9)**:
+
 - Deliver major reveals or discoveries
 - Create shock or awe moments
 - Emotional payoff for buildup
 - Transform understanding
 
-**Resolution (Scene 8)**:
+**Resolution (Scene 10)**:
+
 - Reflect on meaning
 - Leave lasting impact
 - Suggest larger implications
@@ -70,7 +89,6 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 
 - **Mystery-Driven**: Use narration to pose questions, hint at secrets, and build intrigue
 - **Cinematic Phrasing**: "What they discovered next would change everything" / "But the truth was far more shocking"
-- **Pacing**: 2-3 sentences per scene (approximately 15-30 seconds when spoken)
 - **Visual Enhancement**: Describe what viewers should see in ways that heighten anticipation
 - **Character Voice**: Narration should reflect real people's experiences and emotions
 - **Fact-Reveal Balance**: Weave factual information into dramatic reveals
@@ -102,24 +120,28 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ## Scene Types
 
 **Investigation Scenes:**
+
 - Reveal evidence piece by piece
 - Show characters making connections
 - Build toward breakthrough moments
 - Emphasize the detective work
 
 **Revelation Scenes:**
+
 - Deliver shocking discoveries
 - Use cinematic timing for maximum impact
 - Show character reactions authentically
 - Create memorable moments
 
 **Confrontation Scenes:**
+
 - High-stakes conversations
 - Emotional confrontations
 - Characters facing hard truths
 - Dramatic tension
 
 **Reflection Scenes:**
+
 - Characters processing meaning
 - Emotional processing
 - Looking back at journey
@@ -128,6 +150,7 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ## Visual Style
 
 Describe scenes with Netflix cinematic quality:
+
 - **Dramatic Lighting**: chiaroscuro, silhouettes, revealing lights
 - **Camera Movement**: slow pushes, dramatic pulls, handheld intensity
 - **Composition**: framing that emphasizes mystery, isolation, or revelation

@@ -179,7 +179,7 @@
   },
   "101": {
     "inputs": {
-      "lora_name": "wan2.2_i2v__lightx2v_4steps_lora_v1_low_noise_model.safetensors",
+      "lora_name": "wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
       "strength_model": 1,
       "model": [
         "116",
@@ -193,7 +193,7 @@
   },
   "102": {
     "inputs": {
-      "lora_name": "wan2.2_i2v__lightx2v_4steps_lora_v1_low_noise_model.safetensors",
+      "lora_name": "wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1030.safetensors",
       "strength_model": 1,
       "model": [
         "117",
@@ -236,7 +236,6 @@
       "filename_prefix": "video/ComfyUI",
       "format": "auto",
       "codec": "auto",
-      "video-preview": "",
       "video": [
         "94",
         0
@@ -282,7 +281,7 @@
   "128": {
     "inputs": {
       "lora_name": "",
-      "strength_model": 1.0,
+      "strength_model": 1,
       "model": [
         "101",
         0
@@ -296,7 +295,7 @@
   "130": {
     "inputs": {
       "lora_name": "",
-      "strength_model": 1.0,
+      "strength_model": 1,
       "model": [
         "128",
         0
@@ -310,7 +309,7 @@
   "131": {
     "inputs": {
       "lora_name": "",
-      "strength_model": 1.0,
+      "strength_model": 1,
       "model": [
         "127",
         0
@@ -324,7 +323,7 @@
   "132": {
     "inputs": {
       "lora_name": "",
-      "strength_model": 1.0,
+      "strength_model": 1,
       "model": [
         "130",
         0
@@ -338,7 +337,7 @@
   "133": {
     "inputs": {
       "lora_name": "",
-      "strength_model": 1.0,
+      "strength_model": 1,
       "model": [
         "131",
         0
@@ -352,7 +351,7 @@
   "134": {
     "inputs": {
       "lora_name": "",
-      "strength_model": 1.0,
+      "strength_model": 1,
       "model": [
         "132",
         0
@@ -366,7 +365,7 @@
   "135": {
     "inputs": {
       "lora_name": "",
-      "strength_model": 1.0,
+      "strength_model": 1,
       "model": [
         "133",
         0

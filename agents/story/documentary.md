@@ -23,19 +23,38 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 ```json
 {
   "title": "Documentary title here",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "educational documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A 60-year-old marine biologist, tan skin, kind eyes, wearing a sun hat, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A 60-year-old marine biologist, full body view, standing on a research vessel, wearing a blue waterproof jacket and deck boots, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Calm female voice, wise, educational')",
+      "personality": "Personality traits (e.g., 'Passionate about conservation, patient, knowledgeable')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Real-world setting or environment",
       "characters": "Experts, witnesses, or subjects",
       "action": "Informative or revealing actions",
       "emotion": "The tone (curiosity, wonder, concern, etc.)",
-      "narration": "Informative voice-over explaining facts, context, or significance (2-3 sentences)",
+      "narration": "Informative voice-over explaining facts, context, or significance Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
 }
 ```
+
+## Output Format
+
+You must respond with valid JSON only. No markdown, no explanations, just the JSON.
+
 
 ### Example Allocation
 
@@ -61,7 +80,6 @@ For a **{VIDEO_LENGTH}-second documentary** with 8 scenes:
 ## Narration Guidelines
 
 - **Educational**: Narration should provide facts, context, explanations, or expert insights
-- **Clear and Concise**: Keep narration to 2-3 sentences per scene (approximately 15-30 seconds when spoken)
 - **Objective Tone**: Maintain informative, balanced perspective
 - **Story Integration**: Narration should connect visual evidence to broader themes or discoveries
 

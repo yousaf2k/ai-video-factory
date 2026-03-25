@@ -19,7 +19,7 @@ This document provides essential context for interacting with the AI Video Facto
     - `story_engine.py`: Handles initial story and narration text generation.
     - `shot_planner.py`: Breaks scenes into specific shots with visual/motion prompts.
     - `comfy_client.py`: Interfaces with the ComfyUI API.
-    - `session_manager.py`: Manages session state, enabling crash recovery and resumption.
+    - `project_manager.py`: Manages project state, enabling crash recovery and resumption.
 - `agents/`: System prompts (Markdown) that define the "personality" and rules for different pipeline stages.
 - `workflow/`: JSON workflow templates for ComfyUI (images, video, voice).
 - `web_ui/`: Backend and frontend code for the web interface.
@@ -63,9 +63,9 @@ The system uses "Agents" defined in Markdown files within the `agents/` director
 - **To create a new agent:** Add a `.md` file to `agents/{type}/` following the existing templates.
 - **To use a custom agent:** Use flags like `--story-agent agent_name`.
 
-### Session Management
-All generation data is stored in `output/sessions/{session_id}/`.
-- `meta.json`: High-level session progress.
+### Project Management
+All generation data is stored in `output/projects/{project_id}/`.
+- `meta.json`: High-level project progress.
 - `story.json`: The generated story/script.
 - `shots.json`: Detailed shot plans.
 - `images/`: Generated reference images.
@@ -84,5 +84,5 @@ Logs are stored in the `logs/` directory. The logging level can be configured in
 Refer to the `docs/` directory for detailed guides on specific features:
 - `COMFYUI_SETUP_CHECKLIST.md`: Setting up the generation backend.
 - `CAMERA_LORA_GUIDE.md`: Using LoRAs for advanced camera movements.
-- `SESSION_GUIDE.md`: Deep dive into how sessions work.
+- `SESSION_GUIDE.md`: Deep dive into how projects work.
 - `DOCS_INDEX.md`: A complete index of all documentation.

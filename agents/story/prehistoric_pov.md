@@ -27,14 +27,28 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 ```json
 {
   "title": "Documentary title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "First-person POV survival documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "POV description including hands and perspective (e.g., 'My hands reaching out, T-Rex emerging from jungle')",
       "characters": "First-person description (e.g., 'Me (time traveler, terrified but focused), T-Rex (apex predator, 40 feet of death)')",
       "action": "What the protagonist sees and does, hands activity (present tense)",
       "emotion": "Internal state - fear, awe, wonder, terror, scientific fascination",
-      "narration": "Present tense, first-person voice-over narration (what the protagonist says/thinks)",
+      "narration": "Present tense, first-person voice-over narration (what the protagonist says/thinks) Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -78,6 +92,7 @@ Every scene must include what the protagonist's hands are doing:
 - **Physical Interaction**: Climbing terrain, defensive actions, gripping tools/weapons
 - **Emotional Expression**: Trembling hands, clenching fists, hands covering mouth
 - **Survival Actions**: Grasping weapons, gripping ledges, protecting oneself
+- **Visual Framing**: Hands appear at edges/sides of frame, providing POV context while the main scene remains sharp and clear
 
 **Examples**:
 - "My hands tremble as I reach out..."
@@ -85,6 +100,8 @@ Every scene must include what the protagonist's hands are doing:
 - "I shield my eyes with one hand while pointing with the other..."
 - "My hands clamp over my mouth to hide my gasp..."
 - "Hands raised, I take a step back..."
+
+**Important Visual Note**: When hands are visible in the scene description, the background (prehistoric world, dinosaurs) should always be sharp and in focus. Hands can appear slightly soft/blurred at frame edges to create depth, but the main visual subject (what viewers are there to see) must remain crystal clear.
 
 ### 3. Personal Survival Stakes
 
@@ -139,7 +156,7 @@ Even in first-person, maintain epic scale:
   "characters": "Me (time traveler/documentarian), alone and armed only with my field equipment",
   "action": "I step forward, my hands pushing aside giant ferns that tower over my head. The air is thick with humidity and the smell of vegetation. My hands tremble as I take in the dense forest stretching into darkness before me. I reach out to touch a rough tree trunk, feeling the ancient bark under my fingertips.",
   "emotion": "Disbelief, awe, rising fear - I'm actually here, 66 million years in the past",
-  "narration": "My hands shake as I reach out. This fern - this tree - this air. It's all real. I'm the first human to ever see this. And if anything goes wrong, I'll be the last."
+  "narration": "My hands shake as I reach out. This fern - this tree - this air. It's all real. I'm the first human to ever see this. And if anything goes wrong, I'll be the last. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
 }
 ```
 
@@ -159,7 +176,7 @@ Build tension through increasingly dangerous encounters:
   "characters": "Me (crouched in terror), herd of Triceratops passing 20 feet away",
   "action": "I hold my breath. My hands clamp over my mouth, desperate not to make a sound. Through a gap in the log, I watch them pass - three Triceratops, each the size of a truck. My fingers dig into the rough bark of the log. I need to observe this, but one wrong move and I'm trampled.",
   "emotion": "Paralyzing fear mixed with scientific fascination - this moment is priceless",
-  "narration": "Eight tons of dinosaur walks past, so close I can hear them chewing. My hands shake as I grip the log. One Triceratops swings its massive head. I freeze. It snorts, turns away. My breath escapes in a ragged gasp."
+  "narration": "Eight tons of dinosaur walks past, so close I can hear them chewing. My hands shake as I grip the log. One Triceratops swings its massive head. I freeze. It snorts, turns away. My breath escapes in a ragged gasp. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
 }
 ```
 
@@ -179,7 +196,7 @@ Life-threatening situation that requires immediate action:
   "characters": "Me (backed against impassable cliff), juvenile T-Rex blocking the only exit",
   "action": "The young T-Rex snaps its jaws, testing me. My hands shake uncontrollably now, raised in a futile defense. This is unprecedented behavior - a juvenile T-Rex hunting pattern. But I'm not a scientist anymore. I'm prey. It crouches, muscles coiling. My hand finds the rock beside me - a weapon, or a futile defense?",
   "emotion": "Pure terror, adrenaline flooding every nerve, scientific mind overridden by survival instinct",
-  "narration": "It crouches to spring. My hands should run, but they're frozen. Sixty-six million years of evolution brought me here to witness this moment. If I'm going to die, I'll face it head-on. The T-Rex roars - and I stand my ground."
+  "narration": "It crouches to spring. My hands should run, but they're frozen. Sixty-six million years of evolution brought me here to witness this moment. If I'm going to die, I'll face it head-on. The T-Rex roars - and I stand my ground. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
 }
 ```
 
@@ -199,7 +216,7 @@ Aftermath and escape:
   "characters": "Me (exhausted, scratched, alive), taking one last look at this ancient world",
   "action": "My hands are covered in dirt and dried blood, but they're steady now. I raise them one last time, taking in the Cretaceous sunset. My fingers remember the rough bark, the humid air, the terror and wonder. The portal activates behind me. My hands linger, memorizing the texture of this world.",
   "emotion": "Profound relief, grief at leaving, triumph at survival, awe at what I witnessed",
-  "narration": "One final look - the sunset over a world that's been dead 66 million years. My hands lower. I turn toward the portal, toward the future. But my hands still remember the heat of this sun, the tremble of encountering my own near-extinction. I carry the past with me now."
+  "narration": "One final look - the sunset over a world that's been dead 66 million years. My hands lower. I turn toward the portal, toward the future. But my hands still remember the heat of this sun, the tremble of encountering my own near-extinction. I carry the past with me now. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
 }
 ```
 
@@ -294,6 +311,28 @@ Every scene should include:
 ✅ **Emotional State**: Fear, awe, wonder, panic, scientific focus
 ✅ **Present Tense**: Everything is happening now
 
+## Visual Focus Guidelines
+
+**CRITICAL: Background and Hands Focus**
+
+When describing POV shots with visible hands:
+- **Background Scene MUST be Sharp and Clear**: The prehistoric world the viewer is watching (dinosaurs, landscape, action) should always be in sharp focus. This is what viewers came to see.
+- **Hands Can Be Slightly Blurred**: The protagonist's hands at the edges/sides of frame can be slightly out of focus (shallow depth of field) to create depth and draw attention to the scene.
+- **NO Bokeh Effect**: Do not add bokeh (blurry light points) or heavy blur effects that obscure the background scene.
+- **Background Takes Priority**: The prehistoric environment and dinosaurs are the primary visual subject - hands are secondary framing elements.
+
+**Examples of Correct Focus:**
+- "Sharp view of Triceratops grazing in clearing, my slightly blurred hands gripping the foreground tree trunk"
+- "T-Rex emerges clearly from jungle, my out-of-focus hands at frame edges holding the camera still"
+- "Crystal-clear Patagotitan herd migration, my soft-focus hands reaching toward the scene"
+
+**What to Avoid:**
+- ❌ "Blurry background with sharp hands" (WRONG - obscures the dinosaurs)
+- ❌ "Heavy bokeh effect hiding the scenery" (WRONG - ruins the immersion)
+- ❌ "Sharp hands, everything else blurred" (WRONG - hands are framing, not the subject)
+
+**Remember**: Viewers want to see the prehistoric world clearly. Hands are just there to provide POV context - they should never distract from or obscure the main visual subject.
+
 ## Example Complete Scene
 
 ```json
@@ -302,7 +341,7 @@ Every scene should include:
   "characters": "Me (holding breath), juvenile Parasaurolophus drinking 15 feet away",
   "action": "My hands grip the rough reeds, knuckles white with tension. The duck-billed dinosaur lowers its head to the swamp water. I lean forward slightly, hands steadying on the reeds. I need to see its crest structure - unprecedented acoustic organ data. But my movements can't be seen. The Parasaurolophophus raises its head, water dripping from its bill. My hands freeze.",
   "emotion": "Breath-holding tension, scientific hunger overpowering fear, privilege of witnessing this",
-  "narration": "Don't move. My hands stay locked on the reeds, but inside I'm screaming with joy. That crest - the hollow chambers, perfect resonance. No one's ever heard a Parasaurolophophus call live. I should record it. But my hands know better: making sound means becoming prey. So I watch, memorizing every detail. Someday, scientists will hear this call. Someday, but not today."
+  "narration": "Don't move. My hands stay locked on the reeds, but inside I'm screaming with joy. That crest - the hollow chambers, perfect resonance. No one's ever heard a Parasaurolophophus call live. I should record it. But my hands know better: making sound means becoming prey. So I watch, memorizing every detail. Someday, scientists will hear this call. Someday, but not today. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
 }
 ```
 
@@ -313,14 +352,28 @@ Return your story plan as a JSON object with the following structure:
 ```json
 {
   "title": "Documentary title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "First-person POV survival documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "POV description including hands and perspective (e.g., 'My hands reaching out, T-Rex emerging from jungle')",
       "characters": "First-person description (e.g., 'Me (time traveler, terrified but focused), T-Rex (apex predator, 40 feet of death)')",
       "action": "What the protagonist sees and does, hands activity (present tense)",
       "emotion": "Internal state - fear, awe, wonder, terror, scientific fascination",
-      "narration": "Present tense, first-person voice-over narration (what the protagonist says/thinks)"
+      "narration": "Present tense, first-person voice-over narration (what the protagonist says/thinks) Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }
@@ -337,14 +390,28 @@ Return your story plan as a JSON object with the following structure:
 ```json
 {
   "title": "Survival in the Cretaceous",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "First-person POV survival documentary with hands-visible cinematography",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "Forest clearing, my hands resting on the rough bark of a tree, taking in the scene",
       "characters": "Me (documentarian, sweating, terrified but focused), herd of Triceratops grazing peacefully",
       "action": "I slowly raise my hands, palms open, as I take in the sight before me. In a sun-dappled clearing, three Triceratops feed peacefully. My fingers trace the rough bark of the tree I'm leaning against. I check my surroundings: ferns tower around me, the air is thick with humidity. I'm witnessing something no human has ever seen.",
       "emotion": "Awe that makes my hands tremble, terror at my proximity, scientific hunger to document every detail",
-      "narration": "My hands shake, but I stand steady. Three Triceratops - 30,000 pounds of prehistoric life - graze fifty feet away. I'm the first human to witness this. I'm experiencing history. Or I'm risking my own death. Either way, I keep watching."
+      "narration": "My hands shake, but I stand steady. Three Triceratops - 30,000 pounds of prehistoric life - graze fifty feet away. I'm the first human to witness this. I'm experiencing history. Or I'm risking my own death. Either way, I keep watching. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }
@@ -354,6 +421,8 @@ Return your story plan as a JSON object with the following structure:
 
 - **First-Person POV**: Every scene from the protagonist's eyes
 - **Hands Visible**: Always mention what the hands are doing
+- **Sharp Background Scene**: The prehistoric world/dinosaurs must be clear and in focus
+- **Hands Can Be Soft**: Hands at frame edges can be slightly blurred for depth (but never sharper than the scene)
 - **Present Tense**: Happening now, immediate and urgent
 - **Personal Stakes**: Survival, danger, fear mixed with wonder
 - **Cinematic Quality**: Netflix/IMAX standards, even in POV format

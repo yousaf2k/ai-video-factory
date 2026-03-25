@@ -1,0 +1,79 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "THEN_reference.png"
+    }
+  },
+  "2": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "flux1-dev.sft",
+      "weight_dtype": "fp8_e4m3fn"
+    }
+  },
+  "3": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "t5xxl_fp16.safetensors",
+      "type": "flux"
+    }
+  },
+  "5": {
+    "class_type": "IPAdapter",
+    "inputs": {
+      "weight": 0.7,
+      "model": ["2", 0],
+      "image": ["1", 0],
+      "clip": ["3", 1]
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "young version, 20 years ago, portrait style",
+      "clip": ["3", 0]
+    }
+  },
+  "10": {
+    "class_type": "EmptyFlux2LatentImage",
+    "inputs": {
+      "width": 1344,
+      "height": 768,
+      "batch_size": 1
+    }
+  },
+  "13": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "sampler": "euler",
+      "scheduler": "sgm_uniform",
+      "add_noise": "enable",
+      "model": ["5", 0],
+      "positive": ["6", 0],
+      "negative": null,
+      "latent_image": ["10", 0]
+    }
+  },
+  "14": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["13", 0],
+      "vae": ["14", 0]
+    }
+  },
+  "9": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": ["8", 0],
+      "filename_prefix": "then_character"
+    }
+  }
+}

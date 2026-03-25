@@ -1,0 +1,171 @@
+{
+  "9": {
+    "inputs": {
+      "filename_prefix": "1771406747146_e1fbe87c_shot_004_001",
+      "images": [
+        "98:8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "98:12": {
+    "inputs": {
+      "unet_name": "flux2-dev-nvfp4-mixed.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "98:10": {
+    "inputs": {
+      "vae_name": "flux2-ae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "98:16": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "98:48": {
+    "inputs": {
+      "steps": 20,
+      "width": 2048,
+      "height": 1152
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": {
+      "title": "Flux2Scheduler"
+    }
+  },
+  "98:47": {
+    "inputs": {
+      "width": 2048,
+      "height": 1152,
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Empty Flux 2 Latent"
+    }
+  },
+  "98:25": {
+    "inputs": {
+      "noise_seed": 2766538657
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "98:38": {
+    "inputs": {
+      "clip_name": "mistral_3_small_flux2_fp4_mixed.safetensors",
+      "type": "flux2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "98:6": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "98:38",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "98:26": {
+    "inputs": {
+      "guidance": 4,
+      "conditioning": [
+        "98:6",
+        0
+      ]
+    },
+    "class_type": "FluxGuidance",
+    "_meta": {
+      "title": "FluxGuidance"
+    }
+  },
+  "98:22": {
+    "inputs": {
+      "model": [
+        "98:12",
+        0
+      ],
+      "conditioning": [
+        "98:26",
+        0
+      ]
+    },
+    "class_type": "BasicGuider",
+    "_meta": {
+      "title": "BasicGuider"
+    }
+  },
+  "98:13": {
+    "inputs": {
+      "noise": [
+        "98:25",
+        0
+      ],
+      "guider": [
+        "98:22",
+        0
+      ],
+      "sampler": [
+        "98:16",
+        0
+      ],
+      "sigmas": [
+        "98:48",
+        0
+      ],
+      "latent_image": [
+        "98:47",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "98:8": {
+    "inputs": {
+      "samples": [
+        "98:13",
+        0
+      ],
+      "vae": [
+        "98:10",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  }
+}

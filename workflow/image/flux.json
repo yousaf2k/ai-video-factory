@@ -120,7 +120,7 @@
   },
   "25": {
     "inputs": {
-      "noise_seed": 3
+      "noise_seed": 1
     },
     "class_type": "RandomNoise",
     "_meta": {
@@ -142,8 +142,8 @@
   },
   "27": {
     "inputs": {
-      "width": 1536,
-      "height": 864,
+      "width": 1440,
+      "height": 816,
       "batch_size": 1
     },
     "class_type": "EmptySD3LatentImage",
@@ -155,8 +155,8 @@
     "inputs": {
       "max_shift": 0.5,
       "base_shift": 1.15,
-      "width": 1536,
-      "height": 864,
+      "width": 1440,
+      "height": 808,
       "model": [
         "45",
         0

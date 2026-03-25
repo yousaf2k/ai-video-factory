@@ -1,23 +1,23 @@
 # AI Video Factory - Web UI
 
-A modern web-based interface for the AI Video Factory system. This provides a visual way to create, edit, and manage video generation sessions.
+A modern web-based interface for the AI Video Factory system. This provides a visual way to create, edit, and manage video generation projects.
 
 ## Features Implemented (Phase 1-3)
 
 ### ✅ Backend (FastAPI)
-- **Session Management API**: Full CRUD operations for sessions
+- **Project Management API**: Full CRUD operations for projects
 - **Story Editing API**: Update and regenerate stories with validation
-- **Pydantic Models**: Type-safe data models for sessions, stories, and shots
+- **Pydantic Models**: Type-safe data models for projects, stories, and shots
 - **CORS Support**: Properly configured for frontend communication
 - **Static File Serving**: Automatic mounting of images/videos for preview
 
 ### ✅ Frontend (Next.js 14 + TypeScript)
-- **Session List**: View all sessions with progress indicators
-- **Session Detail**: Full session view with story and shots
+- **Project List**: View all projects with progress indicators
+- **Project Detail**: Full project view with story and shots
 - **Story Editor**: Drag-and-drop scene reordering
 - **Inline Editing**: Edit scene fields (location, characters, action, emotion, narration, duration)
 - **Add/Delete Scenes**: Full scene management
-- **Auto-refresh**: Real-time updates when sessions are active
+- **Auto-refresh**: Real-time updates when projects are active
 
 ### ✅ Developer Experience
 - **TypeScript**: Full type safety across frontend and backend
@@ -74,17 +74,17 @@ The web UI will be available at `http://localhost:3000`
 
 ## Usage
 
-### Creating a Session
+### Creating a Project
 
 1. Navigate to `http://localhost:3000`
-2. Click "New Session"
+2. Click "New Project"
 3. Enter your video idea
 4. Click "Create"
 
 ### Editing Story
 
-1. Open a session
-2. Click "Edit Session"
+1. Open a project
+2. Click "Edit Project"
 3. Modify scenes:
    - **Drag** scenes to reorder
    - **Click edit icon** to modify scene details
@@ -94,7 +94,7 @@ The web UI will be available at `http://localhost:3000`
 
 ### Viewing Progress
 
-- Session list shows completion status
+- Project list shows completion status
 - Detail page has progress bars for:
   - Story generation
   - Shot planning
@@ -104,22 +104,22 @@ The web UI will be available at `http://localhost:3000`
 
 ## API Endpoints
 
-### Sessions
-- `GET /api/sessions` - List all sessions
-- `POST /api/sessions` - Create new session
-- `GET /api/sessions/{id}` - Get session details
-- `PUT /api/sessions/{id}` - Update session
-- `DELETE /api/sessions/{id}` - Delete session
-- `POST /api/sessions/{id}/duplicate` - Duplicate session
+### Projects
+- `GET /api/projects` - List all projects
+- `POST /api/projects` - Create new project
+- `GET /api/projects/{id}` - Get project details
+- `PUT /api/projects/{id}` - Update project
+- `DELETE /api/projects/{id}` - Delete project
+- `POST /api/projects/{id}/duplicate` - Duplicate project
 
 ### Story
-- `GET /api/sessions/{id}/story` - Get story
-- `PUT /api/sessions/{id}/story` - Update story
-- `POST /api/sessions/{id}/story/regenerate` - Regenerate story
+- `GET /api/projects/{id}/story` - Get story
+- `PUT /api/projects/{id}/story` - Update story
+- `POST /api/projects/{id}/story/regenerate` - Regenerate story
 
 ### Assets
-- `GET /api/sessions/{id}/images/{filename}` - Get image
-- `GET /api/sessions/{id}/videos/{filename}` - Get video
+- `GET /api/projects/{id}/images/{filename}` - Get image
+- `GET /api/projects/{id}/videos/{filename}` - Get video
 
 ## Project Structure
 
@@ -128,21 +128,21 @@ web_ui/
 ├── backend/
 │   ├── main.py                 # FastAPI app entry point
 │   ├── api/                    # API endpoints
-│   │   ├── sessions.py         # Session CRUD
+│   │   ├── projects.py         # Project CRUD
 │   │   └── stories.py          # Story editing
 │   ├── services/               # Business logic
-│   │   └── session_service.py  # Session wrapper
+│   │   └── project_service.py  # Project wrapper
 │   └── models/                 # Pydantic models
-│       ├── session.py          # Session models
+│       ├── project.py          # Project models
 │       ├── story.py            # Story models
 │       └── shot.py             # Shot models
 └── frontend/
     ├── src/
     │   ├── app/                # Next.js pages
-    │   │   ├── sessions/
-    │   │   │   ├── page.tsx    # Session list
+    │   │   ├── projects/
+    │   │   │   ├── page.tsx    # Project list
     │   │   │   └── [id]/
-    │   │   │       ├── page.tsx # Session detail
+    │   │   │       ├── page.tsx # Project detail
     │   │   │       └── edit/    # Story editor
     │   │   └── globals.css
     │   ├── components/
@@ -150,7 +150,7 @@ web_ui/
     │   │       ├── SceneCard.tsx
     │   │       └── SceneList.tsx
     │   ├── hooks/              # React hooks
-    │   │   ├── useSessions.ts
+    │   │   ├── useProjects.ts
     │   │   └── useStory.ts
     │   ├── services/           # API client
     │   │   └── api.ts
@@ -191,7 +191,7 @@ WEB_UI_CORS_ORIGINS = [                 # Allowed frontend origins
 ### Phase 6: Configuration
 - Config panel UI
 - Agent selector
-- Export/download sessions
+- Export/download projects
 
 ## Development Notes
 
@@ -200,7 +200,7 @@ The web UI is fully complementary to the existing CLI. All CLI commands work exa
 
 ### Wrapper Pattern
 The backend uses a wrapper pattern around existing core modules:
-- `SessionManager` - All session operations
+- `ProjectManager` - All project operations
 - `build_story()` - Story generation
 - `plan_shots()` - Shot planning
 - No changes to core modules required
@@ -224,7 +224,7 @@ The backend uses a wrapper pattern around existing core modules:
 
 ### Images/videos not loading
 - Check that static files are mounted correctly
-- Verify file paths in session data
+- Verify file paths in project data
 - Check browser console for errors
 
 ## License

@@ -25,14 +25,28 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 ```json
 {
   "title": "Journey title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative - Indus Valley Civilization",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A Bronze Age priest, serene expression, trimmed beard, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A Bronze Age priest, full body view, standing by the Great Bath, wearing a white cotton robe over one shoulder, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Calm male voice, melodic, wise')",
+      "personality": "Personality traits (e.g., 'Dignified, meticulous, spiritual')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time (2600-1900 BCE or specific year)",
       "characters": "People you met - merchants, craftspeople, farmers, traders, priests, families",
       "action": "What you witnessed and experienced",
       "emotion": "How you felt in that moment - awe, admiration, curiosity, confusion, melancholy",
-      "narration": "Your voice-over narration describing the experience (2-3 sentences)",
+      "narration": "Your voice-over narration describing the experience Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -80,14 +94,28 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ```json
 {
   "title": "Journey title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative - Indus Valley Civilization",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background",
+      "image_prompt_full": "Full standing view prompt",
+      "voice_type": "Voice requirements",
+      "personality": "Traits",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time (2600-1900 BCE or specific year)",
       "characters": "People you met - merchants, craftspeople, farmers, traders, priests, families",
       "action": "What you witnessed and experienced",
       "emotion": "How you felt in that moment - awe, admiration, curiosity, confusion, melancholy",
-      "narration": "Your voice-over narration describing the experience (2-3 sentences)"
+      "narration": "Your voice-over narration describing the experience Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }

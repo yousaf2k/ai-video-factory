@@ -25,14 +25,28 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 ```json
 {
   "title": "Story title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "futuristic sci-fi narrative",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A rogue AI specialist, neon-lit skin, cybernetic eye, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A rogue AI specialist, full body view, standing in a rain-slicked cyberpunk alley, wearing a holographic trench coat and tech-wear boots, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Slightly distorted digital voice, calm, analytical')",
+      "personality": "Personality traits (e.g., 'Brilliant but isolated, suspicious of authorities')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Detailed future setting (time period + place)",
       "characters": "Inhabitants of this future world",
       "action": "Technological events and transformations unfolding",
       "emotion": "Human/AI emotional response to future conditions",
-      "narration": "Voice-over narration (2-3 sentences, immersive and thought-provoking)",
+      "narration": "Voice-over narration Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -74,14 +88,28 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ```json
 {
   "title": "Story title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "futuristic sci-fi narrative",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background",
+      "image_prompt_full": "Full standing view prompt",
+      "voice_type": "Voice requirements",
+      "personality": "Personality traits",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Detailed future setting (time period + place)",
       "characters": "Inhabitants of this future world",
       "action": "Technological events and transformations unfolding",
       "emotion": "Human/AI emotional response to future conditions",
-      "narration": "Voice-over narration (2-3 sentences, immersive and thought-provoking)"
+      "narration": "Voice-over narration Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }

@@ -14,7 +14,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.session_manager import SessionManager
+from core.project_manager import ProjectManager
 from core.prompt_compiler import load_workflow, compile_workflow
 from core.comfy_client import submit, wait_for_prompt_completion, get_output_file_path
 from core.video_regenerator import generate_unique_video_filename
@@ -122,7 +122,7 @@ def load_images_from_folder(folder_path, image_extensions=None):
     return shots
 
 
-def generate_videos_from_images(shots, output_dir, video_length=5, session_id=None):
+def generate_videos_from_images(shots, output_dir, video_length=5, project_id=None):
     """
     Generate videos from a list of shots with images.
 
@@ -130,7 +130,7 @@ def generate_videos_from_images(shots, output_dir, video_length=5, session_id=No
         shots: List of shot dictionaries with image_path, motion_prompt, camera
         output_dir: Directory to save videos
         video_length: Length of each video in seconds
-        session_id: Optional session ID for tracking
+        project_id: Optional project ID for tracking
 
     Returns:
         tuple: (success_count, failed_count, errors)
@@ -146,8 +146,8 @@ def generate_videos_from_images(shots, output_dir, video_length=5, session_id=No
         print(f"[ERROR] Failed to load workflow: {e}")
         return 0, len(shots), [f"Workflow load failed: {e}"]
 
-    # Initialize session manager if session_id provided
-    session_mgr = SessionManager() if session_id else None
+    # Initialize project manager if project_id provided
+    project_mgr = ProjectManager() if project_id else None
 
     success_count = 0
     failed_count = 0
@@ -254,9 +254,9 @@ def generate_videos_from_images(shots, output_dir, video_length=5, session_id=No
                     file_size = os.path.getsize(video_save_path)
                     print(f"[PASS] Video saved: {video_filename} ({file_size:,} bytes)")
 
-                    # Update session if provided
-                    if session_mgr and session_id:
-                        session_mgr.mark_video_rendered(session_id, shot_idx, video_save_path)
+                    # Update project if provided
+                    if project_mgr and project_id:
+                        project_mgr.mark_video_rendered(project_id, shot_idx, video_save_path)
 
                     success_count += 1
                 else:
@@ -316,8 +316,8 @@ Examples:
   # Specify video length
   python batch_videos.py input_images/ output_videos/ --length 10
 
-  # Create a session for tracking
-  python batch_videos.py input_images/ output_videos/ --session my_video_project
+  # Create a project for tracking
+  python batch_videos.py input_images/ output_videos/ --project my_video_project
 
 Camera Types (detected from filename):
   static, zoom, pan, tilt, dolly, truck, pedestal, orbit, crane, handheld, tracking, push, pull
@@ -333,8 +333,8 @@ Filename Examples:
     parser.add_argument('output_folder', help='Folder to save generated videos')
     parser.add_argument('--length', type=int, default=5,
                         help='Video length in seconds (default: 5)')
-    parser.add_argument('--session', type=str, default=None,
-                        help='Optional session ID for tracking progress')
+    parser.add_argument('--project', type=str, default=None,
+                        help='Optional project ID for tracking progress')
     parser.add_argument('--list-cameras', action='store_true',
                         help='List supported camera types and exit')
 
@@ -355,36 +355,36 @@ Filename Examples:
         print(f"\nInput folder: {args.input_folder}")
         print(f"Output folder: {args.output_folder}")
         print(f"Video length: {args.length}s")
-        print(f"Session: {args.session or 'None'}")
+        print(f"Project: {args.project or 'None'}")
 
         shots = load_images_from_folder(args.input_folder)
 
-        # Create session if specified
-        if args.session:
-            session_mgr = SessionManager()
-            # Create a new session with idea
+        # Create project if specified
+        if args.project:
+            project_mgr = ProjectManager()
+            # Create a new project with idea
             idea = f"Batch video generation from images in {args.input_folder}"
-            session_id, _ = session_mgr.create_session(idea, session_id=args.session)
-            print(f"\n[INFO] Created session: {session_id}")
+            project_id, _ = project_mgr.create_project(idea, project_id=args.project)
+            print(f"\n[INFO] Created project: {project_id}")
         else:
-            session_id = args.session
+            project_id = args.project
 
         # Generate videos
         success, failed, errors = generate_videos_from_images(
             shots,
             args.output_folder,
             video_length=args.length,
-            session_id=session_id
+            project_id=project_id
         )
 
-        # Mark session complete if created
-        if args.session:
-            session_mgr = SessionManager()
+        # Mark project complete if created
+        if args.project:
+            project_mgr = ProjectManager()
             if failed == 0:
-                session_mgr.mark_session_complete(session_id)
-                print(f"\n[SUCCESS] Session {session_id} complete!")
+                project_mgr.mark_project_complete(project_id)
+                print(f"\n[SUCCESS] Project {project_id} complete!")
             else:
-                print(f"\n[WARNING] Session {session_id} completed with errors.")
+                print(f"\n[WARNING] Project {project_id} completed with errors.")
 
         # Exit with appropriate code
         sys.exit(0 if failed == 0 else 1)

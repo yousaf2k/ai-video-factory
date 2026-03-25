@@ -1,0 +1,383 @@
+"""
+Queue API endpoints
+"""
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
+
+from web_ui.backend.models.queue import (
+    QueueItem,
+    QueueStatistics,
+    QueueItemStatus,
+    ReorderRequest,
+    PriorityUpdateRequest,
+    BulkActionRequest
+)
+from web_ui.backend.services.queue_service import get_queue_service
+
+router = APIRouter(prefix="/api/queue", tags=["queue"])
+
+# Get queue service instance
+queue_service = get_queue_service()
+
+
+@router.get("/items", response_model=List[QueueItem])
+async def get_queue_items(
+    project_id: Optional[str] = Query(None, description="Filter by project ID"),
+    status: Optional[QueueItemStatus] = Query(None, description="Filter by status")
+):
+    """
+    Get queue items, optionally filtered by project or status.
+
+    Returns all items across all projects by default.
+    """
+    try:
+        items = queue_service.get_queue(project_id=project_id, status=status)
+        return items
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/statistics", response_model=QueueStatistics)
+async def get_queue_statistics():
+    """
+    Get aggregated queue statistics.
+    """
+    try:
+        stats = queue_service.get_statistics()
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items", response_model=List[QueueItem])
+async def add_queue_items(items: List[QueueItem]):
+    """
+    Add items to queue.
+
+    Items will be auto-sorted by priority after adding.
+    """
+    try:
+        added_items = queue_service.add_items(items)
+        
+        # Ensure queue processor is running
+        try:
+            from web_ui.backend.services.generation_service import get_generation_service
+            get_generation_service()._ensure_queue_processor_started()
+        except Exception as e:
+            # Don't fail the request if it fails to start, but log it
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+            
+        return added_items
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/items/{item_id}")
+async def remove_queue_item(item_id: str):
+    """
+    Remove specific item from queue.
+    """
+    try:
+        success = queue_service.remove_item(item_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+        return {"message": "Item removed successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/items/{item_id}/priority")
+async def update_item_priority(item_id: str, request: PriorityUpdateRequest):
+    """
+    Update priority for a specific item.
+
+    Lower priority value = higher priority (processed first).
+    """
+    try:
+        success = queue_service.update_priority(item_id, request)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+        return {"message": "Priority updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/items/reorder")
+async def reorder_queue(request: ReorderRequest):
+    """
+    Reorder queue based on item_id sequence.
+
+    Used for drag-and-drop reordering in the UI.
+    Items will be assigned new priorities based on their position.
+    """
+    try:
+        success = queue_service.reorder_items(request)
+        if not success:
+            raise HTTPException(status_code=400, detail="Reorder failed")
+        return {"message": "Queue reordered successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/{item_id}/cancel")
+async def cancel_queue_item(item_id: str):
+    """
+    Cancel a specific queue item.
+
+    If the item is currently active, an interrupt will be sent to ComfyUI.
+    """
+    try:
+        # If the item is active, we need to know BEFORE we change its status
+        item = queue_service.get_item(item_id)
+        is_active = item and item.status == QueueItemStatus.ACTIVE
+
+        success = queue_service.mark_cancelled(item_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+
+        # If item was active, interrupt ComfyUI generation
+        if is_active:
+            from core.comfy_client import interrupt_generation
+            interrupt_generation()
+
+        return {"message": "Item cancelled successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/{item_id}/pause")
+async def pause_queue_item(item_id: str):
+    """
+    Pause a specific queue item.
+
+    If the item is currently active, an interrupt will be sent to ComfyUI.
+    """
+    try:
+        item = queue_service.get_item(item_id)
+        is_active = item and item.status == QueueItemStatus.ACTIVE
+
+        success = queue_service.mark_paused(item_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
+
+        # If item was active, interrupt ComfyUI generation
+        if is_active:
+            from core.comfy_client import interrupt_generation
+            interrupt_generation()
+
+        return {"message": "Item paused successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/{item_id}/resume")
+async def resume_queue_item(item_id: str):
+    """
+    Resume a paused queue item.
+    """
+    try:
+        success = queue_service.resume_item(item_id)
+        if not success:
+            raise HTTPException(status_code=400, detail=f"Item {item_id} not found or not paused")
+
+        # Ensure queue processor is running
+        try:
+            from web_ui.backend.services.generation_service import get_generation_service
+            get_generation_service()._ensure_queue_processor_started()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+
+        return {"message": "Item resumed successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/bulk-pause")
+async def bulk_pause_items(request: BulkActionRequest):
+    """
+    Pause multiple queue items.
+    """
+    try:
+        paused_count = 0
+        active_interrupted = False
+
+        for item_id in request.item_ids:
+            item = queue_service.get_item(item_id)
+            if item:
+                is_active = item.status == QueueItemStatus.ACTIVE
+                if queue_service.mark_paused(item_id):
+                    paused_count += 1
+                    if is_active:
+                        active_interrupted = True
+
+        if active_interrupted:
+            from core.comfy_client import interrupt_generation
+            interrupt_generation()
+
+        return {"message": f"Paused {paused_count} items", "count": paused_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/bulk-resume")
+async def bulk_resume_items(request: BulkActionRequest):
+    """
+    Resume multiple paused queue items.
+    """
+    try:
+        resumed_count = 0
+        for item_id in request.item_ids:
+            if queue_service.resume_item(item_id):
+                resumed_count += 1
+
+        if resumed_count > 0:
+            try:
+                from web_ui.backend.services.generation_service import get_generation_service
+                get_generation_service()._ensure_queue_processor_started()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+
+        return {"message": f"Resumed {resumed_count} items", "count": resumed_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/bulk-requeue")
+async def bulk_requeue_items(request: BulkActionRequest):
+    """
+    Requeue multiple failed/cancelled queue items.
+    """
+    try:
+        requeued_count = 0
+        for item_id in request.item_ids:
+            if queue_service.requeue_item(item_id):
+                requeued_count += 1
+
+        if requeued_count > 0:
+            try:
+                from web_ui.backend.services.generation_service import get_generation_service
+                get_generation_service()._ensure_queue_processor_started()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+
+        return {"message": f"Requeued {requeued_count} items", "count": requeued_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/items/{item_id}/requeue")
+async def requeue_queue_item(item_id: str):
+    """
+    Requeue a failed or cancelled queue item.
+    """
+    try:
+        success = queue_service.requeue_item(item_id)
+        if not success:
+            raise HTTPException(status_code=400, detail=f"Item {item_id} not found or not in a requeueable state")
+        
+        # Ensure queue processor is running
+        try:
+            from web_ui.backend.services.generation_service import get_generation_service
+            get_generation_service()._ensure_queue_processor_started()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+
+        return {"message": "Item requeued successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/pause")
+async def pause_queue():
+    """
+    Pause queue processing.
+
+    No new items will be started until queue is resumed.
+    """
+    try:
+        changed = queue_service.pause_queue()
+        if not changed:
+            return {"message": "Queue is already paused", "is_paused": True}
+        return {"message": "Queue paused successfully", "is_paused": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/resume")
+async def resume_queue():
+    """
+    Resume queue processing.
+    """
+    try:
+        changed = queue_service.resume_queue()
+        if not changed:
+            return {"message": "Queue is not paused", "is_paused": False}
+        return {"message": "Queue resumed successfully", "is_paused": False}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/completed")
+async def clear_completed_items():
+    """
+    Remove all completed items from queue.
+    """
+    try:
+        count = queue_service.clear_completed()
+        return {"message": f"Cleared {count} completed items", "count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/failed")
+async def clear_failed_items():
+    """
+    Remove all failed items from queue.
+    """
+    try:
+        count = queue_service.clear_failed()
+        return {"message": f"Cleared {count} failed items", "count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/cancelled")
+async def clear_cancelled_items():
+    """
+    Remove all cancelled items from queue.
+    """
+    try:
+        count = queue_service.clear_cancelled()
+        return {"message": f"Cleared {count} cancelled items", "count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/paused")
+async def is_queue_paused():
+    """
+    Check if queue is currently paused.
+    """
+    try:
+        is_paused = queue_service.is_paused()
+        return {"is_paused": is_paused}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

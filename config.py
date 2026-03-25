@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv(override=True)
 
 # ==========================================
 # LLM PROVIDER CONFIGURATION
@@ -107,20 +107,34 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 # Global output directory
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
 
-# Sessions directory (where project data is stored)
-SESSIONS_DIR = os.path.join(OUTPUT_DIR, "sessions")
+# Projects directory (where project data is stored)
+PROJECTS_DIR = os.path.join(OUTPUT_DIR, "projects")
 
-# Helper to resolve relative paths to project root
+# Helper to resolve relative paths to project root or output dir
 def resolve_path(relative_path):
     if not relative_path:
         return relative_path
     if os.path.isabs(relative_path):
         return relative_path
+        
+    # Standardize to forward slashes for prefix checking
+    norm_rel = relative_path.replace('\\', '/')
+    
+    # If the path starts with "output/", try to resolve it relative to where OUTPUT_DIR is
+    # This handles cases where OUTPUT_DIR is on a different drive than PROJECT_ROOT
+    if norm_rel.startswith('output/'):
+        if os.path.isabs(OUTPUT_DIR):
+            # Resolve relative to the parent of OUTPUT_DIR
+            # e.g., if OUTPUT_DIR is E:/output, parent is E:/
+            # joining E:/ with output/projects/xxx/shot.png correctly resolves it
+            output_parent = os.path.dirname(OUTPUT_DIR)
+            return os.path.join(output_parent, relative_path)
+            
     return os.path.join(PROJECT_ROOT, relative_path)
 
 # Absolute versions of directories
 ABS_OUTPUT_DIR = resolve_path(OUTPUT_DIR)
-ABS_SESSIONS_DIR = resolve_path(SESSIONS_DIR)
+ABS_PROJECTS_DIR = resolve_path(PROJECTS_DIR)
 
 # ==========================================
 # CONFIGURATION UTILITY WRAPPERS
@@ -238,18 +252,101 @@ COMFY_URL = "http://127.0.0.1:8188"
 #   COMFY_OUTPUT_DIR = "/home/user/ComfyUI/output"  # Manual path for Linux/Mac
 COMFY_OUTPUT_DIR = os.getenv("COMFY_OUTPUT_DIR", r"E:\ComfyUI\Output")
 
-# Path to your Wan 2.2 workflow template
+# ==========================================
+# VIDEO WORKFLOW CONFIGURATION
+# ==========================================
+# Active video workflow to use (must exist in VIDEO_WORKFLOWS)
+VIDEO_WORKFLOW = "wan22"
+
+# Video workflow definitions
+# Each workflow has its own node IDs and workflow file path
+# Add new workflows here and set VIDEO_WORKFLOW to the desired key
+VIDEO_WORKFLOWS = {
+    "wan22": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_fix_slowmotion": {
+        "workflow_path": resolve_path("workflow/video/Wan22_FixSlowMotion.json"),
+        "load_image_node_id": "128",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_flfi2v_fast": {
+        "workflow_path": resolve_path("workflow/video/wan22_flf2v_fast_api.json"),
+        "load_image_first_node_id": "128",
+        "load_image_last_node_id": "151",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "150",
+        "seed_node_id": "142",
+        "description": "Wan 2.2 FLFI2V - First/Last frame to video"
+    },
+    "wan22_flfi2v": {
+        "workflow_path": resolve_path("workflow/video/wan22_flf2v_api.json"),
+        "load_image_first_node_id": "128",
+        "load_image_last_node_id": "151",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "150",
+        "seed_node_id": "142",
+        "description": "Wan 2.2 FLFI2V - First/Last frame to video"
+    },
+    "wan22_flfi2v_fix_slowmotion": {
+        "workflow_path": resolve_path("workflow/video/Wan22_FLFI2V_FixSlowMotion_API.json"),
+        "load_image_first_node_id": "128",
+        "load_image_last_node_id": "151",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "150",
+        "seed_node_id": "142",
+        "description": "Wan 2.2 FLFI2V - First/Last frame to video"
+    },
+    "wan22_walk": {
+        "workflow_path": resolve_path("workflow/video/Wan22_Walk.json"),
+        "load_image_node_id": "128",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_walk_full": {
+        "workflow_path": resolve_path("workflow/video/Wan22_Walk_Full.json"),
+        "load_image_node_id": "128",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_lora": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow_lora.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_park": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow_park.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "wan22_pusa": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow_pusa.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    },
+    "default": {
+        "workflow_path": resolve_path("workflow/video/wan22_workflow.json"),
+        "load_image_node_id": "97",
+        "motion_prompt_node_id": "93",
+        "wan_video_node_id": "98"
+    }
+}
+
+# Helper constant for ThenVsNow agents
+THEN_VS_NOW_AGENTS = ["then_vs_now"]
+
+# Legacy single workflow settings (deprecated, use VIDEO_WORKFLOWS instead)
+# Kept for backward compatibility
 WORKFLOW_PATH = resolve_path("workflow/video/wan22_workflow.json")
-
-# Node IDs in your workflow
-# IMPORTANT: Open your workflow in ComfyUI, right-click the LoadImage node → "Node ID for Save"
-# Update this value with the actual node ID from your workflow
-LOAD_IMAGE_NODE_ID = "97"  # User needs to update this
-
-# Motion prompt node ID (currently node 7 in shot_planner.py)
+LOAD_IMAGE_NODE_ID = "97"
 MOTION_PROMPT_NODE_ID = "93"
-
-# WanImageToVideo node ID (for setting video length)
 WAN_VIDEO_NODE_ID = "98"
 
 # ==========================================
@@ -280,7 +377,7 @@ IMAGE_RESOLUTION = "2048"
 # IMAGE WORKFLOW CONFIGURATION
 # ==========================================
 # Active image workflow to use (must exist in IMAGE_WORKFLOWS)
-IMAGE_WORKFLOW = "flux2"
+IMAGE_WORKFLOW = "flux"
 
 # Image workflow definitions
 # Each workflow has its own node IDs and workflow file path
@@ -295,14 +392,117 @@ IMAGE_WORKFLOWS = {
         "save_node_id": "9",           # SaveImage node
         "description": "Flux model for high-quality image generation"
     },
+    "flux_ipadapter_then": {
+        "workflow_path": resolve_path("workflow/image/flux_ipadapter_then.json"),
+        "load_reference_node_id": "1",  # LoadImage node for THEN reference
+        "ipadapter_node_id": "5",       # IP-Adapter node
+        "text_node_id": "6",            # CLIPTextEncode for prompt
+        "neg_text_node_id": None,       # Flux doesn't use negative prompts
+        "ksampler_node_id": "13",       # SamplerCustomAdvanced node
+        "vae_node_id": "8",             # VAEDecode node
+        "save_node_id": "9",            # SaveImage node
+        "description": "Flux with IP-Adapter for THEN character images (young version)"
+    },
+    "flux_ipadapter_now": {
+        "workflow_path": resolve_path("workflow/image/flux_ipadapter_now.json"),
+        "load_reference_node_id": "1",  # LoadImage node for NOW reference
+        "ipadapter_node_id": "5",       # IP-Adapter node
+        "text_node_id": "6",            # CLIPTextEncode for prompt
+        "neg_text_node_id": None,       # Flux doesn't use negative prompts
+        "ksampler_node_id": "13",       # SamplerCustomAdvanced node
+        "vae_node_id": "8",             # VAEDecode node
+        "save_node_id": "9",            # SaveImage node
+        "description": "Flux with IP-Adapter for NOW character images (current version)"
+    },
+    "flux_background": {
+        "workflow_path": resolve_path("workflow/image/flux_background.json"),
+        "text_node_id": "6",            # CLIPTextEncode for prompt
+        "neg_text_node_id": None,       # Flux doesn't use negative prompts
+        "ksampler_node_id": "13",       # SamplerCustomAdvanced node
+        "vae_node_id": "8",             # VAEDecode node
+        "save_node_id": "9",            # SaveImage node
+        "description": "Flux for scene background generation (standard text-to-image)"
+    },
     "flux2": {
-        "workflow_path": resolve_path("workflow/image/flux2_4g_2k.json"),
+        "workflow_path": resolve_path("workflow/image/flux2_hq.json"),
         "text_node_id": "98:6",
         "neg_text_node_id": None,
         "ksampler_node_id": "98:16",
         "vae_node_id": "98:10",
         "save_node_id": "9",
-        "description": "Flux2.Dev for high quality images workflow"
+        "description": "Flux2.Dev"
+    },
+    "flux2_hq": {
+        "workflow_path": resolve_path("workflow/image/flux2_hq.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:16",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2.Dev for high quality images"
+    },
+    "flux2_hq_4ms": {
+        "workflow_path": resolve_path("workflow/image/flux2_hq_4mis.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:16",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2.Dev for high quality images"
+    },
+    "flux2_hq_4s_turbo": {
+        "workflow_path": resolve_path("workflow/image/flux2_hq_4s_turbo.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:16",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2.Dev for high quality with turbo lora"
+    },
+    "flux2_hq_8s_turbo": {
+        "workflow_path": resolve_path("workflow/image/flux2_hq_8s_turbo.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:16",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2.Dev for high quality with turbo lora"
+    },
+    "flux2_api": {
+        "workflow_path": resolve_path("workflow/image/image_flux2_text_to_image_api.json"),
+        "text_node_id": "98:6",
+        "neg_text_node_id": None,
+        "ksampler_node_id": "98:13",
+        "vae_node_id": "98:10",
+        "save_node_id": "9",
+        "description": "Flux2 API version"
+    },
+    "hidream_dev": {
+        "workflow_path": resolve_path("workflow/image/hidream_i1_dev.json"),
+        "text_node_id": "16",
+        "neg_text_node_id": "40",
+        "ksampler_node_id": "3",
+        "vae_node_id": "55",
+        "save_node_id": "9",
+        "description": "HiDream I1 Dev"
+    },
+    "hidream_full": {
+        "workflow_path": resolve_path("workflow/image/hidream_i1_full.json"),
+        "text_node_id": "91",
+        "neg_text_node_id": "85",
+        "ksampler_node_id": "93",
+        "vae_node_id": "81",
+        "save_node_id": "9",
+        "description": "HiDream I1 Full"
+    },
+    "turbo": {
+        "workflow_path": resolve_path("workflow/image/z_image_turbo_api.json"),
+        "text_node_id": "6",
+        "neg_text_node_id": "7",
+        "ksampler_node_id": "3",
+        "vae_node_id": "17",
+        "save_node_id": "9",
+        "description": "Z Image Turbo"
     },
     "sdxl": {
         "workflow_path": resolve_path("workflow/image/sdxl.json"),
@@ -312,24 +512,6 @@ IMAGE_WORKFLOWS = {
         "vae_node_id": "8",            # VAEDecode node
         "save_node_id": "9",           # SaveImage node
         "description": "SDXL model for image generation"
-    },
-    "hidream": {
-        "workflow_path": resolve_path("workflow/image/hidream.json"),
-        "text_node_id": "6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "13",
-        "vae_node_id": "8",
-        "save_node_id": "9",
-        "description": "HiDream model for image generation"
-    },
-    "qwen": {
-        "workflow_path": resolve_path("workflow/image/qwen.json"),
-        "text_node_id": "6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "13",
-        "vae_node_id": "8",
-        "save_node_id": "9",
-        "description": "Qwen model for image generation"
     },
     "default": {
         "workflow_path": resolve_path("workflow/image/image_generation_workflow.json"),
@@ -354,6 +536,9 @@ IMAGE_SAVE_NODE_ID = "9"
 # ==========================================
 # VIDEO GENERATION CONFIGURATION
 # ==========================================
+# Video generation mode: "comfyui" or "geminiweb"
+VIDEO_GENERATION_MODE = os.getenv("VIDEO_GENERATION_MODE", "comfyui")
+
 # Default video length per shot (in seconds)
 DEFAULT_SHOT_LENGTH = 5
 
@@ -591,14 +776,8 @@ AUTO_STEP_MODE = True  # True = auto, False = manual
 # Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary, prehistoric_dinosaur, prehistoric_pov)
 STORY_AGENT = "default"
 
-# Image prompt agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
-IMAGE_AGENT = "default"
-
-# Video motion agent (default, cinematic)
-VIDEO_AGENT = "default"
-
-# Narration agent (default, documentary, professional, storytelling)
-NARRATION_AGENT = "default"
+# Shots agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
+SHOTS_AGENT = "default"
 
 
 # ==========================================
@@ -610,7 +789,19 @@ GENERATE_NARRATION = False  # Set to True to enable narration by default
 # TTS method: "comfyui", "local" (edge-tts), or "elevenlabs"
 TTS_METHOD = "local"  # Options: "comfyui", "local", "elevenlabs"
 
-# ComfyUI TTS workflow path
+# ComfyUI TTS workflows
+# Each workflow defines its own node IDs and path
+TTS_WORKFLOW = "default"
+TTS_WORKFLOWS = {
+    "default": {
+        "workflow_path": resolve_path("workflow/voice/tts_workflow.json"),
+        "text_node_id": "text_input_node",  # Node ID for text input
+        "save_node_id": "save_audio_node",   # Node ID for audio output/save
+        "description": "Default ComfyUI TTS workflow"
+    }
+}
+
+# Legacy single workflow setting (deprecated)
 TTS_WORKFLOW_PATH = resolve_path("workflow/voice/tts_workflow.json")
 
 # ==========================================
@@ -680,18 +871,43 @@ CONTINUE_ON_PARTIAL_IMAGE_FAILURE = True
 # ==========================================
 # GEMINIWEB (BROWSER-BASED) IMAGE GENERATION
 # ==========================================
-# Chrome user data directory for persistent Google login
-GEMINIWEB_CHROME_PROFILE = resolve_path(os.path.join(OUTPUT_DIR, "chrome_profile"))
+# Playwright browser configuration
+# Options: "chromium", "firefox", "webkit"
+PLAYWRIGHT_BROWSER = os.getenv("PLAYWRIGHT_BROWSER", "chromium").lower()
+
+# Browser channel (only for chromium/webkit)
+# Options: "chrome", "msedge", "chrome-beta", etc.
+PLAYWRIGHT_CHANNEL = os.getenv("PLAYWRIGHT_CHANNEL", "chrome").lower()
+
+# Browser profile directory for persistent Google login
+# We use separate folders for different browsers to avoid compatibility issues
+def _get_profile_folder_name():
+    if PLAYWRIGHT_BROWSER == "firefox":
+        return "firefox_profile"
+    if PLAYWRIGHT_BROWSER == "webkit":
+        return "webkit_profile"
+    
+    # Handle chromium-based browsers
+    if "msedge" in PLAYWRIGHT_CHANNEL:
+        return "edge_profile"
+    if "chrome" in PLAYWRIGHT_CHANNEL:
+        return "chrome_profile"
+    
+    return "chromium_profile"
+
+_default_profile_name = _get_profile_folder_name()
+GEMINIWEB_CHROME_PROFILE = os.getenv("GEMINIWEB_CHROME_PROFILE", resolve_path(os.path.join(OUTPUT_DIR, _default_profile_name)))
+if not os.path.isabs(GEMINIWEB_CHROME_PROFILE):
+    GEMINIWEB_CHROME_PROFILE = resolve_path(GEMINIWEB_CHROME_PROFILE)
 
 # Timeout for waiting for image generation (seconds)
-GEMINIWEB_TIMEOUT = 120
+GEMINIWEB_TIMEOUT = 300
 
 # Gemini web URL
 GEMINIWEB_URL = "https://gemini.google.com/app"
-
-
 # ==========================================
-# WEB UI CONFIGURATION
+# Enable/disable Web UI server
+WEB_UI_ENABLED = os.getenv("WEB_UI_ENABLED", "true").lower() == "true"
 # ==========================================
 # Enable/disable Web UI server
 WEB_UI_ENABLED = os.getenv("WEB_UI_ENABLED", "true").lower() == "true"

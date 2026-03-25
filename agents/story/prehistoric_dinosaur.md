@@ -25,14 +25,28 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ```json
 {
   "title": "Documentary title here",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "IMAX prehistoric documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "Describe prehistoric environment with epic scale and immersive detail",
       "characters": "Dinosaurs, prehistoric creatures, and their behaviors/interactions",
       "action": "What happens - focus on spectacular events, hunting, migration, battles, daily life",
       "emotion": "Primary emotion - awe, terror, majesty, wonder, suspense, triumph",
-      "narration": "Epic narration (2-3 sentences) that combines scientific insight with cinematic grandeur, perfect for Netflix/YouTube",
+      "narration": "Epic narration that combines scientific insight with cinematic grandeur, perfect for Netflix/YouTube Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -70,7 +84,6 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 
 - **Epic & Educational**: Combine cinematic storytelling with scientific facts
 - **IMAX Language**: Use grand, sweeping phrases that match visual spectacle
-- **Pacing**: 2-3 sentences per scene (approximately 15-30 seconds when spoken)
 - **Netflix Quality**: Professional documentary narration style (think David Attenborough meets IMDb epics)
 - **Scientific Accuracy**: Include real dinosaur names, time periods, behaviors
 - **Cinematic Phrasing**: "Standing as tall as a three-story building..." / "In a world before continents had taken their current form..."
@@ -230,14 +243,28 @@ Return your story plan as a JSON object with the following structure:
 ```json
 {
   "title": "Documentary title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "IMAX-scale prehistoric documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "Scene location description (e.g., 'Late Cretaceous forest clearing, golden hour light')",
       "characters": "Characters present (e.g., 'T-Rex family hunting, Edmontosaurus herd grazing')",
       "action": "What happens in the scene, dinosaur behavior, camera movements",
       "emotion": "Emotional tone (e.g., 'tension', 'awe', 'terror', 'wonder')",
-      "narration": "Documentary narration text (what the narrator says)"
+      "narration": "Documentary narration text (what the narrator says) Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }

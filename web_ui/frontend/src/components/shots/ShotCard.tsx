@@ -1,17 +1,65 @@
 /**
  * ShotCard component - Individual shot with editing and regeneration
  */
-import { useState } from 'react';
-import { Edit3, RotateCw, RefreshCw, Image, Layers, Video, Check, X, Loader2, Clock, Plus, Trash2 } from 'lucide-react';
-import { Shot } from '@/types';
-import { useUpdateShot, useRegenerateImage, useRegenerateVideo, useSelectImage } from '@/hooks/useShots';
-import { useQueryClient } from '@tanstack/react-query';
-import { api } from '@/services/api';
-import { cn, getMediaUrl } from '@/lib/utils';
+import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  Edit3,
+  RotateCw,
+  RefreshCw,
+  Image,
+  Layers,
+  Video,
+  Check,
+  X,
+  Loader2,
+  Clock,
+  Plus,
+  Trash2,
+  Wand2,
+  Upload,
+  Maximize2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  Copy,
+  ClipboardCheck,
+  GripVertical,
+} from "lucide-react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { Shot } from "@/types";
+import { toast } from "sonner";
+import {
+  useUpdateShot,
+  useRegenerateImage,
+  useRegenerateVideo,
+  useSelectImage,
+  useRemoveWatermark,
+  useUploadShotImage,
+  useDeleteVariationImage,
+  useSelectVideo,
+  useDeleteVariationVideo,
+  useUploadShotVideo,
+} from "@/hooks/useShots";
+import { useAgents, useConfig } from "@/hooks/useAgents";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/services/api";
+import { cn, getMediaUrl } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { GenerationDialog } from "./GenerationDialog";
 
 interface ShotCardProps {
   shot: Shot;
-  sessionId: string;
+  projectId: string;
   showIndex?: boolean;
   selectable?: boolean;
   selected?: boolean;
@@ -23,11 +71,13 @@ interface ShotCardProps {
   onInsertBefore?: () => void;
   onInsertAfter?: () => void;
   onDelete?: () => void;
+  viewModeOverride?: "image" | "video" | null;
+  scenes?: any[];
 }
 
 export function ShotCard({
   shot,
-  sessionId,
+  projectId,
   showIndex = true,
   selectable = false,
   selected = false,
@@ -38,39 +88,146 @@ export function ShotCard({
   onCancel,
   onInsertBefore,
   onInsertAfter,
-  onDelete
+  onDelete,
+  viewModeOverride,
+  scenes,
 }: ShotCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);
-  const [viewMode, setViewMode] = useState<'image' | 'video'>(
-    shot.video_rendered && shot.video_path ? 'video' : 'image'
-  );
+  const [viewMode, setViewMode] = useState<"image" | "video">("image");
+
+  // FLFI2V state management
+  const [activeImageMode, setActiveImageMode] = useState<"then" | "now">("now");
+  const [activeVideoMode, setActiveVideoMode] = useState<"meeting" | "departure">("meeting");
+
+  // Update cache buster when video mode or image mode changes to force media reload
+  useEffect(() => {
+    if (shot.is_flfi2v) {
+      setCacheBuster(Date.now());
+    }
+  }, [activeVideoMode, activeImageMode, shot.is_flfi2v]);
+
+  // Update editedShot when shot prop changes (e.g., after regeneration)
+  useEffect(() => {
+    setEditedShot(shot);
+    // Force cache buster update when shot changes to refresh media URLs
+    if (shot.is_flfi2v) {
+      setCacheBuster(Date.now());
+    }
+  }, [shot]);
 
   // Regeneration modal state
-  const [showRegenModal, setShowRegenModal] = useState<'image' | 'video' | null>(null);
-  const [showFullscreenImage, setShowFullscreenImage] = useState(false);
-  const [regenForce, setRegenForce] = useState(true);
-  const [regenImageMode, setRegenImageMode] = useState('comfyui');
-  const [regenImageWorkflow, setRegenImageWorkflow] = useState('flux2');
-  const [regenVideoWorkflow, setRegenVideoWorkflow] = useState('workflow/video/wan22_workflow.json');
-  const [regenSeed, setRegenSeed] = useState<number | ''>('');
+  const [showRegenModal, setShowRegenModal] = useState<
+    "image" | "video" | null
+  >(null);
+  const [defaultPromptOverride, setDefaultPromptOverride] = useState("");
 
   // ... rest of the hook setup ...
   const queryClient = useQueryClient();
-  const updateShot = useUpdateShot(sessionId, shot.index);
-  const regenerateImage = useRegenerateImage(sessionId);
-  const regenerateVideo = useRegenerateVideo(sessionId);
-  const selectImage = useSelectImage(sessionId);
+  const updateShot = useUpdateShot(projectId, shot.index);
+  const regenerateImage = useRegenerateImage(projectId);
+  const regenerateVideo = useRegenerateVideo(projectId);
+  const selectImage = useSelectImage(projectId);
+  const removeWatermark = useRemoveWatermark(projectId);
+  const uploadShotImage = useUploadShotImage(projectId);
+  const uploadShotVideo = useUploadShotVideo(projectId);
+  const deleteVariation = useDeleteVariationImage(projectId);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isVideoUploading, setIsVideoUploading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  // fullscreenVariationIndex: index into shot.image_paths; null = closed
+  const [fullscreenVariationIndex, setFullscreenVariationIndex] = useState<number | null>(null);
+  const [isImagePromptExpanded, setIsImagePromptExpanded] = useState(false);
+  const [isMotionPromptExpanded, setIsMotionPromptExpanded] = useState(false);
 
-  const hasMultipleImages = (shot.image_paths?.length ?? 0) > 1;
+  const selectVideo = useSelectVideo(projectId);
+  const deleteVariationVideo = useDeleteVariationVideo(projectId);
+
+  const { data: globalConfig } = useConfig();
+
+  // Drag and drop functionality
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: shot.index,
+    disabled: isEditing || isGenerating,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  // Derived data for the fullscreen carousel
+  // For FLFI2V shots, construct array with THEN and NOW images
+  const fsImages = (() => {
+    if (shot.is_flfi2v && viewMode === "image") {
+      const filtered = (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`));
+      if (filtered.length > 0) return filtered;
+      const activePath = activeImageMode === "then" ? shot.then_image_path : shot.now_image_path;
+      return activePath ? [activePath] : [];
+    }
+    return viewMode === "video" ? (shot.video_paths ?? []) : (shot.image_paths ?? []);
+  })();
+  const fsTotal = fsImages.length;
+
+  const openFullscreen = useCallback((idx: number) => {
+    setFullscreenVariationIndex(Math.max(0, Math.min(idx, fsTotal - 1)));
+  }, [fsTotal]);
+
+  const closeFullscreen = useCallback(() => setFullscreenVariationIndex(null), []);
+
+  const fsNext = useCallback(() => {
+    setFullscreenVariationIndex((i) => i === null ? null : (i + 1) % fsTotal);
+  }, [fsTotal]);
+
+  const fsPrev = useCallback(() => {
+    setFullscreenVariationIndex((i) => i === null ? null : (i - 1 + fsTotal) % fsTotal);
+  }, [fsTotal]);
+
+  // Keyboard navigation for fullscreen
+  useEffect(() => {
+    if (fullscreenVariationIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") { e.preventDefault(); fsNext(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); fsPrev(); }
+      if (e.key === "Escape") { e.preventDefault(); closeFullscreen(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [fullscreenVariationIndex, fsNext, fsPrev, closeFullscreen]);
+
+  // Update viewMode when override changes
+  useEffect(() => {
+    if (viewModeOverride) {
+      setViewMode(viewModeOverride);
+    }
+  }, [viewModeOverride]);
+
+  const variationsCount = (() => {
+    if (viewMode === "video") return shot.video_paths?.length ?? 0;
+    if (shot.is_flfi2v) {
+      return (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`)).length;
+    }
+    return shot.image_paths?.length ?? 0;
+  })();
+
+  const hasMultipleVariations = variationsCount > 1;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await queryClient.invalidateQueries({ queryKey: ['shots', sessionId] });
-    await queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+    await queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
+    await queryClient.invalidateQueries({ queryKey: ["project", projectId] });
     setCacheBuster(Date.now());
     setTimeout(() => setIsRefreshing(false), 600);
   };
@@ -82,11 +239,22 @@ export function ShotCard({
         motion_prompt: editedShot.motion_prompt,
         camera: editedShot.camera,
         narration: editedShot.narration,
+        scene_id: editedShot.scene_id,
+        // FLFI2V fields
+        then_image_prompt: editedShot.then_image_prompt,
+        now_image_prompt: editedShot.now_image_prompt,
+        meeting_video_prompt: editedShot.meeting_video_prompt,
+        departure_video_prompt: editedShot.departure_video_prompt,
       });
       setIsEditing(false);
+      toast.success("Shot updated successfully", {
+        description: `Shot ${shot.index} has been saved.`,
+      });
     } catch (error) {
-      console.error('Failed to update shot:', error);
-      alert('Failed to update shot. Please try again.');
+      console.error("Failed to update shot:", error);
+      toast.error("Failed to update shot", {
+        description: "Please try again.",
+      });
     }
   };
 
@@ -96,52 +264,52 @@ export function ShotCard({
   };
 
   const handleRegenerateImage = async () => {
-    setShowRegenModal('image');
+    // Pre-populate prompt textarea with the shot's current prompt
+    const promptToUse = shot.is_flfi2v
+      ? (activeImageMode === 'then' ? shot.then_image_prompt : shot.now_image_prompt) || shot.image_prompt
+      : shot.image_prompt;
+    setDefaultPromptOverride(promptToUse ?? "");
+    setShowRegenModal("image");
   };
 
   const handleRegenerateVideo = async () => {
-    setShowRegenModal('video');
+    setShowRegenModal("video");
   };
 
-  const handleRegenSubmit = async () => {
-    try {
-      const type = showRegenModal;
-      // Close modal immediately
-      setShowRegenModal(null);
-
-      if (type === 'image') {
-        regenerateImage.mutate({
-          shotIndex: shot.index,
-          force: regenForce,
-          imageMode: regenImageMode,
-          imageWorkflow: regenImageWorkflow,
-          seed: regenSeed === '' ? undefined : regenSeed
-        });
-      } else if (type === 'video') {
-        regenerateVideo.mutate({
-          shotIndex: shot.index,
-          force: regenForce,
-          videoWorkflow: regenVideoWorkflow
-        });
-        setViewMode('video');
-      }
-      setCacheBuster(Date.now());
-    } catch (error) {
-      console.error(`Failed to trigger regeneration:`, error);
-    }
-  };
-
-  const imageUrl = getMediaUrl(shot.image_path);
-  const videoUrl = getMediaUrl(shot.video_path);
+  const imageUrl = shot.is_flfi2v
+    ? getMediaUrl(
+      activeImageMode === 'then'
+        ? shot.then_image_path || shot.now_image_path || shot.image_path
+        : shot.now_image_path || shot.then_image_path || shot.image_path
+    )
+    : getMediaUrl(shot.image_path);
+  const videoUrl = shot.is_flfi2v
+    ? getMediaUrl(
+      activeVideoMode === 'meeting'
+        ? shot.meeting_video_path || shot.departure_video_path || shot.video_path
+        : shot.departure_video_path || shot.meeting_video_path || shot.video_path
+    )
+    : getMediaUrl(shot.video_path);
 
   // Append cache-busting param so browser fetches the latest file from disk
-  const bustCache = (url: string) => url ? `${url}${url.includes('?') ? '&' : '?'}t=${cacheBuster}` : '';
+  const bustCache = (url: string) =>
+    url ? `${url}${url.includes("?") ? "&" : "?"}t=${cacheBuster}` : "";
   const cachedImageUrl = bustCache(imageUrl);
+
+  // Fullscreen carousel URL (computed after bustCache is available)
+  const fsUrl = fullscreenVariationIndex !== null && fsTotal > 0
+    ? bustCache(getMediaUrl(fsImages[fullscreenVariationIndex]))
+    : null;
   const cachedVideoUrl = bustCache(videoUrl);
 
   if (isEditing) {
     return (
-      <div className={cn("border rounded-lg p-4 bg-background", selected && "border-primary ring-1 ring-primary")}>
+      <div
+        className={cn(
+          "border rounded-lg p-4 bg-background",
+          selected && "border-primary ring-1 ring-primary",
+        )}
+      >
         {/* ... editing UI ... */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-muted-foreground">
@@ -167,87 +335,298 @@ export function ShotCard({
         </div>
 
         <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground">Image Prompt</label>
-            <textarea
-              value={editedShot.image_prompt}
-              onChange={(e) => setEditedShot({ ...editedShot, image_prompt: e.target.value })}
-              className="w-full px-2 py-1 border rounded text-sm mt-1 min-h-[120px]"
-            />
-          </div>
+          {/* FLFI2V Image Prompts */}
+          {shot.is_flfi2v ? (
+            <>
+              <div>
+                <label className="text-xs text-purple-600 font-semibold">THEN Image Prompt</label>
+                <Textarea
+                  value={editedShot.then_image_prompt || ''}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, then_image_prompt: e.target.value })
+                  }
+                  placeholder="Prompt for THEN image (original appearance)"
+                  className="mt-1 min-h-[80px] border-purple-200 focus:border-purple-500"
+                />
+              </div>
 
-          <div>
-            <label className="text-xs text-muted-foreground">Motion Prompt</label>
-            <textarea
-              value={editedShot.motion_prompt}
-              onChange={(e) => setEditedShot({ ...editedShot, motion_prompt: e.target.value })}
-              className="w-full px-2 py-1 border rounded text-sm mt-1 min-h-[120px]"
-            />
-          </div>
+              <div>
+                <label className="text-xs text-pink-600 font-semibold">NOW Image Prompt</label>
+                <Textarea
+                  value={editedShot.now_image_prompt || ''}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, now_image_prompt: e.target.value })
+                  }
+                  placeholder="Prompt for NOW image (current appearance with selfie)"
+                  className="mt-1 min-h-[80px] border-pink-200 focus:border-pink-500"
+                />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="text-xs text-muted-foreground">
+                Image Prompt
+              </label>
+              <Textarea
+                value={editedShot.image_prompt}
+                onChange={(e) =>
+                  setEditedShot({ ...editedShot, image_prompt: e.target.value })
+                }
+                className="mt-1 min-h-[120px]"
+              />
+            </div>
+          )}
+
+          {/* FLFI2V Motion Prompts */}
+          {shot.is_flfi2v ? (
+            <>
+              <div>
+                <label className="text-xs text-purple-600 font-semibold">Meeting Video Prompt</label>
+                <Textarea
+                  value={editedShot.meeting_video_prompt || ''}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, meeting_video_prompt: e.target.value })
+                  }
+                  placeholder="Prompt for meeting video (arrival at set)"
+                  className="mt-1 min-h-[80px] border-purple-200 focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-pink-600 font-semibold">Departure Video Prompt</label>
+                <Textarea
+                  value={editedShot.departure_video_prompt || ''}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, departure_video_prompt: e.target.value })
+                  }
+                  placeholder="Prompt for departure video (leaving set)"
+                  className="mt-1 min-h-[80px] border-pink-200 focus:border-pink-500"
+                />
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="text-xs text-muted-foreground">
+                Motion Prompt
+              </label>
+              <Textarea
+                value={editedShot.motion_prompt}
+                onChange={(e) =>
+                  setEditedShot({ ...editedShot, motion_prompt: e.target.value })
+                }
+                className="mt-1 min-h-[120px]"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Camera</label>
-              <input
+              <Input
                 type="text"
                 value={editedShot.camera}
-                onChange={(e) => setEditedShot({ ...editedShot, camera: e.target.value })}
-                className="w-full px-2 py-1 border rounded text-sm mt-1"
+                onChange={(e) =>
+                  setEditedShot({ ...editedShot, camera: e.target.value })
+                }
+                className="mt-1"
               />
             </div>
 
             <div>
               <label className="text-xs text-muted-foreground">Narration</label>
-              <input
+              <Input
                 type="text"
                 value={editedShot.narration}
-                onChange={(e) => setEditedShot({ ...editedShot, narration: e.target.value })}
-                className="w-full px-2 py-1 border rounded text-sm mt-1"
+                onChange={(e) =>
+                  setEditedShot({ ...editedShot, narration: e.target.value })
+                }
+                className="mt-1"
               />
             </div>
           </div>
+
+          {scenes && scenes.length > 0 && (
+            <div>
+              <label className="text-xs text-muted-foreground">Scene</label>
+              <Select
+                value={(editedShot.scene_id !== undefined && editedShot.scene_id !== null) ? editedShot.scene_id.toString() : "null"}
+                onValueChange={(val) => setEditedShot({ ...editedShot, scene_id: val === "null" ? null : parseInt(val) })}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select Scene" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null">None (Unassigned)</SelectItem>
+                  {scenes.map((_, idx) => (
+                    <SelectItem key={idx} value={idx.toString()}>
+                      Scene {idx + 1}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
         </div>
       </div>
     );
   }
 
   return (
-    <div className={cn("border rounded-lg p-4 bg-background hover:shadow-md transition-shadow relative", selected && "border-primary ring-1 ring-primary")}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "border rounded-lg p-4 bg-background hover:shadow-md transition-shadow relative",
+        selected && "border-primary ring-1 ring-primary",
+        isDragging && "shadow-xl",
+      )}
+    >
       {/* Header */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-y-1.5 mb-1.5">
         <div className="flex items-center gap-2">
+          {/* Drag Handle */}
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded hover:bg-muted/50"
+            title="Drag to reorder"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
           {selectable && (
             <input
               type="checkbox"
               checked={selected}
               onChange={(e) => onSelectChange?.(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+              className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
             />
           )}
-          <div className="flex-1">
-            {showIndex && (
-              <span className="text-sm font-medium text-muted-foreground">
-                Shot {shot.index}
-              </span>
-            )}
-            <div className="flex gap-2 mt-1">
-              <span className="text-xs bg-muted px-2 py-0.5 rounded">
-                {shot.camera}
-              </span>
-            </div>
-          </div>
+          {showIndex && (
+            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+              {shot.index}
+            </span>
+          )}
+
         </div>
 
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-1 bg-muted/30 p-1 rounded-md ml-auto">
+          {/* Hidden file input for image/video upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              // Reset so the same file can be re-selected later
+              e.target.value = "";
+
+              // Detect file type
+              const isVideo = file.type.startsWith('video/');
+              const isImage = file.type.startsWith('image/');
+
+              if (isVideo) {
+                setIsVideoUploading(true);
+                try {
+                  // For FLFI2V shots, pass the current variant (meeting/departure)
+                  const variant = shot.is_flfi2v ? activeVideoMode : undefined;
+                  await uploadShotVideo.mutateAsync({ shotIndex: shot.index, file, variant });
+                  setCacheBuster(Date.now());
+                  toast.success("Video uploaded successfully", {
+                    description: `Shot ${shot.index}${shot.is_flfi2v && variant ? ` (${variant.charAt(0).toUpperCase() + variant.slice(1)})` : ""} video has been uploaded.`,
+                  });
+                } catch (error) {
+                  console.error("Failed to upload video:", error);
+                  toast.error("Failed to upload video", {
+                    description: "Please try again.",
+                  });
+                } finally {
+                  setIsVideoUploading(false);
+                }
+              } else if (isImage) {
+                setIsUploading(true);
+                try {
+                  // For FLFI2V shots, pass the current variant (THEN/NOW)
+                  const variant = shot.is_flfi2v ? activeImageMode : undefined;
+                  await uploadShotImage.mutateAsync({ shotIndex: shot.index, file, variant });
+                  setCacheBuster(Date.now());
+                  toast.success("Image uploaded successfully", {
+                    description: `Shot ${shot.index}${shot.is_flfi2v && variant ? ` (${variant.toUpperCase()})` : ""} image has been uploaded.`,
+                  });
+                } catch (error) {
+                  console.error("Failed to upload image:", error);
+                  toast.error("Failed to upload image", {
+                    description: "Please try again.",
+                  });
+                } finally {
+                  setIsUploading(false);
+                }
+              } else {
+                toast.warning("Unsupported file type", {
+                  description: "Please select an image or video file.",
+                });
+              }
+            }}
+          />
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
             className="p-1 hover:bg-green-50 text-green-600 rounded disabled:opacity-50"
             title="Refresh image from disk"
           >
-            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
+            <RefreshCw
+              className={cn("w-4 h-4", isRefreshing && "animate-spin")}
+            />
           </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading || isVideoUploading}
+            className={cn(
+              "p-1 rounded disabled:opacity-50",
+              viewMode === "image"
+                ? "hover:bg-indigo-50 text-indigo-600"
+                : "hover:bg-purple-50 text-purple-600"
+            )}
+            title={viewMode === "image" ? "Upload image from disk" : "Upload video from disk"}
+          >
+            {(isUploading || isVideoUploading) ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : viewMode === "image" ? (
+              <Upload className="w-4 h-4" />
+            ) : (
+              <div className="relative">
+                <Video className="w-4 h-4" />
+                <Plus className="w-2 h-2 absolute -top-1 -right-1" />
+              </div>
+            )}
+          </button>
+          {(shot.is_flfi2v
+            ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated)
+            : shot.image_generated) && (
+              <button
+                onClick={async () => {
+                  try {
+                    // For FLFI2V shots, pass the currently active image variant
+                    const variant = shot.is_flfi2v ? activeImageMode : undefined;
+                    await removeWatermark.mutateAsync({ shotIndex: shot.index, variant });
+                    // Refresh the cache buster to show the updated image
+                    setCacheBuster(Date.now());
+                  } catch (error: any) {
+                    console.error("Failed to remove watermark:", error);
+                    const errorMessage = error?.response?.data?.detail || error?.message || "Unknown error";
+                    alert(`Failed to remove watermark: ${errorMessage}\n\nPlease ensure the image file exists on disk.`);
+                  }
+                }}
+                disabled={removeWatermark.isPending}
+                className="p-1 hover:bg-teal-50 text-teal-600 rounded disabled:opacity-50"
+                title={`Remove Gemini Watermark${shot.is_flfi2v ? ` from ${activeImageMode.toUpperCase()} image` : ''}`}
+              >
+                <Wand2 className={cn("w-4 h-4", removeWatermark.isPending && "animate-pulse")} />
+              </button>
+            )}
           <button
             onClick={() => setIsEditing(true)}
             className="p-1 hover:bg-muted rounded"
@@ -271,15 +650,15 @@ export function ShotCard({
           >
             <Video className="w-4 h-4" />
           </button>
-          {hasMultipleImages && (
+          {hasMultipleVariations && (
             <button
               onClick={() => setShowGalleryModal(true)}
               className="p-1 hover:bg-amber-50 text-amber-600 rounded relative"
-              title="View image variations"
+              title={`View ${viewMode} variations`}
             >
               <Layers className="w-4 h-4" />
               <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
-                {shot.image_paths.length}
+                {variationsCount}
               </span>
             </button>
           )}
@@ -307,60 +686,153 @@ export function ShotCard({
         </div>
       </div>
 
-      {/* Status */}
-      <div className="flex gap-3 text-xs mb-3">
-        <span className={cn(
-          "flex items-center gap-1",
-          shot.image_generated ? "text-green-600" : "text-gray-400"
-        )}>
-          <Image className="w-3 h-3" />
-          Image: {shot.image_generated ? "✓" : "○"}
-        </span>
-        <span className={cn(
-          "flex items-center gap-1",
-          shot.video_rendered ? "text-green-600" : "text-gray-400"
-        )}>
-          <Video className="w-3 h-3" />
-          Video: {shot.video_rendered ? "✓" : "○"}
-        </span>
+      <hr className="mb-1.5 border-border/80" />
+
+      {/* Status & Metadata */}
+      <div className="flex flex-wrap items-center justify-between gap-y-1.5 mb-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground truncate uppercase font-semibold tracking-wider">
+            {shot.camera}
+          </span>
+          {/* FLFI2V Mode Toggle Buttons - Image or Video */}
+          {shot.is_flfi2v && viewMode === "image" && (
+            <div className="flex gap-1 bg-muted/50 p-0.5 rounded-md">
+              <button
+                onClick={() => setActiveImageMode('then')}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold transition-all",
+                  activeImageMode === 'then' ? "bg-purple-500 text-white" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                THEN
+              </button>
+              <button
+                onClick={() => setActiveImageMode('now')}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold transition-all",
+                  activeImageMode === 'now' ? "bg-pink-500 text-white" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                NOW
+              </button>
+            </div>
+          )}
+          {shot.is_flfi2v && viewMode === "video" && (
+            <div className="flex gap-1 bg-muted/50 p-0.5 rounded-md">
+              <button
+                onClick={() => setActiveVideoMode('meeting')}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold transition-all",
+                  activeVideoMode === 'meeting' ? "bg-purple-500 text-white" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Meeting
+              </button>
+              <button
+                onClick={() => setActiveVideoMode('departure')}
+                className={cn(
+                  "px-2 py-0.5 rounded text-[10px] font-semibold transition-all",
+                  activeVideoMode === 'departure' ? "bg-pink-500 text-white" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Departure
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2.5 ml-auto">
+          <button
+            onClick={() => setViewMode("image")}
+            className={cn(
+              "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
+              viewMode === "image"
+                ? "bg-purple-500 text-white font-semibold"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            title={(shot.is_flfi2v ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated) : shot.image_generated)
+              ? "Image Generated - Click to view"
+              : "Image Not Generated - Click to view"}
+          >
+            <Image className="w-3 h-3" />
+            {(shot.is_flfi2v ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated) : shot.image_generated)
+              ? "✓"
+              : "○"}
+          </button>
+          <button
+            onClick={() => setViewMode("video")}
+            className={cn(
+              "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
+              viewMode === "video"
+                ? "bg-purple-500 text-white font-semibold"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            title={(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)
+              ? "Video Rendered - Click to view"
+              : "Video Not Rendered - Click to view"}
+          >
+            <Video className="w-3 h-3" />
+            {(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)
+              ? "✓"
+              : "○"}
+          </button>
+        </div>
       </div>
 
       {/* Media Preview */}
       <div className="mb-3 relative group">
         <div className="aspect-video bg-muted rounded overflow-hidden flex items-center justify-center relative">
           {isGenerating ? (
-            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg z-10">
-              <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
-              <span className="text-white font-medium">
-                {progress !== undefined ? `Generating... ${progress}%` : 'Generating...'}
-              </span>
-              {onCancel && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onCancel(); }}
-                  className="mt-2 px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
-                >
-                  Cancel
-                </button>
-              )}
+            <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm p-2 flex flex-col gap-1 z-10 text-xs text-white rounded-b-lg border-t border-white/10">
+              <div className="flex items-center justify-between font-medium">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <span>Generating</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span>{progress !== undefined && progress > 0 ? `${progress}%` : "Initializing..."}</span>
+                  {onCancel && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCancel();
+                      }}
+                      className="p-1 hover:bg-white/10 rounded-full transition-colors text-red-500 hover:text-red-400"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                <div 
+                  className="bg-primary h-full transition-all duration-300 ease-in-out" 
+                  style={{ width: `${progress !== undefined ? progress : 0}%` }}
+                />
+              </div>
             </div>
           ) : isQueued ? (
-            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg z-10">
-              <Clock className="w-8 h-8 text-white/70 mb-2" />
-              <span className="text-white/90 font-medium text-sm">
-                Queued...
-              </span>
+            <div className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm p-2 flex items-center justify-between z-10 text-xs text-white rounded-b-lg border-t border-white/10">
+              <div className="flex items-center gap-1.5 font-medium">
+                <Clock className="w-3.5 h-3.5 text-yellow-500 animate-pulse" />
+                <span>Queued</span>
+              </div>
               {onCancel && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); onCancel(); }}
-                  className="mt-2 px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancel();
+                  }}
+                  className="p-1 hover:bg-white/10 rounded-full transition-colors text-red-500 hover:text-red-400"
                 >
-                  Cancel
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
           ) : null}
-          {viewMode === 'video' && cachedVideoUrl ? (
+          {viewMode === "video" && cachedVideoUrl ? (
             <video
+              key={shot.is_flfi2v ? activeVideoMode : shot.video_path}
               src={cachedVideoUrl}
               poster={cachedImageUrl}
               controls
@@ -372,53 +844,129 @@ export function ShotCard({
             />
           ) : cachedImageUrl ? (
             <img
+              key={shot.is_flfi2v ? `${activeImageMode}-${activeVideoMode}` : shot.image_path}
               src={cachedImageUrl}
               alt={`Shot ${shot.index}`}
               className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => setShowFullscreenImage(true)}
+              onClick={() => {
+                // Get the currently displayed image path based on FLFI2V mode
+                const currentImagePath = shot.is_flfi2v
+                  ? (activeImageMode === 'then'
+                    ? shot.then_image_path || shot.now_image_path || shot.image_path
+                    : shot.now_image_path || shot.then_image_path || shot.image_path)
+                  : shot.image_path;
+
+                const activeIdx = fsImages.indexOf(currentImagePath ?? "");
+                openFullscreen(activeIdx >= 0 ? activeIdx : 0);
+              }}
               title="Click to view full screen"
             />
           ) : (
-            <span className="text-muted-foreground text-xs">No media available</span>
+            <span className="text-muted-foreground text-xs">
+              No media available
+            </span>
           )}
         </div>
-
-        {/* Media Toggle Controls */}
-        {shot.image_path && shot.video_path && (
-          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 backdrop-blur-sm p-1 rounded-md">
-            <button
-              onClick={() => setViewMode('image')}
-              className={cn(
-                "p-1.5 rounded transition-colors",
-                viewMode === 'image' ? "bg-white text-black" : "text-white hover:bg-white/20"
-              )}
-              title="View Image"
-            >
-              <Image className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode('video')}
-              className={cn(
-                "p-1.5 rounded transition-colors",
-                viewMode === 'video' ? "bg-white text-black" : "text-white hover:bg-white/20"
-              )}
-              title="View Video"
-            >
-              <Video className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Prompts */}
       <div className="space-y-2 text-sm">
+        {/* Image Prompt Section */}
         <div className="p-2 bg-muted rounded">
-          <div className="text-xs text-muted-foreground mb-1">Image Prompt</div>
-          <div className="line-clamp-2">{shot.image_prompt}</div>
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1.5">
+              <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+                Image Prompt
+                {shot.is_flfi2v && (
+                  <span className={cn(
+                    "ml-2 text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                    activeImageMode === 'then' ? "bg-purple-500 text-white" : "bg-pink-500 text-white"
+                  )}>
+                    {activeImageMode === 'then' ? 'THEN' : 'NOW'}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setIsImagePromptExpanded(!isImagePromptExpanded)}
+                className="p-0.5 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
+                title={isImagePromptExpanded ? "Collapse" : "Expand"}
+              >
+                {isImagePromptExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                const promptToCopy = shot.is_flfi2v
+                  ? (activeImageMode === 'then' ? shot.then_image_prompt : shot.now_image_prompt) || shot.image_prompt
+                  : shot.image_prompt;
+                navigator.clipboard.writeText(promptToCopy || "");
+                setCopiedField("image");
+                setTimeout(() => setCopiedField(null), 1500);
+              }}
+              className="p-0.5 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
+              title="Copy image prompt"
+            >
+              {copiedField === "image" ? (
+                <ClipboardCheck className="w-3.5 h-3.5 text-green-500" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+          <div className={cn("text-sm", !isImagePromptExpanded && "line-clamp-2")}>
+            {shot.is_flfi2v
+              ? (activeImageMode === 'then' ? (shot.then_image_prompt || shot.image_prompt) : (shot.now_image_prompt || shot.image_prompt))
+              : shot.image_prompt}
+          </div>
         </div>
-        <div className="p-2 bg-muted rounded">
-          <div className="text-xs text-muted-foreground mb-1">Motion Prompt</div>
-          <div className="line-clamp-2">{shot.motion_prompt}</div>
+
+        {/* Motion Prompt Section */}
+        <div key={shot.is_flfi2v ? `motion-section-${activeVideoMode}` : 'motion-section'} className="p-2 bg-muted rounded">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1.5">
+              <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+                Motion Prompt
+                {shot.is_flfi2v && (
+                  <span className={cn(
+                    "ml-2 text-[9px] px-1.5 py-0.5 rounded font-semibold",
+                    activeVideoMode === 'meeting' ? "bg-purple-500 text-white" : "bg-pink-500 text-white"
+                  )}>
+                    {activeVideoMode === 'meeting' ? 'MEETING' : 'DEPARTURE'}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setIsMotionPromptExpanded(!isMotionPromptExpanded)}
+                className="p-0.5 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
+                title={isMotionPromptExpanded ? "Collapse" : "Expand"}
+              >
+                {isMotionPromptExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              </button>
+            </div>
+            <button
+              onClick={() => {
+                const promptToCopy = shot.is_flfi2v
+                  ? (activeVideoMode === 'meeting' ? shot.meeting_video_prompt : shot.departure_video_prompt) || shot.motion_prompt
+                  : shot.motion_prompt;
+                navigator.clipboard.writeText(promptToCopy || "");
+                setCopiedField("motion");
+                setTimeout(() => setCopiedField(null), 1500);
+              }}
+              className="p-0.5 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
+              title="Copy motion prompt"
+            >
+              {copiedField === "motion" ? (
+                <ClipboardCheck className="w-3.5 h-3.5 text-green-500" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+            </button>
+          </div>
+          <div key={shot.is_flfi2v ? `motion-${activeVideoMode}` : 'motion'} className={cn("text-sm", !isMotionPromptExpanded && "line-clamp-2")}>
+            {shot.is_flfi2v
+              ? (activeVideoMode === 'meeting' ? (shot.meeting_video_prompt || shot.motion_prompt) : (shot.departure_video_prompt || shot.motion_prompt))
+              : shot.motion_prompt}
+          </div>
         </div>
       </div>
 
@@ -429,217 +977,277 @@ export function ShotCard({
         </div>
       )}
 
-      {/* Regeneration Modal */}
-      {showRegenModal && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-          <div className="bg-background rounded-lg shadow-xl max-w-sm w-full p-6 relative">
-            <button
-              onClick={() => setShowRegenModal(null)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      <GenerationDialog
+        isOpen={showRegenModal !== null}
+        onClose={() => setShowRegenModal(null)}
+        type={showRegenModal || "image"}
+        projectId={projectId}
+        isPending={regenerateImage.isPending || regenerateVideo.isPending}
+        defaultPromptOverride={defaultPromptOverride}
+        onSubmit={(config) => {
+          try {
+            const type = showRegenModal;
+            setShowRegenModal(null);
 
-            <h2 className="text-lg font-semibold mb-4">
-              Regenerate {showRegenModal === 'image' ? 'Image' : 'Video'}
-            </h2>
+            if (type === "image") {
+              const imageVariant = shot.is_flfi2v ? activeImageMode : undefined;
+              regenerateImage.mutate({
+                shotIndex: shot.index,
+                force: config.force || false,
+                imageMode: config.mode || "comfyui",
+                imageWorkflow: config.workflow || "default",
+                seed: config.seed === "" ? undefined : config.seed,
+                promptOverride: config.promptOverride?.trim() || undefined,
+                imageVariant,
+              });
+              toast.info("Image regeneration started", {
+                description: `Shot ${shot.index}${shot.is_flfi2v && imageVariant ? ` (${imageVariant.toUpperCase()})` : ""} image is being generated.`,
+              });
+            } else if (type === "video") {
+              const videoVariant = shot.is_flfi2v ? activeVideoMode : undefined;
+              regenerateVideo.mutate({
+                shotIndex: shot.index,
+                force: config.force || false,
+                videoMode: config.mode || "comfyui",
+                videoWorkflow: config.mode === "comfyui" ? config.workflow : undefined,
+                videoVariant,
+                appendImagePrompt: config.appendImagePrompt === "default" ? undefined : config.appendImagePrompt,
+              });
+              setViewMode("video");
+              toast.info("Video regeneration started", {
+                description: `Shot ${shot.index}${shot.is_flfi2v && videoVariant ? ` (${videoVariant.charAt(0).toUpperCase() + videoVariant.slice(1)})` : ""} video is being generated.`,
+              });
+            }
+            setCacheBuster(Date.now());
+          } catch (error) {
+            console.error(`Failed to trigger regeneration:`, error);
+            toast.error("Failed to start regeneration", {
+              description: "Please try again.",
+            });
+          }
+        }}
+      />
 
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="regen-force"
-                  checked={regenForce}
-                  onChange={(e) => setRegenForce(e.target.checked)}
-                  className="rounded border-gray-300 text-primary focus:ring-primary"
-                />
-                <label htmlFor="regen-force" className="text-sm">
-                  Force regeneration (ignore cache)
-                </label>
-              </div>
-
-              {showRegenModal === 'image' && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Generation Mode</label>
-                    <select
-                      value={regenImageMode}
-                      onChange={(e) => setRegenImageMode(e.target.value)}
-                      className="w-full border rounded-md p-2 text-sm"
-                    >
-                      <option value="comfyui">ComfyUI (Local)</option>
-                      <option value="gemini">Gemini (Cloud)</option>
-                      <option value="geminiweb">GeminiWeb - Gemini Web (Browser)</option>
-                    </select>
-                  </div>
-
-                  {regenImageMode === 'comfyui' && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">Workflow</label>
-                        <select
-                          value={regenImageWorkflow}
-                          onChange={(e) => setRegenImageWorkflow(e.target.value)}
-                          className="w-full border rounded-md p-2 text-sm"
-                        >
-                          <option value="flux2">Flux 2 (High Quality)</option>
-                          <option value="flux">Flux (Standard)</option>
-                          <option value="sdxl">SDXL</option>
-                          <option value="default">Default</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">Noise Seed (Optional)</label>
-                        <input
-                          type="number"
-                          value={regenSeed}
-                          onChange={(e) => setRegenSeed(e.target.value === '' ? '' : parseInt(e.target.value))}
-                          placeholder="Random"
-                          className="w-full border rounded-md p-2 text-sm"
-                        />
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          Leave blank for automatic seed (1 for 1st version, random otherwise).
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-
-              {showRegenModal === 'video' && (
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Video Workflow</label>
-                  <input
-                    type="text"
-                    value={regenVideoWorkflow}
-                    onChange={(e) => setRegenVideoWorkflow(e.target.value)}
-                    className="w-full border rounded-md p-2 text-sm"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowRegenModal(null)}
-                className="px-3 py-1.5 border rounded-md hover:bg-muted text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRegenSubmit}
-                disabled={regenerateImage.isPending || regenerateVideo.isPending}
-                className="px-3 py-1.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 text-sm flex items-center gap-2 disabled:opacity-50"
-              >
-                {regenerateImage.isPending || regenerateVideo.isPending ? (
-                  <>
-                    <RotateCw className="w-3 h-3 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  'Start'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Fullscreen Image Modal */}
-      {showFullscreenImage && cachedImageUrl && (
+      {/* Fullscreen Carousel Modal — navigates through all image_paths */}
+      {fullscreenVariationIndex !== null && fsUrl && (
         <div
-          className="fixed inset-0 bg-black/90 z-[70] flex items-center justify-center p-4 cursor-zoom-out"
-          onClick={() => setShowFullscreenImage(false)}
+          className="fixed inset-0 bg-black/92 z-[70] flex items-center justify-center p-4"
+          onClick={closeFullscreen}
         >
-          <img
-            src={cachedImageUrl}
-            alt={`Shot ${shot.index} Fullscreen`}
-            className="max-w-full max-h-full object-contain"
-          />
+          {viewMode === "video" ? (
+            <video
+              src={fsUrl}
+              autoPlay
+              controls
+              loop
+              className="max-w-full max-h-full object-contain select-none"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <img
+              src={fsUrl}
+              alt={`Shot ${shot.index} — ${fullscreenVariationIndex + 1} / ${fsTotal}`}
+              className="max-w-full max-h-full object-contain select-none"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+
+          {/* Counter badge */}
+          {fsTotal > 1 && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm px-3 py-1 rounded-full backdrop-blur-sm">
+              {fullscreenVariationIndex + 1} / {fsTotal}
+            </div>
+          )}
+
+          {/* Close */}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowFullscreenImage(false);
-            }}
+            onClick={(e) => { e.stopPropagation(); closeFullscreen(); }}
             className="absolute top-4 right-4 text-white/70 hover:text-white p-2 transition-colors"
           >
             <X className="w-8 h-8" />
           </button>
+
+          {/* Prev */}
+          {fsTotal > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); fsPrev(); }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-3 rounded-full transition-colors"
+              title="Previous (←)"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+
+          {/* Next */}
+          {fsTotal > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); fsNext(); }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-3 rounded-full transition-colors"
+              title="Next (→)"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
         </div>
       )}
 
-      {/* Image Gallery Modal */}
-      {showGalleryModal && hasMultipleImages && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-          <div className="bg-background rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col relative">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Shot {shot.index} — Image Variations ({shot.image_paths.length})</h2>
-              <button
-                onClick={() => setShowGalleryModal(false)}
-                className="text-muted-foreground hover:text-foreground p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="overflow-y-auto p-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {shot.image_paths.map((imgPath, idx) => {
-                  const url = getMediaUrl(imgPath);
-                  const cachedUrl = bustCache(url);
-                  const isActive = imgPath === shot.image_path;
-                  return (
-                    <div
-                      key={idx}
-                      className={cn(
-                        "relative group rounded-lg overflow-hidden border-2 transition-all",
-                        isActive ? "border-primary ring-2 ring-primary/30" : "border-transparent hover:border-muted-foreground/30"
-                      )}
-                    >
-                      <div className="aspect-video bg-muted">
-                        <img
-                          src={cachedUrl}
-                          alt={`Variation ${idx + 1}`}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-end justify-center">
-                        <div className="p-2 w-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between">
-                          <span className="text-white text-xs font-medium drop-shadow">
-                            {imgPath.split('/').pop()?.split('\\').pop()}
-                          </span>
-                          {isActive ? (
-                            <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                              <Check className="w-3 h-3" /> Active
-                            </span>
+      {/* Media Gallery Modal */}
+      {showGalleryModal && hasMultipleVariations && (() => {
+        const paths = viewMode === "video" 
+          ? (shot.video_paths ?? []) 
+          : (shot.is_flfi2v 
+              ? (shot.image_paths ?? []).filter(p => p.includes(`_${activeImageMode}_`)) 
+              : (shot.image_paths ?? []));
+              
+        const activePath = viewMode === "video" 
+          ? shot.video_path 
+          : (shot.is_flfi2v 
+              ? (activeImageMode === "then" ? shot.then_image_path : shot.now_image_path) 
+              : shot.image_path);
+              
+        const mediaType = viewMode === "video" ? "Video" : "Image";
+
+        return (
+          <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+            <div className="bg-background rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col relative">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-lg font-semibold">
+                  Shot {shot.index} — {mediaType} Variations ({paths.length})
+                </h2>
+                <button
+                  onClick={() => setShowGalleryModal(false)}
+                  className="text-muted-foreground hover:text-foreground p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="overflow-y-auto p-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {paths.map((path, idx) => {
+                    const url = getMediaUrl(path);
+                    const cachedUrl = bustCache(url);
+                    const isActive = path === activePath;
+                    return (
+                      <div
+                        key={idx}
+                        className={cn(
+                          "relative group rounded-lg overflow-hidden border-2 transition-all block",
+                          isActive
+                            ? "border-primary ring-2 ring-primary/30"
+                            : "border-transparent hover:border-muted-foreground/30",
+                        )}
+                      >
+                        <div className="aspect-video bg-muted flex items-center justify-center">
+                          {viewMode === "video" ? (
+                            <video
+                              src={cachedUrl}
+                              className="w-full h-full object-cover"
+                              muted
+                              loop
+                              onMouseEnter={(e) => { e.currentTarget.play(); }}
+                              onMouseLeave={(e) => { e.currentTarget.pause(); }}
+                            />
                           ) : (
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await selectImage.mutateAsync({ shotIndex: shot.index, imagePath: imgPath });
-                                  setCacheBuster(Date.now());
-                                  setShowGalleryModal(false);
-                                } catch (error) {
-                                  console.error('Failed to select image:', error);
-                                  alert('Failed to select image. Please try again.');
-                                }
-                              }}
-                              disabled={selectImage.isPending}
-                              className="text-xs bg-white text-black px-2 py-0.5 rounded-full font-medium hover:bg-white/90 disabled:opacity-50"
-                            >
-                              Select
-                            </button>
+                            <img
+                              src={cachedUrl}
+                              alt={`Variation ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
                           )}
                         </div>
+
+                        {/* Hover overlay */}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors">
+                          {/* Fullscreen button — top right */}
+                          <button
+                            onClick={() => openFullscreen(idx)}
+                            className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                            title="View fullscreen"
+                          >
+                            <Maximize2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Bottom bar: filename + select/active + delete */}
+                          <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-between gap-1">
+                            {/* Delete button — always visible on hover */}
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Delete this variation? This cannot be undone.`)) return;
+                                try {
+                                  let remaining = 0;
+                                  if (viewMode === "video") {
+                                    const result = await deleteVariationVideo.mutateAsync({
+                                      shotIndex: shot.index,
+                                      videoPath: path,
+                                    });
+                                    remaining = result.remaining;
+                                  } else {
+                                    const result = await deleteVariation.mutateAsync({
+                                      shotIndex: shot.index,
+                                      imagePath: path,
+                                    });
+                                    remaining = result.remaining;
+                                  }
+
+                                  setCacheBuster(Date.now());
+                                  // Close gallery if no variations remain
+                                  if (remaining === 0) setShowGalleryModal(false);
+                                } catch (error) {
+                                  console.error("Failed to delete variation:", error);
+                                  alert("Failed to delete variation. Please try again.");
+                                }
+                              }}
+                              disabled={viewMode === "video" ? deleteVariationVideo.isPending : deleteVariation.isPending}
+                              className="p-1.5 bg-red-600/80 text-white rounded-md hover:bg-red-600 disabled:opacity-50 flex-shrink-0"
+                              title="Delete this variation"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Select / Active badge */}
+                            {isActive ? (
+                              <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ml-auto">
+                                <Check className="w-3 h-3" /> Active
+                              </span>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    if (viewMode === "video") {
+                                      await selectVideo.mutateAsync({
+                                        shotIndex: shot.index,
+                                        videoPath: path,
+                                      });
+                                    } else {
+                                      await selectImage.mutateAsync({
+                                        shotIndex: shot.index,
+                                        imagePath: path,
+                                      });
+                                    }
+                                    setCacheBuster(Date.now());
+                                    setShowGalleryModal(false);
+                                  } catch (error) {
+                                    console.error("Failed to select variation:", error);
+                                    alert("Failed to select variation. Please try again.");
+                                  }
+                                }}
+                                disabled={viewMode === "video" ? selectVideo.isPending : selectImage.isPending}
+                                className="text-xs bg-white text-black px-2 py-0.5 rounded-full font-medium hover:bg-white/90 disabled:opacity-50 ml-auto"
+                              >
+                                Select
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Travel's Historical Video Channel - Story Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Crimson+Pro:wght@300;400;600&family=Montserrat:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-gold: #D4AF37;
+            --deep-blue: #0a1128;
+            --navy: #1a2238;
+            --slate: #2d3561;
+            --cream: #f4e9d8;
+            --accent-red: #c1292e;
+            --text-light: #e8e5dc;
+            --shadow: rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            font-family: 'Crimson Pro', serif;
+            background: linear-gradient(135deg, var(--deep-blue) 0%, var(--navy) 50%, var(--slate) 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 2px,
+                    rgba(0, 0, 0, 0.03) 2px,
+                    rgba(0, 0, 0, 0.03) 4px
+                );
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .film-grain {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.03;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" /></filter><rect width="100%" height="100%" filter="url(%23noise)" /></svg>');
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 2;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+            animation: fadeInDown 1s ease-out;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: var(--primary-gold);
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px var(--shadow);
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.1rem;
+            color: var(--cream);
+            font-weight: 300;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+
+        .divider {
+            width: 100px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary-gold), transparent);
+            margin: 20px auto;
+        }
+
+        .input-section {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            border-radius: 12px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 8px 32px var(--shadow);
+            animation: fadeIn 1s ease-out 0.3s both;
+        }
+
+        label {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--primary-gold);
+            display: block;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 15px 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 8px;
+            color: var(--text-light);
+            font-family: 'Crimson Pro', serif;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-gold);
+            background: rgba(255, 255, 255, 0.12);
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .button {
+            font-family: 'Montserrat', sans-serif;
+            background: linear-gradient(135deg, var(--primary-gold), #b8941f);
+            color: var(--deep-blue);
+            padding: 18px 50px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(212, 175, 55, 0.5);
+        }
+
+        .button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(212, 175, 55, 0.2);
+            border-top: 4px solid var(--primary-gold);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        .results {
+            animation: fadeIn 1s ease-out;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+            border-radius: 12px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px var(--shadow);
+        }
+
+        .section h2 {
+            font-family: 'Cinzel', serif;
+            font-size: 2rem;
+            color: var(--primary-gold);
+            margin-bottom: 25px;
+            border-bottom: 2px solid rgba(212, 175, 55, 0.3);
+            padding-bottom: 15px;
+        }
+
+        .section h3 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.3rem;
+            color: var(--cream);
+            margin: 30px 0 15px;
+            font-weight: 600;
+        }
+
+        .section p {
+            line-height: 1.8;
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: var(--text-light);
+        }
+
+        .image-prompt {
+            background: rgba(0, 0, 0, 0.3);
+            border-left: 4px solid var(--primary-gold);
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .image-prompt:hover {
+            background: rgba(0, 0, 0, 0.4);
+            border-left-color: var(--accent-red);
+        }
+
+        .prompt-header {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.9rem;
+            color: var(--primary-gold);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .prompt-time {
+            font-size: 0.85rem;
+            color: rgba(212, 175, 55, 0.7);
+            margin-bottom: 10px;
+        }
+
+        .prompt-text {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: var(--cream);
+        }
+
+        .download-section {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 40px;
+            border-top: 2px solid rgba(212, 175, 55, 0.3);
+        }
+
+        .download-button {
+            background: linear-gradient(135deg, var(--accent-red), #9a1f23);
+            display: inline-block;
+            margin: 10px;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+
+            .input-section, .section {
+                padding: 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="film-grain"></div>
+    <div class="container">
+        <header>
+            <h1>TIME TRAVEL</h1>
+            <div class="divider"></div>
+            <p class="subtitle">Historical Video Channel Generator</p>
+        </header>
+
+        <div class="input-section">
+            <label for="topic">Historical Topic or Event</label>
+            <input 
+                type="text" 
+                id="topic" 
+                placeholder="e.g., The Fall of the Roman Empire, Ancient Egypt's Pyramids, The Industrial Revolution"
+            />
+            
+            <label for="focus" style="margin-top: 25px;">Specific Focus or Angle (Optional)</label>
+            <textarea 
+                id="focus" 
+                placeholder="e.g., Focus on daily life, key figures, technological innovations, cultural impact..."
+            ></textarea>
+
+            <button class="button" onclick="generateVideo()">Generate Video Content</button>
+        </div>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        let fullContent = {};
+
+        async function generateVideo() {
+            const topic = document.getElementById('topic').value.trim();
+            const focus = document.getElementById('focus').value.trim();
+            
+            if (!topic) {
+                alert('Please enter a historical topic');
+                return;
+            }
+
+            const output = document.getElementById('output');
+            output.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p style="font-family: 'Montserrat', sans-serif; font-size: 1.1rem; color: var(--primary-gold); letter-spacing: 2px;">
+                        TRAVELING THROUGH TIME...
+                    </p>
+                    <p style="margin-top: 10px; font-size: 0.95rem; color: var(--cream);">
+                        Generating comprehensive video content for your historical documentary
+                    </p>
+                </div>
+            `;
+
+            try {
+                const prompt = `You are a professional historical documentary content creator for "Time Travel's Historical Video Channel". Generate comprehensive video production content for a 10-minute historical documentary.
+
+TOPIC: ${topic}
+${focus ? `SPECIFIC FOCUS: ${focus}` : ''}
+
+Generate the following in a structured format:
+
+1. STORY OVERVIEW (2-3 paragraphs)
+A compelling narrative arc for the entire 10-minute video that hooks viewers and takes them on a journey through this historical topic.
+
+2. DETAILED NARRATION
+Write the complete narration script divided into 12 segments (approximately 50 seconds each). Each segment should:
+- Be engaging and educational
+- Flow naturally from one to the next
+- Include specific historical details, dates, and facts
+- Use vivid, descriptive language that brings history to life
+- Be approximately 100-150 words per segment
+
+3. IMAGE PROMPTS (120 total - one per 5 seconds)
+For each 5-second interval, create a DETAILED image generation prompt that:
+- Describes the exact scene, setting, time period, and atmosphere
+- Includes specific visual details (lighting, colors, composition, mood)
+- Specifies historical accuracy requirements (clothing, architecture, technology of the era)
+- Describes camera angle and cinematic style
+- Is 50-100 words long (NOT a one-liner)
+- Matches the narration timing
+
+Format your response as JSON with this structure:
+{
+  "title": "Documentary Title",
+  "storyOverview": "The narrative arc...",
+  "segments": [
+    {
+      "segmentNumber": 1,
+      "duration": "0:00-0:50",
+      "narration": "The narration text...",
+      "imagePrompts": [
+        {
+          "promptNumber": 1,
+          "timeCode": "0:00-0:05",
+          "prompt": "Detailed image description..."
+        },
+        // ... 10 prompts per segment
+      ]
+    },
+    // ... 12 segments total
+  ]
+}
+
+Make the content historically accurate, engaging, and visually stunning.`;
+
+                const response = await fetch("https://api.anthropic.com/v1/messages", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        model: "claude-sonnet-4-20250514",
+                        max_tokens: 16000,
+                        messages: [
+                            { 
+                                role: "user", 
+                                content: prompt
+                            }
+                        ],
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.content && data.content[0]) {
+                    const textContent = data.content[0].text;
+                    
+                    // Extract JSON from the response
+                    const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        fullContent = JSON.parse(jsonMatch[0]);
+                        displayResults(fullContent);
+                    } else {
+                        throw new Error('Could not parse JSON from response');
+                    }
+                } else {
+                    throw new Error('Invalid response format');
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                output.innerHTML = `
+                    <div class="section">
+                        <h2 style="color: var(--accent-red);">Error</h2>
+                        <p>Failed to generate content. Please try again.</p>
+                        <p style="font-size: 0.9rem; color: rgba(255,255,255,0.6);">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function displayResults(content) {
+            const output = document.getElementById('output');
+            
+            let html = '<div class="results">';
+            
+            // Title
+            html += `
+                <div class="section">
+                    <h2 style="text-align: center; font-size: 2.5rem; border: none; padding: 0;">
+                        ${content.title}
+                    </h2>
+                </div>
+            `;
+
+            // Story Overview
+            html += `
+                <div class="section">
+                    <h2>📜 Story Overview</h2>
+                    <p>${content.storyOverview}</p>
+                </div>
+            `;
+
+            // Segments with Narration and Image Prompts
+            content.segments.forEach(segment => {
+                html += `
+                    <div class="section">
+                        <h2>🎬 Segment ${segment.segmentNumber} <span style="font-size: 1rem; color: var(--cream); font-weight: 300;">(${segment.duration})</span></h2>
+                        
+                        <h3>Narration Script</h3>
+                        <p style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 8px; border-left: 4px solid var(--accent-red);">
+                            ${segment.narration}
+                        </p>
+
+                        <h3 style="margin-top: 35px;">Image Prompts</h3>
+                `;
+
+                segment.imagePrompts.forEach(img => {
+                    html += `
+                        <div class="image-prompt">
+                            <div class="prompt-header">Image ${img.promptNumber}</div>
+                            <div class="prompt-time">⏱️ ${img.timeCode}</div>
+                            <div class="prompt-text">${img.prompt}</div>
+                        </div>
+                    `;
+                });
+
+                html += `</div>`;
+            });
+
+            // Download Section
+            html += `
+                <div class="download-section">
+                    <h3 style="font-family: 'Cinzel', serif; font-size: 1.8rem; color: var(--primary-gold); margin-bottom: 25px;">
+                        Export Your Content
+                    </h3>
+                    <button class="button download-button" onclick="downloadJSON()">
+                        📥 Download as JSON
+                    </button>
+                    <button class="button download-button" onclick="downloadText()">
+                        📄 Download as Text
+                    </button>
+                </div>
+            `;
+
+            html += '</div>';
+            output.innerHTML = html;
+        }
+
+        function downloadJSON() {
+            const dataStr = JSON.stringify(fullContent, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${fullContent.title.replace(/[^a-z0-9]/gi, '_')}_content.json`;
+            link.click();
+        }
+
+        function downloadText() {
+            let text = `${fullContent.title}\n${'='.repeat(fullContent.title.length)}\n\n`;
+            text += `STORY OVERVIEW\n${'-'.repeat(50)}\n${fullContent.storyOverview}\n\n\n`;
+
+            fullContent.segments.forEach(segment => {
+                text += `SEGMENT ${segment.segmentNumber} (${segment.duration})\n`;
+                text += `${'='.repeat(60)}\n\n`;
+                text += `NARRATION:\n${segment.narration}\n\n`;
+                text += `IMAGE PROMPTS:\n${'-'.repeat(60)}\n`;
+                
+                segment.imagePrompts.forEach(img => {
+                    text += `\n[${img.timeCode}] Image ${img.promptNumber}:\n${img.prompt}\n`;
+                });
+                
+                text += `\n\n`;
+            });
+
+            const dataBlob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${fullContent.title.replace(/[^a-z0-9]/gi, '_')}_script.txt`;
+            link.click();
+        }
+    </script>
+</body>
+</html>

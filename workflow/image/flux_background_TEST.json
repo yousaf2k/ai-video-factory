@@ -1,0 +1,107 @@
+{
+  "6": {
+    "inputs": {
+      "text": "movie set background, cinematic lighting, high quality, detailed",
+      "clip": [
+        "43",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode"
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "13",
+        0
+      ],
+      "vae": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "VAEDecode"
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "scene_background",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage"
+  },
+  "10": {
+    "inputs": {
+      "vae_name": "ae.safetensors"
+    },
+    "class_type": "VAELoader"
+  },
+  "13": {
+    "inputs": {
+      "add_noise": "enable",
+      "guider": [
+        "22",
+        0
+      ],
+      "latent_image": [
+        "27",
+        0
+      ],
+      "noise": [
+        "25",
+        0
+      ],
+      "sampler": [
+        "16",
+        0
+      ],
+      "sigmas": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced"
+  },
+  "16": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect"
+  },
+  "17": {
+    "inputs": {
+      "scheduler": "sgm_uniform",
+      "steps": 20,
+      "denoise": 1
+    },
+    "class_type": "BasicScheduler"
+  },
+  "22": {
+    "inputs": {
+      "guidance": 3.5
+    },
+    "class_type": "FluxGuidance"
+  },
+  "25": {
+    "inputs": {
+      "noise_seed": 42
+    },
+    "class_type": "RandomNoise"
+  },
+  "27": {
+    "inputs": {
+      "width": 1344,
+      "height": 768,
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage"
+  },
+  "43": {
+    "inputs": {
+      "ckpt_name": "flux1-dev-fp8.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple"
+  }
+}

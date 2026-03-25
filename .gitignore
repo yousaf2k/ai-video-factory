@@ -5,8 +5,10 @@
 __pycache__/
 core/__pycache__/
 
-output/sessions/
+output/projects/
 output/
+input/
+/*test*.py
 
 # Log files
 *.log
@@ -34,3 +36,4 @@ web_ui/backend/__pycache__/
 web_ui/backend/services/__pycache__/
 web_ui/backend/api/__pycache__/
 web_ui/backend/models/__pycache__/
+node_modules/

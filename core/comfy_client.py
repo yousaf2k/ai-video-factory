@@ -5,6 +5,8 @@ import config
 import os
 from core.logger_config import get_logger
 
+# Use a project to pool TCP connections and prevent socket exhaustion (WinError 10055)
+http_session = requests.Session()
 
 # Get logger for ComfyUI API operations
 logger = get_logger(__name__)
@@ -35,7 +37,7 @@ def get_comfyui_output_directory():
 
     try:
         # Try to get ComfyUI settings - this includes path information
-        r = requests.get(f"{config.COMFY_URL}/settings", timeout=5)
+        r = http_session.get(f"{config.COMFY_URL}/settings", timeout=5)
 
         if r.status_code == 200:
             settings = r.json()
@@ -59,7 +61,7 @@ def get_comfyui_output_directory():
 
     try:
         # Alternative: Try the system_stats endpoint
-        r = requests.get(f"{config.COMFY_URL}/system_stats", timeout=5)
+        r = http_session.get(f"{config.COMFY_URL}/system_stats", timeout=5)
 
         if r.status_code == 200:
             stats = r.json()
@@ -79,7 +81,7 @@ def get_comfyui_output_directory():
 
     try:
         # Another approach: Check the extension settings
-        r = requests.get(f"{config.COMFY_URL}/extension_manager", timeout=5)
+        r = http_session.get(f"{config.COMFY_URL}/extension_manager", timeout=5)
 
         if r.status_code == 200:
             ext_data = r.json()
@@ -129,7 +131,7 @@ def submit(workflow):
         "client_id": str(uuid.uuid4())
     }
 
-    r = requests.post(
+    r = http_session.post(
         f"{config.COMFY_URL}/prompt",
         json=payload,
         timeout=10
@@ -148,7 +150,7 @@ def submit(workflow):
 def interrupt_generation():
     """Interrupt the currently running generation in ComfyUI."""
     try:
-        r = requests.post(f"{config.COMFY_URL}/interrupt", timeout=5)
+        r = http_session.post(f"{config.COMFY_URL}/interrupt", timeout=5)
         logger.info(f"ComfyUI interrupt sent, status: {r.status_code}")
         return r.status_code == 200
     except Exception as e:
@@ -159,7 +161,7 @@ def interrupt_generation():
 def clear_queue():
     """Clear all pending items from the ComfyUI queue."""
     try:
-        r = requests.post(
+        r = http_session.post(
             f"{config.COMFY_URL}/queue",
             json={"clear": True},
             timeout=5
@@ -198,27 +200,32 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
 
     # First, check if it's already in history (fast execution)
     from core.comfy_client import wait_for_prompt_completion
-    try:
-        check_response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
-        if check_response.status_code == 200:
-            history = check_response.json()
-            if prompt_id in history:
-                logger.debug(f"Prompt {prompt_id} already in history, skipping WS progress.")
-                if progress_callback:
-                    progress_callback(100, 100)
-                return wait_for_prompt_completion(prompt_id, timeout=10)
-    except Exception as e:
-        logger.debug(f"Initial history check failed: {e}")
+    for attempt in range(2): # Try twice with a tiny delay
+        try:
+            check_response = http_session.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
+            if check_response.status_code == 200:
+                history = check_response.json()
+                if prompt_id in history:
+                    logger.debug(f"Prompt {prompt_id} already in history, skipping WS progress.")
+                    if progress_callback:
+                        progress_callback(100, 100)
+                    return wait_for_prompt_completion(prompt_id, timeout=10)
+        except Exception as e:
+            logger.debug(f"Initial history check attempt {attempt+1} failed: {e}")
+        
+        if attempt == 0:
+            time.sleep(0.1) # Tiny sleep before second attempt
 
     async def _listen():
         logger.info(f"Connecting to ComfyUI WebSocket: {ws_url}")
         try:
             async with websockets.connect(ws_url) as websocket:
                 start_time = time.time()
-                last_history_check = time.time()
+                last_history_check = 0 # Force immediate first check
                 our_prompt_is_executing = False  # Only true when OUR prompt is actively running
-                currently_executing_prompt_id = None  # Track exactly which prompt is running (for progress filtering)
+                another_prompt_is_executing = False  # True when we've confirmed another prompt is running
                 execution_start_time = None  # Track when our prompt actually starts
+                currently_executing_prompt_id = None  # Track what prompt is executing right now
                 
                 while True:
                     current_time = time.time()
@@ -235,10 +242,10 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                             return {'success': False, 'error': f'Queue timeout after {int(current_time - start_time)}s', 'outputs': []}
 
                     # Occasionally check history manually as fallback
-                    if current_time - last_history_check > 5.0:
+                    if current_time - last_history_check > 1.0:
                         last_history_check = current_time
                         try:
-                            hist_result = await asyncio.to_thread(requests.get, f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
+                            hist_result = await asyncio.to_thread(http_session.get, f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
                             if hist_result.status_code == 200:
                                 history = hist_result.json()
                                 if prompt_id in history:
@@ -255,6 +262,8 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                         
                         msg_type = message.get("type")
                         data = message.get("data", {})
+                        
+
 
                         if msg_type == "executing":
                             msg_prompt_id = data.get("prompt_id")
@@ -284,22 +293,20 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
                             # Progress messages in newer ComfyUI versions include prompt_id
                             prog_prompt_id = data.get("prompt_id")
                             
-                            # If prompt_id is directly in the progress message, trust it
                             is_our_progress = False
+                            # 1. Direct match (best)
                             if prog_prompt_id == prompt_id:
                                 is_our_progress = True
-                            # If no prompt_id in progress message, fallback to tracking 'executing' events
+                            # 2. Fallback to global execution state tracker
                             elif prog_prompt_id is None:
                                 if currently_executing_prompt_id == prompt_id:
-                                    is_our_progress = True
-                                # If we haven't seen ANY prompt start executing yet, it might be an early progress event for us
-                                elif currently_executing_prompt_id is None and not our_prompt_is_executing:
                                     is_our_progress = True
 
                             if is_our_progress and progress_callback:
                                 value = data.get("value", 0)
                                 max_val = data.get("max", 0)
                                 progress_callback(value, max_val)
+
 
                     except asyncio.TimeoutError:
                         continue
@@ -338,7 +345,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
         if elapsed > timeout:
             # Check queue status before giving up
             try:
-                queue_response = requests.get(f"{config.COMFY_URL}/queue", timeout=5)
+                queue_response = http_session.get(f"{config.COMFY_URL}/queue", timeout=5)
                 if queue_response.status_code == 200:
                     queue_data = queue_response.json()
                     queue_running = queue_data.get("queue_running", [])
@@ -359,7 +366,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
 
         try:
             # Check prompt status
-            response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
+            response = http_session.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
 
             if response.status_code != 200:
                 time.sleep(2)
@@ -371,7 +378,7 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
                 # If it's not in history, check if it's still in the queue.
                 # If it's in neither, it was likely canceled/interrupted.
                 try:
-                    queue_resp = requests.get(f"{config.COMFY_URL}/queue", timeout=5)
+                    queue_resp = http_session.get(f"{config.COMFY_URL}/queue", timeout=5)
                     if queue_resp.status_code == 200:
                         queue_data = queue_resp.json()
                         queue_running = queue_data.get("queue_running", [])
@@ -526,7 +533,7 @@ def get_output_file_path(output_info):
 
     # Try each candidate path
     for path in candidate_paths:
-        abs_path = os.path.abspath(path)
+        abs_path = config.resolve_path(path)
         if os.path.exists(abs_path):
             logger.debug(f"Output file found: {abs_path}")
             return abs_path
@@ -546,7 +553,7 @@ def get_output_file_path(output_info):
                     if file.startswith(base_name) and file.endswith('.mp4'):
                         found_path = os.path.join(comfy_output_dir, file)
                         logger.info(f"Found video with similar name: {found_path}")
-                        return os.path.abspath(found_path)
+                        return config.resolve_path(found_path)
 
     # Log the expected path even if not found
     logger.warning(f"Output file not found at any expected path")

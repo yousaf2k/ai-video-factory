@@ -5,7 +5,10 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
+import { Toaster } from 'sonner';
 import Link from 'next/link';
+import { List } from 'lucide-react';
+import QueueMenuLink from '@/components/navigation/QueueMenuLink';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -26,13 +29,14 @@ export default function RootLayout({
           <div className="min-h-screen bg-background">
             <header className="border-b bg-card">
               <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-                <Link href="/sessions" className="text-xl font-bold text-primary">
+                <Link href="/projects" className="text-xl font-bold text-primary">
                   AI Video Factory
                 </Link>
                 <nav className="flex items-center gap-6">
-                  <Link href="/sessions" className="text-sm font-medium hover:text-primary transition-colors">
-                    Sessions
+                  <Link href="/projects" className="text-sm font-medium hover:text-primary transition-colors">
+                    Projects
                   </Link>
+                  <QueueMenuLink />
                   <Link href="/agents" className="text-sm font-medium hover:text-primary transition-colors">
                     Agents
                   </Link>
@@ -49,6 +53,16 @@ export default function RootLayout({
               {children}
             </main>
           </div>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: {
+                border: "2px solid",
+                borderRadius: "0.5rem",
+                boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
+              },
+            }}
+          />
         </Providers>
       </body>
     </html>

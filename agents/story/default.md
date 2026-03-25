@@ -23,14 +23,28 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 ```json
 {
   "title": "Video title here",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "ultra cinematic documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A 45-year-old explorer, weathered skin, intense blue eyes, wearing a leather pilot cap, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A 45-year-old explorer, full body view, standing heroically, wearing a brown distressed leather jacket and khaki cargo pants, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Deep male voice, authoritative, gravelly')",
+      "personality": "Personality traits (e.g., 'Adventurous, cynical, but loyal')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Describe the setting/environment",
       "characters": "Who is in the scene",
       "action": "What happens in the scene",
       "emotion": "The emotional tone/mood",
-      "narration": "Voice-over narration text for this scene (2-3 sentences spoken by narrator)",
+      "narration": "Voice-over narration text for this scene. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -63,14 +77,28 @@ You must respond with valid JSON only. No markdown, no explanations, just the JS
 ```json
 {
   "title": "Video title here",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "ultra cinematic documentary",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A 45-year-old explorer, weathered skin, intense blue eyes, wearing a leather pilot cap, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A 45-year-old explorer, full body view, standing heroically, wearing a brown distressed leather jacket and khaki cargo pants, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Deep male voice, authoritative, gravelly')",
+      "personality": "Personality traits (e.g., 'Adventurous, cynical, but loyal')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Describe the setting/environment",
       "characters": "Who is in the scene",
       "action": "What happens in the scene",
       "emotion": "The emotional tone/mood",
-      "narration": "Voice-over narration text for this scene (2-3 sentences spoken by narrator)"
+      "narration": "Voice-over narration text for this scene. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }
@@ -80,7 +108,7 @@ You must respond with valid JSON only. No markdown, no explanations, just the JS
 
 - **Scene-Specific**: Each scene should have its own narration that describes what's happening
 - **Story-Driven**: Narration should advance the story, provide context, or add emotional depth
-- **Concise**: Keep narration to 2-3 sentences per scene (approximately 15-30 seconds when spoken)
+- **Dynamic Length**: Calculate the exact amount of narration needed based on the scene_duration. At ~2.5 words per second, a 20s scene needs ~50 words, a 60s scene needs ~150 words. Do not under-write or over-write.
 - **Conversational**: Write as if speaking naturally to the audience
 - **Visual Complement**: Narration should enhance what's seen on screen, not just describe it
 

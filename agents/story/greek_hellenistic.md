@@ -25,14 +25,28 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 ```json
 {
   "title": "Journey title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative - Greek Hellenistic Period",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background (e.g., 'A scholar from the Library of Alexandria, intelligent eyes, holding a papyrus scroll, high detail photography, white background')",
+      "image_prompt_full": "Full standing view prompt (e.g., 'A scholar from the Library of Alexandria, full body view, standing in a grand colonnade, wearing a fine linen chiton, high detail cinematic lighting')",
+      "voice_type": "Voice requirements (e.g., 'Eloquent male voice, slightly fast-paced, enthusiastic')",
+      "personality": "Personality traits (e.g., 'Intellectually curious, cosmopolitan, slightly arrogant')",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time (323-31 BCE or specific year)",
       "characters": "People you met - Ptolemy, Cleopatra, Archimedes, Euclid, scholars, merchants",
       "action": "What you witnessed and experienced",
       "emotion": "How you felt in that moment - wonder, fascination, sadness, admiration",
-      "narration": "Your voice-over narration describing the experience (2-3 sentences)",
+      "narration": "Your voice-over narration describing the experience Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -79,14 +93,28 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ```json
 {
   "title": "Journey title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative - Greek Hellenistic Period",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed face prompt on white background",
+      "image_prompt_full": "Full standing view prompt",
+      "voice_type": "Voice requirements",
+      "personality": "Traits",
+      "attire": "Description of clothing as per story requirements"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time (323-31 BCE or specific year)",
       "characters": "People you met - Ptolemy, Cleopatra, Archimedes, Euclid, scholars, merchants",
       "action": "What you witnessed and experienced",
       "emotion": "How you felt in that moment - wonder, fascination, sadness, admiration",
-      "narration": "Your voice-over narration describing the experience (2-3 sentences)"
+      "narration": "Your voice-over narration describing the experience Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }

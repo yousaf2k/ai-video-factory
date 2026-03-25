@@ -39,9 +39,17 @@ Complete guide to all documentation for the AI Video Factory system.
 | Document | Description |
 |----------|-------------|
 | **[Workflow Guide](WORKFLOW_GUIDE.md)** ⭐ | Complete pipeline overview |
-| [Session Guide](SESSION_GUIDE.md) | Session management |
+| [Project Guide](SESSION_GUIDE.md) | Project management |
 | [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md) | Regenerate failed shots |
 | [Workflow Diagram](WORKFLOW_DIAGRAM.md) | Visual system architecture |
+| **[Then Vs Now Quick Start](features/thenvsnow/THEN_VS_NOW_QUICKSTART.md)** 🆕 | FLFI2V reunion video guide |
+| **[Then Vs Now Scene Requirements](features/thenvsnow/THEN_VS_NOW_SCENE_REQUIREMENTS.md)** 🆕 | 7 mandatory scene elements |
+| **[Then Vs Now Thumbnail Guide](features/thenvsnow/THEN_VS_NOW_THUMBNAIL_GUIDE.md)** 🆕 | YouTube thumbnail specifications |
+| **[Then Vs Now Motion Prompt Guide](features/thenvsnow/THEN_VS_NOW_MOTION_PROMPT_GUIDE.md)** 🆕 | Animation/motion prompt specs |
+| **[How to Make Departure Videos](features/thenvsnow/HOW_TO_MAKE_DEPARTURE_VIDEOS.md)** 🆕 | Departure video generation guide |
+| **[FLFI2V Video Generation Logic](features/thenvsnow/FLFI2V_VIDEO_GENERATION_LOGIC.md)** 🆕 | First/last frame logic |
+| **[Viewing FLFI2V Prompts](features/thenvsnow/VIEWING_FLFI2V_PROMPTS.md)** 🆕 | How to view THEN/NOW prompts |
+| **[FLFI2V Selfie Composition](features/thenvsnow/FLFI2V_SELFIE_COMPOSITION.md)** 🆕 | Selfie composition details |
 
 ### Reference
 
@@ -51,6 +59,7 @@ Complete guide to all documentation for the AI Video Factory system.
 | [Features Overview](COMPLETE_FEATURE_OVERVIEW.md) | All features explained |
 | [Project Overview](PROJECT_OVERVIEW.md) | Project structure and implementation |
 | [Implementation Summary](IMPLEMENTATION_SUMMARY.md) | Technical implementation details |
+| **[Then Vs Now Implementation](features/thenvsnow/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)** 🆕 | FLFI2V technical docs |
 
 ### Quick Reference
 
@@ -60,7 +69,7 @@ Complete guide to all documentation for the AI Video Factory system.
 | [Video Length Guide](VIDEO_LENGTH_GUIDE.md) | Video length configuration |
 | [Video Length QuickRef](VIDEO_LENGTH_QUICKREF.md) | Video length cheat sheet |
 | [Video Regeneration QuickRef](VIDEO_REGEN_QUICKREF.md) | Regeneration quick reference |
-| [Session Visual Guide](SESSION_VISUAL_GUIDE.md) | Visual session guide |
+| [Project Visual Guide](SESSION_VISUAL_GUIDE.md) | Visual project guide |
 | [Features Summary](FEATURES_SUMMARY.md) | Feature summary |
 | [New Features Summary](NEW_FEATURES_SUMMARY.md) | New features overview |
 | [Final Feature Summary](FINAL_FEATURE_SUMMARY.md) | Final feature list |
@@ -70,6 +79,7 @@ Complete guide to all documentation for the AI Video Factory system.
 | Document | Description |
 |----------|-------------|
 | [Test Results](TEST_RESULTS.md) | System test results |
+| **[Then Vs Now Test Report](testing/THEN_VS_NOW_TEST_REPORT.md)** 🆕 | FLFI2V feature test results |
 
 ---
 
@@ -160,22 +170,22 @@ IMAGE_GENERATION_MODE = "gemini"  # or "comfyui"
 
 **See:** [Configuration Guide](CONFIGURATION.md), [ComfyUI Image Guide](COMFYUI_IMAGE_GUIDE.md)
 
-### Session Management & Crash Recovery
+### Project Management & Crash Recovery
 
-Full session tracking with automatic resume:
+Full project tracking with automatic resume:
 
 ```bash
-# List sessions
-python sessions.py --list
+# List projects
+python projects.py --list
 
-# Resume session
-python main.py --session session_20260210_174844
+# Resume project
+python main.py --project project_20260210_174844
 
 # Regenerate failed shots
-python regenerate.py --session session_20260210_174844 --videos --failed-only
+python regenerate.py --project project_20260210_174844 --videos --failed-only
 ```
 
-**See:** [Session Guide](SESSION_GUIDE.md), [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md)
+**See:** [Project Guide](SESSION_GUIDE.md), [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md)
 
 ---
 
@@ -191,11 +201,11 @@ python main.py --idea "Your idea" --max-shots 5 --shot-length 8
 # Enable narration
 python main.py --idea "Your idea" --generate-narration --tts-voice en-US-AriaNeural
 
-# Resume from session
-python main.py --session session_20260210_174844
+# Resume from project
+python main.py --project project_20260210_174844
 
 # Regenerate specific shots
-python regenerate.py --session session_20260210_174844 --shots 1,3,5
+python regenerate.py --project project_20260210_174844 --shots 1,3,5
 
 # Test setup
 python test_setup.py
@@ -211,7 +221,7 @@ ai_video_factory/
 ├── config.py                    # All configuration
 ├── main.py                      # Pipeline entry point
 ├── regenerate.py                # Regeneration utility
-├── sessions.py                  # Session management CLI
+├── projects.py                  # Project management CLI
 │
 ├── docs/                        # 📚 Documentation (this folder)
 │   ├── DOCS_INDEX.md           # ← You are here
@@ -230,7 +240,7 @@ ai_video_factory/
 │   ├── image_generator.py      # Image generation
 │   ├── prompt_compiler.py      # Workflow compilation
 │   ├── comfy_client.py         # ComfyUI interface
-│   └── session_manager.py      # Session management
+│   └── project_manager.py      # Project management
 │
 ├── agents/                      # Prompt templates
 │   ├── story/                  # Story generation agents
@@ -247,7 +257,7 @@ ai_video_factory/
 │   └── story.txt               # Default idea input
 │
 └── output/                      # Output files
-    └── sessions/               # Session folders
+    └── projects/               # Project folders
 ```
 
 ---
@@ -313,7 +323,7 @@ Do you want to...
 
 ### Workflow
 - [Workflow Guide](WORKFLOW_GUIDE.md)
-- [Session Guide](SESSION_GUIDE.md)
+- [Project Guide](SESSION_GUIDE.md)
 - [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md)
 
 ### Reference
@@ -327,13 +337,15 @@ Do you want to...
 
 **New in This Version:**
 
+- 🆕 **[Then Vs Now Implementation](features/thenvsnow/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)** - Complete FLFI2V feature documentation
+- 🆕 **[Then Vs Now Quick Start](features/thenvsnow/THEN_VS_NOW_QUICKSTART.md)** - User guide for FLFI2V reunion videos
 - ⭐ **[Configuration Guide](CONFIGURATION.md)** - Complete config.py reference
 - ⭐ **[Camera LoRA Guide](CAMERA_LORA_GUIDE.md)** - Multi-camera LoRA system documentation
 - ⭐ **[Workflow Guide](WORKFLOW_GUIDE.md)** - Complete pipeline overview
 - ⭐ **[API Reference](API_REFERENCE.md)** - Full API documentation
 
-**Last Updated:** February 11, 2026
-**Version:** 3.0 (Multi-Camera LoRA System)
+**Last Updated:** March 12, 2026
+**Version:** 4.0 (FLFI2V Then Vs Now Feature)
 
 ---
 

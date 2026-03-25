@@ -10,12 +10,13 @@ import os
 import time
 import uuid
 from core.logger_config import get_logger
+from core.comfy_client import http_session
 
 # Get logger for ComfyUI image generation
 logger = get_logger(__name__)
 
 
-def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = "", seed: int = None, workflow_name: str = None, progress_callback=None):
+def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = "", seed: int = None, workflow_name: str = None, aspect_ratio: str = None, progress_callback=None, reference_image_path: str = None):
     """
     Generate a single image using ComfyUI workflow.
 
@@ -25,6 +26,9 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
         negative_prompt: Optional negative prompt for better quality
         seed: Optional random seed for reproducibility
         workflow_name: Optional workflow name from IMAGE_WORKFLOWS (uses config.IMAGE_WORKFLOW if not specified)
+        aspect_ratio: Optional aspect ratio override (uses config.IMAGE_ASPECT_RATIO if not specified)
+        progress_callback: Optional callback for progress updates (current, total)
+        reference_image_path: Optional path to reference image for IP-Adapter
 
     Returns:
         Path to the generated image file, or None if failed
@@ -55,21 +59,31 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
             workflow_config = workflows[workflow_name]
 
         workflow_path = workflow_config['workflow_path']
-        text_node_id = workflow_config['text_node_id']
-        neg_text_node_id = workflow_config['neg_text_node_id']
-        ksampler_node_id = workflow_config['ksampler_node_id']
-        vae_node_id = workflow_config['vae_node_id']
-        save_node_id = workflow_config['save_node_id']
+        text_node_id = workflow_config.get('text_node_id')
+        neg_text_node_id = workflow_config.get('neg_text_node_id')
+        ksampler_node_id = workflow_config.get('ksampler_node_id')
+        vae_node_id = workflow_config.get('vae_node_id')
+        save_node_id = workflow_config.get('save_node_id')
+        load_reference_node_id = workflow_config.get('load_reference_node_id')
 
         logger.info(f"Using workflow: {workflow_name} ({workflow_config.get('description', 'No description')})")
         logger.debug(f"Workflow file: {workflow_path}")
+
+        # Log IP-Adapter usage if reference image provided
+        if reference_image_path:
+            if load_reference_node_id:
+                logger.info(f"Using IP-Adapter with reference image: {reference_image_path}")
+            else:
+                logger.warning(f"Reference image provided but workflow '{workflow_name}' doesn't have load_reference_node_id configured")
 
         # Load the image generation workflow
         with open(workflow_path, 'r', encoding='utf-8') as f:
             workflow = json.load(f)
 
         # Get dimensions from config
-        width, height = config.calculate_image_dimensions()
+        if aspect_ratio is None:
+            aspect_ratio = config.IMAGE_ASPECT_RATIO
+        width, height = config.calculate_image_dimensions(aspect_ratio=aspect_ratio)
 
         # Inject prompts into the workflow
         # The workflow structure needs to be converted to API format
@@ -77,15 +91,15 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
 
         # If it was already in API format, we still need to inject dimensions into specific nodes
         if "nodes" not in workflow:
-            # Detect Flux v1 workflows and clamp width to 1536
+            # Detect Flux v1 workflows and clamp width to 1440
             node_classes = {nd.get("class_type", "") for nd in api_format.values()}
             is_flux_v1 = ("ModelSamplingFlux" in node_classes or "EmptySD3LatentImage" in node_classes) \
                          and "EmptyFlux2LatentImage" not in node_classes \
                          and "Flux2Scheduler" not in node_classes
-            if is_flux_v1 and width > 1536:
-                logger.info(f"Flux v1 detected: clamping width from {width} to 1536")
-                height = int(height * (1536 / width))
-                width = 1536
+            if is_flux_v1 and width > 1440:
+                logger.info(f"Flux v1 detected: clamping width from {width} to 1440")
+                height = int(height * (1440 / width))
+                width = 1440
 
             for node_id, node_data in api_format.items():
                 class_type = node_data.get("class_type", "")
@@ -108,6 +122,13 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
 
         if neg_text_node_id and neg_text_node_id in api_format and negative_prompt:
             api_format[neg_text_node_id]["inputs"]["text"] = negative_prompt
+
+        # Inject reference image for IP-Adapter if provided
+        if reference_image_path and load_reference_node_id and load_reference_node_id in api_format:
+            # Convert to absolute path and normalize
+            ref_path = config.resolve_path(reference_image_path).replace('\\', '/')
+            api_format[load_reference_node_id]["inputs"]["image"] = ref_path
+            logger.debug(f"Injected reference image into node {load_reference_node_id}: {ref_path}")
 
         # Set random seed if provided
         if seed is not None:
@@ -139,7 +160,7 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
             "prompt": api_format
         }
 
-        response = requests.post(
+        response = http_session.post(
             f"{config.COMFY_URL}/prompt",
             json=payload
         )
@@ -309,7 +330,7 @@ def _wait_for_image(prompt_id, output_path, timeout=300, progress_callback=None)
 
     # Get the history to extract outputs
     try:
-        response = requests.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
+        response = http_session.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=10)
         if response.status_code != 200:
             logger.error(f"Failed to get history for prompt {prompt_id}")
             return None
@@ -363,7 +384,7 @@ def _wait_for_image(prompt_id, output_path, timeout=300, progress_callback=None)
             else:
                 url = f"{config.COMFY_URL}/view?filename={image_filename}&type=output"
 
-            img_response = requests.get(url, timeout=30)
+            img_response = http_session.get(url, timeout=30)
             if img_response.status_code == 200:
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 with open(output_path, 'wb') as f:

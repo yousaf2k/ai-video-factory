@@ -25,14 +25,28 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 ```json
 {
   "title": "Journey title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time period",
       "characters": "Historical figures and people you met",
       "action": "What you witnessed and experienced",
       "emotion": "How you felt in that moment",
-      "narration": "Your voice-over narration describing the experience (2-3 sentences)",
+      "narration": "Your voice-over narration describing the experience Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
       "scene_duration": 45  // Duration in seconds
     }
   ]
@@ -77,14 +91,28 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
 ```json
 {
   "title": "Journey title",
+  "description": "A short, engaging description of the video",
+  "tags": ["tag1", "tag2", "tag3"],
+  "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
+  "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
   "style": "first-person time travel narrative",
+  "characters": [
+    {
+      "name": "Character Name",
+      "image_prompt_face": "Detailed prompt for character face on white background",
+      "image_prompt_full": "Detailed prompt for character full standing view in appropriate attire",
+      "voice_type": "Description of the character's voice",
+      "personality": "Key personality traits",
+      "attire": "Description of the character's clothing"
+    }
+  ],
   "scenes": [
     {
       "location": "Exact place and time period",
       "characters": "Historical figures and people you met",
       "action": "What you witnessed and experienced",
       "emotion": "How you felt in that moment",
-      "narration": "Your voice-over narration describing the experience (2-3 sentences)"
+      "narration": "Your voice-over narration describing the experience Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration."
     }
   ]
 }

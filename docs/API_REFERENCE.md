@@ -209,7 +209,7 @@ from core.image_generator import generate_images_for_shots
 
 shots = generate_images_for_shots(
     shots=shots,
-    output_dir="output/session/images",
+    output_dir="output/project/images",
     images_per_shot=2
 )
 ```
@@ -360,52 +360,52 @@ video_path = get_video_path(prompt_id)
 
 ---
 
-### session_manager.py
+### project_manager.py
 
 ```python
-class SessionManager:
-    def __init__(self, base_dir: str = "output/sessions")
-    def create_session(self, idea: str) -> str
-    def save_step(self, session_id: str, step: str, data: dict)
-    def load_step(self, session_id: str, step: str) -> dict
-    def update_status(self, session_id: str, status: str)
-    def get_session_info(self, session_id: str) -> dict
-    def list_sessions(self) -> list
+class ProjectManager:
+    def __init__(self, base_dir: str = "output/projects")
+    def create_project(self, idea: str) -> str
+    def save_step(self, project_id: str, step: str, data: dict)
+    def load_step(self, project_id: str, step: str) -> dict
+    def update_status(self, project_id: str, status: str)
+    def get_project_info(self, project_id: str) -> dict
+    def list_projects(self) -> list
 ```
 
-Manages session creation, storage, and retrieval.
+Manages project creation, storage, and retrieval.
 
 **Methods:**
 
-**`create_session(idea: str) -> str`**
-- Creates a new session
-- Returns session ID
+**`create_project(idea: str) -> str`**
+- Creates a new project
+- Returns project ID
 
-**`save_step(session_id: str, step: str, data: dict)`**
-- Saves step data to session
+**`save_step(project_id: str, step: str, data: dict)`**
+- Saves step data to project
 - Steps: "story", "scene_graph", "shots", "images", "videos"
 
-**`load_step(session_id: str, step: str) -> dict`**
-- Loads step data from session
+**`load_step(project_id: str, step: str) -> dict`**
+- Loads step data from project
 
-**`update_status(session_id: str, status: str)`**
-- Updates session status
+**`update_status(project_id: str, status: str)`**
+- Updates project status
 - Statuses: "in_progress", "completed", "failed"
 
-**`get_session_info(session_id: str) -> dict`**
-- Returns complete session information
+**`get_project_info(project_id: str) -> dict`**
+- Returns complete project information
 
-**`list_sessions() -> list`**
-- Lists all sessions
+**`list_projects() -> list`**
+- Lists all projects
 
 **Example:**
 ```python
-from core.session_manager import SessionManager
+from core.project_manager import ProjectManager
 
-sm = SessionManager()
-session_id = sm.create_session("A sunset over the ocean")
-sm.save_step(session_id, "story", story_data)
-info = sm.get_session_info(session_id)
+sm = ProjectManager()
+project_id = sm.create_project("A sunset over the ocean")
+sm.save_step(project_id, "story", story_data)
+info = sm.get_project_info(project_id)
 ```
 
 ---
@@ -456,16 +456,16 @@ Convert narration script to audio using TTS.
 
 ```python
 regenerate_videos(
-    session_id: str,
+    project_id: str,
     shot_numbers: list = None,
     failed_only: bool = False
 ) -> dict
 ```
 
-Regenerate videos for a session.
+Regenerate videos for a project.
 
 **Parameters:**
-- `session_id` (str): Session to regenerate
+- `project_id` (str): Project to regenerate
 - `shot_numbers` (list, optional): Specific shots to regenerate
 - `failed_only` (bool): Only regenerate failed videos
 
@@ -476,16 +476,16 @@ Regenerate videos for a session.
 
 ```python
 regenerate_images(
-    session_id: str,
+    project_id: str,
     shot_numbers: list = None,
     failed_only: bool = False
 ) -> dict
 ```
 
-Regenerate images for a session.
+Regenerate images for a project.
 
 **Parameters:**
-- `session_id` (str): Session to regenerate
+- `project_id` (str): Project to regenerate
 - `shot_numbers` (list, optional): Specific shots to regenerate
 - `failed_only` (bool): Only regenerate failed images
 
@@ -568,7 +568,7 @@ python main.py [OPTIONS]
 
 **Options:**
 - `--idea TEXT`: Video idea
-- `--session TEXT`: Resume from session
+- `--project TEXT`: Resume from project
 - `--step N`: Start from step (2-7)
 - `--max-shots N`: Limit number of shots
 - `--shot-length SECONDS`: Video length per shot
@@ -618,7 +618,7 @@ from typing import Dict, List, Optional, Union
 Shot = Dict[str, Any]
 Story = Dict[str, Any]
 SceneGraph = List[Dict[str, Any]]
-SessionID = str
+ProjectID = str
 PromptID = str
 ```
 

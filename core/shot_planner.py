@@ -12,6 +12,7 @@ from config import (DEFAULT_SHOTS_PER_SCENE, MIN_SHOTS_PER_SCENE, MAX_SHOTS_PER_
                     DEFAULT_SHOT_LENGTH)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+import uuid
 
 
 # Get logger for agent operations
@@ -24,7 +25,7 @@ def is_local_provider():
     return LLM_PROVIDER.lower() in local_providers
 
 
-def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, image_agent, video_agent):
+def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_agent):
     """Plan shots for a batch of scenes"""
     # Create scene graph for this batch
     batch_graph = json.dumps(scenes_batch, ensure_ascii=False)
@@ -40,7 +41,7 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
     # Try to use agent prompts
     try:
         user_input = f"{batch_graph}{batch_instruction}"
-        image_prompt = load_agent_prompt("image", user_input, image_agent)
+        image_prompt = load_agent_prompt("shots", user_input, shots_agent)
 
         provider = get_provider()
         response = provider.ask(image_prompt, response_format="application/json")
@@ -51,17 +52,17 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
 
     except (FileNotFoundError, ValueError):
         # Fall back to legacy prompt
-        print(f"[WARN] Image agent '{image_agent}' not found, using legacy prompt for batch {batch_num}")
+        print(f"[WARN] Shots agent '{shots_agent}' not found, using legacy prompt for batch {batch_num}")
         prompt = f"""
 Create cinematic shots for WAN 2.2.{batch_instruction}
 
-Return JSON list (each shot MUST include narration from scene):
+Return JSON list (each shot):
 [
   {{
+   "scene_id": 0,
    "image_prompt":"",
    "motion_prompt":"",
-   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime ",
-   "narration":""
+   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]
 
@@ -283,17 +284,15 @@ def extract_complete_objects(json_str):
 
 
 @log_agent_call
-def plan_shots(scene_graph, max_shots=None, image_agent="default", video_agent="default", shots_per_scene=None):
+def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_scene=None):
     """
     Plan cinematic shots for WAN 2.2 video generation.
 
     Args:
         scene_graph: The scene graph JSON
         max_shots: Maximum number of shots to create (optional)
-        image_agent: Name of image prompt agent to use (default: "default")
+        shots_agent: Name of shots prompt agent to use (default: "default")
                     Available: default, artistic
-        video_agent: Name of video motion agent to use (default: "default")
-                    Available: default, cinematic
         shots_per_scene: Target number of shots per scene (optional)
 
     Returns:
@@ -326,6 +325,11 @@ def plan_shots(scene_graph, max_shots=None, image_agent="default", video_agent="
     else:
         scenes = parsed_graph
         
+    # Inject 0-based index into each scene so LLM knows which index to return
+    for i, scene in enumerate(scenes):
+        scene['scene_id'] = i
+        
+    scene_graph_with_indices = json.dumps(scenes, ensure_ascii=False, indent=2)
     scene_count = len(scenes)
 
     # Determine shots per scene target
@@ -444,8 +448,7 @@ CRITICAL SHOT REQUIREMENTS:
                 'batch_num': batch_num + 1,
                 'total_batches': total_batches,
                 'max_shots_instruction': batch_instruction,
-                'image_agent': image_agent,
-                'video_agent': video_agent,
+                'shots_agent': shots_agent,
                 'start_idx': start_idx,
                 'end_idx': end_idx
             })
@@ -469,8 +472,7 @@ CRITICAL SHOT REQUIREMENTS:
                     batch_num=batch_data['batch_num'],
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
-                    image_agent=batch_data['image_agent'],
-                    video_agent=batch_data['video_agent']
+                    shots_agent=batch_data['shots_agent']
                 )
 
                 # Add batch number
@@ -527,11 +529,10 @@ CRITICAL SHOT REQUIREMENTS:
                     batch_num=batch_data['batch_num'],
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
-                    image_agent=batch_data['image_agent'],
-                    video_agent=batch_data['video_agent']
+                    shots_agent=batch_data['shots_agent']
                 )
 
-                # Add batch number
+                # Add batch number and ensure scene_index is present
                 for shot in batch_shots:
                     shot['batch_number'] = batch_data['batch_num']
 
@@ -553,15 +554,20 @@ CRITICAL SHOT REQUIREMENTS:
                 print(f"[INFO] Final shot count: {len(all_shots)} shots = ~{len(all_shots) * DEFAULT_SHOT_LENGTH}s video")
             logger.info(f"Final shot count: {len(all_shots)} shots, ~{len(all_shots) * DEFAULT_SHOT_LENGTH}s video")
 
+        # Inject stable UUIDs and correct indices
+        for i, shot in enumerate(all_shots):
+            shot['id'] = uuid.uuid4().hex[:8]
+            shot['index'] = i + 1
+
         return all_shots
 
     # Single batch processing (original logic)
-    user_input = f"{scene_graph}{max_shots_instruction}"
+    user_input = f"{scene_graph_with_indices}{max_shots_instruction}"
 
     # Try to use agent prompts
     try:
-        # Load image agent prompt
-        image_prompt = load_agent_prompt("image", user_input, image_agent)
+        # Load shots agent prompt
+        image_prompt = load_agent_prompt("shots", user_input, shots_agent)
 
         # Get the response
         provider = get_provider()
@@ -594,26 +600,33 @@ CRITICAL SHOT REQUIREMENTS:
                 print(f"[INFO] Final shot count: {len(shots)} shots = ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
             logger.info(f"Final shot count: {len(shots)} shots, ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
 
+        # Inject stable UUIDs and correct indices
+        for i, shot in enumerate(shots):
+            shot['id'] = uuid.uuid4().hex[:8]
+            shot['index'] = i + 1
+            # scene_id should already be there from LLM, but we can't trust it fully for all cases
+            # If missing, we'll leave it as None or try to guess? Better to leave for now as model allows Optional
+
         return shots
 
     except (FileNotFoundError, ValueError):
         # Fall back to legacy prompt if agent not found
-        print(f"[WARN] Image agent '{image_agent}' not found, using legacy prompt")
+        print(f"[WARN] Shots agent '{shots_agent}' not found, using legacy prompt")
         prompt = f"""
 Create cinematic shots for WAN 2.2.{max_shots_instruction}
 
-Return JSON list (each shot MUST include narration from scene):
+Return JSON list (each shot):
 [
   {{
+   "scene_index": 0,
    "image_prompt":"",
    "motion_prompt":"",
-   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime ",
-   "narration":""
+   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]
 
 SCENES:
-{scene_graph}
+{scene_graph_with_indices}
 """
         provider = get_provider()
         response = provider.ask(prompt, response_format="application/json")
@@ -634,5 +647,10 @@ SCENES:
         if max_shots and len(shots) > max_shots:
             print(f"[INFO] Generated {len(shots)} shots, limiting to {max_shots}")
             shots = shots[:max_shots]
+
+        # Inject stable UUIDs and correct indices
+        for i, shot in enumerate(shots):
+            shot['id'] = uuid.uuid4().hex[:8]
+            shot['index'] = i + 1
 
         return shots
