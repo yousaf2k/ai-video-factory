@@ -1,0 +1,1 @@
+uvx claude-code-log@latest

@@ -1,13 +1,13 @@
 import json
 import os
-from core.session_manager import SessionManager
+from core.project_manager import ProjectManager
 
-session_id = 'session_20260208_015314'
-session_mgr = SessionManager()
-images_dir = session_mgr.get_images_dir(session_id)
+project_id = 'project_20260208_015314'
+project_mgr = ProjectManager()
+images_dir = project_mgr.get_images_dir(project_id)
 
 # Load shots
-shots_path = os.path.join(session_mgr.get_session_dir(session_id), 'shots.json')
+shots_path = os.path.join(project_mgr.get_project_dir(project_id), 'shots.json')
 with open(shots_path, 'r', encoding='utf-8') as f:
     shots = json.load(f)
 

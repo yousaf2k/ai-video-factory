@@ -234,6 +234,7 @@ export function QueueHeader({
               <SelectItem value="image">Images</SelectItem>
               <SelectItem value="video">Videos</SelectItem>
               <SelectItem value="narration">Audio</SelectItem>
+              <SelectItem value="soundfx">Sound FX</SelectItem>
             </SelectContent>
           </Select>
         </div>

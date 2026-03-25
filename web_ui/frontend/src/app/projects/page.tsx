@@ -30,6 +30,7 @@ import { getMediaUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -38,7 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/services/api";
-import type { CreateProjectRequest } from "@/types";
+import { type CreateProjectRequest, ProjectType } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 
 export default function ProjectsPage() {
@@ -53,12 +54,23 @@ export default function ProjectsPage() {
   const [newIdea, setNewIdea] = useState("");
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
 
-  // Agent selection state
-  const [selectedStoryAgent, setSelectedStoryAgent] = useState("default");
+  // Project type and Agent selection state
+  const [selectedProjectType, setSelectedProjectType] = useState<number>(ProjectType.Documentary);
+  const [selectedStoryAgent, setSelectedStoryAgent] = useState("choose");
   const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
+
+  // Filter Story Agents based on selected Project Type
+  const filteredStoryAgents = agents?.story?.filter((agent: any) => {
+    if ((selectedProjectType as number) === ProjectType.ThenVsNow) {
+      return agent.category === "then_vs_now";
+    } else {
+      return agent.category === "documentary" || !agent.category;
+    }
+  }) || [];
   const [totalDuration, setTotalDuration] = useState(600);
   const [promptsFile, setPromptsFile] = useState("");
-  const [selectedAspectRatio, setSelectedAspectRatio] = useState<"16:9" | "9:16">("16:9");
+  const [usePromptsFile, setUsePromptsFile] = useState(false);
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<"16:9" | "9:16" | "21:8">("16:9");
   const [generatingThumbnails, setGeneratingThumbnails] = useState<
     Record<string, boolean>
   >({});
@@ -77,11 +89,25 @@ export default function ProjectsPage() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newIdea.trim()) return;
+    
+    if (usePromptsFile) {
+      if (!promptsFile.trim()) {
+        alert("Please enter a prompts file path.");
+        return;
+      }
+    } else {
+      if (!newIdea.trim()) return;
+    }
+
+    if (selectedStoryAgent === "choose" && !usePromptsFile) {
+      alert("Please select a story agent before creating the project.");
+      return;
+    }
 
     const request: CreateProjectRequest = {
-      idea: newIdea,
-      story_agent: selectedStoryAgent,
+      idea: usePromptsFile ? `Prompts File: ${promptsFile}` : newIdea,
+      project_type: selectedProjectType,
+      story_agent: selectedStoryAgent === "choose" ? "default" : selectedStoryAgent,
       shots_agent: selectedShotsAgent,
       total_duration: totalDuration,
       prompts_file: promptsFile.trim() || undefined,
@@ -358,6 +384,45 @@ export default function ProjectsPage() {
                   </h3>
                   
                   <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      Project Type <span className="text-red-500">*</span>
+                    </label>
+                    <Select
+                      value={selectedProjectType.toString()}
+                      onValueChange={(val) => {
+                        const typeVal = parseInt(val) as ProjectType;
+                        setSelectedProjectType(typeVal);
+                        setSelectedStoryAgent("choose"); // Force selection
+                        if (typeVal !== ProjectType.Documentary) {
+                          setUsePromptsFile(false);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Select Project Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Documentary</SelectItem>
+                        <SelectItem value="2">Then Vs Now</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {selectedProjectType === ProjectType.Documentary && (
+                  <div className="flex items-center space-x-2 mt-2">
+                    <Switch
+                      id="usePromptsFile"
+                      checked={usePromptsFile}
+                      onCheckedChange={setUsePromptsFile}
+                    />
+                    <label htmlFor="usePromptsFile" className="text-sm font-medium text-foreground">
+                      Use Prompts File
+                    </label>
+                  </div>
+                  )}
+                  
+                  {!usePromptsFile && (
+                  <div>
                     <label
                       htmlFor="idea"
                       className="block text-sm font-medium mb-1.5"
@@ -370,16 +435,18 @@ export default function ProjectsPage() {
                       onChange={(e) => setNewIdea(e.target.value)}
                       className="min-h-[120px] resize-y bg-background"
                       placeholder="Describe your video idea in detail..."
-                      required
+                      required={!usePromptsFile}
                     />
                   </div>
+                  )}
 
+                  {selectedProjectType === ProjectType.Documentary && usePromptsFile && (
                   <div>
                     <label
                       htmlFor="promptsFile"
                       className="block text-sm font-medium mb-1.5"
                     >
-                      Prompts File Path <span className="text-muted-foreground font-normal">(optional)</span>
+                      Prompts File Path <span className="text-red-500">*</span>
                     </label>
                     <Input
                       id="promptsFile"
@@ -388,11 +455,13 @@ export default function ProjectsPage() {
                       onChange={(e) => setPromptsFile(e.target.value)}
                       placeholder="e.g., input/my_prompts.txt"
                       className="bg-background"
+                      required={true}
                     />
                     <p className="text-xs text-muted-foreground mt-1.5">
-                      Skip generation and import shots directly from a text file.
+                      Import shots and prompts directly from a text file.
                     </p>
                   </div>
+                  )}
                 </div>
 
                 <div className="border-t"></div>
@@ -411,13 +480,14 @@ export default function ProjectsPage() {
                       </label>
                       <Select
                         value={selectedAspectRatio}
-                        onValueChange={(val) => setSelectedAspectRatio(val as "16:9" | "9:16")}
+                        onValueChange={(val) => setSelectedAspectRatio(val as "16:9" | "9:16" | "21:8")}
                       >
                         <SelectTrigger className="bg-background">
                           <SelectValue placeholder="Select Aspect Ratio" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="16:9">16:9 (Landscape - YouTube)</SelectItem>
+                          <SelectItem value="21:8">21:8 (Cinematic Ultrawide)</SelectItem>
                           <SelectItem value="9:16">9:16 (Portrait - TikTok/Reels)</SelectItem>
                         </SelectContent>
                       </Select>
@@ -450,9 +520,10 @@ export default function ProjectsPage() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
                     <div>
                       <label className="block text-sm font-medium mb-1.5">
-                        Story Agent
+                        Story Agent <span className="text-red-500">*</span>
                       </label>
                       <Select
                         value={selectedStoryAgent}
@@ -462,10 +533,11 @@ export default function ProjectsPage() {
                           <SelectValue placeholder="Select Story Agent" />
                         </SelectTrigger>
                         <SelectContent>
-                          {!agents?.story.length && (
+                          <SelectItem value="choose" disabled>-- Choose an Agent --</SelectItem>
+                          {!filteredStoryAgents.length && (
                             <SelectItem value="default">Default</SelectItem>
                           )}
-                          {agents?.story.map((agent) => (
+                          {filteredStoryAgents.map((agent: any) => (
                             <SelectItem key={agent.id} value={agent.id}>
                               {agent.name}
                             </SelectItem>

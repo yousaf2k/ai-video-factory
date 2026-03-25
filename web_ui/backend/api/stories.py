@@ -217,10 +217,44 @@ async def regenerate_story(project_id: str, request: RegenerateStoryRequest):
         # Get aspect_ratio from meta, default to 16:9
         aspect_ratio = meta.get("aspect_ratio", "16:9")
 
-        story_json = build_story(idea, request.agent, target_length, aspect_ratio)
+        from web_ui.backend.models.story import ProjectType
 
-        # Save story
-        project_manager.save_story(project_id, story_json)
+        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.agent == "then_vs_now" or request.agent.startswith("then_vs_now/")
+
+        if is_then_vs_now:
+            from core.story_engine import build_story_then_vs_now
+            
+            logger.info(f"Regenerating ThenVsNow story for movie: {idea}")
+            story_json = build_story_then_vs_now(
+                movie_name=idea,
+                target_length=target_length,
+                aspect_ratio=aspect_ratio
+            )
+            story = json.loads(story_json)
+            shots = story.pop('shots', [])
+            
+            # Save story.json
+            project_manager.save_story(project_id, json.dumps(story, indent=2, ensure_ascii=False))
+            
+            # Save shots.json directly
+            project_dir = project_manager.get_project_dir(project_id)
+            shots_path = os.path.join(project_dir, "shots.json")
+            with open(shots_path, 'w', encoding='utf-8') as f:
+                json.dump(shots, f, indent=2, ensure_ascii=False)
+                
+            # Update metadata
+            meta['steps']['story'] = True
+            meta['steps']['scene_graph'] = True
+            meta['steps']['shots'] = True
+            meta['stats']['total_shots'] = len(shots)
+            project_manager._save_meta(project_id, meta)
+            
+            logger.info(f"ThenVsNow story regenerated with {len(shots)} shots")
+            return project_service.get_project(project_id)
+        else:
+            story_json = build_story(idea, request.agent, target_length, aspect_ratio)
+            # Save story
+            project_manager.save_story(project_id, story_json)
 
         # Return updated project
         return project_service.get_project(project_id)

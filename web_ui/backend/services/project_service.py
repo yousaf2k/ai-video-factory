@@ -77,6 +77,24 @@ class ProjectService:
         # Load shots if exist
         shots = self.project_manager.get_shots(project_id)
 
+        # Auto-complete check
+        if shots and not meta.get('completed', False):
+            all_done = True
+            for shot in shots:
+                if shot.get('is_flfi2v'):
+                    if not shot.get('meeting_video_rendered') or not shot.get('departure_video_rendered'):
+                        all_done = False
+                        break
+                else:
+                    if not shot.get('video_rendered'):
+                        all_done = False
+                        break
+            if all_done:
+                meta['completed'] = True
+                from datetime import datetime
+                meta['completed_at'] = datetime.now().isoformat()
+                self.project_manager._save_meta(project_id, meta)
+
         return ProjectDetail.from_project_data(
             meta=meta,
             story=story,
@@ -94,8 +112,13 @@ class ProjectService:
             aspect_ratio=request.aspect_ratio
         )
 
+        from web_ui.backend.models.story import ProjectType
+
+        # Store project_type in metadata
+        meta['project_type'] = request.project_type
+
         # Detect if this is a ThenVsNow project
-        is_then_vs_now = request.story_agent == "then_vs_now"
+        is_then_vs_now = request.project_type == ProjectType.THEN_VS_NOW
 
         if is_then_vs_now:
             # Use special story generation flow for ThenVsNow

@@ -99,8 +99,8 @@ def run_flow_generation(image_path, prompt, output_path, aspect_ratio="16:9"):
             page.get_by_text("Video", exact=True).click()
             
             # Select Aspect Ratio
-            # Map "16:9" -> "Landscape", "9:16" -> "Portrait"
-            ratio_text = "Landscape" if aspect_ratio == "16:9" else "Portrait"
+            # Map "21:8", "16:9" -> "Landscape", "9:16" -> "Portrait"
+            ratio_text = "Portrait" if aspect_ratio == "9:16" else "Landscape"
             print(f"Setting Aspect Ratio: {ratio_text}")
             page.get_by_text(ratio_text).click()
             

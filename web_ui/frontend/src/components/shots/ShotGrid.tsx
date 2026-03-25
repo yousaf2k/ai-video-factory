@@ -61,9 +61,10 @@ interface ShotGridProps {
   shots: Shot[];
   projectId: string;
   scenes?: Scene[];
+  aspectRatio?: string;
 }
 
-export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
+export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<
     "image" | "video" | "both" | "narration" | null
@@ -114,8 +115,18 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
         // Whenever a WebSocket progress message broadcasts 'completed', refresh this project's UI!
         queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+
+        // Clear from generatingIndices on completion to remove sticky overlays
+        if (type === 'shot') {
+          setGeneratingIndices((prev) => {
+            const next = new Set(prev);
+            const shot = shots.find(s => s.id === id || s.index.toString() === id.toString());
+            if (shot) next.delete(shot.index);
+            return next;
+          });
+        }
       },
-      [queryClient, projectId],
+      [queryClient, projectId, shots],
     ),
   );
 
@@ -296,6 +307,36 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
     }
   };
 
+  const isSceneSelected = (groupShots: Shot[]) => {
+    if (groupShots.length === 0) return false;
+    return groupShots.every((s) => selectedIndices.includes(s.index));
+  };
+
+  const isSceneIndeterminate = (groupShots: Shot[]) => {
+    const selectedCount = groupShots.filter((s) =>
+      selectedIndices.includes(s.index)
+    ).length;
+    return selectedCount > 0 && selectedCount < groupShots.length;
+  };
+
+  const toggleSelectScene = (groupShots: Shot[], selected: boolean) => {
+    const shotIndices = groupShots.map((s) => s.index);
+    if (selected) {
+      setSelectedIndices((prev) => prev.filter((i) => !shotIndices.includes(i)));
+    } else {
+      setSelectedIndices((prev) => {
+        const next = [...prev];
+        shotIndices.forEach((idx) => {
+          if (!next.includes(idx)) {
+            next.push(idx);
+          }
+        });
+        return next;
+      });
+    }
+  };
+
+
   const handleBatchSubmit = useCallback(async () => {
     if (selectedIndices.length === 0 || !showBatchModal) return;
 
@@ -467,8 +508,10 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
     async (shotIndex: number) => {
       try {
         await api.cancelShotGeneration(projectId, shotIndex);
-
-        // Remove just this one shot from local sets
+      } catch (error) {
+        console.error(`Failed to cancel shot ${shotIndex}:`, error);
+      } finally {
+        // Unconditionally clear local state when cancelling
         setGeneratingIndices((prev) => {
           const next = new Set(prev);
           next.delete(shotIndex);
@@ -481,8 +524,6 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
         });
 
         queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
-      } catch (error) {
-        console.error(`Failed to cancel shot ${shotIndex}:`, error);
       }
     },
     [projectId, queryClient],
@@ -627,7 +668,7 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
 
   return (
     <div className="relative">
-      <div className="flex flex-wrap items-center justify-between gap-y-2 mb-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-4">
         {/* Bulk Selection Toggle */}
         <div className="flex items-center gap-2">
           <button
@@ -690,7 +731,7 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
           Object.keys(shotProgress).length > 0) && (
             <button
               onClick={handleCancelAll}
-              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors ml-auto"
             >
               <XCircle className="w-4 h-4" />
               Cancel All Generation
@@ -881,9 +922,28 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
                   <div className="flex flex-col gap-3 pb-4 border-b">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3">
+                        <button
+                          onClick={() => toggleSelectScene(groupShots, isSceneSelected(groupShots))}
+                          className={cn(
+                            "flex items-center gap-1.5 text-sm p-1 hover:bg-muted rounded transition-colors mt-0.5",
+                            isSceneSelected(groupShots) ? "text-primary" : "text-muted-foreground"
+                          )}
+                          title={isSceneSelected(groupShots) ? "Deselect Scene" : "Select Scene"}
+                        >
+                          {isSceneSelected(groupShots) ? (
+                            <CheckSquare className="w-4 h-4" />
+                          ) : isSceneIndeterminate(groupShots) ? (
+                            <div className="w-4 h-4 border border-input rounded flex items-center justify-center">
+                              <div className="w-2 h-0.5 bg-primary" />
+                            </div>
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
                         <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider whitespace-nowrap shrink-0">
                           {sIdx !== null ? `Scene ${sIdx + 1}` : "Unmatched Shots"}
                         </span>
+
                         {scene && (
                           <div className="flex flex-col gap-1">
                             <h3 className="text-xl font-bold tracking-tight">
@@ -985,9 +1045,10 @@ export function ShotGrid({ shots, projectId, scenes }: ShotGridProps) {
                         queuedIndices.has(shot.index) && !isCurrentlyGenerating;
                       return (
                         <ShotCard
-                          key={`${progressKey}-${shot.image_path}`}
+                          key={progressKey}
                           shot={shot}
                           projectId={projectId}
+                          aspectRatio={aspectRatio}
                           selectable={true}
                           selected={selectedIndices.includes(shot.index)}
                           onSelectChange={(selected: boolean) =>

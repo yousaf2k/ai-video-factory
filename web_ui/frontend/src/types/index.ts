@@ -30,6 +30,8 @@ export interface Character {
   departure_prompt?: string;
   then_reference_image_path?: string;
   now_reference_image_path?: string;
+  then_age?: number;
+  now_age?: number;
 }
 
 export interface ProjectStep {
@@ -61,6 +63,10 @@ export interface Project {
   stats: ProjectStats;
   thumbnail_url?: string;
   thumbnail_url_9_16?: string;
+  thumbnail_url_21_8?: string;
+  poster_thumbnail_url?: string;
+  poster_thumbnail_url_9_16?: string;
+  poster_thumbnail_url_21_8?: string;
   aspect_ratio?: string;
   story?: Story;
   shots?: Shot[];
@@ -77,6 +83,10 @@ export interface ProjectListItem {
   videos_rendered: number;
   thumbnail_url?: string;
   thumbnail_url_9_16?: string;
+  thumbnail_url_21_8?: string;
+  poster_thumbnail_url?: string;
+  poster_thumbnail_url_9_16?: string;
+  poster_thumbnail_url_21_8?: string;
   aspect_ratio?: string;
   story?: Story;
 }
@@ -87,6 +97,10 @@ export interface Story {
   tags?: string[];
   thumbnail_prompt_16_9?: string;
   thumbnail_prompt_9_16?: string;
+  thumbnail_prompt_21_8?: string;
+  poster_thumbnail_prompt_16_9?: string;
+  poster_thumbnail_prompt_9_16?: string;
+  poster_thumbnail_prompt_21_8?: string;
   style: string;
   master_script?: string;
   total_duration?: number;
@@ -148,15 +162,19 @@ export interface Shot {
   departure_video_prompt?: string;
   departure_video_path?: string;
   departure_video_rendered?: boolean;
+  // Sound FX fields
+  soundfx_path?: string;
+  soundfx_generated?: boolean;
 }
 export interface CreateProjectRequest {
   idea: string;
   project_id?: string;
+  project_type: ProjectType;
   story_agent?: string;
   shots_agent?: string;
   total_duration?: number;
   prompts_file?: string;
-  aspect_ratio?: "16:9" | "9:16";
+  aspect_ratio?: "16:9" | "9:16" | "21:8";
 }
 
 export interface UpdateProjectRequest {
@@ -164,7 +182,7 @@ export interface UpdateProjectRequest {
   completed?: boolean;
   story_agent?: string;
   shots_agent?: string;
-  aspect_ratio?: "16:9" | "9:16";
+  aspect_ratio?: "16:9" | "9:16" | "21:8";
 }
 
 export interface GlobalConfig {
@@ -180,6 +198,7 @@ export interface GlobalConfig {
   image_workflow?: string;
   available_video_workflows?: string[];
   available_image_workflows?: string[];
+  playwright_browser?: string;
 }
 
 export interface UpdateGlobalConfigRequest {
@@ -193,6 +212,7 @@ export interface UpdateGlobalConfigRequest {
   gemini_api_key?: string;
   openai_api_key?: string;
   elevenlabs_api_key?: string;
+  playwright_browser?: string;
 }
 
 export interface UpdateStoryRequest {
@@ -253,7 +273,8 @@ export enum GenerationType {
   MEETING_VIDEO = "meeting_video",
   DEPARTURE_VIDEO = "departure_video",
   NARRATION = "narration",
-  BACKGROUND = "background"
+  BACKGROUND = "background",
+  SOUNDFX = "soundfx"
 }
 
 export enum QueueItemStatus {

@@ -103,6 +103,21 @@ def generate_unique_video_filename(videos_dir, shot_idx):
     return video_filename, video_save_path
 
 
+def ensure_base_directories():
+    """Ensure all required base directories exist"""
+    base_dirs = [
+        config.ABS_OUTPUT_DIR,
+        config.LOG_DIR,
+        os.path.join(config.ABS_OUTPUT_DIR, "images"),
+        os.path.join(config.ABS_OUTPUT_DIR, "videos")
+    ]
+    
+    for directory in base_dirs:
+        if not os.path.exists(directory):
+            logger.info(f"Creating directory: {directory}")
+            os.makedirs(directory, exist_ok=True)
+
+
 def print_configuration_summary():
     """Print all configuration settings at startup"""
     print("\n" + "="*70)
@@ -2240,6 +2255,9 @@ def _run_with_prompts_file(project_mgr, args):
 
 def main():
     """Main pipeline with crash recovery"""
+    # Ensure all base directories exist
+    ensure_base_directories()
+
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         description="AI Film Studio - Video Generation Pipeline",
@@ -2431,7 +2449,7 @@ Testing Options:
     parser.add_argument(
         '--aspect-ratio',
         type=str,
-        choices=['1:1', '16:9', '9:16', '4:3', '3:4'],
+        choices=['1:1', '16:9', '9:16', '4:3', '3:4', '21:8'],
         help='Image aspect ratio (default: from config.py)'
     )
 
@@ -2446,7 +2464,7 @@ Testing Options:
     parser.add_argument(
         '--video-aspect-ratio',
         type=str,
-        choices=['1:1', '16:9', '9:16', '4:3', '3:4'],
+        choices=['1:1', '16:9', '9:16', '4:3', '3:4', '21:8'],
         help='Video aspect ratio (default: from config.py)'
     )
 

@@ -16,7 +16,7 @@ from core.comfy_client import http_session
 logger = get_logger(__name__)
 
 
-def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = "", seed: int = None, workflow_name: str = None, aspect_ratio: str = None, progress_callback=None, reference_image_path: str = None):
+def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str = "", seed: int = None, workflow_name: str = None, aspect_ratio: str = None, progress_callback=None, reference_image_path: str = None, prompt_id_callback=None, existing_prompt_id=None):
     """
     Generate a single image using ComfyUI workflow.
 
@@ -29,11 +29,37 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
         aspect_ratio: Optional aspect ratio override (uses config.IMAGE_ASPECT_RATIO if not specified)
         progress_callback: Optional callback for progress updates (current, total)
         reference_image_path: Optional path to reference image for IP-Adapter
+        prompt_id_callback: Optional callback to save the prompt_id once received
+        existing_prompt_id: Optional prior prompt_id to resume listening to
 
     Returns:
         Path to the generated image file, or None if failed
     """
     try:
+        # DEEP RESUME CHECK
+        if existing_prompt_id:
+            logger.info(f"Deep Resume: Attempting to reconnect to ComfyUI prompt '{existing_prompt_id}'")
+            try:
+                # Quick check if it's still valid
+                h_resp = http_session.get(f"{config.COMFY_URL}/history/{existing_prompt_id}", timeout=5)
+                q_resp = http_session.get(f"{config.COMFY_URL}/queue", timeout=5)
+                is_valid = False
+                if h_resp.status_code == 200 and existing_prompt_id in h_resp.json():
+                    is_valid = True
+                elif q_resp.status_code == 200:
+                    q_data = q_resp.json()
+                    for q_item in q_data.get("queue_running", []) + q_data.get("queue_pending", []):
+                        if len(q_item) > 1 and q_item[1] == existing_prompt_id:
+                            is_valid = True
+                            break
+                if is_valid:
+                    logger.info(f"Deep Resume: Prompt '{existing_prompt_id}' is still active! Re-attaching...")
+                    return _wait_for_image(existing_prompt_id, output_path, progress_callback=progress_callback)
+                else:
+                    logger.info(f"Deep Resume: Prompt '{existing_prompt_id}' not found. Submitting new generation.")
+            except Exception as e:
+                logger.warning(f"Deep Resume validation failed: {e}. Submitting new generation.")
+                
         # Get workflow configuration
         if workflow_name is None:
             workflow_name = config.IMAGE_WORKFLOW
@@ -103,7 +129,7 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
 
             for node_id, node_data in api_format.items():
                 class_type = node_data.get("class_type", "")
-                if class_type == "EmptySD3LatentImage":
+                if class_type in ["EmptySD3LatentImage", "EmptyLatentImage"]:
                     node_data["inputs"]["width"] = width
                     node_data["inputs"]["height"] = height
                 elif class_type == "ModelSamplingFlux":
@@ -175,6 +201,12 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
         if not prompt_id:
             logger.error("No prompt_id in response")
             return None
+            
+        if prompt_id_callback:
+            try:
+                prompt_id_callback(prompt_id)
+            except Exception as e:
+                logger.error(f"Error in prompt_id_callback: {e}")
 
         # Wait for completion and get the result
         return _wait_for_image(prompt_id, output_path, progress_callback=progress_callback)
@@ -264,7 +296,7 @@ def _convert_workflow_to_api_format(workflow, width=None, height=None):
                 elif node_type == "RandomNoise":
                     if len(widgets) >= 1:
                         node_data["inputs"]["noise_seed"] = widgets[0]
-                elif node_type == "EmptySD3LatentImage":
+                elif node_type in ["EmptySD3LatentImage", "EmptyLatentImage"]:
                     if len(widgets) >= 3:
                         # Use config dimensions instead of hardcoded values
                         node_data["inputs"]["width"] = width

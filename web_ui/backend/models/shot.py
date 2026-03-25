@@ -41,6 +41,10 @@ class Shot(BaseModel):
     departure_video_path: Optional[str] = Field(default=None, description="Path to departure video")
     departure_video_rendered: bool = Field(default=False, description="Whether departure video has been rendered")
 
+    # Sound FX fields
+    soundfx_path: Optional[str] = Field(default=None, description="Path to video with generated sound effects")
+    soundfx_generated: bool = Field(default=False, description="Whether sound effects have been generated")
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -96,6 +100,8 @@ class RegenerateVideoRequest(BaseModel):
     video_workflow: Optional[str] = Field(default=None, description="Override video workflow")
     video_variant: Optional[str] = Field(default=None, description="Video variant for FLFI2V: 'meeting', 'departure', or 'both'")
     append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
+    generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
+    draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
 
 
 class BatchRegenerateRequest(BaseModel):
@@ -112,6 +118,8 @@ class BatchRegenerateRequest(BaseModel):
     video_workflow: Optional[str] = Field(default=None, description="Override video workflow")
     queue_setting: Optional[str] = Field(default="all_images_then_videos", description="Queue order: 'image_then_video' or 'all_images_then_videos'")
     append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
+    generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
+    draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
 
 
 
@@ -124,14 +132,21 @@ class ReplanShotsRequest(BaseModel):
 class SelectImageRequest(BaseModel):
     """Request to select a specific image as the active one for a shot"""
     image_path: str = Field(..., description="Path of the image to set as active")
+    variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then' or 'now'")
 
 
 class SelectVideoRequest(BaseModel):
     """Request to select a specific video as the active one for a shot"""
     video_path: str = Field(..., description="Path of the video to set as active")
+    variant: Optional[str] = Field(default=None, description="Video variant for FLFI2V: 'meeting' or 'departure'")
 
 
 class RemoveWatermarkRequest(BaseModel):
     """Request to remove watermark from a shot image"""
     variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then' or 'now'")
+
+
+class RegenerateSoundFXRequest(BaseModel):
+    """Request to generate sound effects for a shot video"""
+    force: bool = Field(default=False, description="Force regeneration even if sound FX exists")
 

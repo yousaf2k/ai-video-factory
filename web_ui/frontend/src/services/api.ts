@@ -78,7 +78,8 @@ class ApiClient {
     force: boolean = false,
     imageMode?: string,
     imageWorkflow?: string,
-    seed?: number
+    seed?: number,
+    isPoster?: boolean
   ): Promise<string> {
     const response = await this.client.post<{ status: string, thumbnail_url: string }>(
       `/api/projects/${projectId}/thumbnail`,
@@ -87,7 +88,8 @@ class ApiClient {
         force,
         image_mode: imageMode,
         image_workflow: imageWorkflow,
-        seed
+        seed,
+        is_poster: isPoster || false
       }
     );
     return response.data.thumbnail_url;
@@ -162,14 +164,28 @@ class ApiClient {
     videoMode?: string,
     videoWorkflow?: string,
     videoVariant?: string,
-    appendImagePrompt?: string
+    appendImagePrompt?: string,
+    generateSoundFX?: boolean,
+    draftLowResVideo?: boolean
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/regenerate-video`, {
       force,
       video_mode: videoMode,
       video_workflow: videoWorkflow,
       video_variant: videoVariant || undefined,
-      append_image_prompt: appendImagePrompt
+      append_image_prompt: appendImagePrompt,
+      generate_soundfx: generateSoundFX || false,
+      draft_low_res_video: draftLowResVideo || false
+    });
+  }
+
+  async generateSoundFX(
+    projectId: string,
+    shotIndex: number,
+    force: boolean = false
+  ): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/generate-soundfx`, {
+      force
     });
   }
 
@@ -325,6 +341,8 @@ class ApiClient {
       video_workflow?: string;
       queue_setting?: string;
       append_image_prompt?: string;
+      generate_soundfx?: boolean;
+      draft_low_res_video?: boolean;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/projects/${projectId}/shots/batch-regenerate`, data);

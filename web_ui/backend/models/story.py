@@ -38,6 +38,8 @@ class Character(BaseModel):
     departure_prompt: Optional[str] = Field(default=None, description="Prompt for departure/transitional video")
     then_reference_image_path: Optional[str] = Field(default=None, description="Path to THEN reference photo for facial consistency")
     now_reference_image_path: Optional[str] = Field(default=None, description="Path to NOW reference photo for facial consistency")
+    then_age: Optional[int] = Field(default=None, description="Age of character/actor during the 'Then' period")
+    now_age: Optional[int] = Field(default=None, description="Current age of character/actor")
 
 
 class Scene(BaseModel):

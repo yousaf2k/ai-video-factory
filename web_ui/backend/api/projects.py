@@ -19,6 +19,7 @@ class GenerateThumbnailRequest(BaseModel):
     image_mode: Optional[str] = None
     image_workflow: Optional[str] = None
     seed: Optional[int] = None
+    is_poster: bool = False
 
 from web_ui.backend.services.project_service import ProjectService
 
@@ -182,6 +183,31 @@ async def get_project_video(project_id: str, filename: str):
         )
 
 
+@router.get("/{project_id}/narration/{filename}", response_class=FileResponse)
+async def get_project_narration(project_id: str, filename: str):
+    """Serve a project narration audio file directly"""
+    try:
+        project_dir = project_service.get_project_dir(project_id)
+        narration_dir = os.path.join(project_dir, "narration")
+        audio_path = os.path.join(narration_dir, filename)
+        
+        if not os.path.exists(audio_path) or not os.path.isfile(audio_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Narration {filename} not found for project {project_id}"
+            )
+            
+        return FileResponse(audio_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving narration {filename} for project {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve narration: {str(e)}"
+        )
+
+
 @router.get("/{project_id}/backgrounds/{filename}", response_class=FileResponse)
 async def get_project_background(project_id: str, filename: str):
     """Serve a project background image file directly"""
@@ -245,7 +271,8 @@ async def generate_thumbnail(project_id: str, request: GenerateThumbnailRequest)
             force=request.force,
             image_mode=request.image_mode,
             image_workflow=request.image_workflow,
-            seed=request.seed
+            seed=request.seed,
+            is_poster=request.is_poster
         )
         
         filename = os.path.basename(image_path)

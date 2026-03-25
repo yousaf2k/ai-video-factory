@@ -25,9 +25,9 @@ from core.logger_config import get_logger
 logger = get_logger(__name__)
 
 
-def _create_browser_context(playwright_instance):
+def _create_browser_context(playwright_instance, profile_dir=None):
     """Create a persistent browser context with the configured browser."""
-    chrome_profile = getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
+    chrome_profile = profile_dir or getattr(config, 'GEMINIWEB_CHROME_PROFILE', None)
     os.makedirs(chrome_profile, exist_ok=True)
     
     browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
@@ -55,6 +55,7 @@ def _create_browser_context(playwright_instance):
                 '--disable-blink-features=AutomationControlled',
                 '--no-first-run',
                 '--no-default-browser-check',
+                '--disable-features=OptimizationGuideModelExecution,OptimizationGuideOnDeviceModel',
             ]
         else:
             launch_args = []
@@ -352,7 +353,7 @@ def _download_video_fallback(page, output_path: str) -> Optional[str]:
         
     return None
 
-def run(image_path: str, motion_prompt: str, output_path: str, project_title: str = None) -> Optional[str]:
+def run(image_path: str, motion_prompt: str, output_path: str, project_title: str = None, profile_dir: str = None) -> Optional[str]:
     """Main entry point — run Playwright and generate a video."""
     from playwright.sync_api import sync_playwright
 
@@ -364,7 +365,7 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
     logger.debug(f"  Reference Image: {image_path}")
 
     with sync_playwright() as playwright_instance:
-        context = _create_browser_context(playwright_instance)
+        context = _create_browser_context(playwright_instance, profile_dir)
         page = context.new_page()
 
         try:
@@ -588,9 +589,10 @@ if __name__ == "__main__":
     parser.add_argument("motion_prompt")
     parser.add_argument("output_path")
     parser.add_argument("project_title", nargs='?', default=None)
+    parser.add_argument("--profile-dir", default=None)
     args = parser.parse_args()
 
-    result = run(args.image_path, args.motion_prompt, args.output_path, args.project_title)
+    result = run(args.image_path, args.motion_prompt, args.output_path, args.project_title, args.profile_dir)
     if result:
         print(f"SUCCESS:{result}")
         sys.exit(0)

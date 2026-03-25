@@ -91,21 +91,24 @@ class ProjectDetail(ProjectMetadata):
         )
 
 
+from web_ui.backend.models.story import ProjectType
+
 class CreateProjectRequest(BaseModel):
     """Request to create a new project"""
     idea: str = Field(..., description="Video idea/prompt", min_length=1)
     project_id: Optional[str] = Field(default=None, description="Optional custom project ID")
+    project_type: ProjectType = Field(default=ProjectType.DOCUMENTARY, description="Project Type (1=Documentary, 2=ThenVsNow)")
     story_agent: str = Field(default="default", description="Story generation agent")
     shots_agent: str = Field(default="default", description="Shots prompt agent")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
     prompts_file: Optional[str] = Field(default=None, description="Path to a custom prompts file")
-    aspect_ratio: str = Field(default="16:9", description="Video aspect ratio (16:9 or 9:16)")
+    aspect_ratio: str = Field(default="16:9", description="Video aspect ratio (16:9, 9:16, or 21:8)")
 
     @field_validator('aspect_ratio')
     @classmethod
     def validate_aspect_ratio(cls, v):
-        if v not in ["16:9", "9:16"]:
-            raise ValueError("aspect_ratio must be '16:9' or '9:16'")
+        if v not in ["16:9", "9:16", "21:8"]:
+            raise ValueError("aspect_ratio must be '16:9', '9:16', or '21:8'")
         return v
 
 
@@ -115,13 +118,13 @@ class UpdateProjectRequest(BaseModel):
     completed: Optional[bool] = None
     story_agent: Optional[str] = None
     shots_agent: Optional[str] = None
-    aspect_ratio: Optional[str] = Field(default=None, description="Video aspect ratio (16:9 or 9:16)")
+    aspect_ratio: Optional[str] = Field(default=None, description="Video aspect ratio (16:9, 9:16, or 21:8)")
 
     @field_validator('aspect_ratio')
     @classmethod
     def validate_aspect_ratio(cls, v):
-        if v is not None and v not in ["16:9", "9:16"]:
-            raise ValueError("aspect_ratio must be '16:9' or '9:16'")
+        if v is not None and v not in ["16:9", "9:16", "21:8"]:
+            raise ValueError("aspect_ratio must be '16:9', '9:16', or '21:8'")
         return v
 
 

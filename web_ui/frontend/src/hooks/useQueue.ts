@@ -20,6 +20,15 @@ interface UseQueueOptions {
   enabled?: boolean;
 }
 
+const recentNotifications = new Set<string>();
+
+const debounceToast = (key: string, fn: () => void) => {
+  if (recentNotifications.has(key)) return;
+  recentNotifications.add(key);
+  setTimeout(() => recentNotifications.delete(key), 1000);
+  fn();
+};
+
 export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
@@ -155,13 +164,15 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     // Show toast notifications for important events
     switch (message.type) {
       case 'queue.item_failed':
-        toast.error(`Generation failed: ${message.data.error_message || 'Unknown error'}`);
+        debounceToast(`failed-${message.data?.item_id || 'all'}`, () => {
+          toast.error(`Generation failed: ${message.data?.error_message || 'Unknown error'}`);
+        });
         break;
       case 'queue.paused':
-        toast.info('Queue paused');
+        debounceToast('paused', () => toast.info('Queue paused'));
         break;
       case 'queue.resumed':
-        toast.info('Queue resumed');
+        debounceToast('resumed', () => toast.info('Queue resumed'));
         break;
     }
   }, [queryClient, projectId]);
@@ -326,6 +337,20 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     }
   });
 
+  const forceStartItem = useMutation({
+    mutationFn: async (itemId: string) => {
+      const response = await api.post(`/api/queue/items/${itemId}/force-start`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['queue', projectId] });
+      toast.success('Item force started');
+    },
+    onError: (error: any) => {
+      toast.error(`Failed to force start item: ${error.message}`);
+    }
+  });
+
   const clearCompleted = useMutation({
     mutationFn: async () => {
       const response = await api.delete('/api/queue/completed');
@@ -434,6 +459,7 @@ export function useQueue({ projectId, enabled = true }: UseQueueOptions = {}) {
     clearCancelled: clearCancelled.mutate,
     reorderItems: reorderItems.mutate,
     updatePriority: updatePriority.mutate,
+    forceStartItem: forceStartItem.mutate,
     refetch
   };
 }

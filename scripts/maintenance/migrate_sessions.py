@@ -6,22 +6,22 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 import config
-from core.session_manager import SessionManager
+from core.project_manager import ProjectManager
 
-def migrate_sessions():
-    print("Starting session migration with path healing...")
-    sm = SessionManager()
+def migrate_projects():
+    print("Starting project migration with path healing...")
+    sm = ProjectManager()
     
-    sessions_dir = config.SESSIONS_DIR
-    print(f"Scanning sessions in: {sessions_dir}")
+    projects_dir = config.SESSIONS_DIR
+    print(f"Scanning projects in: {projects_dir}")
     
-    if not os.path.exists(sessions_dir):
-        print(f"Error: Sessions directory not found: {sessions_dir}")
+    if not os.path.exists(projects_dir):
+        print(f"Error: Projects directory not found: {projects_dir}")
         return
 
     migrated_count = 0
     
-    for root, dirs, files in os.walk(sessions_dir):
+    for root, dirs, files in os.walk(projects_dir):
         if "shots.json" in files:
             shots_path = os.path.join(root, "shots.json")
             print(f"Processing: {shots_path}")
@@ -33,7 +33,7 @@ def migrate_sessions():
                 modified = False
                 for shot in shots:
                     # HEALING LOGIC:
-                    # If the path is broken, try to find the file in the current session's images/videos folder
+                    # If the path is broken, try to find the file in the current project's images/videos folder
                     
                     # 1. Handle image_path healing/discovery
                     if 'image_path' in shot and shot['image_path']:
@@ -138,4 +138,4 @@ def migrate_sessions():
     print(f"\nMigration complete. Total files updated: {migrated_count}")
 
 if __name__ == "__main__":
-    migrate_sessions()
+    migrate_projects()

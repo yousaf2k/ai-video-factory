@@ -12,7 +12,7 @@ import config
 def _ensure_log_directory():
     """Create logs directory if it doesn't exist"""
     log_dir = getattr(config, 'LOG_DIR', 'logs')
-    Path(log_dir).mkdir(exist_ok=True)
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
     return log_dir
 
 
@@ -24,9 +24,31 @@ def _get_log_formatter():
     )
 
 
+class SafeRotatingFileHandler(RotatingFileHandler):
+    """A RotatingFileHandler that doesn't crash on Windows if file is locked during rollover."""
+    def doRollover(self):
+        try:
+            super().doRollover()
+        except PermissionError:
+            # On Windows, another process holds the lock. MaxBytes exceeded but don't crash.
+            pass
+
+    def emit(self, record):
+        try:
+            if self.shouldRollover(record):
+                self.doRollover()
+            logging.FileHandler.emit(self, record)
+        except PermissionError:
+            # On Windows, another process might hold the file lock during concurrent writes.
+            # We fail silently instead of flooding the console with tracebacks.
+            pass
+        except Exception:
+            self.handleError(record)
+
+
 def _setup_file_handler(log_file_path, max_bytes, backup_count, level=logging.DEBUG):
     """Create a rotating file handler with specified parameters"""
-    handler = RotatingFileHandler(
+    handler = SafeRotatingFileHandler(
         log_file_path,
         maxBytes=max_bytes,
         backupCount=backup_count,

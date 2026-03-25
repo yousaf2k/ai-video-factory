@@ -16,8 +16,7 @@ from core.logger_config import get_logger
 
 logger = get_logger(__name__)
 
-import threading
-_generation_lock = threading.Lock()
+# Global lock removed in favor of worker profile cloning
 
 def generate_video_geminiweb(
     image_path: str,
@@ -57,9 +56,55 @@ def generate_video_geminiweb(
         logger.error(f"Image path does not exist: {abs_image_path}")
         return None
 
-    # We use a global lock to strictly enforce ONE browser running at a time
-    with _generation_lock:
-        logger.debug("Acquired generation lock. Starting subprocess...")
+    from core.geminiweb_pool import get_worker_id, release_worker_id
+    import shutil
+    
+    worker_id = get_worker_id()
+    try:
+        # Determine profile path dynamically to avoid cached GEMINIWEB_CHROME_PROFILE
+        browser_type_name = getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium').lower()
+        profile_name = "chrome_profile"
+        if browser_type_name == "firefox":
+            profile_name = "firefox_profile"
+        elif browser_type_name == "webkit":
+            profile_name = "webkit_profile"
+        else:
+            channel = getattr(config, 'PLAYWRIGHT_CHANNEL', 'chrome')
+            if channel and "msedge" in channel:
+                profile_name = "edge_profile"
+                
+        output_dir = getattr(config, 'OUTPUT_DIR', 'output')
+        master_profile = os.path.abspath(os.path.join(output_dir, profile_name))
+        worker_profile = f"{master_profile}_worker_{worker_id}"
+        
+        logger.info(f"Checking out {profile_name} worker {worker_id}...")
+        
+        # Only copy if it doesn't exist to save disk I/O, and ignore heavy cache folders
+        if not os.path.exists(worker_profile) and os.path.exists(master_profile):
+            ignore_func = shutil.ignore_patterns('*Cache*', '*cache*', 'Service Worker', 'Crashpad', '*OptGuideOnDeviceModel*', '*OptimizationGuide*')
+            try:
+                shutil.copytree(master_profile, worker_profile, ignore=ignore_func)
+            except Exception as e:
+                logger.warning(f"Profile copy warning for worker {worker_id}: {e}. "
+                               f"This usually means your main browser window is open, locking some files. "
+                               f"Close it for full profile replication.")
+        elif not os.path.exists(worker_profile):
+            os.makedirs(worker_profile, exist_ok=True)
+            
+        # Crucial: If reusing an existing worker profile, we MUST delete stale Chrome/Firefox locks 
+        # otherwise Playwright will crash if the previous run was forcefully killed.
+        for lock_file in ['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'parent.lock', '.parentlock', 'lock']:
+            lock_path = os.path.join(worker_profile, lock_file)
+            if os.path.exists(lock_path):
+                try:
+                    if os.path.islink(lock_path):
+                        os.unlink(lock_path)
+                    else:
+                        os.remove(lock_path)
+                except Exception as e:
+                    logger.warning(f"Failed to remove stale lock {lock_file}: {e}")
+                    
+        logger.debug(f"Starting subprocess with profile: {worker_profile} ...")
         
         args = [
             "python",
@@ -72,6 +117,8 @@ def generate_video_geminiweb(
         
         if project_title:
             args.append(project_title)
+            
+        args.extend(["--profile-dir", worker_profile])
         
         try:
             # We use subprocess.run with capture_output=True to cleanly harvest
@@ -112,3 +159,5 @@ def generate_video_geminiweb(
             import traceback
             logger.error(traceback.format_exc())
             return None
+    finally:
+        release_worker_id(worker_id)

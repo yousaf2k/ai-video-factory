@@ -110,7 +110,7 @@ def build_story(idea, agent_name="default", target_length=None, aspect_ratio="16
 
     # Pass 1: Generate Master Script
     try:
-        master_prompt = load_agent_prompt("story", idea, "master_script")
+        master_prompt = load_agent_prompt("story", idea, "system/master_script")
         if target_length:
             master_prompt = master_prompt.replace("{VIDEO_LENGTH}", str(int(target_length)))
             word_count = int(target_length * 2.5)
@@ -235,7 +235,7 @@ def build_story_then_vs_now(movie_name: str, target_length: int = None, aspect_r
     provider = get_provider()
 
     # Load the then_vs_now agent
-    prompt = load_agent_prompt("story", movie_name, "then_vs_now")
+    prompt = load_agent_prompt("story", movie_name, "then_vs_now/then_vs_now")
     if target_length:
         prompt = prompt.replace("{VIDEO_LENGTH}", str(int(target_length)))
 

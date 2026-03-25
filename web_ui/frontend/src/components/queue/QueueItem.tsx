@@ -22,12 +22,13 @@ interface QueueItemProps {
   onSelect?: (itemId: string) => void;
   onCancel?: (itemId: string) => void;
   onRequeue?: (itemId: string) => void;
+  onForceStart?: (itemId: string) => void;
   onImageClick?: (itemId: string) => void;
   dragListeners?: Record<string, any>;
   dragAttributes?: Record<string, any>;
 }
 
-export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onImageClick, dragListeners, dragAttributes }: QueueItemProps) {
+export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onForceStart, onImageClick, dragListeners, dragAttributes }: QueueItemProps) {
   const getImageUrl = () => {
     if (!item.shot_index || !item.project_id) return null;
     const padded = String(item.shot_index).padStart(3, '0');
@@ -95,6 +96,8 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onI
         return 'Narration';
       case GenerationType.BACKGROUND:
         return 'Background';
+      case GenerationType.SOUNDFX:
+        return 'Sound FX';
       default:
         return 'Unknown';
     }
@@ -114,6 +117,8 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onI
         return 'bg-green-100 text-green-700';
       case GenerationType.BACKGROUND:
         return 'bg-orange-100 text-orange-700';
+      case GenerationType.SOUNDFX:
+        return 'bg-yellow-100 text-yellow-700';
       default:
         return 'bg-gray-100 text-gray-700';
     }
@@ -121,6 +126,7 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onI
 
   const canCancel = item.status === QueueItemStatus.QUEUED || item.status === QueueItemStatus.ACTIVE || item.status === QueueItemStatus.PAUSED;
   const canRequeue = item.status === QueueItemStatus.FAILED || item.status === QueueItemStatus.CANCELLED;
+  const canForceStart = [QueueItemStatus.QUEUED, QueueItemStatus.FAILED, QueueItemStatus.CANCELLED, QueueItemStatus.PAUSED].includes(item.status);
 
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return 'N/A';
@@ -289,6 +295,17 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onI
             title="Cancel generation"
           >
             <StopCircle className="w-5 h-5" />
+          </button>
+        )}
+
+        {/* Force Start button */}
+        {canForceStart && onForceStart && (
+          <button
+            onClick={() => onForceStart(item.item_id)}
+            className="flex-shrink-0 p-1.5 text-muted-foreground/80 hover:text-orange-600 hover:bg-orange-500/10 rounded-xl transition-all hover:scale-105 border border-transparent hover:border-orange-100"
+            title="Force Start immediately"
+          >
+            <Play className="w-5 h-5 text-orange-500" />
           </button>
         )}
 

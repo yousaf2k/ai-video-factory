@@ -17,6 +17,7 @@ class GenerationType(str, Enum):
     DEPARTURE_VIDEO = "departure_video"
     NARRATION = "narration"
     BACKGROUND = "background"
+    SOUNDFX = "soundfx"
 
 
 class QueueItemStatus(str, Enum):
@@ -58,6 +59,11 @@ class QueueItem(BaseModel):
     image_variant: Optional[str] = Field(None, description="Image variant (then/now)")
     video_variant: Optional[str] = Field(None, description="Video variant (meeting/departure)")
     append_image_prompt: Optional[str] = Field(None, description="Append image prompt position ('none', 'start', 'end')")
+    generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
+    draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
+
+    # Tracking for deep resume
+    comfyui_prompt_id: Optional[str] = Field(None, description="ComfyUI prompt ID for resuming active tasks")
 
     # Project metadata for display
     project_title: Optional[str] = Field(None, description="Project title")

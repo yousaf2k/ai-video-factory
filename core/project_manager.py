@@ -4,7 +4,9 @@ Saves all outputs (story, shots, images) and tracks completion status
 """
 import json
 import os
+import time
 from datetime import datetime
+import contextlib
 from core.logger_config import get_logger
 import config
 
@@ -23,6 +25,63 @@ class ProjectManager:
             self.projects_dir = projects_dir
             
         os.makedirs(self.projects_dir, exist_ok=True)
+
+    @contextlib.contextmanager
+    def lock_project(self, project_id: str, timeout: int = 15):
+        """
+        File-based lock to prevent concurrent read-modify-write collisions on shots.json.
+        Uses atomic directory creation (supported across Windows and POSIX).
+        """
+        project_dir = os.path.join(self.projects_dir, project_id)
+        os.makedirs(project_dir, exist_ok=True)
+        lock_dir = os.path.join(project_dir, ".shots_lock")
+        
+        start_time = time.time()
+        acquired = False
+        
+        while time.time() - start_time < timeout:
+            try:
+                os.mkdir(lock_dir)
+                acquired = True
+                break
+            except FileExistsError:
+                # Check if the lock is stale (e.g., from a crash)
+                try:
+                    # If lock is older than 60 seconds, remove it as stale safety
+                    mtime = os.path.getmtime(lock_dir)
+                    if time.time() - mtime > 60:
+                        logger.warning(f"Removing stale project lock for {project_id}")
+                        os.rmdir(lock_dir)
+                        continue
+                except:
+                    pass
+                time.sleep(0.1)
+                
+        if not acquired:
+            logger.error(f"Timed out acquiring lock for project: {project_id}")
+            raise TimeoutError(f"Could not acquire project lock for {project_id} after {timeout} seconds.")
+            
+        try:
+            yield
+        finally:
+            try:
+                os.rmdir(lock_dir)
+            except Exception as e:
+                logger.warning(f"Failed to release project lock for {project_id}: {e}")
+
+    def update_shots_safely(self, project_id: str, modify_func):
+        """
+        Atomically loads, modifies, and saves shots.json with explicit file locking.
+        
+        Args:
+            project_id: The ID of the project.
+            modify_func: A callable that accepts a list of shot dictionaries or None and updates in-place.
+        """
+        with self.lock_project(project_id):
+            shots = self._load_shots(project_id)
+            modify_func(shots)
+            self._save_shots(project_id, shots)
+            return shots
 
     def get_latest_project(self):
         """Get the most recent incomplete project, or None if all complete"""

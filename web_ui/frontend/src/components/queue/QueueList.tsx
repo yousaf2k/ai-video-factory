@@ -29,10 +29,11 @@ interface SortableQueueItemProps {
   onSelect?: (itemId: string) => void;
   onCancel?: (itemId: string) => void;
   onRequeue?: (itemId: string) => void;
+  onForceStart?: (itemId: string) => void;
   onImageClick?: (itemId: string) => void;
 }
 
-function SortableQueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onImageClick }: SortableQueueItemProps) {
+function SortableQueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onForceStart, onImageClick }: SortableQueueItemProps) {
   const {
     attributes,
     listeners,
@@ -55,6 +56,7 @@ function SortableQueueItem({ item, isSelected, onSelect, onCancel, onRequeue, on
         onSelect={onSelect}
         onCancel={onCancel}
         onRequeue={onRequeue}
+        onForceStart={onForceStart}
         onImageClick={onImageClick}
         dragAttributes={attributes}
         dragListeners={listeners}
@@ -69,6 +71,7 @@ interface QueueListProps {
   onSelectItem?: (itemId: string) => void;
   onCancelItem?: (itemId: string) => void;
   onRequeueItem?: (itemId: string) => void;
+  onForceStartItem?: (itemId: string) => void;
   onReorder?: (itemIds: string[]) => void;
   onImageClick?: (itemId: string) => void;
 }
@@ -79,6 +82,7 @@ export function QueueList({
   onSelectItem,
   onCancelItem,
   onRequeueItem,
+  onForceStartItem,
   onReorder,
   onImageClick
 }: QueueListProps) {
@@ -137,6 +141,7 @@ export function QueueList({
               onSelect={onSelectItem}
               onCancel={onCancelItem}
               onRequeue={onRequeueItem}
+              onForceStart={onForceStartItem}
               onImageClick={onImageClick}
             />
           ))}

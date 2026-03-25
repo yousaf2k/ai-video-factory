@@ -9,7 +9,7 @@ Generate a cinematic narrative for a "Then vs Now" reunion for a specific movie.
 3. **THEN vs NOW Dynamics**: Each character should be described in both their original (THEN) and current (NOW) forms.
 4. **Segment Structure**: Each character featured must have exactly two video segments:
    - **Meeting**: Arrival at the set, rediscovering the iconic location, or meeting another character/crew member.
-   - **Departure / Transition**: Leaving the set, a reflective moment, or a cross-fade to a different location.
+   - **Departure / Transition**: Leaving the set, a reflective moment, or a **smooth physical camera pan to the right, revealing the adjacent set**.
 5. **Ensemble Support**: Support 8–25 characters per movie. (For shorter videos, focus on the core cast).
 
 ## Video Duration Planning
@@ -133,11 +133,13 @@ Group characters into 2-4 logical scenes based on:
 ```json
 {
   "project_type": 2,
-  "title": "Movie Name: The Reunion",
-  "description": "A cinematic Then vs Now reunion on the original sets of Movie Name",
+  "title": "Movie Name (Year): The Reunion",
+  "description": "Short description of the original movie plot here (e.g. A mafia boss passes control to his son)",
   "tags": ["reunion", "then vs now", "behind the scenes"],
   "thumbnail_prompt_16_9": "Close-up selfie of the most prominent character from [Movie Title] — Then + Now, smiling and taking a selfie together on the filming set. NOW version of the character holding the smartphone (iPhone 15 Pro Max with titanium frame and triple camera system clearly visible) for the selfie. Both characters visible: younger THEN version on left, older NOW version on right holding phone. Visible cameras, lighting rigs, scaffolding in background. A few production crew members moving naturally, slightly blurred. Cinematic, photorealistic, ultra-realistic textures, vibrant colors, high-quality YouTube thumbnail style. Natural depth-of-field emphasizing THEN and NOW, soft cinematic lighting, hyper-realistic skin, fun and nostalgic atmosphere. 16:9 horizontal composition.",
   "thumbnail_prompt_9_16": "Vertical close-up selfie of the most prominent character from [Movie Title] — Then + Now, smiling and taking a selfie together on the filming set. NOW version holding iPhone 15 Pro Max visible in frame for selfie. Younger THEN version visible beside older NOW version. Production equipment (cameras, lights, rigging) and crew members in background, slightly blurred. Cinematic, photorealistic, ultra-realistic textures, vibrant colors, high-quality YouTube thumbnail style. Natural depth-of-field emphasizing both characters, soft cinematic lighting, hyper-realistic skin, fun and nostalgic atmosphere. 9:16 vertical composition.",
+  "poster_thumbnail_prompt_16_9": "Cinematic movie poster with 'THEN VS NOW' text, split-screen showing [Character Name] in [Year] on the left and modern [Actor Name] on the [Set Location] on the right, high-contrast cinematic lighting.",
+  "poster_thumbnail_prompt_9_16": "Vertical movie poster with 'THEN VS NOW' text, [Character Name] in iconic [Pose], juxtaposed with their modern self standing in the [Set Location] layout, dramatic lighting.",
   "style": "cinematic ensemble reunion, production set aesthetic",
   "movie_metadata": {
     "year": 1972,
@@ -186,8 +188,10 @@ Group characters into 2-4 logical scenes based on:
     {
       "name": "Actor Name as Character Name",
       "scene_id": 0,
-      "then_prompt": "Medium shot of young actor in original movie attire, period-accurate costume, iconic character pose, standing on movie set, cinematic lighting, film grain texture, 1970s cinematography style, neutral expression",
-      "now_prompt": "Medium shot showing both characters side by side on the same movie set background. On the left: the original younger version of the character from the film in period-accurate costume. On the right: the current older version of the actor taking a selfie with an iPhone 15 Pro Max. The older actor extends arm holding the phone, iPhone 15 Pro Max is clearly visible in frame with screen showing camera interface. Both characters look at camera, the older actor has a nostalgic smile. Cinematic lighting, modern 4K quality, depth of field with movie set in background",
+      "then_age": 25,
+      "now_age": 55,
+      "then_prompt": "Waist-up medium shot of young actor in original movie attire, period-accurate costume, iconic character pose on movie set, cinematic lighting, film grain texture, 1970s cinematography style, neutral expression",
+      "now_prompt": "[Actor Name] meeting [Character Name] from [Movie Title]. Standing together inside the same continuous scene environment on top of the set space, single unified shot (NO SPLIT SCREEN, NO BORDERS, NO COLLAGE). [Character Name] on left, [Actor Name] on right standing close together, shoulder-to-shoulder for a selfie. [Character Name] wearing [COPY EXACT DETAILED CLOTHING DESCRIPTION FROM THEIR SOLO THEN-PROMPT VERBATIM]. [Actor Name] wearing highly detailed modern attire suitable for their real-life persona [Describe clothing details like materials, style, cut e.g., a sophisticated dark suit jacket with a cashmere turtleneck, stylish glasses], holding iPhone 15 Pro Max with titanium frame and triple camera system, holding the phone high up at face level with arm extended like taking a real selfie posture, phone back clearly visible in actor's hand. Both looking towards the smartphone with happy, cheerful smiling expressions. Medium waist-up shot, symmetrical composition, cinematic lighting, modern 4K quality.",
       "meeting_prompt": "The younger character (THEN) on the left smiles warmly as the older character (NOW) on the right approaches, the younger version extends arms for embrace, both characters step forward and share a warm heartfelt hug. Camera captures the emotional reunion moment from side angle. Production set visible in background with subtle crew movement. Cinematic lighting, emotional connection, nostalgic atmosphere, smooth natural animation.",
       "departure_prompt": "Both characters (THEN and NOW versions) walk together to the right side of frame, smiling and talking to each other in friendly conversation. Camera follows their movement with smooth tracking shot as they exit the scene. Production set and equipment visible in background, crew members working naturally. Warm lighting, joyful atmosphere, natural walking animation, sense of closure and continued friendship."
     }
@@ -197,16 +201,26 @@ Group characters into 2-4 logical scenes based on:
 
 ## Important Notes
 1. **project_type must always be 2** for ThenVsNow projects
-2. **movie_metadata** should include the actual release year, cast list with actor/character pairs, director, and genre
-3. **youtube_metadata** should provide SEO-optimized title options with click-through appeal
-4. **Characters array** should have 8-25 entries for ensemble movies, or core cast for shorter videos
-5. **Scenes** should alternate between Meeting and Departure for each character
-6. **set_prompt** in each scene must be a detailed background description that will be appended to character image prompts
-7. **NOW Image Composition**: The now_prompt MUST show both characters in a medium shot side-by-side on the same movie set background. The NOW (older) character must be taking a selfie with an iPhone 15 Pro Max. The phone back should show. Both characters look at the phone
-8. **iPhone Visibility**: Ensure the iPhone 15 Pro Max is clearly visible - describe it as "titanium frame with triple camera system, phone back clearly visible in actor's hand, visible in camera frame"
-9. **Thumbnail Prompts**: Must feature the MOST PROMINENT character from the movie in a close-up selfie composition showing both THEN and NOW versions together. Include production set background with visible equipment, crew members (slightly blurred), vibrant colors, and nostalgic atmosphere. Specify iPhone 15 Pro Max details for authenticity.
+2. **description**: This field MUST contain a short 1-2 sentence description of the **original movie's plot**, not a description of the reunion concept or narrative script.
+3. **movie_metadata** should include the actual release year, cast list with actor/character pairs, director, and genre
+4. **youtube_metadata** should provide SEO-optimized title options with click-through appeal
+5. **Characters array** should have 8-25 entries for ensemble movies, or core cast for shorter videos
+6. **Scenes** should alternate between Meeting and Departure for each character
+7. **set_prompt** in each scene must be a detailed background description that will be appended to character image prompts
+8. **NOW Image Composition**: The now_prompt MUST show both characters standing together inside the same continuous scene space of the set environment. **STRICTLY MEDIUM WAIST-UP SHOT showing from the waist up. ABSOLUTELY NO LEGS OR SHOES VISIBLE.** **DO NOT describe the background or location** in the prompt. The NOW (older) character must be taking a selfie with an iPhone 15 Pro Max. **The phone must be held high at face level or slightly above face level with an extended arm (like taking a real selfie posture).** **The phone back with triple camera system must be visible (solid opaque backing, absolutely NO SCREEN on this side).** Both characters must **look towards the smartphone** and expression must be **happy face mood (smiling, cheerful)**. They must **stand close together (shoulder-to-shoulder)** to ensure a single unified shot (NO SPLIT SCREEN, NO BORDERS).
+9. **iPhone Visibility**: Ensure the iPhone 15 Pro Max is clearly visible - describe it as "titanium frame with triple camera system on the back, solid opaque phone back clearly visible in actor's hand, strictly no screen on this side". **DO NOT describe any screen interface on the back.**
+10. **Thumbnail Prompts**: Must feature the MOST PROMINENT character from the movie in a close-up selfie composition showing both THEN and NOW versions together. Include production set background with visible equipment, crew members (slightly blurred), vibrant colors, and nostalgic atmosphere. Specify iPhone 15 Pro Max details for authenticity.
 
 ## CHARACTER IMAGE PROMPTS (CENTERED INTERVIEW STYLE LOCKED)
+
+**CRITICAL CHARACTER PROMPT RULES (MANDATORY):**
+1. **NO BACKGROUND REFERENCES**: DO NOT describe background, set, location, or environment in character prompts. The background will be appended automatically from the `set_prompt`.
+2. **Character Name Format**: Prompt MUST use the specific character name for the historical role and the real actor name for the modern appearance. 
+   - **For THEN solo:** Start with `[Character Name] from [Movie Title]` (dressed in original attire).
+   - **For NOW dual:** Start with `[Actor Name] meeting [Character Name] from [Movie Title]` (standing together).
+   **DO NOT include years or dates like "(1996)" anywhere inside the prompt text. DO NOT use isolated uppercase labels like "THEN" or "NOW" inside the prompt body to prevent the AI from generating on-screen text.**
+3. **Apparel Equality**: The character in the interacting prompt MUST use the exact same attire/costume description as in their solo prompt. Use identical wording for their clothing.
+4. **NO ON-SCREEN TEXT (CRITICAL)**: ABSOLUTELY DO NOT include labels, tags, stamps, or headers like "THEN", "NOW", or "TEXT" inside any prompt body text to avoid AI drawing text on top of the image. Always refer to the younger persona as the **[Character Name]** and the modern persona as the **[Actor Name]** instead of using words like "younger" or "older".
 
 This section defines the exact specifications for generating character images.
 
@@ -214,7 +228,7 @@ This section defines the exact specifications for generating character images.
 
 **Character Prompt Format:**
 ```
-[Character Name] from [Movie Title (Year)] — THEN version
+[Character Name] from [Movie Title (Year)] — younger version
 Reference: Use user-provided image strictly for facial likeness. Do not modify facial structure.
 
 Pose: Iconic in-character posture from scene, but facing camera.
@@ -222,7 +236,7 @@ Set Placement: Placed naturally on recreated film set with cameras and subtle cr
 Expression: Focused, calm, in-character presence.
 
 MANDATORY COMPOSITION BLOCK:
-Straight-on eye-level camera, subject perfectly centered in frame, medium waist-up shot, symmetrical composition, 50mm cinematic lens, shallow depth of field, subject looking directly into camera, crew slightly blurred in background, no side angle, no profile view, no tilt.
+Straight-on eye-level camera, subject perfectly centered in frame, STRICTLY MEDIUM WAIST-UP SHOT showing from the waist up. ABSOLUTELY NO LEGS OR SHOES VISIBLE, symmetrical composition, 50mm cinematic lens, shallow depth of field, subject looking directly into camera, crew slightly blurred in background, no side angle, no profile view, no tilt.
 
 Style: Ultra-realistic, cinematic, photorealistic, film-set lighting, 4K detail.
 ```
@@ -230,64 +244,70 @@ Style: Ultra-realistic, cinematic, photorealistic, film-set lighting, 4K detail.
 ### B. THEN + NOW INTERACTION (Dual Centered Composition)
 
 **Characters:**
-- [Character Name] from [Movie Title (Year)]
+- [Actor Name] as [Character Name] from [Movie Title] ([Year])
 
 **Both Characters Visible:**
-- Side-by-side centered composition
-- Each character maintains their era-specific appearance
-- Younger (THEN) character on left
-- Older (NOW) character on right
-- Both visible from waist up
-- Looking directly at camera
+- **[Character Name] (Then)** on left
+- **[Actor Name] (Now)** on right
+- STRICTLY MEDIUM WAIST-UP SHOT showing from the waist up (no legs, no shoes visible)
+- **Both looking towards the smartphone**
+- **Standing close together, shoulder-to-shoulder**
+- **Single unified shot (NO SPLIT SCREEN, NO BORDERS, NO COLLAGE)**
+- **Happy, cheerful smiling expressions**
+- **The younger (THEN) character must wear the EXACT SAME attire/costume as described in their solo THEN prompt**
+- **Detailed Modern Attire**: Describe the older (NOW) character's modern clothing with rich descriptive detail (materials, style, color, cut, accessories like watches or glasses) that reflects their mature, aged status elegantly. DO NOT leave NOW attire generic.
 
 **Composition:**
 ```
-Straight-on eye-level camera, both subjects perfectly centered in frame, medium waist-up shot, symmetrical dual-subject composition, 50mm cinematic lens, shallow depth of field, both looking directly into camera, crew and set slightly blurred in background, no side angle, no profile view, no tilt, equal visual weight between subjects.
+Straight-on eye-level camera, both subjects perfectly centered in frame, SINGLE UNIFIED SHOT (NO SPLIT-SCREEN, NO BORDERS, NO COLLAGE), STRICTLY MEDIUM WAIST-UP SHOT showing from the waist up, ABSOLUTELY NO LEGS OR SHOES VISIBLE, symmetrical dual-subject composition, 50mm cinematic lens, shallow depth of field, both looking towards the smartphone, standing close together shoulder-to-shoulder, phone MUST be held high at face level or above face level with arm extended like a real selfie-taking posture, no side angle, no profile view, no tilt, equal visual weight between subjects.
 ```
 
 **NOW Character Selfie Variant:**
 When NOW character takes selfie, composition adjusts to:
 - Phone (iPhone 15 Pro Max) visible in frame
-- Phone back clearly visible
-- Both characters still visible
-- Natural selfie arm position
+- **The phone is held high up at face level or above face level with an extended arm (taking a selfie)**
+- **Phone back with triple camera system clearly visible (solid back, NO SCREEN on this side)**
+- **Both characters looking towards the smartphone**
+- **Characters standing close together, shoulder-to-shoulder**
+- **Happy, smiling expressions**
+- Natural selfie arm posture (arm extended upward and outward)
 - Composition remains centered and balanced
 
 ## Scene Detail Requirements
 
 Every scene description MUST include the following elements:
 
-### 1️⃣ Exact Movie Scene Reference
+### 1. Exact Movie Scene Reference
 Describe the precise iconic moment from the film being recreated.
 
-### 2️⃣ Accurate Set Recreation
+### 2. Accurate Set Recreation
 - Architecture exactly as seen in the movie
 - Props, furniture, textures faithful to the original
 - Partial soundstage walls or removable panels visible
 - Film equipment subtly visible
 
-### 3️⃣ Composition Lock (MANDATORY)
+### 3. Composition Lock (MANDATORY)
 Always include this exact block in every scene description:
 
 **STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL FRAMING, TRIPOD-MOUNTED CAMERA PERSPECTIVE, NO TILT, NO DUTCH ANGLE, NO SIDE ANGLE. MEDIUM-WIDE CENTERED COMPOSITION. BALANCED LEFT-TO-RIGHT VISUAL WEIGHT.**
 
-### 4️⃣ Lighting & Atmosphere
+### 4. Lighting & Atmosphere
 - Time of day as in the original scene
 - Studio lighting rigs visible but natural
 - Soft cinematic shadows
 - Subtle haze if appropriate
 
-### 5️⃣ Production Crew (Natural, Not Distracting)
+### 5. Production Crew (Natural, Not Distracting)
 - 2-5 crew members visible
 - Camera operator near lens
 - Gaffer adjusting light flags
 - Grip near dolly track
 - Moving naturally, not posing
 
-### 6️⃣ Character Presence Rule
+### 6. Character Presence Rule
 Scene may be empty OR if character is present, they must be centered
 
-### 7️⃣ Rendering Style
+### 7. Rendering Style
 - Ultra-realistic
 - Hyper-detailed
 - Photorealistic textures
@@ -338,33 +358,33 @@ This section defines the exact specifications for generating YouTube thumbnails 
 
 ### Mandatory Thumbnail Elements
 
-#### 1️⃣ Character Composition
+#### 1. Character Composition
 - **Close-up selfie shot** (not full body, not medium shot)
 - **Both characters visible**: Younger THEN on left, Older NOW on right
 - **NOW character holds iPhone 15 Pro Max** for selfie
 - **Both characters smiling** at camera
 - **Fun, nostalgic expression** on older character
 
-#### 2️⃣ iPhone Details (CRITICAL)
+#### 2. iPhone Details (CRITICAL)
 - **iPhone 15 Pro Max must be clearly visible**
 - Describe: "titanium frame with triple camera system"
 - Phone screen showing camera interface
 - Natural selfie arm position
 - Phone clearly visible in camera frame
 
-#### 3️⃣ Production Set Background
+#### 3. Production Set Background
 - **Visible film equipment**: cameras on dollies, lighting rigs, scaffolding
 - **C-stands with diffusion flags**
 - **Crane arms or overhead rigging**
 - **Set pieces from the movie** recognizable in background
 
-#### 4️⃣ Production Crew
+#### 4. Production Crew
 - **2-3 crew members** in background
 - **Naturally moving**, not posing
 - **Slightly blurred** (depth of field keeps focus on characters)
 - **Roles**: camera operator, gaffer, grip
 
-#### 5️⃣ Style & Quality
+#### 5. Style & Quality
 - **Cinematic, photorealistic rendering**
 - **Ultra-realistic textures**
 - **Vibrant, eye-catching colors** (YouTube thumbnail style)
@@ -472,6 +492,34 @@ Bright daylight, cinematic, photorealistic, vibrant colors, fun nostalgic atmosp
 
 ---
 
+## MOVIE POSTER THUMBNAIL GUIDELINES
+
+This section defines specifications for an alternative illustrative/dramatic thumbnail style resembling a theoretical cinematic movie poster that explicitly utilizes **Text Overlay** for direct visual contrast.
+
+### Key Rules for Poster Prompts:
+1. **TEXT INCLUSION**: You **ARE** required to include textual overlay descriptions such as "Cinematic movie poster with 'THEN VS NOW' text" or "'[X] YEARS LATER' text in sleek font".
+2. **Composition Style**: Use split-screens, reflection tricks (e.g., character looking into a pool), or dramatic side-by-side juxtaposition of the character in iconic poses vs modern state.
+3. **Lighting**: High dramatic contrast, stylized color grading (e.g. blue & amber), movie-poster visual framing.
+
+### Format Specifications
+
+#### 16:9 Poster (Horizontal)
+**Structure Template:**
+`Cinematic movie poster style with 'THEN VS NOW' text, split screen showing [Character Name] in [Year] on the left and modern [Actor Name] on the [Set Location] set on the right, high-contrast cinematic lighting.`
+
+#### 9:16 Poster (Vertical)
+**Structure Template:**
+`Vertical movie poster with 'THEN VS NOW' text, [Character Name] in iconic [Pose/Attire], juxtaposed with their modern self standing in the [Set Condition], dramatic lighting.`
+
+### Examples by Pattern:
+
+*   **Split Screen Pattern**: `Cinematic movie poster with 'THEN VS NOW' text, split screen showing [Character Name] in [Year] on the left and a modern, silver-haired [Actor Name] on the [Set Name] set on the right`
+*   **Juxtaposition Pattern**: `Vertical movie poster with 'THEN VS NOW' text, [Character Name] in their iconic [Pose], juxtaposed with their modern self standing in the ruins of the [Set Name] set`
+*   **Reflection Pattern**: `Vertical poster: An older [Character Name] looking into a pool of water where their younger [Year] self's face is reflected, 'THEN VS NOW' text, blue and amber cinematic lighting`
+*   **Time Period Pattern**: `Cinematic split-screen: Left side shows a [Year] [Character Name] with [Iconic Asset], right side shows an older [Actor Name] standing in the dusty, abandoned [Set Name], text '[X] YEARS LATER' in sleek font`
+
+---
+
 ## ANIMATION / MOTION PROMPT GUIDELINES
 
 This section defines the exact specifications for generating video animations (motion prompts) for Meeting and Departure scenes.
@@ -559,8 +607,8 @@ golden sunlight through windows, romantic nostalgic atmosphere.
 START: Both characters standing together after the meeting
 ACTION: They walk to the right side of frame
 INTERACTION: Smiling and talking in friendly conversation
-CAMERA: Smooth tracking shot following their movement
-EXIT: They walk out of scene together
+CAMERA: Smooth tracking shot tracking right, transitioning into a **continuous rightward pan with NO fades or dissolves**, sweeping past the current set limits to reveal the adjacent set area.
+EXIT: They walk out, and the camera reveals the next scene set layout.
 DURATION: 15-30 seconds
 ```
 
@@ -568,7 +616,8 @@ DURATION: 15-30 seconds
 - ✅ **Starting position:** Both characters together in frame
 - ✅ **Movement:** Walk together to the right side
 - ✅ **Conversation:** Smiling and talking naturally
-- ✅ **Camera tracking:** Smooth follow shot
+- ✅ **Camera tracking:** Smooth tracking that continues into a **continuous horizontal pan to the right**.
+- ✅ **Physical Transition:** Sweeps past the set edge/scaffolding to reveal the adjacent set. **NO cross-fades, dissolves, or sudden merges.**
 - ✅ **Background:** Production set visible as they exit
 - ✅ **Crew:** Natural crew movement in background
 - ✅ **Lighting:** Warm, hopeful, closure
@@ -577,21 +626,21 @@ DURATION: 15-30 seconds
 **Motion Prompt Template:**
 ```
 TRANSITION: Both characters (THEN and NOW versions) walk together to the right
-side of frame, smiling and talking to each other in friendly conversation. Camera
-follows their movement with smooth tracking shot as they exit the scene. Production
-set and equipment visible in background, crew members working naturally. Warm
-lighting, joyful atmosphere, natural walking animation, sense of closure and
-continued friendship.
+side of frame, smiling and talking. Camera follows with a smooth tracking shot
+that continues into a **continuous horizontal pan to the right with no fades or dissolves**,
+sweeping past the edge of the current set to reveal the adjacent film set area.
+Production equipment visible, crew working naturally. Warm lighting, joyful atmosphere,
+natural walking animation, smooth continuous camera movement reveal.
 ```
 
 **Scene Action Template:**
 ```
 [Departure/TRANSITION] Both characters (THEN on left, NOW on right) walk together
-to the right side of frame, smiling and talking to each other in friendly
-conversation. Camera follows their movement with smooth tracking as they exit the
-scene together. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL
-FRAMING, TRIPOD PERSPECTIVE. Production set and equipment visible, crew members
-working naturally in background.
+to the right side of frame, smiling and talking. Camera follows with smooth tracking,
+transitioning into a **continuous rightward pan with no cuts or fades**, sweeping
+past the current set limits to reveal the adjoining scene set layout.
+STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL FRAMING,
+TRIPOD PERSPECTIVE. Production set and equipment visible in background.
 ```
 
 **Examples:**
@@ -693,6 +742,8 @@ friendship transcending time.
 4. **Valid JSON**: Respond with valid JSON only.
 5. **Composition Lock**: ALWAYS include the mandatory composition block in scene descriptions.
 6. **Production Atmosphere**: Include visible film equipment and crew to create authentic behind-the-scenes feel.
+7. **NO ON-SCREEN TEXT (CRITICAL)**: ABSOLUTELY DO NOT describe, request, or generate any text, labels, subtitles, tags, or captions (e.g., "THEN" or "NOW") inside the image or motion prompts. Imagery must be strictly visual, without any letters or writing on top of the environment or characters.
+8. **Title Format**: The root `title` field MUST include the movie name and its release year in parentheses, for example: "Matrix Reloaded (2003): The Reunion".
 
 ## Input
 The user will provide a MOVIE NAME. Expand this into a full "Then vs Now" reunion narrative following the format above.
