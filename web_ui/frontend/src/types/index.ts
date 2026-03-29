@@ -199,6 +199,9 @@ export interface GlobalConfig {
   available_video_workflows?: string[];
   available_image_workflows?: string[];
   playwright_browser?: string;
+  gemini_watermark_tool_image?: string;
+  gemini_watermark_tool_video?: string;
+  watermark_removal_method?: string;
 }
 
 export interface UpdateGlobalConfigRequest {
@@ -213,6 +216,9 @@ export interface UpdateGlobalConfigRequest {
   openai_api_key?: string;
   elevenlabs_api_key?: string;
   playwright_browser?: string;
+  gemini_watermark_tool_image?: string;
+  gemini_watermark_tool_video?: string;
+  watermark_removal_method?: string;
 }
 
 export interface UpdateStoryRequest {

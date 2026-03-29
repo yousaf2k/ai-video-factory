@@ -129,9 +129,9 @@ class ApiClient {
     return response.data;
   }
 
-  async updateShot(projectId: string, shotIndex: number, request: UpdateShotRequest): Promise<Shot> {
+  async updateShot(projectId: string, shotIdOrIndex: string | number, request: UpdateShotRequest): Promise<Shot> {
     const response = await this.client.put<Shot>(
-      `/api/projects/${projectId}/shots/${shotIndex}`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}`,
       request
     );
     return response.data;
@@ -139,7 +139,7 @@ class ApiClient {
 
   async regenerateShotImage(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     force: boolean = false,
     imageMode?: string,
     imageWorkflow?: string,
@@ -147,7 +147,7 @@ class ApiClient {
     promptOverride?: string,
     imageVariant?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/regenerate-image`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/regenerate-image`, {
       force,
       image_mode: imageMode,
       image_workflow: imageWorkflow,
@@ -159,7 +159,7 @@ class ApiClient {
 
   async regenerateShotVideo(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     force: boolean = false,
     videoMode?: string,
     videoWorkflow?: string,
@@ -168,7 +168,7 @@ class ApiClient {
     generateSoundFX?: boolean,
     draftLowResVideo?: boolean
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/regenerate-video`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/regenerate-video`, {
       force,
       video_mode: videoMode,
       video_workflow: videoWorkflow,
@@ -181,10 +181,10 @@ class ApiClient {
 
   async generateSoundFX(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     force: boolean = false
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/generate-soundfx`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-soundfx`, {
       force
     });
   }
@@ -195,13 +195,14 @@ class ApiClient {
     await this.client.post(`/api/projects/${projectId}/shots/cancel-generation`);
   }
 
-  async cancelShotGeneration(projectId: string, shotIndex: number): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/cancel-generation`);
+  async cancelShotGeneration(projectId: string, shotIdOrIndex: string | number): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/cancel-generation`);
   }
 
-  async removeWatermark(projectId: string, shotIndex: number, variant?: string): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/remove-watermark`, {
+  async removeWatermark(projectId: string, shotIdOrIndex: string | number, variant?: string, type: string = "image"): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/remove-watermark`, {
       variant: variant || null,
+      type: type
     });
   }
 
@@ -212,21 +213,23 @@ class ApiClient {
 
   async selectShotImage(
     projectId: string,
-    shotIndex: number,
-    imagePath: string
+    shotIdOrIndex: string | number,
+    imagePath: string,
+    variant?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/select-image`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/select-image`, {
       image_path: imagePath,
+      variant: variant || undefined,
     });
   }
 
   async deleteVariationImage(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     imagePath: string
   ): Promise<{ remaining: number; active_image_path: string | null }> {
     const response = await this.client.delete<{ status: string; remaining: number; active_image_path: string | null }>(
-      `/api/projects/${projectId}/shots/${shotIndex}/images`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}/images`,
       { params: { image_path: imagePath } }
     );
     return response.data;
@@ -234,21 +237,23 @@ class ApiClient {
 
   async selectShotVideo(
     projectId: string,
-    shotIndex: number,
-    videoPath: string
+    shotIdOrIndex: string | number,
+    videoPath: string,
+    variant?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/select-video`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/select-video`, {
       video_path: videoPath,
+      variant: variant || undefined,
     });
   }
 
   async deleteVariationVideo(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     videoPath: string
   ): Promise<{ remaining: number; active_video_path: string | null }> {
     const response = await this.client.delete<{ status: string; remaining: number; active_video_path: string | null }>(
-      `/api/projects/${projectId}/shots/${shotIndex}/videos`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}/videos`,
       { params: { video_path: videoPath } }
     );
     return response.data;
@@ -290,14 +295,14 @@ class ApiClient {
 
   async uploadShotImage(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     file: File,
     variant?: string
   ): Promise<{ image_path: string; filename: string }> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await this.client.post<{ status: string; image_path: string; filename: string }>(
-      `/api/projects/${projectId}/shots/${shotIndex}/upload-image`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}/upload-image`,
       formData,
       { 
         params: { variant },
@@ -309,14 +314,14 @@ class ApiClient {
 
   async uploadShotVideo(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     file: File,
     variant?: string
   ): Promise<{ video_path: string; filename: string }> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await this.client.post<{ status: string; video_path: string; filename: string }>(
-      `/api/projects/${projectId}/shots/${shotIndex}/upload-video`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}/upload-video`,
       formData,
       { 
         params: { variant },

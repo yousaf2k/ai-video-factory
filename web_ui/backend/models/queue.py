@@ -18,6 +18,7 @@ class GenerationType(str, Enum):
     NARRATION = "narration"
     BACKGROUND = "background"
     SOUNDFX = "soundfx"
+    THUMBNAIL = "thumbnail"
 
 
 class QueueItemStatus(str, Enum):
@@ -61,6 +62,8 @@ class QueueItem(BaseModel):
     append_image_prompt: Optional[str] = Field(None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
+    aspect_ratio: Optional[str] = Field(None, description="Aspect ratio for thumbnails/standard shots")
+    is_poster: bool = Field(default=False, description="Is this a poster-style generation?")
 
     # Tracking for deep resume
     comfyui_prompt_id: Optional[str] = Field(None, description="ComfyUI prompt ID for resuming active tasks")

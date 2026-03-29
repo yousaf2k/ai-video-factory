@@ -27,7 +27,16 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
   "tags": ["tag1", "tag2", "tag3"],
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
+  "poster_thumbnail_prompt_16_9": "A cinematic movie poster style prompt for 16:9 aspect ratio",
+  "poster_thumbnail_prompt_9_16": "A cinematic movie poster style prompt for 9:16 aspect ratio",
   "style": "ultra cinematic documentary",
+  "youtube_metadata": {
+    "title_options": ["Engaging SEO Title 1", "Engaging SEO Title 2"],
+    "seo_keywords": ["keyword1", "keyword2"],
+    "chapters": [
+      { "timestamp": "00:00", "title": "Introduction" }
+    ]
+  },
   "characters": [
     {
       "name": "Character Name",
@@ -81,7 +90,17 @@ You must respond with valid JSON only. No markdown, no explanations, just the JS
   "tags": ["tag1", "tag2", "tag3"],
   "thumbnail_prompt_16_9": "A highly detailed, cinematic prompt for a 16:9 Youtube thumbnail image",
   "thumbnail_prompt_9_16": "A highly detailed, cinematic prompt for a 9:16 Shorts/TikTok thumbnail image",
+  "poster_thumbnail_prompt_16_9": "A cinematic movie poster style prompt for 16:9 aspect ratio",
+  "poster_thumbnail_prompt_9_16": "A cinematic movie poster style prompt for 9:16 aspect ratio",
   "style": "ultra cinematic documentary",
+  "youtube_metadata": {
+    "title_options": ["3-5 catchy, SEO-optimized title options"],
+    "seo_keywords": ["10-15 relevant SEO keywords and tags"],
+    "chapters": [
+      { "timestamp": "00:00", "title": "Intro" },
+      { "timestamp": "XX:XX", "title": "Chapter Name based on scenes" }
+    ]
+  },
   "characters": [
     {
       "name": "Character Name",

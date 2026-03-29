@@ -35,7 +35,9 @@ def check_port_available(port):
     import socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
-            s.bind(('127.0.0.1', port))
+            # Bind to 0.0.0.0 (all interfaces) for common network accessibility 
+            # while checking if the port is available
+            s.bind(('0.0.0.0', port))
             return True
         except:
             return False
@@ -43,20 +45,35 @@ def check_port_available(port):
 
 def start_backend():
     """Start the FastAPI backend server"""
-    print(f"Starting backend server at http://{config.WEB_UI_HOST}:{config.WEB_UI_PORT}")
-    print(f"API docs: http://{config.WEB_UI_HOST}:{config.WEB_UI_PORT}/docs")
+    host = getattr(config, 'BACKEND_HOST', '127.0.0.1')
+    bind_host = getattr(config, 'BACKEND_BIND_HOST', '0.0.0.0')
+    port = getattr(config, 'BACKEND_PORT', 8000)
+    print(f"Starting backend server at http://{host}:{port}")
+    print(f"Listening on: {bind_host}:{port}")
+    print(f"API docs: http://{host}:{port}/docs")
 
     backend_dir = Path(__file__).parent / "backend"
+    # Pass bind host through env for uvicorn in main.py
+    env = os.environ.copy()
+    env["BACKEND_BIND_HOST"] = bind_host
     subprocess.run(
         [sys.executable, "main.py"],
         cwd=backend_dir,
-        env=os.environ.copy()
+        env=env
     )
 
 
 def start_frontend():
     """Start the Next.js frontend development server"""
-    print("Starting frontend server at http://localhost:3000")
+    # Use configuration for frontend host/port and backend URL
+    frontend_host = getattr(config, 'FRONTEND_HOST', '127.0.0.1')
+    frontend_bind_host = getattr(config, 'FRONTEND_BIND_HOST', '0.0.0.0')
+    frontend_port = getattr(config, 'FRONTEND_PORT', 3000)
+    backend_url = getattr(config, 'BACKEND_URL', 'http://127.0.0.1:8000')
+
+    print(f"Starting frontend server at http://{frontend_host}:{frontend_port}")
+    print(f"Listening on: {frontend_bind_host}:{frontend_port}")
+    print(f"Connecting to backend at {backend_url}")
 
     frontend_dir = Path(__file__).parent / "frontend"
 
@@ -69,10 +86,16 @@ def start_frontend():
             env=os.environ.copy()
         )
 
+    # Set environment variables for the frontend
+    env = os.environ.copy()
+    env["PORT"] = str(frontend_port)
+    env["HOSTNAME"] = frontend_bind_host # Next.js binds to this
+    env["NEXT_PUBLIC_API_URL"] = backend_url
+
     subprocess.run(
         ["npm", "run", "dev"],
         cwd=frontend_dir,
-        env=os.environ.copy(),
+        env=env,
         shell=True
     )
 
@@ -104,14 +127,17 @@ def main():
         sys.exit(1)
 
     # Check ports
-    if not args.frontend_only and not check_port_available(config.WEB_UI_PORT):
-        print(f"Error: Port {config.WEB_UI_PORT} is already in use")
+    backend_port = getattr(config, 'BACKEND_PORT', 8000)
+    frontend_port = getattr(config, 'FRONTEND_PORT', 3000)
+
+    if not args.frontend_only and not check_port_available(backend_port):
+        print(f"Error: Port {backend_port} (Backend) is already in use")
         print("Please stop the other process or use a different port in config.py")
         sys.exit(1)
 
-    if not args.backend_only and not check_port_available(3000):
-        print("Error: Port 3000 is already in use")
-        print("Please stop the other process (likely the frontend dev server)")
+    if not args.backend_only and not check_port_available(frontend_port):
+        print(f"Error: Port {frontend_port} (Frontend) is already in use")
+        print("Please stop the other process (likely a previous frontend dev server)")
         sys.exit(1)
 
     print("="*60)

@@ -7,7 +7,7 @@ import config
 # Set up logging
 logger = logging.getLogger(__name__)
 
-def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_res_video=False):
+def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_res_video=False, workflow_config=None):
     """Load workflow and optionally set video length and dimensions"""
     if not os.path.isabs(path):
         # Resolve relative to the project root (one level up from core/)
@@ -23,8 +23,9 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
     width, height = config.calculate_video_dimensions(aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video)
 
     # Get workflow settings for node IDs
-    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
-    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+    if not workflow_config:
+        work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+        workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
 
     wan_video_node_id = None
     if workflow_config:
@@ -90,7 +91,7 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
                     if len(widgets) >= 5:
                         node_data["inputs"]["save_output"] = widgets[4]
                 # For WanImageToVideo or WanFirstLastFrameToVideo, widgets_values contains [width, height, frames, batch_size]
-                elif node_type in ["WanImageToVideo", "WanFirstLastFrameToVideo"] and len(widgets) >= 4:
+                elif node_type in ["WanImageToVideo", "WanFirstLastFrameToVideo", "WanVideoTextToVideo", "WanVideoFirstLastFrameToVideo", "WanVideoSampler", "WanSampler", "WanVideoGenerator"] and len(widgets) >= 4:
                     # Use config dimensions instead of hardcoded values
                     node_data["inputs"]["width"] = width
                     node_data["inputs"]["height"] = height
@@ -180,20 +181,21 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
 
         return wf
 
-def compile_workflow(template, shot, video_length_seconds=None):
+def compile_workflow(template, shot, video_length_seconds=None, workflow_config=None):
 
     wf = copy.deepcopy(template)
 
     # Get workflow settings for node IDs
-    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
-    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+    if not workflow_config:
+        work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+        workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
 
     load_image_node_id = None
     motion_prompt_node_id = None
     wan_video_node_id = None
 
     if workflow_config:
-        load_image_node_id = workflow_config.get('load_image_node_id', config.LOAD_IMAGE_NODE_ID)
+        load_image_node_id = workflow_config.get('load_image_node_id') or workflow_config.get('load_image_first_node_id') or config.LOAD_IMAGE_NODE_ID
         motion_prompt_node_id = workflow_config.get('motion_prompt_node_id', config.MOTION_PROMPT_NODE_ID)
         wan_video_node_id = workflow_config.get('wan_video_node_id', getattr(config, 'WAN_VIDEO_NODE_ID', None))
     else:

@@ -17,7 +17,7 @@ Generate a cinematic narrative for a "Then vs Now" reunion for a specific movie.
 You are creating a story for a **{VIDEO_LENGTH}-second video**.
 
 ### Scene Duration Allocation
-- Each segment (Meeting or Departure) should typically be 15-30 seconds.
+- Each segment (Meeting or Departure) should typically be 10-15 seconds.
 - Sum of all `scene_duration` must equal {VIDEO_LENGTH}.
 
 ## Scene Organization
@@ -711,7 +711,7 @@ friendship transcending time.
 - Emotional authenticity
 
 **Duration:**
-- Target: 15-30 seconds per clip
+- Target: 10-15 seconds per clip
 - Allow 5-second tolerance
 - Total video = Sum of all scene durations
 
@@ -743,7 +743,7 @@ friendship transcending time.
 5. **Composition Lock**: ALWAYS include the mandatory composition block in scene descriptions.
 6. **Production Atmosphere**: Include visible film equipment and crew to create authentic behind-the-scenes feel.
 7. **NO ON-SCREEN TEXT (CRITICAL)**: ABSOLUTELY DO NOT describe, request, or generate any text, labels, subtitles, tags, or captions (e.g., "THEN" or "NOW") inside the image or motion prompts. Imagery must be strictly visual, without any letters or writing on top of the environment or characters.
-8. **Title Format**: The root `title` field MUST include the movie name and its release year in parentheses, for example: "Matrix Reloaded (2003): The Reunion".
+8. **Title Format**: The root `title` field MUST include the movie name and its release year in parentheses, for example: "Matrix Reloaded (2003): Movie Cast Reunion of Then vs Now".
 
 ## Input
 The user will provide a MOVIE NAME. Expand this into a full "Then vs Now" reunion narrative following the format above.

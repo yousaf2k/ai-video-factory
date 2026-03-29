@@ -15,6 +15,15 @@ logger = get_logger(__name__)
 _comfy_output_dir = None
 
 
+def is_comfyui_running():
+    """Check if ComfyUI is currently running and accessible."""
+    try:
+        r = http_session.get(f"{config.COMFY_URL}/system_stats", timeout=2)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
 def get_comfyui_output_directory():
     """
     Get ComfyUI's actual output directory from the API.

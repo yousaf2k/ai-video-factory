@@ -265,7 +265,7 @@ async def generate_thumbnail(project_id: str, request: GenerateThumbnailRequest)
         from web_ui.backend.services.generation_service import get_generation_service
         gen_service = get_generation_service()
         
-        image_path = await gen_service.generate_thumbnail(
+        item_id = await gen_service.generate_thumbnail(
             project_id, 
             aspect_ratio=request.aspect_ratio, 
             force=request.force,
@@ -275,10 +275,7 @@ async def generate_thumbnail(project_id: str, request: GenerateThumbnailRequest)
             is_poster=request.is_poster
         )
         
-        filename = os.path.basename(image_path)
-        thumbnail_url = f"/api/projects/{project_id}/images/{filename}"
-        
-        return {"status": "success", "thumbnail_url": thumbnail_url}
+        return {"status": "success", "item_id": item_id}
     except Exception as e:
         logger.error(f"Error generating thumbnail: {e}")
         raise HTTPException(

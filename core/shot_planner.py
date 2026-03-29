@@ -353,7 +353,7 @@ def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_sce
             # Support both scene_length and scene_duration field names
             scene_len = scene.get("scene_length") or scene.get("scene_duration", 0)
             if scene_len > 0:
-                shots_for_scene = max(MIN_SHOTS_PER_SCENE, int(scene_len / DEFAULT_SHOT_LENGTH))
+                shots_for_scene = max(MIN_SHOTS_PER_SCENE or 1, int(scene_len / DEFAULT_SHOT_LENGTH))
                 scene_shot_plan.append({
                     'scene_idx': i,
                     'shots': shots_for_scene,
@@ -389,7 +389,7 @@ IMPORTANT:
 
     elif max_shots:
         # Calculate shots per scene from max_shots (even distribution)
-        shots_per_scene_target = max(MIN_SHOTS_PER_SCENE, max_shots // scene_count)
+        shots_per_scene_target = max(MIN_SHOTS_PER_SCENE or 1, max_shots // scene_count)
 
         # Log shot distribution planning
         print(f"[INFO] Shot distribution: {max_shots} shots across {scene_count} scenes (~{shots_per_scene_target} shots/scene)")
@@ -399,17 +399,26 @@ IMPORTANT:
 IMPORTANT SHOT DISTRIBUTION:
 - Generate exactly {max_shots} shots total ({shots_per_scene_target}-{max_shots // scene_count + 2} shots per scene)
 - DISTRIBUTE shots evenly across all {scene_count} scenes
-- Each scene MUST have at least {MIN_SHOTS_PER_SCENE} shots (different camera angles)
+- Each scene MUST have at least {MIN_SHOTS_PER_SCENE or 1} shots (different camera angles)
 """
     else:
         # Use shots_per_scene target
-        estimated_total = scene_count * shots_per_scene
-        max_shots_instruction = f"""
+        if shots_per_scene > 0:
+            estimated_total = scene_count * shots_per_scene
+            max_shots_instruction = f"""
 IMPORTANT SHOT DISTRIBUTION:
-- Generate approximately {shots_per_scene}-{min(shots_per_scene + 2, MAX_SHOTS_PER_SCENE)} shots for EACH of the {scene_count} scenes
+- Generate approximately {shots_per_scene}-{min(shots_per_scene + 2, MAX_SHOTS_PER_SCENE) if MAX_SHOTS_PER_SCENE > 0 else shots_per_scene + 2} shots for EACH of the {scene_count} scenes
 - Estimated total: {estimated_total} shots
-- Each scene MUST have at least {MIN_SHOTS_PER_SCENE} shots with different camera angles
-- Maximum: {MAX_SHOTS_PER_SCENE} shots per scene (to prevent over-generation)
+- Each scene MUST have at least {MIN_SHOTS_PER_SCENE or 1} shots with different camera angles
+"""
+            if MAX_SHOTS_PER_SCENE > 0:
+                max_shots_instruction += f"- Maximum: {MAX_SHOTS_PER_SCENE} shots per scene (to prevent over-generation)\n"
+        else:
+            max_shots_instruction = f"""
+IMPORTANT SHOT DISTRIBUTION:
+- Generate as many shots as necessary for EACH of the {scene_count} scenes to properly and visually tell the story.
+- DO NOT artificially limit the number of shots. If a scene is complex or long, generate many shots for it.
+- Each scene MUST have at least 1 shot with different camera angles.
 """
 
     # Use batch processing if there are many scenes to avoid truncation
@@ -424,23 +433,51 @@ IMPORTANT SHOT DISTRIBUTION:
             end_idx = min(start_idx + batch_size, scene_count)
             scenes_batch = scenes[start_idx:end_idx]
 
-            # Adjust max_shots for this batch
-            batch_max_shots = None
-            if max_shots:
-                batch_max_shots = max_shots // total_batches
+            if has_scene_lengths:
+                # Extract the subset of the scene_shot_plan for this batch
+                batch_plan = [p for p in scene_shot_plan if start_idx <= p['scene_idx'] < end_idx]
+                batch_max_total = sum(p['shots'] for p in batch_plan)
+                
+                # Format scene shot plan for LLM instruction
+                batch_scene_plan_text = "\n".join([
+                    f"  Scene {p['scene_idx']}: {p['shots']} shots ({p['duration']}s)"
+                    for p in batch_plan
+                ])
 
-            # Build batch-specific instruction
-            batch_max_total = batch_max_shots or len(scenes_batch) * shots_per_scene
-            scenes_in_batch = len(scenes_batch)
-            shots_per_batch_scene = max(MIN_SHOTS_PER_SCENE, batch_max_total // scenes_in_batch) if batch_max_total else shots_per_scene
+                batch_instruction = f"""
+CRITICAL SHOT REQUIREMENTS FOR THIS BATCH:
+- You MUST generate exactly {batch_max_total} shots for this batch
+- This batch contains {len(scenes_batch)} scene(s)
+Generate the following exact number of shots for each scene based on its duration:
+{batch_scene_plan_text}
 
-            # Create a clear batch-specific instruction (don't reuse the global one)
-            batch_instruction = f"""
+IMPORTANT: Follow the exact shot count specified for each scene above.
+"""
+            else:
+                # Adjust max_shots for this batch
+                batch_max_shots = None
+                if max_shots:
+                    batch_max_shots = max_shots // total_batches
+
+                # Build batch-specific instruction
+                batch_max_total = batch_max_shots or len(scenes_batch) * shots_per_scene
+                scenes_in_batch = len(scenes_batch)
+
+                if shots_per_scene > 0:
+                    shots_per_batch_scene = max(MIN_SHOTS_PER_SCENE or 1, batch_max_total // scenes_in_batch) if batch_max_total else shots_per_scene
+                    batch_instruction = f"""
 CRITICAL SHOT REQUIREMENTS:
 - You MUST generate exactly {batch_max_total} shots for this batch
 - This batch contains {scenes_in_batch} scene(s)
 - For EACH scene in this batch, generate {shots_per_batch_scene}-{shots_per_batch_scene + 2} unique shots with different camera angles
-- Each scene MUST have at least {MIN_SHOTS_PER_SCENE} shots (different angles: wide shot, close-up, detail, etc.)
+- Each scene MUST have at least {MIN_SHOTS_PER_SCENE or 1} shots (different angles: wide shot, close-up, detail, etc.)
+"""
+                else:
+                    batch_instruction = f"""
+CRITICAL SHOT REQUIREMENTS:
+- This batch contains {scenes_in_batch} scene(s)
+- Generate as many shots as necessary for each scene to properly tell the story visually.
+- Each scene MUST have at least 1 shot.
 """
 
             batches.append({

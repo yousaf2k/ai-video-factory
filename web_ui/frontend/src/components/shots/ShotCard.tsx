@@ -145,9 +145,7 @@ export function ShotCard({
   const regenerateVideo = useRegenerateVideo(projectId);
   const selectImage = useSelectImage(projectId);
   const removeWatermark = useRemoveWatermark(projectId);
-  const uploadShotImage = useUploadShotImage(projectId);
-  const uploadShotVideo = useUploadShotVideo(projectId);
-  const generateSoundFX = useGenerateSoundFX(projectId);
+  const uploadImage = useUploadShotImage(projectId);
   const deleteVariation = useDeleteVariationImage(projectId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -161,8 +159,10 @@ export function ShotCard({
   const [isImagePromptExpanded, setIsImagePromptExpanded] = useState(false);
   const [isMotionPromptExpanded, setIsMotionPromptExpanded] = useState(false);
 
+  const uploadVideo = useUploadShotVideo(projectId);
   const selectVideo = useSelectVideo(projectId);
   const deleteVariationVideo = useDeleteVariationVideo(projectId);
+  const generateSoundFX = useGenerateSoundFX(projectId);
 
   const { data: globalConfig } = useConfig();
 
@@ -548,12 +548,15 @@ export function ShotCard({
               const isVideo = file.type.startsWith('video/');
               const isImage = file.type.startsWith('image/');
 
+              // Use ID if available, otherwise index (string or number)
+              const shotIdOrIndex = shot.id || shot.index;
+
               if (isVideo) {
                 setIsVideoUploading(true);
                 try {
                   // For FLFI2V shots, pass the current variant (meeting/departure)
                   const variant = shot.is_flfi2v ? activeVideoMode : undefined;
-                  await uploadShotVideo.mutateAsync({ shotIndex: shot.index, file, variant });
+                  await uploadVideo.mutateAsync({ shotIdOrIndex, file, variant });
                   setCacheBuster(Date.now());
                   toast.success("Video uploaded successfully", {
                     description: `Shot ${shot.index}${shot.is_flfi2v && variant ? ` (${variant.charAt(0).toUpperCase() + variant.slice(1)})` : ""} video has been uploaded.`,
@@ -571,7 +574,7 @@ export function ShotCard({
                 try {
                   // For FLFI2V shots, pass the current variant (THEN/NOW)
                   const variant = shot.is_flfi2v ? activeImageMode : undefined;
-                  await uploadShotImage.mutateAsync({ shotIndex: shot.index, file, variant });
+                  await uploadImage.mutateAsync({ shotIdOrIndex, file, variant });
                   setCacheBuster(Date.now());
                   toast.success("Image uploaded successfully", {
                     description: `Shot ${shot.index}${shot.is_flfi2v && variant ? ` (${variant.toUpperCase()})` : ""} image has been uploaded.`,
@@ -623,26 +626,36 @@ export function ShotCard({
               </div>
             )}
           </button>
-          {(shot.is_flfi2v
-            ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated)
-            : shot.image_generated) && (
+          {(viewMode === "image" 
+            ? (shot.is_flfi2v ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated) : shot.image_generated)
+            : (shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)
+          ) && (
               <button
                 onClick={async () => {
                   try {
+                    // Use ID if available, otherwise index (string or number)
+                    const shotIdOrIndex = shot.id || shot.index;
                     // For FLFI2V shots, pass the currently active image variant
-                    const variant = shot.is_flfi2v ? activeImageMode : undefined;
-                    await removeWatermark.mutateAsync({ shotIndex: shot.index, variant });
-                    // Refresh the cache buster to show the updated image
+                    const variant = shot.is_flfi2v 
+                      ? (viewMode === "image" ? activeImageMode : activeVideoMode) 
+                      : undefined;
+                    await removeWatermark.mutateAsync({ 
+                      shotIdOrIndex, 
+                      variant,
+                      type: viewMode === "image" ? "image" : "video"
+                    });
+                    // Refresh the cache buster to show the updated media
                     setCacheBuster(Date.now());
+                    toast.success(`Watermark removal started for ${viewMode}`);
                   } catch (error: any) {
                     console.error("Failed to remove watermark:", error);
                     const errorMessage = error?.response?.data?.detail || error?.message || "Unknown error";
-                    alert(`Failed to remove watermark: ${errorMessage}\n\nPlease ensure the image file exists on disk.`);
+                    toast.error(`Failed to remove watermark: ${errorMessage}`);
                   }
                 }}
                 disabled={removeWatermark.isPending}
                 className="p-1 hover:bg-teal-50 text-teal-600 rounded disabled:opacity-50"
-                title={`Remove Gemini Watermark${shot.is_flfi2v ? ` from ${activeImageMode.toUpperCase()} image` : ''}`}
+                title={`Remove Gemini Watermark from ${viewMode}${shot.is_flfi2v ? ` (${(viewMode === "image" ? activeImageMode : activeVideoMode).toUpperCase()})` : ''}`}
               >
                 <Wand2 className={cn("w-4 h-4", removeWatermark.isPending && "animate-pulse")} />
               </button>
@@ -685,7 +698,9 @@ export function ShotCard({
           <button
             onClick={async () => {
               try {
-                await generateSoundFX.mutateAsync({ shotIndex: shot.index, force: true });
+                // Use ID if available, otherwise index (string or number)
+                const shotIdOrIndex = shot.id || shot.index;
+                await generateSoundFX.mutateAsync({ shotIdOrIndex, force: true });
                 toast.info("Sound FX generation started", {
                   description: `Shot ${shot.index} sound FX is being generated.`,
                 });
@@ -1049,51 +1064,63 @@ export function ShotCard({
         onClose={() => setShowRegenModal(null)}
         type={showRegenModal || "image"}
         projectId={projectId}
-        isPending={regenerateImage.isPending || regenerateVideo.isPending}
+        isPending={
+          regenerateImage.isPending ||
+          regenerateVideo.isPending ||
+          updateShot.isPending ||
+          removeWatermark.isPending ||
+          uploadImage.isPending ||
+          uploadVideo.isPending ||
+          generateSoundFX.isPending
+        }
         defaultPromptOverride={defaultPromptOverride}
         onSubmit={(config) => {
-          try {
-            const type = showRegenModal;
-            setShowRegenModal(null);
+          // Use ID if available, otherwise index (string or number)
+          const shotIdOrIndex = shot.id || shot.index;
+          const type = showRegenModal;
+          setShowRegenModal(null);
 
-            if (type === "image") {
-              const imageVariant = shot.is_flfi2v ? activeImageMode : undefined;
-              regenerateImage.mutate({
-                shotIndex: shot.index,
-                force: config.force || false,
-                imageMode: config.mode || "comfyui",
-                imageWorkflow: config.workflow || "default",
-                seed: config.seed === "" ? undefined : config.seed,
-                promptOverride: config.promptOverride?.trim() || undefined,
-                imageVariant,
-              });
-              toast.info("Image regeneration started", {
-                description: `Shot ${shot.index}${shot.is_flfi2v && imageVariant ? ` (${imageVariant.toUpperCase()})` : ""} image is being generated.`,
-              });
-            } else if (type === "video") {
-              const videoVariant = shot.is_flfi2v ? activeVideoMode : undefined;
-              regenerateVideo.mutate({
-                shotIndex: shot.index,
-                force: config.force || false,
-                videoMode: config.mode || "comfyui",
-                videoWorkflow: config.mode === "comfyui" ? config.workflow : undefined,
-                videoVariant,
-                appendImagePrompt: config.appendImagePrompt === "default" ? undefined : config.appendImagePrompt,
-                generateSoundFX: config.generateSoundFX || false,
-                draftLowResVideo: config.draftLowResVideo || false,
-              });
-              setViewMode("video");
-              toast.info("Video regeneration started", {
-                description: `Shot ${shot.index}${shot.is_flfi2v && videoVariant ? ` (${videoVariant.charAt(0).toUpperCase() + videoVariant.slice(1)})` : ""} video is being generated.`,
-              });
-            }
-            setCacheBuster(Date.now());
-          } catch (error) {
-            console.error(`Failed to trigger regeneration:`, error);
-            toast.error("Failed to start regeneration", {
-              description: "Please try again.",
+          if (type === "image") {
+            const imageVariant = shot.is_flfi2v ? activeImageMode : undefined;
+            regenerateImage.mutate({
+              shotIdOrIndex,
+              force: config.force || false,
+              imageMode: config.mode || "comfyui",
+              imageWorkflow: config.workflow || "default",
+              seed: config.seed === "" ? undefined : config.seed,
+              promptOverride: config.promptOverride?.trim() || undefined,
+              imageVariant,
+            });
+            toast.info("Image regeneration started", {
+              description: `Shot ${shot.index}${shot.is_flfi2v && imageVariant ? ` (${imageVariant.toUpperCase()})` : ""} image is being generated.`,
+            });
+          } else if (type === "video") {
+            const videoVariant = shot.is_flfi2v ? activeVideoMode : undefined;
+            regenerateVideo.mutate({
+              shotIdOrIndex,
+              force: config.force || false,
+              videoMode: config.mode || "comfyui",
+              videoWorkflow: config.mode === "comfyui" ? config.workflow : undefined,
+              videoVariant,
+              appendImagePrompt: config.appendImagePrompt === "default" ? undefined : config.appendImagePrompt,
+              generateSoundFX: config.generateSoundFX || false,
+              draftLowResVideo: config.draftLowResVideo || false,
+            });
+            setViewMode("video");
+            toast.info("Video regeneration started", {
+              description: `Shot ${shot.index}${shot.is_flfi2v && videoVariant ? ` (${videoVariant.charAt(0).toUpperCase() + videoVariant.slice(1)})` : ""} video is being generated.`,
+            });
+          } else if (type === "watermark") {
+            removeWatermark.mutate({
+              shotIdOrIndex,
+              variant: shot.is_flfi2v ? (viewMode === "image" ? activeImageMode : activeVideoMode) : undefined,
+              type: viewMode === "video" ? "video" : "image",
+            });
+            toast.info("Watermark removal started", {
+              description: `Shot ${shot.index} ${viewMode} is being processed for watermark removal.`,
             });
           }
+          setCacheBuster(Date.now());
         }}
       />
 
@@ -1176,6 +1203,9 @@ export function ShotCard({
 
         const mediaType = viewMode === "video" ? "Video" : "Image";
 
+        // Use ID if available, otherwise index (string or number)
+        const shotIdOrIndex = shot.id || shot.index;
+
         return (
           <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
             <div className="bg-background rounded-xl shadow-2xl max-w-3xl w-full max-h-[80vh] flex flex-col relative">
@@ -1249,13 +1279,13 @@ export function ShotCard({
                                   let remaining = 0;
                                   if (viewMode === "video") {
                                     const result = await deleteVariationVideo.mutateAsync({
-                                      shotIndex: shot.index,
+                                      shotIdOrIndex,
                                       videoPath: path,
                                     });
                                     remaining = result.remaining;
                                   } else {
                                     const result = await deleteVariation.mutateAsync({
-                                      shotIndex: shot.index,
+                                      shotIdOrIndex,
                                       imagePath: path,
                                     });
                                     remaining = result.remaining;
@@ -1287,13 +1317,15 @@ export function ShotCard({
                                   try {
                                     if (viewMode === "video") {
                                       await selectVideo.mutateAsync({
-                                        shotIndex: shot.index,
+                                        shotIdOrIndex,
                                         videoPath: path,
+                                        variant: shot.is_flfi2v ? activeVideoMode : undefined,
                                       });
                                     } else {
                                       await selectImage.mutateAsync({
-                                        shotIndex: shot.index,
+                                        shotIdOrIndex,
                                         imagePath: path,
+                                        variant: shot.is_flfi2v ? activeImageMode : undefined,
                                       });
                                     }
                                     setCacheBuster(Date.now());

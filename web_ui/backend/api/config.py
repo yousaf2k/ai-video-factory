@@ -34,6 +34,15 @@ class UpdateConfigRequest(BaseModel):
     video_workflow: Optional[str] = None
     image_workflow: Optional[str] = None
     playwright_browser: Optional[str] = None
+    gemini_watermark_tool_image: Optional[str] = None
+    gemini_watermark_tool_video: Optional[str] = None
+    watermark_removal_method: Optional[str] = None
+    backend_host: Optional[str] = None
+    backend_port: Optional[int] = None
+    frontend_host: Optional[str] = None
+    frontend_port: Optional[int] = None
+    backend_bind_host: Optional[str] = None
+    frontend_bind_host: Optional[str] = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -117,6 +126,15 @@ async def get_config():
                 getattr(config, 'PLAYWRIGHT_CHANNEL', '') if getattr(config, 'PLAYWRIGHT_CHANNEL', '') in ['chrome', 'msedge'] 
                 else getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium')
             ),
+            "gemini_watermark_tool_image": getattr(config, 'GEMINI_WATERMARK_TOOL_IMAGE', ''),
+            "gemini_watermark_tool_video": getattr(config, 'GEMINI_WATERMARK_TOOL_VIDEO', ''),
+            "watermark_removal_method": getattr(config, 'WATERMARK_REMOVAL_METHOD', 'builtin'),
+            "backend_host": getattr(config, 'BACKEND_HOST', '127.0.0.1'),
+            "backend_port": getattr(config, 'BACKEND_PORT', 8000),
+            "frontend_host": getattr(config, 'FRONTEND_HOST', '127.0.0.1'),
+            "frontend_port": getattr(config, 'FRONTEND_PORT', 3000),
+            "backend_bind_host": getattr(config, 'BACKEND_BIND_HOST', '0.0.0.0'),
+            "frontend_bind_host": getattr(config, 'FRONTEND_BIND_HOST', '0.0.0.0'),
         }
 
         return safe_config
@@ -160,6 +178,24 @@ async def update_config(request: UpdateConfigRequest):
                 updates["PLAYWRIGHT_CHANNEL"] = ""
         if request.elevenlabs_api_key is not None:
             updates["ELEVENLABS_API_KEY"] = request.elevenlabs_api_key
+        if request.gemini_watermark_tool_image is not None:
+            updates["GEMINI_WATERMARK_TOOL_IMAGE"] = request.gemini_watermark_tool_image
+        if request.gemini_watermark_tool_video is not None:
+            updates["GEMINI_WATERMARK_TOOL_VIDEO"] = request.gemini_watermark_tool_video
+        if request.watermark_removal_method is not None:
+            updates["WATERMARK_REMOVAL_METHOD"] = request.watermark_removal_method
+        if request.backend_host is not None:
+            updates["BACKEND_HOST"] = request.backend_host
+        if request.backend_port is not None:
+            updates["BACKEND_PORT"] = request.backend_port
+        if request.frontend_host is not None:
+            updates["FRONTEND_HOST"] = request.frontend_host
+        if request.frontend_port is not None:
+            updates["FRONTEND_PORT"] = request.frontend_port
+        if request.backend_bind_host is not None:
+            updates["BACKEND_BIND_HOST"] = request.backend_bind_host
+        if request.frontend_bind_host is not None:
+            updates["FRONTEND_BIND_HOST"] = request.frontend_bind_host
 
         if updates:
             import os

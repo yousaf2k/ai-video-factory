@@ -83,6 +83,73 @@ class ProjectManager:
             self._save_shots(project_id, shots)
             return shots
 
+    def update_shot_metadata(self, project_id: str, updates: dict, shot_id: str = None, shot_index: int = None):
+        """
+        Update metadata for a specific shot using ID (preferred) or index.
+        Thread-safe and race-condition proof via update_shots_safely.
+        """
+        def modify_shot(shots):
+            target_shot = None
+            
+            # 1. Try to find by ID
+            if shot_id:
+                for s in shots:
+                    if s.get('id') == shot_id:
+                        target_shot = s
+                        break
+            
+            # 2. Skip fallback if ID was provided but not found (safety)
+            # 3. Try to find by index if no ID or ID not found
+            if not target_shot and shot_index is not None:
+                if 0 <= shot_index - 1 < len(shots):
+                    target_shot = shots[shot_index - 1]
+                    
+            if target_shot:
+                # Apply updates
+                for key, value in updates.items():
+                    target_shot[key] = value
+                
+                # Special handling for path lists (image_paths, video_paths)
+                # if we are updating a path, we usually want to add it to the list too
+                if 'image_path' in updates:
+                    path = updates['image_path']
+                    if 'image_paths' not in target_shot:
+                        target_shot['image_paths'] = []
+                    if path and path not in target_shot['image_paths']:
+                        target_shot['image_paths'].append(path)
+                
+                if 'video_path' in updates:
+                    path = updates['video_path']
+                    if 'video_paths' not in target_shot:
+                        target_shot['video_paths'] = []
+                    if path and path not in target_shot['video_paths']:
+                        target_shot['video_paths'].append(path)
+
+                # Special handling for project stats (meta updates)
+                # We handle this OUTSIDE the modify_shot to avoid nested locks 
+                # or complicated side effects, though ProjectManager methods 
+                # often update meta immediately after saving shots.
+            else:
+                logger.warning(f"Could not find shot to update: ID={shot_id}, Index={shot_index}")
+
+        # Update shots.json atomically
+        updated_shots = self.update_shots_safely(project_id, modify_shot)
+        
+        # Update metadata stats (total counts)
+        try:
+            images_generated = sum(1 for s in updated_shots if s.get('image_generated', False))
+            videos_rendered = sum(1 for s in updated_shots if s.get('video_rendered', False))
+            
+            meta = self.load_project(project_id)
+            if meta:
+                meta['stats']['images_generated'] = images_generated
+                meta['stats']['videos_rendered'] = videos_rendered
+                self._save_meta(project_id, meta)
+        except Exception as e:
+            logger.error(f"Failed to update metadata stats: {e}")
+            
+        return target_shot if 'target_shot' in locals() else None
+
     def get_latest_project(self):
         """Get the most recent incomplete project, or None if all complete"""
         projects = []
@@ -178,8 +245,12 @@ class ProjectManager:
         """Load an existing project"""
         logger.debug(f"Loading project: {project_id}")
         meta_path = os.path.join(self.projects_dir, project_id, f"{project_id}_meta.json")
-        with open(meta_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError, Exception) as e:
+            logger.error(f"Failed to load project meta from {meta_path}: {e}")
+            return {}
 
     def get_project(self, project_id):
         """Get project metadata (alias for load_project)"""
@@ -196,8 +267,9 @@ class ProjectManager:
 
         # Update metadata
         meta = self.load_project(project_id)
-        meta['steps']['story'] = True
-        self._save_meta(project_id, meta)
+        if meta:
+            meta['steps']['story'] = True
+            self._save_meta(project_id, meta)
 
     def save_shots(self, project_id, shots):
         """Save shot data (image prompts, motion prompts) and initialize status fields"""
@@ -261,11 +333,12 @@ class ProjectManager:
 
         # Update metadata - only store stats, not the shots array
         meta = self.load_project(project_id)
-        meta['stats']['total_shots'] = len(shots)
-        meta['steps']['shots'] = True
-        self._save_meta(project_id, meta)
+        if meta:
+            meta['stats']['total_shots'] = len(shots)
+            meta['steps']['shots'] = True
+            self._save_meta(project_id, meta)
 
-    def _relativize_path(self, path):
+    def relativize_path(self, path):
         """Convert an absolute path to a relative path if it's within the project root or output dir"""
         if not path:
             return path
@@ -299,171 +372,95 @@ class ProjectManager:
         
         return path
 
-    def mark_image_generated(self, project_id, shot_index, image_path):
+    def mark_image_generated(self, project_id, shot_index, image_path, shot_id=None):
         """Mark that an image has been generated for a shot"""
-        # Load shots from shots.json
-        shots = self._load_shots(project_id)
+        normalized_path = self.relativize_path(image_path)
+        updates = {
+            'image_generated': True,
+            'image_path': normalized_path
+        }
+        self.update_shot_metadata(project_id, updates, shot_id=shot_id, shot_index=shot_index)
 
-        if 0 <= shot_index - 1 < len(shots):
-            # Convert to relative path if absolute and inside project root
-            normalized_path = self._relativize_path(image_path)
-
-            shots[shot_index - 1]['image_generated'] = True
-            shots[shot_index - 1]['image_path'] = normalized_path
-
-            # Also add to image_paths array if not already there
-            if normalized_path not in shots[shot_index - 1].get('image_paths', []):
-                if 'image_paths' not in shots[shot_index - 1]:
-                    shots[shot_index - 1]['image_paths'] = []
-                shots[shot_index - 1]['image_paths'].append(normalized_path)
-
-            # Update stats
-            images_generated = sum(1 for s in shots if s.get('image_generated', False))
-
-            # Save updated shots.json
-            self._save_shots(project_id, shots)
-
-            # Update metadata stats
-            meta = self.load_project(project_id)
-            meta['stats']['images_generated'] = images_generated
-            self._save_meta(project_id, meta)
-
-    def mark_video_rendered(self, project_id, shot_index, video_path=None):
+    def mark_video_rendered(self, project_id, shot_index, video_path=None, shot_id=None):
         """
         Mark that a video has been rendered for a shot
-
-        Args:
-            project_id: Project identifier
-            shot_index: Shot number (1-based)
-            video_path: Optional path to the video file (will verify existence)
         """
         import os
-
         # Verify video file exists before marking as rendered
         if video_path and not os.path.exists(video_path):
-            print(f"[WARN] mark_video_rendered: Video file doesn't exist: {video_path}")
-            print(f"[WARN] Shot {shot_index} will NOT be marked as rendered")
+            logger.warning(f"mark_video_rendered: Video file doesn't exist: {video_path}")
             return
 
-        # Load shots from shots.json
-        shots = self._load_shots(project_id)
-
-        if 0 <= shot_index - 1 < len(shots):
-            shots[shot_index - 1]['video_rendered'] = True
-            if video_path:
-                # Convert to relative path if absolute and inside project root
-                normalized_path = self._relativize_path(video_path)
-                
-                shots[shot_index - 1]['video_path'] = normalized_path
-
-                # Also add to video_paths array if not already there
-                if normalized_path not in shots[shot_index - 1].get('video_paths', []):
-                    if 'video_paths' not in shots[shot_index - 1]:
-                        shots[shot_index - 1]['video_paths'] = []
-                    shots[shot_index - 1]['video_paths'].append(normalized_path)
-
-            # Update stats
-            videos_rendered = sum(1 for s in shots if s.get('video_rendered', False))
-
-            # Save updated shots.json
-            self._save_shots(project_id, shots)
-
-            # Update metadata stats
-            meta = self.load_project(project_id)
-            meta['stats']['videos_rendered'] = videos_rendered
-            self._save_meta(project_id, meta)
+        normalized_path = self.relativize_path(video_path) if video_path else None
+        updates = {
+            'video_rendered': True
+        }
+        if normalized_path:
+            updates['video_path'] = normalized_path
+            
+        self.update_shot_metadata(project_id, updates, shot_id=shot_id, shot_index=shot_index)
 
     def mark_step_complete(self, project_id, step_name):
         """Mark a pipeline step as complete"""
         logger.debug(f"Marking step complete: {project_id} - {step_name}")
         meta = self.load_project(project_id)
-        meta['steps'][step_name] = True
-        self._save_meta(project_id, meta)
+        if meta:
+            meta['steps'][step_name] = True
+            self._save_meta(project_id, meta)
 
     def mark_project_complete(self, project_id):
         """Mark the entire project as complete"""
         meta = self.load_project(project_id)
-        meta['completed'] = True
-        meta['completed_at'] = datetime.now().isoformat()
-        self._save_meta(project_id, meta)
+        if meta:
+            meta['completed'] = True
+            meta['completed_at'] = datetime.now().isoformat()
+            self._save_meta(project_id, meta)
 
-    def mark_then_image_generated(self, project_id, shot_index, image_path):
+    def mark_then_image_generated(self, project_id, shot_index, image_path, shot_id=None):
         """Mark THEN image as generated for FLFI2V shot"""
-        shots = self._load_shots(project_id)
+        normalized_path = self.relativize_path(image_path)
+        updates = {
+            'then_image_generated': True,
+            'then_image_path': normalized_path
+        }
+        self.update_shot_metadata(project_id, updates, shot_id=shot_id, shot_index=shot_index)
 
-        if 0 <= shot_index - 1 < len(shots):
-            normalized_path = self._relativize_path(image_path)
-
-            shots[shot_index - 1]['then_image_generated'] = True
-            shots[shot_index - 1]['then_image_path'] = normalized_path
-
-            # Save updated shots.json
-            self._save_shots(project_id, shots)
-
-    def mark_now_image_generated(self, project_id, shot_index, image_path):
+    def mark_now_image_generated(self, project_id, shot_index, image_path, shot_id=None):
         """Mark NOW image as generated for FLFI2V shot"""
-        shots = self._load_shots(project_id)
+        normalized_path = self.relativize_path(image_path)
+        updates = {
+            'now_image_generated': True,
+            'now_image_path': normalized_path
+        }
+        self.update_shot_metadata(project_id, updates, shot_id=shot_id, shot_index=shot_index)
 
-        if 0 <= shot_index - 1 < len(shots):
-            normalized_path = self._relativize_path(image_path)
-
-            shots[shot_index - 1]['now_image_generated'] = True
-            shots[shot_index - 1]['now_image_path'] = normalized_path
-
-            # Save updated shots.json
-            self._save_shots(project_id, shots)
-
-    def mark_meeting_video_rendered(self, project_id, shot_index, video_path):
+    def mark_meeting_video_rendered(self, project_id, shot_index, video_path, shot_id=None):
         """Mark meeting video as rendered for FLFI2V shot"""
         import os
-
-        # Verify video file exists before marking as rendered
         if video_path and not os.path.exists(video_path):
-            print(f"[WARN] mark_meeting_video_rendered: Video file doesn't exist: {video_path}")
+            logger.warning(f"mark_meeting_video_rendered: Video file doesn't exist: {video_path}")
             return
 
-        shots = self._load_shots(project_id)
+        normalized_path = self.relativize_path(video_path)
+        updates = {
+            'meeting_video_rendered': True,
+            'meeting_video_path': normalized_path
+        }
+        self.update_shot_metadata(project_id, updates, shot_id=shot_id, shot_index=shot_index)
 
-        if 0 <= shot_index - 1 < len(shots):
-            normalized_path = self._relativize_path(video_path)
-
-            shots[shot_index - 1]['meeting_video_rendered'] = True
-            shots[shot_index - 1]['meeting_video_path'] = normalized_path
-
-            # Also add to video_paths array if not already there
-            if normalized_path not in shots[shot_index - 1].get('video_paths', []):
-                if 'video_paths' not in shots[shot_index - 1]:
-                    shots[shot_index - 1]['video_paths'] = []
-                shots[shot_index - 1]['video_paths'].append(normalized_path)
-
-            # Save updated shots.json
-            self._save_shots(project_id, shots)
-
-    def mark_departure_video_rendered(self, project_id, shot_index, video_path):
+    def mark_departure_video_rendered(self, project_id, shot_index, video_path, shot_id=None):
         """Mark departure video as rendered for FLFI2V shot"""
         import os
-
-        # Verify video file exists before marking as rendered
         if video_path and not os.path.exists(video_path):
-            print(f"[WARN] mark_departure_video_rendered: Video file doesn't exist: {video_path}")
+            logger.warning(f"mark_departure_video_rendered: Video file doesn't exist: {video_path}")
             return
 
-        shots = self._load_shots(project_id)
-
-        if 0 <= shot_index - 1 < len(shots):
-            normalized_path = self._relativize_path(video_path)
-
-            shots[shot_index - 1]['departure_video_rendered'] = True
-            shots[shot_index - 1]['departure_video_path'] = normalized_path
-
-            # Also add to video_paths array if not already there
-            if normalized_path not in shots[shot_index - 1].get('video_paths', []):
-                if 'video_paths' not in shots[shot_index - 1]:
-                    shots[shot_index - 1]['video_paths'] = []
-                shots[shot_index - 1]['video_paths'].append(normalized_path)
-
-            # Save updated shots.json
-            self._save_shots(project_id, shots)
+        normalized_path = self.relativize_path(video_path)
+        updates = {
+            'departure_video_rendered': True,
+            'departure_video_path': normalized_path
+        }
+        self.update_shot_metadata(project_id, updates, shot_id=shot_id, shot_index=shot_index)
 
     def get_project_dir(self, project_id):
         """Get the directory path for a project"""
@@ -498,6 +495,9 @@ class ProjectManager:
             try:
                 with open(story_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
+            except json.JSONDecodeError as e:
+                logger.error(f"Malformed story.json in {project_id}: {e}")
+                return {}
             except Exception as e:
                 logger.error(f"Failed to load story from {story_path}: {e}")
                 return None
@@ -527,17 +527,27 @@ class ProjectManager:
         if not os.path.exists(shots_path):
             return []
 
-        with open(shots_path, 'r', encoding='utf-8') as f:
-            shots = json.load(f)
+        try:
+            with open(shots_path, 'r', encoding='utf-8') as f:
+                shots = json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(f"Malformed shots.json in {project_id}: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Failed to load shots from {shots_path}: {e}")
+            return []
             
         # Resolve paths to absolute at runtime
+        path_fields = ['image_path', 'video_path', 'then_image_path', 'now_image_path',
+                       'meeting_video_path', 'departure_video_path']
+        list_path_fields = ['image_paths', 'video_paths']
         for shot in shots:
-            if 'image_path' in shot and shot['image_path']:
-                shot['image_path'] = config.resolve_path(shot['image_path'])
-            if 'image_paths' in shot and shot['image_paths']:
-                shot['image_paths'] = [config.resolve_path(p) for p in shot['image_paths']]
-            if 'video_path' in shot and shot['video_path']:
-                shot['video_path'] = config.resolve_path(shot['video_path'])
+            for field in path_fields:
+                if field in shot and shot[field]:
+                    shot[field] = config.resolve_path(shot[field])
+            for field in list_path_fields:
+                if field in shot and shot[field]:
+                    shot[field] = [config.resolve_path(p) for p in shot[field]]
                 
         return shots
 
@@ -547,13 +557,16 @@ class ProjectManager:
         shots_path = os.path.join(project_dir, "shots.json")
 
         # Ensure all paths are relative before saving
+        path_fields = ['image_path', 'video_path', 'then_image_path', 'now_image_path',
+                       'meeting_video_path', 'departure_video_path']
+        list_path_fields = ['image_paths', 'video_paths']
         for shot in shots:
-            if 'image_path' in shot:
-                shot['image_path'] = self._relativize_path(shot.get('image_path'))
-            if 'image_paths' in shot:
-                shot['image_paths'] = [self._relativize_path(p) for p in shot.get('image_paths', [])]
-            if 'video_path' in shot:
-                shot['video_path'] = self._relativize_path(shot.get('video_path'))
+            for field in path_fields:
+                if field in shot:
+                    shot[field] = self.relativize_path(shot.get(field))
+            for field in list_path_fields:
+                if field in shot:
+                    shot[field] = [self.relativize_path(p) for p in shot.get(field, [])]
 
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots, f, indent=2, ensure_ascii=False)
@@ -584,6 +597,9 @@ class ProjectManager:
     def print_project_summary(self, project_id):
         """Print a summary of a project"""
         meta = self.load_project(project_id)
+        if not meta:
+            print(f"Project meta not found for {project_id}")
+            return
 
         print("\n" + "="*60)
         print(f"SESSION: {project_id}")

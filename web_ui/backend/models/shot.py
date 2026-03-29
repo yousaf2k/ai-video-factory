@@ -106,7 +106,8 @@ class RegenerateVideoRequest(BaseModel):
 
 class BatchRegenerateRequest(BaseModel):
     """Request to batch regenerate shots"""
-    shot_indices: List[int] = Field(..., description="List of shot indices to regenerate")
+    shot_indices: Optional[List[int]] = Field(default=None, description="List of shot indices to regenerate (legacy)")
+    shot_ids: Optional[List[str]] = Field(default=None, description="List of shot stable IDs to regenerate (preferred)")
     regenerate_images: bool = Field(default=True, description="Regenerate images")
     regenerate_videos: bool = Field(default=True, description="Regenerate videos")
     force: bool = Field(default=False, description="Force regeneration (legacy, use granular flags)")
@@ -142,8 +143,9 @@ class SelectVideoRequest(BaseModel):
 
 
 class RemoveWatermarkRequest(BaseModel):
-    """Request to remove watermark from a shot image"""
+    """Request to remove watermark from a shot image or video"""
     variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then' or 'now'")
+    type: str = Field(default="image", description="Media type: 'image' or 'video'")
 
 
 class RegenerateSoundFXRequest(BaseModel):

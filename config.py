@@ -2,10 +2,11 @@
 Configuration for AI Film Studio System
 """
 import os
+import json
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv(override=True)
+# Load environment variables from .env file in the same directory as config.py
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
 
 # ==========================================
 # LLM PROVIDER CONFIGURATION
@@ -18,7 +19,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "16384"))  # Default: 16K tokens
 
 # Batch size for generating shots (process scenes in batches to avoid truncation)
-SHOT_GENERATION_BATCH_SIZE = int(os.getenv("SHOT_GENERATION_BATCH_SIZE", "1"))  # Process 1 scene at a time
+SHOT_GENERATION_BATCH_SIZE = int(os.getenv("SHOT_GENERATION_BATCH_SIZE", "1"))  # Process 1 scenes at a time to prevent LLM context errors
 
 # Maximum parallel threads for batch processing (only for cloud providers, not local models)
 # Higher values = faster processing but more API rate limits
@@ -265,94 +266,192 @@ COMFY_OUTPUT_DIR = os.getenv("COMFY_OUTPUT_DIR", r"E:\ComfyUI\Output")
 # VIDEO WORKFLOW CONFIGURATION
 # ==========================================
 # Active video workflow to use (must exist in VIDEO_WORKFLOWS)
-VIDEO_WORKFLOW = "wan22"
+VIDEO_WORKFLOW = "wan22_workflow"
 
 # Video workflow definitions
-# Each workflow has its own node IDs and workflow file path
-# Add new workflows here and set VIDEO_WORKFLOW to the desired key
-VIDEO_WORKFLOWS = {
-    "wan22": {
-        "workflow_path": resolve_path("workflow/video/wan22_workflow.json"),
-        "load_image_node_id": "97",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "98"
-    },
-    "wan22_fix_slowmotion": {
-        "workflow_path": resolve_path("workflow/video/Wan22_FixSlowMotion_Normal.json"),
-        "load_image_node_id": "128",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "98"
-    },
-    "wan22_fix_slowmotion_vfi": {
-        "workflow_path": resolve_path("workflow/video/Wan22_FixSlowMotion_VFI.json"),
-        "load_image_node_id": "128",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "98"
-    },
-    "wan22_flfi2v_fast": {
-        "workflow_path": resolve_path("workflow/video/wan22_flf2v_fast_api.json"),
-        "load_image_first_node_id": "128",
-        "load_image_last_node_id": "151",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "150",
-        "seed_node_id": "142",
-        "description": "Wan 2.2 FLFI2V - First/Last frame to video"
-    },
-    "wan22_flfi2v": {
-        "workflow_path": resolve_path("workflow/video/wan22_flf2v_api.json"),
-        "load_image_first_node_id": "128",
-        "load_image_last_node_id": "151",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "150",
-        "seed_node_id": "142",
-        "description": "Wan 2.2 FLFI2V - First/Last frame to video"
-    },
-    "wan22_flfi2v_fix_slowmotion": {
-        "workflow_path": resolve_path("workflow/video/Wan22_FLFI2V_FixSlowMotion_API.json"),
-        "load_image_first_node_id": "128",
-        "load_image_last_node_id": "151",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "150",
-        "seed_node_id": "142",
-        "description": "Wan 2.2 FLFI2V - First/Last frame to video"
-    },
-    "wan22_walk": {
-        "workflow_path": resolve_path("workflow/video/Wan22_Walk.json"),
-        "load_image_node_id": "128",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "98"
-    },
-    "wan22_walk_full": {
-        "workflow_path": resolve_path("workflow/video/Wan22_Walk_Full.json"),
-        "load_image_node_id": "128",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "98"
-    },
-    "wan22_lora": {
-        "workflow_path": resolve_path("workflow/video/wan22_workflow_lora.json"),
-        "load_image_node_id": "97",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "98"
-    },
-    "wan22_park": {
-        "workflow_path": resolve_path("workflow/video/wan22_workflow_park.json"),
-        "load_image_node_id": "97",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "98"
-    },
-    "wan22_pusa": {
-        "workflow_path": resolve_path("workflow/video/wan22_workflow_pusa.json"),
-        "load_image_node_id": "97",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "98"
-    },
-    "default": {
-        "workflow_path": resolve_path("workflow/video/wan22_workflow.json"),
-        "load_image_node_id": "97",
-        "motion_prompt_node_id": "93",
-        "wan_video_node_id": "98"
-    }
-}
+# Each workflow is auto-detected from the workflow/video directory
+VIDEO_WORKFLOWS = {}
+
+# ==========================================
+# DYNAMIC VIDEO WORKFLOW DISCOVERY
+# ==========================================
+# Auto-discover any new video workflows in the workflow/video directory
+# Uses Node Title Tags (e.g., "[prompt]", "[image_in]", "[video_out]") or smart heuristics
+_video_workflow_dir = resolve_path("workflow/video")
+if os.path.exists(_video_workflow_dir):
+    for _wf_file in os.listdir(_video_workflow_dir):
+        if _wf_file.endswith(".json"):
+            _wf_key = os.path.splitext(_wf_file)[0]
+            if _wf_key not in VIDEO_WORKFLOWS:
+                _wf_path = os.path.join(_video_workflow_dir, _wf_file)
+                try:
+                    with open(_wf_path, "r", encoding="utf-8") as _f:
+                        _wf_raw = json.load(_f)
+                    
+                    # Normalize workflow format (API JSON vs Workflow JSON)
+                    _wf_nodes = {}
+                    if "nodes" in _wf_raw and isinstance(_wf_raw["nodes"], list):
+                        # Workflow JSON format
+                        _links = {}
+                        if "links" in _wf_raw and isinstance(_wf_raw["links"], list):
+                            for _l in _wf_raw["links"]:
+                                # Link: [id, origin_id, origin_slot, target_id, target_slot, type]
+                                if len(_l) >= 2:
+                                    _links[_l[0]] = [_l[1], _l[2]]
+                                    
+                        for _n in _wf_raw["nodes"]:
+                            _n_id = str(_n.get("id", ""))
+                            if _n_id:
+                                _node_inputs = {}
+                                # Convert UI links to API-style inputs for tracing
+                                if "inputs" in _n and isinstance(_n["inputs"], list):
+                                    for _inp in _n["inputs"]:
+                                        _name = _inp.get("name")
+                                        _link_id = _inp.get("link")
+                                        if _name and _link_id in _links:
+                                            _node_inputs[_name] = _links[_link_id]
+                                            
+                                _wf_nodes[_n_id] = {
+                                    "class_type": _n.get("type", ""),
+                                    "inputs": _node_inputs,
+                                    "_meta": {"title": _n.get("title", "")}
+                                }
+                    elif isinstance(_wf_raw, dict):
+                        # API JSON format
+                        _wf_nodes = _wf_raw
+                    
+                    _load_image_node_id = None
+                    _load_image_first_node_id = None
+                    _load_image_last_node_id = None
+                    _motion_prompt_node_id = None
+                    _wan_video_node_id = None
+                    _seed_node_id = None
+                    
+                    _load_image_candidates = []
+                    _text_encode_candidates = []
+                    _video_gen_candidates = []
+                    _seed_candidates = []
+                    
+                    # 1. First pass: strict tag matching and gathering candidates
+                    for _n_id, _n_data in _wf_nodes.items():
+                        if not isinstance(_n_data, dict): continue
+                        _title = _n_data.get("_meta", {}).get("title", "")
+                        if not _title: _title = ""
+                        _title = _title.lower()
+                        _class_type = _n_data.get("class_type", "")
+                        
+                        # Explicit title tag discovery
+                        if "[motion_prompt]" in _title or "[prompt]" in _title:
+                            _motion_prompt_node_id = _n_id
+                        elif "[image_in_first]" in _title:
+                            _load_image_first_node_id = _n_id
+                        elif "[image_in_last]" in _title:
+                            _load_image_last_node_id = _n_id
+                        elif "[image_in]" in _title:
+                            _load_image_node_id = _n_id
+                        elif "[video_out]" in _title or "[video_gen]" in _title:
+                            _wan_video_node_id = _n_id
+                        elif "[seed]" in _title:
+                            _seed_node_id = _n_id
+                            
+                        # Candidate gathering for heuristics
+                        if "LoadImage" == _class_type:
+                            _load_image_candidates.append(_n_id)
+                        if "CLIPTextEncode" == _class_type:
+                            _text_encode_candidates.append((_n_id, _title))
+                        if any(x in _class_type for x in ["WanImageToVideo", "WanVideoTextToVideo", "WanVideoSampler", "WanSampler", "WanVideoGenerator", "WanFirstLastFrameToVideo", "WanVideoFirstLastFrameToVideo"]):
+                            # Prioritize specialized Wan nodes
+                            _video_gen_candidates.insert(0, _n_id)
+                        elif "Sampler" in _class_type or "KSampler" in _class_type:
+                            _video_gen_candidates.append(_n_id)
+                        if any(x in _class_type for x in ["Seed", "RandomNoise", "KSamplerAdvanced", "KSampler (Advanced)"]):
+                            _seed_candidates.append(_n_id)
+                    
+                    # 2. Second pass: Tracing connections from the identified Video Sampler
+                    # This is much more robust than title matching
+                    if not _wan_video_node_id and _video_gen_candidates:
+                        _wan_video_node_id = _video_gen_candidates[0]
+                        
+                    if _wan_video_node_id:
+                        _sampler_node = _wf_nodes.get(_wan_video_node_id)
+                        _inputs = _sampler_node.get("inputs", {})
+                        
+                        # Trace Positive Prompt (Motion Prompt)
+                        if not _motion_prompt_node_id and "positive" in _inputs:
+                            _p_val = _inputs["positive"]
+                            if isinstance(_p_val, list) and len(_p_val) > 0:
+                                _motion_prompt_node_id = str(_p_val[0])
+                        
+                        # Trace Load Image
+                        if not _load_image_node_id and not _load_image_first_node_id:
+                            for _img_input in ["start_image", "image", "pixels"]:
+                                if _img_input in _inputs:
+                                    _i_val = _inputs[_img_input]
+                                    if isinstance(_i_val, list) and len(_i_val) > 0:
+                                        _load_image_node_id = str(_i_val[0])
+                                        break
+
+                    # 3. Third pass: Heuristics fallbacks for missing IDs
+                    # Text/Motion Prompt: Look for nodes called "prompt" or "motion"
+                    if not _motion_prompt_node_id:
+                        _motion_filter = [c[0] for c in _text_encode_candidates if "motion" in c[1] or "prompt" in c[1]]
+                        # Exclude likely negative prompts
+                        _motion_filter = [c for c in _motion_filter if "negative" not in _wf_nodes[c].get("_meta", {}).get("title", "").lower()]
+                        if _motion_filter:
+                            _motion_prompt_node_id = _motion_filter[0]
+                        elif len(_text_encode_candidates) > 0:
+                            _motion_prompt_node_id = _text_encode_candidates[0][0]
+
+                    # Image Loaders:
+                    if not _load_image_node_id and not _load_image_first_node_id:
+                        if len(_load_image_candidates) == 1:
+                            _load_image_node_id = _load_image_candidates[0]
+                        elif len(_load_image_candidates) == 2:
+                            _load_image_first_node_id = _load_image_candidates[0]
+                            _load_image_last_node_id = _load_image_candidates[1]
+                            
+                    # Seed: Use first candidate as per user request
+                    if not _seed_node_id and _seed_candidates:
+                        _seed_node_id = _seed_candidates[0]
+
+                    # Detect if this is an FLFI2V workflow
+                    _is_flfi2v = "flf2v" in _wf_key.lower() or "flfi2v" in _wf_key.lower()
+
+                    # Always add the workflow if it was parseable
+                    _detected_wf = {
+                        "workflow_path": _wf_path,
+                        "description": f"Auto-detected workflow: {_wf_key}",
+                        "is_flfi2v": _is_flfi2v
+                    }
+                    if _load_image_node_id: _detected_wf["load_image_node_id"] = _load_image_node_id
+                    if _load_image_first_node_id: _detected_wf["load_image_first_node_id"] = _load_image_first_node_id
+                    if _load_image_last_node_id: _detected_wf["load_image_last_node_id"] = _load_image_last_node_id
+                    if _motion_prompt_node_id: _detected_wf["motion_prompt_node_id"] = _motion_prompt_node_id
+                    if _wan_video_node_id: _detected_wf["wan_video_node_id"] = _wan_video_node_id
+                    if _seed_node_id: _detected_wf["seed_node_id"] = _seed_node_id
+                    
+                    VIDEO_WORKFLOWS[_wf_key] = _detected_wf
+                        
+                except Exception as e:
+                    # Silently skip unparseable files
+                    pass
+
+# Legacy Key Mapping & Defaults
+# Resolve wan22_flfi2v to any discovered FLFI2V workflow
+if "wan22_flfi2v" not in VIDEO_WORKFLOWS:
+    _fl_candidates = [k for k, v in VIDEO_WORKFLOWS.items() if v.get("is_flfi2v")]
+    if _fl_candidates:
+        VIDEO_WORKFLOWS["wan22_flfi2v"] = VIDEO_WORKFLOWS[_fl_candidates[0]]
+    elif "default" in VIDEO_WORKFLOWS:
+        VIDEO_WORKFLOWS["wan22_flfi2v"] = VIDEO_WORKFLOWS["default"]
+
+# Ensure a "default" workflow exists for backward compatibility
+if "default" not in VIDEO_WORKFLOWS:
+    if "wan22_workflow" in VIDEO_WORKFLOWS:
+        VIDEO_WORKFLOWS["default"] = VIDEO_WORKFLOWS["wan22_workflow"]
+    elif VIDEO_WORKFLOWS:
+        _first_key = list(VIDEO_WORKFLOWS.keys())[0]
+        VIDEO_WORKFLOWS["default"] = VIDEO_WORKFLOWS[_first_key]
 
 # Helper constant for ThenVsNow agents
 THEN_VS_NOW_AGENTS = ["then_vs_now"]
@@ -395,149 +494,143 @@ IMAGE_RESOLUTION = "2048"
 IMAGE_WORKFLOW = "flux"
 
 # Image workflow definitions
-# Each workflow has its own node IDs and workflow file path
-# Add new workflows here and set IMAGE_WORKFLOW to the desired key
-IMAGE_WORKFLOWS = {
-    "flux": {
-        "workflow_path": resolve_path("workflow/image/flux.json"),
-        "text_node_id": "6",           # CLIPTextEncode node for positive prompt
-        "neg_text_node_id": None,      # Flux doesn't use negative prompts
-        "ksampler_node_id": "13",      # SamplerCustomAdvanced node
-        "vae_node_id": "8",            # VAEDecode node
-        "save_node_id": "9",           # SaveImage node
-        "description": "Flux model for high-quality image generation"
-    },
-    "flux_ipadapter_then": {
-        "workflow_path": resolve_path("workflow/image/flux_ipadapter_then.json"),
-        "load_reference_node_id": "1",  # LoadImage node for THEN reference
-        "ipadapter_node_id": "5",       # IP-Adapter node
-        "text_node_id": "6",            # CLIPTextEncode for prompt
-        "neg_text_node_id": None,       # Flux doesn't use negative prompts
-        "ksampler_node_id": "13",       # SamplerCustomAdvanced node
-        "vae_node_id": "8",             # VAEDecode node
-        "save_node_id": "9",            # SaveImage node
-        "description": "Flux with IP-Adapter for THEN character images (young version)"
-    },
-    "flux_ipadapter_now": {
-        "workflow_path": resolve_path("workflow/image/flux_ipadapter_now.json"),
-        "load_reference_node_id": "1",  # LoadImage node for NOW reference
-        "ipadapter_node_id": "5",       # IP-Adapter node
-        "text_node_id": "6",            # CLIPTextEncode for prompt
-        "neg_text_node_id": None,       # Flux doesn't use negative prompts
-        "ksampler_node_id": "13",       # SamplerCustomAdvanced node
-        "vae_node_id": "8",             # VAEDecode node
-        "save_node_id": "9",            # SaveImage node
-        "description": "Flux with IP-Adapter for NOW character images (current version)"
-    },
-    "flux_background": {
-        "workflow_path": resolve_path("workflow/image/flux_background.json"),
-        "text_node_id": "6",            # CLIPTextEncode for prompt
-        "neg_text_node_id": None,       # Flux doesn't use negative prompts
-        "ksampler_node_id": "13",       # SamplerCustomAdvanced node
-        "vae_node_id": "8",             # VAEDecode node
-        "save_node_id": "9",            # SaveImage node
-        "description": "Flux for scene background generation (standard text-to-image)"
-    },
-    "flux2": {
-        "workflow_path": resolve_path("workflow/image/flux2_hq.json"),
-        "text_node_id": "98:6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "98:16",
-        "vae_node_id": "98:10",
-        "save_node_id": "9",
-        "description": "Flux2.Dev"
-    },
-    "flux2_hq": {
-        "workflow_path": resolve_path("workflow/image/flux2_hq.json"),
-        "text_node_id": "98:6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "98:16",
-        "vae_node_id": "98:10",
-        "save_node_id": "9",
-        "description": "Flux2.Dev for high quality images"
-    },
-    "flux2_hq_4ms": {
-        "workflow_path": resolve_path("workflow/image/flux2_hq_4mis.json"),
-        "text_node_id": "98:6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "98:16",
-        "vae_node_id": "98:10",
-        "save_node_id": "9",
-        "description": "Flux2.Dev for high quality images"
-    },
-    "flux2_hq_4s_turbo": {
-        "workflow_path": resolve_path("workflow/image/flux2_hq_4s_turbo.json"),
-        "text_node_id": "98:6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "98:16",
-        "vae_node_id": "98:10",
-        "save_node_id": "9",
-        "description": "Flux2.Dev for high quality with turbo lora"
-    },
-    "flux2_hq_8s_turbo": {
-        "workflow_path": resolve_path("workflow/image/flux2_hq_8s_turbo.json"),
-        "text_node_id": "98:6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "98:16",
-        "vae_node_id": "98:10",
-        "save_node_id": "9",
-        "description": "Flux2.Dev for high quality with turbo lora"
-    },
-    "flux2_api": {
-        "workflow_path": resolve_path("workflow/image/image_flux2_text_to_image_api.json"),
-        "text_node_id": "98:6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "98:13",
-        "vae_node_id": "98:10",
-        "save_node_id": "9",
-        "description": "Flux2 API version"
-    },
-    "hidream_dev": {
-        "workflow_path": resolve_path("workflow/image/hidream_i1_dev.json"),
-        "text_node_id": "16",
-        "neg_text_node_id": "40",
-        "ksampler_node_id": "3",
-        "vae_node_id": "55",
-        "save_node_id": "9",
-        "description": "HiDream I1 Dev"
-    },
-    "hidream_full": {
-        "workflow_path": resolve_path("workflow/image/hidream_i1_full.json"),
-        "text_node_id": "91",
-        "neg_text_node_id": "85",
-        "ksampler_node_id": "93",
-        "vae_node_id": "81",
-        "save_node_id": "9",
-        "description": "HiDream I1 Full"
-    },
-    "turbo": {
-        "workflow_path": resolve_path("workflow/image/z_image_turbo_api.json"),
-        "text_node_id": "6",
-        "neg_text_node_id": "7",
-        "ksampler_node_id": "3",
-        "vae_node_id": "17",
-        "save_node_id": "9",
-        "description": "Z Image Turbo"
-    },
-    "sdxl": {
-        "workflow_path": resolve_path("workflow/image/sdxl.json"),
-        "text_node_id": "6",           # CLIPTextEncode node for positive prompt
-        "neg_text_node_id": "7",       # CLIPTextEncode node for negative prompt
-        "ksampler_node_id": "13",      # KSampler node
-        "vae_node_id": "8",            # VAEDecode node
-        "save_node_id": "9",           # SaveImage node
-        "description": "SDXL model for image generation"
-    },
-    "default": {
-        "workflow_path": resolve_path("workflow/image/image_generation_workflow.json"),
-        "text_node_id": "6",
-        "neg_text_node_id": None,
-        "ksampler_node_id": "13",
-        "vae_node_id": "8",
-        "save_node_id": "9",
-        "description": "Default/fallback image generation workflow"
-    }
-}
+# Each workflow is auto-detected from the workflow/image directory
+IMAGE_WORKFLOWS = {}
+
+# ==========================================
+# DYNAMIC IMAGE WORKFLOW DISCOVERY
+# ==========================================
+# Auto-discover any new image workflows in the workflow/image directory
+_image_workflow_dir = resolve_path("workflow/image")
+if os.path.exists(_image_workflow_dir):
+    for _wf_file in os.listdir(_image_workflow_dir):
+        if _wf_file.endswith(".json"):
+            _wf_key = os.path.splitext(_wf_file)[0]
+            if _wf_key not in IMAGE_WORKFLOWS:
+                _wf_path = os.path.join(_image_workflow_dir, _wf_file)
+                try:
+                    with open(_wf_path, "r", encoding="utf-8") as _f:
+                        _wf_raw = json.load(_f)
+                    
+                    # Normalize workflow format (API JSON vs Workflow JSON)
+                    _wf_nodes = {}
+                    if "nodes" in _wf_raw and isinstance(_wf_raw["nodes"], list):
+                        # Workflow JSON format
+                        for _n in _wf_raw["nodes"]:
+                            _n_id = str(_n.get("id", ""))
+                            if _n_id:
+                                _wf_nodes[_n_id] = {
+                                    "class_type": _n.get("type", ""),
+                                    "_meta": {"title": _n.get("title", "")}
+                                }
+                    elif isinstance(_wf_raw, dict):
+                        # API JSON format
+                        _wf_nodes = _wf_raw
+                    
+                    _text_node_id = None
+                    _neg_text_node_id = None
+                    _ksampler_node_id = None
+                    _vae_node_id = None
+                    _save_node_id = None
+                    _load_reference_node_id = None
+                    _ipadapter_node_id = None
+                    
+                    _text_candidates = []
+                    _sampler_candidates = []
+                    _vae_candidates = []
+                    _save_candidates = []
+                    _load_image_candidates = []
+                    _ipadapter_candidates = []
+                    
+                    # 1. First pass: strict tag matching and gathering candidates
+                    for _n_id, _n_data in _wf_nodes.items():
+                        if not isinstance(_n_data, dict): continue
+                        _title = _n_data.get("_meta", {}).get("title", "")
+                        if not _title: _title = ""
+                        _title = _title.lower()
+                        _class_type = _n_data.get("class_type", "")
+                        
+                        # Explicit title tag discovery
+                        if "[positive]" in _title or "[prompt]" in _title:
+                            _text_node_id = _n_id
+                        elif "[negative]" in _title or "[neg]" in _title:
+                            _neg_text_node_id = _n_id
+                        elif "[ksampler]" in _title or "[sampler]" in _title:
+                            _ksampler_node_id = _n_id
+                        elif "[vae]" in _title:
+                            _vae_node_id = _n_id
+                        elif "[save]" in _title:
+                            _save_node_id = _n_id
+                        elif "[reference]" in _title or "[load_ref]" in _title:
+                            _load_reference_node_id = _n_id
+                        elif "[ipadapter]" in _title:
+                            _ipadapter_node_id = _n_id
+                            
+                        # Candidate gathering for heuristics
+                        if "CLIPTextEncode" == _class_type:
+                            _text_candidates.append((_n_id, _title))
+                        if any(x in _class_type for x in ["KSampler", "SamplerCustomAdvanced", "KSamplerAdvanced", "KSampler (Advanced)"]):
+                            _sampler_candidates.append(_n_id)
+                        if "VAEDecode" == _class_type:
+                            _vae_candidates.append(_n_id)
+                        if "SaveImage" == _class_type:
+                            _save_candidates.append(_n_id)
+                        if "LoadImage" == _class_type:
+                            _load_image_candidates.append(_n_id)
+                        if "IPAdapter" in _class_type:
+                            _ipadapter_candidates.append(_n_id)
+                    
+                    # 2. Second pass: Heuristics for missing IDs
+                    # Text Nodes (Positive/Negative)
+                    if not _text_node_id:
+                        _pos_filter = [c[0] for c in _text_candidates if "positive" in c[1] or "prompt" in c[1]]
+                        if _pos_filter: _text_node_id = _pos_filter[0]
+                        elif len(_text_candidates) > 0: _text_node_id = _text_candidates[0][0]
+                    
+                    if not _neg_text_node_id:
+                        _neg_filter = [c[0] for c in _text_candidates if "negative" in c[1] or "neg" in c[1]]
+                        if _neg_filter: _neg_text_node_id = _neg_filter[0]
+                        elif len(_text_candidates) > 1:
+                            # If we have 2+ nodes and haven't picked the positive one already
+                            if _text_candidates[1][0] != _text_node_id:
+                                _neg_text_node_id = _text_candidates[1][0]
+                    
+                    # Sampler
+                    if not _ksampler_node_id and _sampler_candidates:
+                        _ksampler_node_id = _sampler_candidates[0]
+                    
+                    # VAE / Save / LoadRef / IPAdapter
+                    if not _vae_node_id and _vae_candidates: _vae_node_id = _vae_candidates[0]
+                    if not _save_node_id and _save_candidates: _save_node_id = _save_candidates[0]
+                    if not _load_reference_node_id and _load_image_candidates: _load_reference_node_id = _load_image_candidates[0]
+                    if not _ipadapter_node_id and _ipadapter_candidates: _ipadapter_node_id = _ipadapter_candidates[0]
+
+                    # Always add the workflow if it was parseable
+                    IMAGE_WORKFLOWS[_wf_key] = {
+                        "workflow_path": _wf_path,
+                        "text_node_id": _text_node_id,
+                        "neg_text_node_id": _neg_text_node_id,
+                        "ksampler_node_id": _ksampler_node_id,
+                        "vae_node_id": _vae_node_id,
+                        "save_node_id": _save_node_id,
+                        "load_reference_node_id": _load_reference_node_id,
+                        "ipadapter_node_id": _ipadapter_node_id,
+                        "description": f"Auto-detected image workflow: {_wf_key}"
+                    }
+                        
+                except Exception as e:
+                    # Silently skip unparseable files
+                    pass
+
+# Ensure a "default" image workflow exists
+if "default" not in IMAGE_WORKFLOWS:
+    if "flux" in IMAGE_WORKFLOWS:
+        IMAGE_WORKFLOWS["default"] = IMAGE_WORKFLOWS["flux"]
+    elif "image_generation_workflow" in IMAGE_WORKFLOWS:
+        IMAGE_WORKFLOWS["default"] = IMAGE_WORKFLOWS["image_generation_workflow"]
+    elif IMAGE_WORKFLOWS:
+        _first_key = list(IMAGE_WORKFLOWS.keys())[0]
+        IMAGE_WORKFLOWS["default"] = IMAGE_WORKFLOWS[_first_key]
 
 # Legacy single workflow settings (deprecated, use IMAGE_WORKFLOWS instead)
 # Kept for backward compatibility
@@ -566,13 +659,13 @@ DEFAULT_MAX_SHOTS = 0  # 0 = no limit
 # SHOT PLANNING CONFIGURATION
 # ==========================================
 # Default number of shots to generate per scene (when no max_shots specified)
-DEFAULT_SHOTS_PER_SCENE = 12  # 4 shots x 5 scenes = 20 shots total
+DEFAULT_SHOTS_PER_SCENE = 0  # 0 = auto (LLM determines based on context or duration)
 
 # Minimum shots per scene (enforced in planning logic)
-MIN_SHOTS_PER_SCENE = 3  # Each scene gets at least 3 shots
+MIN_SHOTS_PER_SCENE = 0  # 0 = no hard minimum
 
 # Maximum shots per scene (prevents over-generation for long stories)
-MAX_SHOTS_PER_SCENE = 12  # No more than 8 shots per scene
+MAX_SHOTS_PER_SCENE = 0  # 0 = no hard maximum
 
 # ==========================================
 # SCENE DURATION CONFIGURATION
@@ -796,6 +889,18 @@ SHOTS_AGENT = "default"
 
 
 # ==========================================
+# WATERMARK REMOVAL CONFIGURATION
+# ==========================================
+# External watermark removal tools (full paths)
+GEMINI_WATERMARK_TOOL_IMAGE = os.getenv("GEMINI_WATERMARK_TOOL_IMAGE", "GeminiWatermarkTool")
+GEMINI_WATERMARK_TOOL_VIDEO = os.getenv("GEMINI_WATERMARK_TOOL_VIDEO", "")
+
+# Watermark removal method: "builtin" or "external"
+# - builtin: Uses the internal high-precision image restoration (for images only)
+# - external: Calls the configured external tool with the file path as the first argument
+WATERMARK_REMOVAL_METHOD = os.getenv("WATERMARK_REMOVAL_METHOD", "builtin")
+
+# ==========================================
 # NARRATION/TTS CONFIGURATION
 # ==========================================
 # Whether to generate narration for videos
@@ -921,17 +1026,45 @@ GEMINIWEB_TIMEOUT = 300
 # Gemini web URL
 GEMINIWEB_URL = "https://gemini.google.com/app"
 # ==========================================
-# Enable/disable Web UI server
-WEB_UI_ENABLED = os.getenv("WEB_UI_ENABLED", "true").lower() == "true"
+# Web UI Configuration
 # ==========================================
 # Enable/disable Web UI server
 WEB_UI_ENABLED = os.getenv("WEB_UI_ENABLED", "true").lower() == "true"
 
-# Web UI backend host
-WEB_UI_HOST = os.getenv("WEB_UI_HOST", "127.0.0.1")
+# Backend Configuration
+# BACKEND_HOST: External hostname/IP for URLs (default: 127.0.0.1)
+# BACKEND_BIND_HOST: Address to listen on (default: 0.0.0.0 for network access)
+BACKEND_HOST = os.getenv("BACKEND_HOST", os.getenv("WEB_UI_HOST", "127.0.0.1")).strip('"\' ')
+BACKEND_PORT = int(os.getenv("BACKEND_PORT", os.getenv("WEB_UI_PORT", "8000")).strip('"\' '))
+BACKEND_BIND_HOST = os.getenv("BACKEND_BIND_HOST", "0.0.0.0" if BACKEND_HOST != "127.0.0.1" and BACKEND_HOST != "localhost" else BACKEND_HOST).strip('"\' ')
 
-# Web UI backend port
-WEB_UI_PORT = int(os.getenv("WEB_UI_PORT", "8000"))
+# Frontend Configuration
+# FRONTEND_HOST: External hostname/IP for URLs (default: 127.0.0.1)
+# FRONTEND_BIND_HOST: Address to listen on (default: 0.0.0.0 for network access)
+FRONTEND_HOST = os.getenv("FRONTEND_HOST", "127.0.0.1").strip('"\' ')
+FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "3000").strip('"\' '))
+FRONTEND_BIND_HOST = os.getenv("FRONTEND_BIND_HOST", "0.0.0.0" if FRONTEND_HOST != "127.0.0.1" and FRONTEND_HOST != "localhost" else FRONTEND_HOST).strip('"\' ')
+
+# Base URLs
+BACKEND_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}"
+FRONTEND_URL = f"http://{FRONTEND_HOST}:{FRONTEND_PORT}"
+
+# Backward Compatibility
+WEB_UI_HOST = BACKEND_HOST
+WEB_UI_PORT = BACKEND_PORT
 
 # CORS origins (comma-separated list of allowed origins for API)
-WEB_UI_CORS_ORIGINS = os.getenv("WEB_UI_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001").split(",")
+# Dynamically include the configured frontend URLs and common loopbacks
+_default_cors = [
+    f"http://localhost:{FRONTEND_PORT}",
+    f"http://127.0.0.1:{FRONTEND_PORT}",
+    f"http://[::1]:{FRONTEND_PORT}",  # IPv6 loopback
+    f"http://{FRONTEND_HOST}:{FRONTEND_PORT}",
+    FRONTEND_URL
+]
+_env_cors = os.getenv("WEB_UI_CORS_ORIGINS", "").strip('"\' ')
+if _env_cors:
+    WEB_UI_CORS_ORIGINS = [c.strip() for c in _env_cors.split(",")]
+else:
+    # Use unique origins sorted
+    WEB_UI_CORS_ORIGINS = sorted(list(set(_default_cors)))
