@@ -529,21 +529,17 @@ async def generate_scene_background(project_id: str, scene_id: int, request: Bac
                 detail=f"Scene {scene_id} does not have a set_prompt for background generation"
             )
 
-        # Start background generation task
-        asyncio.create_task(generation_service.generate_scene_background(
-            project_id=project_id, 
+        # Add to background generation queue
+        generation_service.add_background_to_queue(
+            project_id=project_id,
             scene_id=scene_id,
-            set_prompt=set_prompt,
-            prompt=request.prompt,
-            negative_prompt=request.negative_prompt,
-            seed=request.seed,
-            workflow=request.workflow
-        ))
+            request=request
+        )
 
         return {
             "status": "queued",
             "scene_id": scene_id,
-            "message": f"Background generation for scene {scene_id} started"
+            "message": f"Background generation for scene {scene_id} added to queue"
         }
 
     except HTTPException:

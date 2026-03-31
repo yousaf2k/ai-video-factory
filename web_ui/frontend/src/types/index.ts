@@ -4,7 +4,8 @@
 
 export enum ProjectType {
   Documentary = 1,
-  ThenVsNow = 2
+  ThenVsNow = 2,
+  Movie = 3
 }
 
 export interface MovieMetadata {

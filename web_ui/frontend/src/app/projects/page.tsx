@@ -63,6 +63,8 @@ export default function ProjectsPage() {
   const filteredStoryAgents = agents?.story?.filter((agent: any) => {
     if ((selectedProjectType as number) === ProjectType.ThenVsNow) {
       return agent.category === "then_vs_now";
+    } else if ((selectedProjectType as number) === ProjectType.Movie) {
+      return agent.category === "movie";
     } else {
       return agent.category === "documentary" || !agent.category;
     }
@@ -404,6 +406,7 @@ export default function ProjectsPage() {
                       <SelectContent>
                         <SelectItem value="1">Documentary</SelectItem>
                         <SelectItem value="2">Then Vs Now</SelectItem>
+                        <SelectItem value="3">Cinematic Movie</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

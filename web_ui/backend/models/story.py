@@ -10,6 +10,7 @@ class ProjectType(IntEnum):
     """Project type enumeration"""
     DOCUMENTARY = 1
     THEN_VS_NOW = 2
+    MOVIE = 3
 
 
 class MovieMetadata(BaseModel):

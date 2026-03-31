@@ -580,10 +580,35 @@ if os.path.exists(_image_workflow_dir):
                         if "IPAdapter" in _class_type:
                             _ipadapter_candidates.append(_n_id)
                     
-                    # 2. Second pass: Heuristics for missing IDs
+                    # 2. Second pass: Tracing connections from the identified KSampler
+                    # This is much more robust than title matching
+                    if not _ksampler_node_id and _sampler_candidates:
+                        _ksampler_node_id = _sampler_candidates[0]
+                    
+                    if _ksampler_node_id:
+                        _sampler_node = _wf_nodes.get(_ksampler_node_id)
+                        _inputs = _sampler_node.get("inputs", {})
+                        
+                        # Trace Positive Prompt
+                        if not _text_node_id:
+                            for _pos_input in ["positive", "conditioning", "guider"]:
+                                if _pos_input in _inputs:
+                                    _p_val = _inputs[_pos_input]
+                                    if isinstance(_p_val, list) and len(_p_val) > 0:
+                                        _text_node_id = str(_p_val[0])
+                                        break
+                                        
+                        # Trace Negative Prompt
+                        if not _neg_text_node_id and "negative" in _inputs:
+                            _n_val = _inputs["negative"]
+                            if isinstance(_n_val, list) and len(_n_val) > 0:
+                                _neg_text_node_id = str(_n_val[0])
+
+                    # 3. Third pass: Heuristics for missing IDs
                     # Text Nodes (Positive/Negative)
                     if not _text_node_id:
-                        _pos_filter = [c[0] for c in _text_candidates if "positive" in c[1] or "prompt" in c[1]]
+                        # Improved heuristic: pick "positive" or "prompt", but EXCLUDE those that look like negative prompts
+                        _pos_filter = [c[0] for c in _text_candidates if "positive" in c[1] or ("prompt" in c[1] and "negative" not in c[1] and "neg " not in c[1])]
                         if _pos_filter: _text_node_id = _pos_filter[0]
                         elif len(_text_candidates) > 0: _text_node_id = _text_candidates[0][0]
                     
@@ -595,11 +620,7 @@ if os.path.exists(_image_workflow_dir):
                             if _text_candidates[1][0] != _text_node_id:
                                 _neg_text_node_id = _text_candidates[1][0]
                     
-                    # Sampler
-                    if not _ksampler_node_id and _sampler_candidates:
-                        _ksampler_node_id = _sampler_candidates[0]
-                    
-                    # VAE / Save / LoadRef / IPAdapter
+                    # VAE / Save / LoadRef / IPAdapter (Sampler already handled in tracing pass)
                     if not _vae_node_id and _vae_candidates: _vae_node_id = _vae_candidates[0]
                     if not _save_node_id and _save_candidates: _save_node_id = _save_candidates[0]
                     if not _load_reference_node_id and _load_image_candidates: _load_reference_node_id = _load_image_candidates[0]

@@ -82,6 +82,7 @@ export default function SceneBackgroundManager({
         prompt: config.promptOverride,
         seed: config.seed === "" ? undefined : config.seed,
         workflow: config.workflow === "default" ? undefined : config.workflow,
+        image_model: config.mode,
       };
 
       const response = await fetch(

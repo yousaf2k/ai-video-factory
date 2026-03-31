@@ -20,7 +20,7 @@ import { useShots, useReplanShots } from "@/hooks/useShots";
 import { useAgents } from "@/hooks/useAgents";
 import { SceneList } from "@/components/scenes/SceneList";
 import { ShotGrid } from "@/components/shots/ShotGrid";
-import { Scene, Story, Shot } from "@/types";
+import { Scene, Story, Shot, ProjectType } from "@/types";
 import { api } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import CharacterReferenceUpload from "@/components/characters/CharacterReferenceUpload";
@@ -29,6 +29,7 @@ import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play, Ar
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MultiAgentSelector } from "@/components/agents/MultiAgentSelector";
 import {
   Select,
   SelectContent,
@@ -47,6 +48,18 @@ export default function ProjectEditPage() {
   const { data: shots } = useShots(projectId);
   const { data: agents } = useAgents();
   const queryClient = useQueryClient();
+  
+  // Filter story agents based on project type
+  const filteredStoryAgents = agents?.story?.filter((agent: any) => {
+    const projectType = project?.story?.project_type;
+    if (projectType === ProjectType.ThenVsNow) {
+      return agent.category === "then_vs_now";
+    } else if (projectType === ProjectType.Movie) {
+      return agent.category === "movie";
+    } else {
+      return agent.category === "documentary" || !agent.category;
+    }
+  }) || [];
 
   // Keep WebSocket invalidation connected top-level for both tabs
   useProgress(
@@ -613,29 +626,12 @@ export default function ProjectEditPage() {
             </p>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Story Agent
-                </label>
-                <Select
-                  value={selectedStoryAgent}
-                  onValueChange={(val) => setSelectedStoryAgent(val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Agent" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {!agents?.story.length && (
-                      <SelectItem value="default">Default Agent</SelectItem>
-                    )}
-                    {agents?.story.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <MultiAgentSelector
+                availableAgents={filteredStoryAgents}
+                selectedValue={selectedStoryAgent}
+                onChange={setSelectedStoryAgent}
+                label="Select Story Building Blocks"
+              />
             </div>
 
             <div className="mt-8 flex justify-end gap-3">
@@ -683,29 +679,12 @@ export default function ProjectEditPage() {
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Shots Agent
-                  </label>
-                  <Select
-                    value={selectedShotsAgent}
-                    onValueChange={(val) => setSelectedShotsAgent(val)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Agent" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {!agents?.shots?.length && (
-                        <SelectItem value="default">Default</SelectItem>
-                      )}
-                      {agents?.shots?.map((agent) => (
-                        <SelectItem key={agent.id} value={agent.id}>
-                          {agent.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <MultiAgentSelector
+                  availableAgents={agents?.shots || []}
+                  selectedValue={selectedShotsAgent}
+                  onChange={setSelectedShotsAgent}
+                  label="Select Shots Building Blocks"
+                />
               </div>
 
               <div>

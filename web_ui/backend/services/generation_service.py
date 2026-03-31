@@ -13,6 +13,7 @@ import threading
 import logging
 import time
 import shutil
+import uuid
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
@@ -79,7 +80,7 @@ class GenerationService:
     def get_item_engine(item: QueueItem) -> str:
         """Resolve which engine will process this item"""
         import config
-        if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.THUMBNAIL]:
+        if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.THUMBNAIL, GenerationType.BACKGROUND]:
             return item.image_mode or getattr(config, 'IMAGE_GENERATION_MODE', 'comfyui')
         elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
             return item.video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
@@ -498,9 +499,39 @@ class GenerationService:
 
     async def _process_background_generation(self, item: QueueItem):
         """Process background generation for a queue item"""
-        # TODO: Implement background generation
-        logger.warning(f"Background generation not yet implemented for item {item.item_id}")
-        raise NotImplementedError("Background generation not yet implemented")
+        try:
+            # Load story to get default set_prompt
+            story = self.project_manager.get_story(item.project_id)
+            scenes = story.get('scenes', [])
+            
+            scene = None
+            for s in scenes:
+                if s.get('scene_id') == item.scene_id:
+                    scene = s
+                    break
+            
+            if not scene:
+                raise ValueError(f"Scene {item.scene_id} not found in story")
+            
+            set_prompt = scene.get('set_prompt')
+            
+            # Call generate_scene_background with overrides from the queue item
+            await self.generate_scene_background(
+                project_id=item.project_id,
+                scene_id=item.scene_id,
+                set_prompt=set_prompt,
+                prompt=item.prompt_override,
+                negative_prompt=None,
+                seed=item.seed,
+                workflow=item.image_workflow,
+                image_mode=item.image_mode
+            )
+
+            logger.info(f"Completed background generation for queue item {item.item_id}")
+
+        except Exception as e:
+            logger.error(f"Error processing background generation for {item.item_id}: {e}")
+            raise
 
     async def _process_soundfx_generation(self, item: QueueItem):
         """Process sound FX generation for a queue item"""
@@ -637,16 +668,18 @@ class GenerationService:
     def _get_queue_item_id(
         self,
         project_id: str,
-        shot_index: int,
-        generation_type: GenerationType
+        shot_index: Optional[int],
+        generation_type: GenerationType,
+        scene_id: Optional[int] = None
     ) -> Optional[str]:
         """
-        Get the queue item_id for a specific shot and generation type.
+        Get the queue item_id for a specific shot/scene and generation type.
 
         Args:
             project_id: Project identifier
             shot_index: Shot index (1-based)
             generation_type: Type of generation
+            scene_id: Optional scene identifier
 
         Returns:
             Queue item ID or None if not found
@@ -656,38 +689,47 @@ class GenerationService:
 
         # Find matching queue item
         for item in queue_items:
-            if (item.shot_index == shot_index and
-                item.generation_type == generation_type and
-                item.status in [QueueItemStatus.QUEUED, QueueItemStatus.ACTIVE]):
-                return item.item_id
+            # Match by shot index if provided
+            if shot_index is not None and item.shot_index == shot_index:
+                if (item.generation_type == generation_type and
+                    item.status in [QueueItemStatus.QUEUED, QueueItemStatus.ACTIVE]):
+                    return item.item_id
+            # Match by scene ID if shot_index is None
+            elif shot_index is None and scene_id is not None and item.scene_id == scene_id:
+                if (item.generation_type == generation_type and
+                    item.status in [QueueItemStatus.QUEUED, QueueItemStatus.ACTIVE]):
+                    return item.item_id
 
         return None
 
     def _mark_queue_item_active(
         self,
         project_id: str,
-        shot_index: int,
-        generation_type: GenerationType
+        shot_index: Optional[int],
+        generation_type: GenerationType,
+        scene_id: Optional[int] = None
     ):
         """Mark a queue item as active (started processing)."""
-        item_id = self._get_queue_item_id(project_id, shot_index, generation_type)
+        item_id = self._get_queue_item_id(project_id, shot_index, generation_type, scene_id)
         if item_id:
             queue_service = get_queue_service()
             queue_service.mark_active(item_id)
             # Store active mapping for progress updates
-            key = f"{project_id}:{shot_index}:{generation_type.value}"
+            key_id = shot_index if shot_index is not None else f"s{scene_id}"
+            key = f"{project_id}:{key_id}:{generation_type.value}"
             self.active_queue_items[key] = item_id
-            logger.info(f"Marked queue item {item_id} as active ({generation_type.value}, shot {shot_index})")
+            logger.info(f"Marked queue item {item_id} as active ({generation_type.value}, id {key_id})")
 
     def _update_queue_item_progress(
         self,
         project_id: str,
-        shot_index: int,
+        shot_index: Optional[int],
         generation_type: GenerationType,
-        progress: int
+        progress: int,
+        scene_id: Optional[int] = None
     ):
         """Update progress for an active queue item."""
-        item_id = self._get_queue_item_id(project_id, shot_index, generation_type)
+        item_id = self._get_queue_item_id(project_id, shot_index, generation_type, scene_id)
         if item_id:
             queue_service = get_queue_service()
             queue_service.update_progress(item_id, progress)
@@ -696,34 +738,38 @@ class GenerationService:
     def _mark_queue_item_completed(
         self,
         project_id: str,
-        shot_index: int,
+        shot_index: Optional[int],
         generation_type: GenerationType,
-        progress: int = 100
+        progress: int = 100,
+        scene_id: Optional[int] = None
     ):
         """Mark a queue item as completed."""
-        item_id = self._get_queue_item_id(project_id, shot_index, generation_type)
+        item_id = self._get_queue_item_id(project_id, shot_index, generation_type, scene_id)
         if item_id:
             queue_service = get_queue_service()
             queue_service.mark_completed(item_id, progress)
             # Remove from active tracking
-            key = f"{project_id}:{shot_index}:{generation_type.value}"
+            key_id = shot_index if shot_index is not None else f"s{scene_id}"
+            key = f"{project_id}:{key_id}:{generation_type.value}"
             self.active_queue_items.pop(key, None)
-            logger.info(f"Marked queue item {item_id} as completed ({generation_type.value}, shot {shot_index})")
+            logger.info(f"Marked queue item {item_id} as completed ({generation_type.value}, id {key_id})")
 
     def _mark_queue_item_failed(
         self,
         project_id: str,
-        shot_index: int,
+        shot_index: Optional[int],
         generation_type: GenerationType,
-        error_message: str
+        error_message: str,
+        scene_id: Optional[int] = None
     ):
         """Mark a queue item as failed."""
-        item_id = self._get_queue_item_id(project_id, shot_index, generation_type)
+        item_id = self._get_queue_item_id(project_id, shot_index, generation_type, scene_id)
         if item_id:
             queue_service = get_queue_service()
             queue_service.mark_failed(item_id, error_message)
             # Remove from active tracking
-            key = f"{project_id}:{shot_index}:{generation_type.value}"
+            key_id = shot_index if shot_index is not None else f"s{scene_id}"
+            key = f"{project_id}:{key_id}:{generation_type.value}"
             self.active_queue_items.pop(key, None)
             logger.warning(f"Marked queue item {item_id} as failed: {error_message}")
 
@@ -793,6 +839,52 @@ class GenerationService:
         
         queue_service = get_queue_service()
         added_items = queue_service.add_items(items_to_add)
+        return added_items
+
+    def add_background_to_queue(
+        self,
+        project_id: str,
+        scene_id: int,
+        request: Any
+    ) -> list:
+        """Add a background generation item to the background queue"""
+        from web_ui.backend.services.queue_service import get_queue_service
+        # Ensure queue processor is running
+        self._ensure_queue_processor_started()
+
+        story = self.project_manager.get_story(project_id)
+        project_title = story.get('title', project_id) if story else project_id
+        
+        # Find the scene
+        scenes = story.get('scenes', [])
+        scene = None
+        for s in scenes:
+            if s.get('scene_id') == scene_id:
+                scene = s
+                break
+        
+        scene_name = (scene.get('scene_name') if scene else None) or f"Scene {scene_id}"
+
+        item = QueueItem(
+            item_id="",  # Will be assigned by QueueService
+            project_id=project_id,
+            shot_index=None,
+            scene_id=scene_id,
+            generation_type=GenerationType.BACKGROUND,
+            status=QueueItemStatus.QUEUED,
+            progress=0,
+            priority=50,  # Backgrounds higher priority
+            is_flfi2v=True,
+            project_title=project_title,
+            scene_name=scene_name,
+            prompt_override=getattr(request, 'prompt', None),
+            seed=getattr(request, 'seed', None),
+            image_mode=getattr(request, 'image_model', None),
+            image_workflow=getattr(request, 'workflow', None)
+        )
+        
+        queue_service = get_queue_service()
+        added_items = queue_service.add_items([item])
         return added_items
 
     async def run_batch_generation(self, project_id: str, request: Any):
@@ -1154,8 +1246,6 @@ class GenerationService:
         images_dir = self.project_manager.get_images_dir(project_id)
         os.makedirs(images_dir, exist_ok=True)
 
-        set_prompt = story.get('set_prompt', '')
-
         results = {}
         actual_mode = image_mode or config.IMAGE_GENERATION_MODE
         shots = self.project_manager.get_shots(project_id)
@@ -1176,6 +1266,12 @@ class GenerationService:
                 shot_id = shot_to_use.get('id')
             else:
                 raise ValueError(f"Shot {shot_index} (ID={shot_id}) not found")
+
+        # Resolve scene-level background (set_prompt) for more accurate environment generation
+        scenes = story.get('scenes', [])
+        scene_id = shot_to_use.get('scene_id') if shot_to_use else shot.get('scene_id')
+        scene = next((s for s in scenes if s.get('scene_id') == scene_id), {})
+        set_prompt = scene.get('set_prompt', '') or story.get('set_prompt', '')
 
         # Character Resolution: Resolve reference images from character_id
         then_reference = ''
@@ -1234,7 +1330,12 @@ class GenerationService:
 
                     now_prompt = prompt_override if prompt_override and prompt_override.strip() else shot_to_use.get('now_image_prompt', '')
                     if set_prompt:
-                        now_prompt = f"{now_prompt}. Background: {set_prompt}"
+                        # Helper to append with proper spacing
+                        def append_set(p, s):
+                            if not s: return p
+                            if not p: return s
+                            return f"{p}. {s}" if not p.strip().endswith('.') else f"{p} {s}"
+                        now_prompt = append_set(now_prompt, set_prompt)
                     
                     next_version = self._get_next_image_version(images_dir, shot_index, "now")
                     image_filename = f"shot_{shot_index:03d}_now_{next_version:03d}.png"
@@ -1324,8 +1425,7 @@ class GenerationService:
                             self.project_manager.update_shot_metadata(project_id, {'image_paths': shot_to_use['image_paths']}, shot_id=shot_id)
 
                     then_prompt = prompt_override if prompt_override and prompt_override.strip() else shot_to_use.get('then_image_prompt', '')
-                    if set_prompt:
-                        then_prompt = f"{then_prompt}. Background: {set_prompt}"
+                    # Note: per user request, background (set_prompt) is NOT added to THEN prompts
 
                     next_version = self._get_next_image_version(images_dir, shot_index, "then")
                     
@@ -2232,7 +2332,8 @@ class GenerationService:
         prompt: Optional[str] = None,
         negative_prompt: Optional[str] = None,
         seed: Optional[int] = None,
-        workflow: Optional[str] = None
+        workflow: Optional[str] = None,
+        image_mode: Optional[str] = None
     ) -> str:
         """
         Generate background image for a scene using AI
@@ -2241,6 +2342,7 @@ class GenerationService:
             project_id: Project identifier
             scene_id: Scene ID in the story
             set_prompt: Background description prompt
+            image_mode: Provider (comfyui, geminiweb, etc.)
 
         Returns:
             Path to generated background image
@@ -2253,42 +2355,31 @@ class GenerationService:
             backgrounds_dir = os.path.join(project_dir, "backgrounds")
             os.makedirs(backgrounds_dir, exist_ok=True)
 
-            # Generate filename
-            background_filename = f"scene_{scene_id}_background_001.png"
-            background_path = os.path.join(backgrounds_dir, background_filename)
+            # Mark as active in queue
+            self._mark_queue_item_active(project_id, None, GenerationType.BACKGROUND, scene_id=scene_id)
 
             # Broadcast 0% progress
             manager.broadcast_sync(project_id, {
                 "type": "progress",
                 "project_id": project_id,
                 "scene_id": scene_id,
+                "generation_type": "background",
                 "step": "background_generation",
                 "progress": 0
             })
-
-            # Progress callback
-            def on_step_progress(current, total):
-                progress = int((current / total) * 100) if total > 0 else 0
-                manager.broadcast_sync(project_id, {
-                    "type": "progress",
-                    "project_id": project_id,
-                    "scene_id": scene_id,
-                    "step": "background_generation",
-                    "progress": progress
-                })
 
             # Generate background using standard Flux workflow
             # Use override if provided, otherwise fallback to story set_prompt
             set_prompt = prompt if prompt else set_prompt # defined or story fallback
             actual_workflow = workflow if workflow else "flux"
 
-            logger.info(f"Generating background for scene {scene_id} using prompt: {set_prompt[:60]}... (workflow: {actual_workflow})")
+            logger.info(f"Generating background for scene {scene_id} using prompt: {set_prompt[:60]}... (workflow: {actual_workflow}, mode: {image_mode})")
 
             result_path = await asyncio.to_thread(
                 self._generate_single_image,
                 project_id,
                 {'image_prompt': set_prompt, 'index': scene_id},  # Use scene_id for indexing
-                "comfyui",  # Always use ComfyUI for backgrounds
+                image_mode,  # Use the passed provider mode
                 actual_workflow,
                 seed, # Pass direct seed down to inherit first-time logic from _generate_single_image
                 set_prompt,  # Use set_prompt directly
@@ -2299,7 +2390,6 @@ class GenerationService:
                 backgrounds_dir,
                 f"background_{scene_id:03d}_%03d.png"
             )
-
             if not result_path or not os.path.exists(result_path):
                 raise RuntimeError(f"Failed to generate background for scene {scene_id}")
 
@@ -2330,11 +2420,15 @@ class GenerationService:
             with open(story_path, 'w', encoding='utf-8') as f:
                 json.dump(story_data, f, indent=4, ensure_ascii=False)
 
+            # Mark as completed in queue
+            self._mark_queue_item_completed(project_id, None, GenerationType.BACKGROUND, scene_id=scene_id)
+
             # Broadcast completion
             manager.broadcast_sync(project_id, {
                 "type": "completed",
                 "project_id": project_id,
                 "scene_id": scene_id,
+                "generation_type": "background",
                 "step": "background_generation",
                 "background_image_path": relative_path
             })
@@ -2344,11 +2438,12 @@ class GenerationService:
 
         except Exception as e:
             logger.error(f"Error generating background for scene {scene_id}: {e}")
+            self._mark_queue_item_failed(project_id, None, GenerationType.BACKGROUND, str(e), scene_id=scene_id)
             manager.broadcast_sync(project_id, {
                 "type": "error",
                 "project_id": project_id,
                 "scene_id": scene_id,
-                "step": "background_generation",
+                "generation_type": "background",
                 "message": str(e)
             })
             raise
@@ -2478,18 +2573,30 @@ class GenerationService:
             project_meta = self.project_manager.get_project(project_id)
             story_data = json.loads(story_json)
             
-            # Check if this is a ThenVsNow project
-            is_then_vs_now = (
-                project_meta.get('project_type') == ProjectType.THEN_VS_NOW or 
-                story_data.get('project_type') == ProjectType.THEN_VS_NOW or
-                story_data.get('project_type') == 2 or
-                'characters' in story_data
-            )
+            # Check project type (1=Doc, 2=ThenVsNow, 3=Movie)
+            p_type = project_meta.get('project_type')
+            if p_type is None:
+                p_type = story_data.get('project_type')
+            
+            # Type 2 is ThenVsNow (uses specialized local generator)
+            is_then_vs_now = (p_type == ProjectType.THEN_VS_NOW or p_type == 2)
+            
+            # Type 3 is Movie (uses standard LLM planner)
+            is_movie = (p_type == ProjectType.MOVIE or p_type == 3)
 
             if is_then_vs_now:
                 logger.info(f"Detected ThenVsNow project for {project_id}, using specialized shot generator")
                 from core.story_engine import generate_shots_from_then_vs_now_story
                 shots = generate_shots_from_then_vs_now_story(story_data)
+            elif is_movie:
+                logger.info(f"Detected Movie project for {project_id}, using standard shot planner")
+                # Run standard planner in thread pool to avoid blocking
+                shots = await asyncio.to_thread(
+                    plan_shots,
+                    story_json,
+                    max_shots=max_shots,
+                    shots_agent=shots_agent
+                )
             else:
                 # Run standard planner in thread pool to avoid blocking
                 shots = await asyncio.to_thread(
@@ -2605,18 +2712,20 @@ class GenerationService:
             if not result_path:
                 raise ValueError("Image generation failed")
 
-            # Update final metadata
-            key = 'poster_thumbnail_url' if is_poster else 'thumbnail_url'
-            key_916 = 'poster_thumbnail_url_9_16' if is_poster else 'thumbnail_url_9_16'
+            # Update final metadata safely
+            def modify_meta(meta):
+                key = 'poster_thumbnail_url' if is_poster else 'thumbnail_url'
+                key_916 = 'poster_thumbnail_url_9_16' if is_poster else 'thumbnail_url_9_16'
+                relative_url = f"/api/projects/{project_id}/images/{filename}"
+                
+                if aspect_ratio == "16:9":
+                    meta[key] = relative_url
+                elif aspect_ratio == "9:16":
+                    meta[key_916] = relative_url
+                elif aspect_ratio == "21:8":
+                    meta['thumbnail_url_21_8'] = relative_url
             
-            relative_url = f"/api/projects/{project_id}/images/{filename}"
-            
-            if aspect_ratio == "16:9":
-                project_meta[key] = relative_url
-            elif aspect_ratio == "9:16":
-                project_meta[key_916] = relative_url
-            
-            self.project_manager._save_meta(project_id, project_meta)
+            self.project_manager.update_meta_safely(project_id, modify_meta)
 
             # Mark as completed in queue
             queue_service = get_queue_service()
@@ -2765,16 +2874,27 @@ class GenerationService:
 
             # Update queue item progress for the correct generation type
             queue_gen_type = generation_type or GenerationType.IMAGE
-            self._update_queue_item_progress(project_id, shot_index, queue_gen_type, progress)
+            
+            if queue_gen_type == GenerationType.BACKGROUND:
+                self._update_queue_item_progress(project_id, None, queue_gen_type, progress, scene_id=shot_index)
+            else:
+                self._update_queue_item_progress(project_id, shot_index, queue_gen_type, progress)
 
-            manager.broadcast_sync(project_id, {
+            # Prepare broadcast data
+            broadcast_data = {
                 "type": "progress",
                 "project_id": project_id,
-                "shot_index": shot_index,
-                "shot_id": shot.get('id'),
                 "generation_type": queue_gen_type.value,
                 "progress": progress
-            })
+            }
+            
+            if queue_gen_type == GenerationType.BACKGROUND:
+                broadcast_data["scene_id"] = shot_index
+            else:
+                broadcast_data["shot_index"] = shot_index
+                broadcast_data["shot_id"] = shot.get('id')
+
+            manager.broadcast_sync(project_id, broadcast_data)
 
         # Generate using the core image_generator module
         # This correctly handles both Gemini and ComfyUI modes and workflows

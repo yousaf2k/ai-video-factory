@@ -12,6 +12,7 @@ import { api } from "@/services/api";
 import { Save, RefreshCw, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { MultiAgentSelector } from "@/components/agents/MultiAgentSelector";
 import {
   Select,
   SelectContent,
@@ -122,55 +123,21 @@ export default function ProjectSettingsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Story Agent
-              </label>
-              <Select
-                value={formData.story_agent}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, story_agent: val })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Agent" />
-                </SelectTrigger>
-                <SelectContent>
-                  {!agents?.story.length && (
-                    <SelectItem value="default">Default</SelectItem>
-                  )}
-                  {agents?.story.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiAgentSelector
+                availableAgents={agents?.story || []}
+                selectedValue={formData.story_agent}
+                onChange={(val) => setFormData({ ...formData, story_agent: val })}
+                label="Default Story Building Blocks"
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Shots Agent
-              </label>
-              <Select
-                value={formData.shots_agent}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, shots_agent: val })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Agent" />
-                </SelectTrigger>
-                <SelectContent>
-                  {!agents?.shots?.length && (
-                    <SelectItem value="default">Default</SelectItem>
-                  )}
-                  {agents?.shots?.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiAgentSelector
+                availableAgents={agents?.shots || []}
+                selectedValue={formData.shots_agent}
+                onChange={(val) => setFormData({ ...formData, shots_agent: val })}
+                label="Default Shots Building Blocks"
+              />
             </div>
           </div>
         </section>

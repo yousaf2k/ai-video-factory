@@ -344,3 +344,47 @@ class ProjectService:
     def get_videos_dir(self, project_id: str) -> str:
         """Get videos directory for project"""
         return self.project_manager.get_videos_dir(project_id)
+
+    async def upload_thumbnail(self, project_id: str, file: Any, is_poster: bool = False, aspect_ratio: str = "16:9") -> str:
+        """Upload and register a project thumbnail"""
+        import time
+        import os
+        
+        # Determine filename and destination
+        ext = os.path.splitext(file.filename or "")[1] or ".png"
+        prefix = "uploaded_poster_thumbnail" if is_poster else "uploaded_thumbnail"
+        timestamp = int(time.time())
+        filename = f"{prefix}_{aspect_ratio.replace(':', '_')}_{timestamp}{ext}"
+        
+        images_dir = self.get_images_dir(project_id)
+        os.makedirs(images_dir, exist_ok=True)
+        dest_path = os.path.join(images_dir, filename)
+        
+        # Save file
+        contents = await file.read()
+        with open(dest_path, "wb") as f:
+            f.write(contents)
+            
+        # Get relative path for metadata
+        rel_path = self.project_manager.relativize_path(dest_path)
+        
+        # Update metadata safely
+        def modify_meta(meta):
+            if is_poster:
+                if aspect_ratio == "16:9":
+                    meta['poster_thumbnail_url'] = rel_path
+                elif aspect_ratio == "9:16":
+                    meta['poster_thumbnail_url_9_16'] = rel_path
+                elif aspect_ratio == "21:8":
+                    meta['poster_thumbnail_url_21_8'] = rel_path
+            else:
+                if aspect_ratio == "16:9":
+                    meta['thumbnail_url'] = rel_path
+                elif aspect_ratio == "9:16":
+                    meta['thumbnail_url_9_16'] = rel_path
+                elif aspect_ratio == "21:8":
+                    meta['thumbnail_url_21_8'] = rel_path
+                
+        self.project_manager.update_meta_safely(project_id, modify_meta)
+        
+        return rel_path

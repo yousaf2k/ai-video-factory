@@ -1,7 +1,7 @@
 """
 Projects API endpoints
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import List, Optional
 import logging
@@ -281,5 +281,32 @@ async def generate_thumbnail(project_id: str, request: GenerateThumbnailRequest)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate thumbnail: {str(e)}"
+        )
+
+
+@router.post("/{project_id}/thumbnail/upload")
+async def upload_thumbnail(
+    project_id: str,
+    file: UploadFile = File(...),
+    aspect_ratio: str = Form("16:9"),
+    is_poster: str = Form("false")
+):
+    """Upload a custom thumbnail for the project"""
+    try:
+        # Convert string form value to boolean
+        is_poster_bool = is_poster.lower() == "true"
+        
+        image_path = await project_service.upload_thumbnail(
+            project_id, 
+            file, 
+            is_poster=is_poster_bool, 
+            aspect_ratio=aspect_ratio
+        )
+        return {"status": "success", "thumbnail_url": image_path}
+    except Exception as e:
+        logger.error(f"Error uploading thumbnail: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload thumbnail: {str(e)}"
         )
 

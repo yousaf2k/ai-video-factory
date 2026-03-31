@@ -12,7 +12,7 @@ import { useState } from "react";
 import { api } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ImageIcon, X, Copy, Globe, Search, MessageSquare, Tag } from "lucide-react";
+import { RefreshCw, ImageIcon, X, Copy, Globe, Search, MessageSquare, Tag, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { GenerationDialog, GenerationConfig } from "@/components/shots/GenerationDialog";
 import { Input } from "@/components/ui/input";
@@ -102,6 +102,27 @@ export default function ProjectDetailPage() {
     } catch (error) {
       console.error(`Failed to generate ${aspectRatio} thumbnail:`, error);
       alert("Failed to generate thumbnail. Please check the logs.");
+    } finally {
+      setGeneratingThumbnails((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleUploadThumbnail = async (
+    aspectRatio: "16:9" | "9:16" | "21:8",
+    file: File,
+    isPoster: boolean = false
+  ) => {
+    const key = `${aspectRatio}${isPoster ? "-poster" : ""}`;
+    try {
+      setGeneratingThumbnails((prev) => ({ ...prev, [key]: true }));
+      await api.uploadThumbnail(projectId, file, aspectRatio, isPoster);
+      setImageVersion(Date.now());
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("Thumbnail uploaded successfully!");
+    } catch (error) {
+      console.error(`Failed to upload ${aspectRatio} thumbnail:`, error);
+      toast.error("Failed to upload thumbnail.");
     } finally {
       setGeneratingThumbnails((prev) => ({ ...prev, [key]: false }));
     }
@@ -411,7 +432,7 @@ export default function ProjectDetailPage() {
                     alt="9:16 Thumbnail"
                     className="w-full h-full object-contain bg-black cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() => {
-                      const url = getMediaUrl(project.thumbnail_url_9_16, imageVersion);
+                      const url = project.thumbnail_url_9_16 ? getMediaUrl(project.thumbnail_url_9_16, imageVersion) : null;
                       if (url) setFullscreenImageUrl(url);
                     }}
                   />
@@ -426,7 +447,7 @@ export default function ProjectDetailPage() {
                     alt="16:9 Thumbnail"
                     className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
                     onClick={() => {
-                      const url = getMediaUrl(project.thumbnail_url, imageVersion);
+                      const url = project.thumbnail_url ? getMediaUrl(project.thumbnail_url, imageVersion) : null;
                       if (url) setFullscreenImageUrl(url);
                     }}
                   />
@@ -511,7 +532,7 @@ export default function ProjectDetailPage() {
                             </div>
                           )}
 
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 gap-2">
                             <Button
                               variant="secondary"
                               size="sm"
@@ -529,6 +550,28 @@ export default function ProjectDetailPage() {
                               )}
                               {project.thumbnail_url ? "Regenerate" : "Generate"}
                             </Button>
+                            
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadThumbnail("16:9", file, false);
+                                }}
+                                disabled={generatingThumbnails["16:9"]}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 bg-background/80 hover:bg-background shadow-lg pr-4 pl-4"
+                                disabled={generatingThumbnails["16:9"]}
+                              >
+                                <Upload className="w-4 h-4 text-primary" />
+                                {project.thumbnail_url ? "Upload New" : "Upload"}
+                              </Button>
+                            </div>
                           </div>
                         </div>
 
@@ -593,7 +636,7 @@ export default function ProjectDetailPage() {
                             </div>
                           )}
 
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 gap-2">
                             <Button
                               variant="secondary"
                               size="sm"
@@ -613,6 +656,28 @@ export default function ProjectDetailPage() {
                                 ? "Regenerate"
                                 : "Generate"}
                             </Button>
+                            
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadThumbnail("9:16", file, false);
+                                }}
+                                disabled={generatingThumbnails["9:16"]}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 bg-background/80 hover:bg-background shadow-lg pr-4 pl-4"
+                                disabled={generatingThumbnails["9:16"]}
+                              >
+                                <Upload className="w-4 h-4 text-primary" />
+                                {project.thumbnail_url_9_16 ? "Upload New" : "Upload"}
+                              </Button>
+                            </div>
                           </div>
                         </div>
 
@@ -680,7 +745,7 @@ export default function ProjectDetailPage() {
                                     <span className="text-sm font-medium">Coming Soon</span>
                                   </div>
                                 )}
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 gap-2">
                                   <Button
                                     variant="secondary"
                                     size="sm"
@@ -693,6 +758,27 @@ export default function ProjectDetailPage() {
                                   >
                                     {generatingThumbnails["16:9-poster"] ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />} Generate
                                   </Button>
+                                  <div className="relative">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="absolute inset-0 opacity-0 cursor-pointer"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleUploadThumbnail("16:9", file, true);
+                                      }}
+                                      disabled={generatingThumbnails["16:9-poster"]}
+                                    />
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-2 bg-background/80 hover:bg-background shadow-lg pr-4 pl-4"
+                                      disabled={generatingThumbnails["16:9-poster"]}
+                                    >
+                                      <Upload className="w-4 h-4 text-primary" />
+                                      {project.poster_thumbnail_url ? "Upload New" : "Upload"}
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                               <div className="flex items-center justify-between mb-1.5 px-1 mt-2">
@@ -742,7 +828,7 @@ export default function ProjectDetailPage() {
                                     <span className="text-sm font-medium">Coming Soon</span>
                                   </div>
                                 )}
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 gap-2">
                                   <Button
                                     variant="secondary"
                                     size="sm"
@@ -755,6 +841,27 @@ export default function ProjectDetailPage() {
                                   >
                                     {generatingThumbnails["9:16-poster"] ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />} Generate
                                   </Button>
+                                  <div className="relative">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="absolute inset-0 opacity-0 cursor-pointer"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleUploadThumbnail("9:16", file, true);
+                                      }}
+                                      disabled={generatingThumbnails["9:16-poster"]}
+                                    />
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-2 bg-background/80 hover:bg-background shadow-lg pr-4 pl-4"
+                                      disabled={generatingThumbnails["9:16-poster"]}
+                                    >
+                                      <Upload className="w-4 h-4 text-primary" />
+                                      {project.poster_thumbnail_url_9_16 ? "Upload New" : "Upload"}
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                               <div className="flex items-center justify-between mb-1.5 px-1 mt-2">

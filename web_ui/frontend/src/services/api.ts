@@ -95,6 +95,27 @@ class ApiClient {
     return response.data.thumbnail_url;
   }
 
+  async uploadThumbnail(
+    projectId: string,
+    file: File,
+    aspectRatio: string = '16:9',
+    isPoster: boolean = false
+  ): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('aspect_ratio', aspectRatio);
+    formData.append('is_poster', isPoster ? 'true' : 'false');
+    
+    const response = await this.client.post<{ status: string, thumbnail_url: string }>(
+      `/api/projects/${projectId}/thumbnail/upload`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }
+    );
+    return response.data.thumbnail_url;
+  }
+
   // Story
   async getStory(projectId: string): Promise<Story> {
     const project = await this.getProject(projectId);

@@ -69,19 +69,22 @@ class ProjectManager:
             except Exception as e:
                 logger.warning(f"Failed to release project lock for {project_id}: {e}")
 
-    def update_shots_safely(self, project_id: str, modify_func):
+    def update_meta_safely(self, project_id: str, modify_func):
         """
-        Atomically loads, modifies, and saves shots.json with explicit file locking.
+        Atomically loads, modifies, and saves project metadata with explicit file locking.
         
         Args:
             project_id: The ID of the project.
-            modify_func: A callable that accepts a list of shot dictionaries or None and updates in-place.
+            modify_func: A callable that accepts a metadata dictionary and updates it in-place.
         """
         with self.lock_project(project_id):
-            shots = self._load_shots(project_id)
-            modify_func(shots)
-            self._save_shots(project_id, shots)
-            return shots
+            meta = self.load_project(project_id)
+            if not meta:
+                logger.warning(f"Metadata not found for project: {project_id}")
+                return None
+            modify_func(meta)
+            self._save_meta(project_id, meta)
+            return meta
 
     def update_shot_metadata(self, project_id: str, updates: dict, shot_id: str = None, shot_index: int = None):
         """
@@ -110,7 +113,6 @@ class ProjectManager:
                     target_shot[key] = value
                 
                 # Special handling for path lists (image_paths, video_paths)
-                # if we are updating a path, we usually want to add it to the list too
                 if 'image_path' in updates:
                     path = updates['image_path']
                     if 'image_paths' not in target_shot:
@@ -124,31 +126,26 @@ class ProjectManager:
                         target_shot['video_paths'] = []
                     if path and path not in target_shot['video_paths']:
                         target_shot['video_paths'].append(path)
-
-                # Special handling for project stats (meta updates)
-                # We handle this OUTSIDE the modify_shot to avoid nested locks 
-                # or complicated side effects, though ProjectManager methods 
-                # often update meta immediately after saving shots.
             else:
                 logger.warning(f"Could not find shot to update: ID={shot_id}, Index={shot_index}")
+                return  # Move to next step if no shot for stats update
 
         # Update shots.json atomically
         updated_shots = self.update_shots_safely(project_id, modify_shot)
         
-        # Update metadata stats (total counts)
-        try:
-            images_generated = sum(1 for s in updated_shots if s.get('image_generated', False))
-            videos_rendered = sum(1 for s in updated_shots if s.get('video_rendered', False))
-            
-            meta = self.load_project(project_id)
-            if meta:
+        # Update metadata stats (total counts) - do it SAFELY using update_meta_safely
+        def modify_meta(meta):
+            try:
+                images_generated = sum(1 for s in updated_shots if s.get('image_generated', False))
+                videos_rendered = sum(1 for s in updated_shots if s.get('video_rendered', False))
+                
                 meta['stats']['images_generated'] = images_generated
                 meta['stats']['videos_rendered'] = videos_rendered
-                self._save_meta(project_id, meta)
-        except Exception as e:
-            logger.error(f"Failed to update metadata stats: {e}")
-            
-        return target_shot if 'target_shot' in locals() else None
+            except Exception as e:
+                logger.error(f"Failed to update metadata stats in locked block: {e}")
+                
+        self.update_meta_safely(project_id, modify_meta)
+        return True # Best effort
 
     def get_latest_project(self):
         """Get the most recent incomplete project, or None if all complete"""
@@ -265,11 +262,10 @@ class ProjectManager:
         with open(story_path, 'w', encoding='utf-8') as f:
             f.write(story_json)
 
-        # Update metadata
-        meta = self.load_project(project_id)
-        if meta:
+        # Update metadata safely
+        def modify_meta(meta):
             meta['steps']['story'] = True
-            self._save_meta(project_id, meta)
+        self.update_meta_safely(project_id, modify_meta)
 
     def save_shots(self, project_id, shots):
         """Save shot data (image prompts, motion prompts) and initialize status fields"""
@@ -331,12 +327,11 @@ class ProjectManager:
         with open(shots_path, 'w', encoding='utf-8') as f:
             json.dump(shots_with_status, f, indent=2, ensure_ascii=False)
 
-        # Update metadata - only store stats, not the shots array
-        meta = self.load_project(project_id)
-        if meta:
+        # Update metadata safely - only store stats, not the shots array
+        def modify_meta(meta):
             meta['stats']['total_shots'] = len(shots)
             meta['steps']['shots'] = True
-            self._save_meta(project_id, meta)
+        self.update_meta_safely(project_id, modify_meta)
 
     def relativize_path(self, path):
         """Convert an absolute path to a relative path if it's within the project root or output dir"""
@@ -403,18 +398,16 @@ class ProjectManager:
     def mark_step_complete(self, project_id, step_name):
         """Mark a pipeline step as complete"""
         logger.debug(f"Marking step complete: {project_id} - {step_name}")
-        meta = self.load_project(project_id)
-        if meta:
+        def modify_meta(meta):
             meta['steps'][step_name] = True
-            self._save_meta(project_id, meta)
+        self.update_meta_safely(project_id, modify_meta)
 
     def mark_project_complete(self, project_id):
         """Mark the entire project as complete"""
-        meta = self.load_project(project_id)
-        if meta:
+        def modify_meta(meta):
             meta['completed'] = True
             meta['completed_at'] = datetime.now().isoformat()
-            self._save_meta(project_id, meta)
+        self.update_meta_safely(project_id, modify_meta)
 
     def mark_then_image_generated(self, project_id, shot_index, image_path, shot_id=None):
         """Mark THEN image as generated for FLFI2V shot"""
