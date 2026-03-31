@@ -219,7 +219,7 @@ Return JSON:
     return story_json_str
 
 
-def build_story_then_vs_now(movie_name: str, target_length: int = None, aspect_ratio: str = "16:9") -> str:
+def build_story_then_vs_now(movie_name: str, agent_name: str = "then_vs_now/then_vs_now", target_length: int = None, aspect_ratio: str = "16:9") -> str:
     """
     Build a ThenVsNow story from a movie name.
     Generates both story and shots directly (bypasses shot planner).
@@ -235,7 +235,12 @@ def build_story_then_vs_now(movie_name: str, target_length: int = None, aspect_r
     provider = get_provider()
 
     # Load the then_vs_now agent
-    prompt = load_agent_prompt("story", movie_name, "then_vs_now/then_vs_now")
+    # If agent_name doesn't already contain a slash, prepend 'then_vs_now/'
+    final_agent_path = agent_name
+    if "/" not in agent_name:
+        final_agent_path = f"then_vs_now/{agent_name}"
+        
+    prompt = load_agent_prompt("story", movie_name, final_agent_path)
     if target_length:
         prompt = prompt.replace("{VIDEO_LENGTH}", str(int(target_length)))
 

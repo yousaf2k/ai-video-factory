@@ -187,8 +187,8 @@ Group characters into **10–30+ unique logical scenes**. Each actor (or pair of
       "scene_id": 0,
       "then_age": 25,
       "now_age": 55,
-      "then_prompt": "Waist-up medium shot of young actor in original movie attire, period-accurate costume, iconic character pose on movie set with visible production equipment (lighting rigs, cables, cameras) and subtle crew in background, cinematic lighting, film grain texture, 1970s cinematography style, neutral expression",
-      "now_prompt": "[Actor Name] meeting [Character Name] from [Movie Title]. Standing together inside the same continuous scene environment on top of the professional movie set space (visible cameras, overhead lighting, and production crew in the background), single unified shot (NO SPLIT SCREEN, NO BORDERS, NO COLLAGE). [Character Name] on left, [Actor Name] on right standing close together, shoulder-to-shoulder for a selfie. [Character Name] wearing [COPY EXACT DETAILED CLOTHING DESCRIPTION FROM THEIR SOLO THEN-PROMPT VERBATIM]. [Actor Name] wearing highly detailed modern attire suitable for their real-life persona [Describe clothing details like materials, style, cut e.g., a sophisticated dark suit jacket with a cashmere turtleneck, stylish glasses], holding iPhone 15 Pro Max with titanium frame and triple camera system, holding the phone high up at face level with arm extended like taking a real selfie posture, phone back clearly visible in actor's hand. Both looking towards the smartphone with happy, cheerful smiling expressions. Medium waist-up shot, symmetrical composition, cinematic lighting, modern 4K quality.",
+      "then_prompt": "Close-up selfie of young [Character Name] from [Movie Title] in original attire, period-accurate costume, iconic character pose on movie set. [Character Name] holding the smartphone (iPhone 15 Pro Max with titanium frame and triple camera system clearly visible) for the selfie. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL FRAMING, STRICTLY CLOSE-UP SELFIE SHOT. ABSOLUTELY NO LEGS OR SHOES VISIBLE. Cinematic lighting, film grain texture, stylish and nostalgic expression.",
+      "now_prompt": "Close-up selfie of [Actor Name] from [Movie Title] — Then + Now, smiling and taking a selfie together on the filming set. [Actor Name] holding the smartphone (iPhone 15 Pro Max with titanium frame and triple camera system clearly visible) for the selfie. Both characters visible: younger [Character Name] on left, older [Actor Name] on right holding phone. Visible cameras, lighting rigs, scaffolding in background. A few production crew members moving naturally, slightly blurred. Cinematic, photorealistic, ultra-realistic textures, vibrant colors, high-quality YouTube thumbnail style. Natural depth-of-field emphasizing characters, soft cinematic lighting, hyper-realistic skin, fun and nostalgic atmosphere. 16:9 horizontal composition.",
       "meeting_prompt": "The younger character (THEN) on the left smiles warmly as the older character (NOW) on the right approaches, the younger version extends arms for embrace, both characters step forward and share a warm heartfelt hug. Camera captures the emotional reunion moment from side angle. Production set visible in background with subtle crew movement. Cinematic lighting, emotional connection, nostalgic atmosphere, smooth natural animation.",
       "departure_prompt": "Both characters (THEN and NOW versions) walk together to the right side of frame, smiling and talking to each other in friendly conversation. Camera follows their movement with smooth tracking shot as they exit the scene. Production set and equipment visible in background, crew members working naturally. Warm lighting, joyful atmosphere, natural walking animation, sense of closure and continued friendship."
     }
@@ -204,8 +204,9 @@ Group characters into **10–30+ unique logical scenes**. Each actor (or pair of
 5. **Characters array** should have 8-25 entries for ensemble movies, or core cast for shorter videos
 6. **Scenes** should alternate between Meeting and Departure for each character
 7. **set_prompt** in each scene must be a detailed background description that will be appended to character image prompts
-8. **NOW Image Composition**: The now_prompt MUST show both characters standing together inside the same continuous scene space of the set environment. **STRICTLY MEDIUM WAIST-UP SHOT showing from the waist up. ABSOLUTELY NO LEGS OR SHOES VISIBLE.** **DO NOT describe the background or location** in the prompt. The NOW (older) character must be taking a selfie with an iPhone 15 Pro Max. **The phone must be held high at face level or slightly above face level with an extended arm (like taking a real selfie posture).** **The phone back with triple camera system must be visible (solid opaque backing, absolutely NO SCREEN on this side).** Both characters must **look towards the smartphone** and expression must be **happy face mood (smiling, cheerful)**. They must **stand close together (shoulder-to-shoulder)** to ensure a single unified shot (NO SPLIT SCREEN, NO BORDERS).
-9. **iPhone Visibility**: Ensure the iPhone 15 Pro Max is clearly visible - describe it as "titanium frame with triple camera system on the back, solid opaque phone back clearly visible in actor's hand, strictly no screen on this side". **DO NOT describe any screen interface on the back.**
+8. **NOW Image Composition**: The `now_prompt` MUST be the **SAME EXACT PROMPT** as the YouTube thumbnail format, adapted for each character. Specifically: "Close-up selfie of [Actor Name] from [Movie Title] — Then + Now, smiling and taking a selfie together on the filming set. [Actor Name] holding the smartphone (iPhone 15 Pro Max with titanium frame and triple camera system clearly visible) for the selfie. Both characters visible: younger [Character Name] on left, older [Actor Name] on right holding phone. Visible cameras, lighting rigs, scaffolding in background. A few production crew members moving naturally, slightly blurred. Cinematic, photorealistic, ultra-realistic textures, vibrant colors, high-quality YouTube thumbnail style. Natural depth-of-field emphasizing characters, soft cinematic lighting, hyper-realistic skin, fun and nostalgic atmosphere. 16:9 horizontal composition." 
+Use the exact thumbnail instructions for every character intersection prompt. Ensure consistent wording. 
+9. **iPhone Visibility**: Ensure the iPhone 15 Pro Max is clearly visible - describe it as "titanium frame with triple camera system on the back, solid opaque phone back clearly visible in actor's hand, strictly no screen on this side". **DO NOT describe any screen interface on the back.** Use the "Close-up selfie" pattern from the YouTube thumbnail guidelines for all now-prompts.
 10. **Thumbnail Prompts**: Must feature the MOST PROMINENT character from the movie in a close-up selfie composition showing both THEN and NOW versions together. Include production set background with visible equipment, crew members (slightly blurred), vibrant colors, and nostalgic atmosphere. Specify iPhone 15 Pro Max details for authenticity.
 
 ## CHARACTER IMAGE PROMPTS (CENTERED INTERVIEW STYLE LOCKED)
@@ -233,7 +234,7 @@ Set Placement: Placed naturally on recreated film set with cameras and subtle cr
 Expression: Focused, calm, in-character presence.
 
 MANDATORY COMPOSITION BLOCK:
-Straight-on eye-level camera, subject perfectly centered in frame, STRICTLY MEDIUM WAIST-UP SHOT showing from the waist up. ABSOLUTELY NO LEGS OR SHOES VISIBLE, symmetrical composition, 50mm cinematic lens, shallow depth of field, subject looking directly into camera, crew slightly blurred in background, no side angle, no profile view, no tilt.
+Straight-on eye-level camera, subject perfectly centered in frame, STRICTLY CLOSE-UP SELFIE SHOT showing from the face up. ABSOLUTELY NO LEGS OR SHOES VISIBLE, symmetrical composition, 50mm cinematic lens, shallow depth of field, subject holding high-end smartphone (iPhone 15 Pro Max) at face level with arm extended like a real selfie posture, phone back with triple camera system clearly visible, subject looking towards the smartphone with a happy smiling expression, crew slightly blurred in background, no side angle, no profile view, no tilt.
 
 Style: Ultra-realistic, cinematic, photorealistic, film-set lighting, 4K detail.
 ```
@@ -244,9 +245,10 @@ Style: Ultra-realistic, cinematic, photorealistic, film-set lighting, 4K detail.
 - [Actor Name] as [Character Name] from [Movie Title] ([Year])
 
 **Both Characters Visible:**
+- **Close-up selfie** as per the EXACT YouTube thumbnail prompt
 - **[Character Name] (Then)** on left
-- **[Actor Name] (Now)** on right
-- STRICTLY MEDIUM WAIST-UP SHOT showing from the waist up (no legs, no shoes visible)
+- **[Actor Name] (Now)** on right holding phone
+- **STRICTLY CLOSE-UP SELFIE SHOT**
 - **Both looking towards the smartphone**
 - **Standing close together, shoulder-to-shoulder**
 - **Single unified shot (NO SPLIT SCREEN, NO BORDERS, NO COLLAGE)**
@@ -256,7 +258,7 @@ Style: Ultra-realistic, cinematic, photorealistic, film-set lighting, 4K detail.
 
 **Composition:**
 ```
-Straight-on eye-level camera, both subjects perfectly centered in frame, SINGLE UNIFIED SHOT (NO SPLIT-SCREEN, NO BORDERS, NO COLLAGE), STRICTLY MEDIUM WAIST-UP SHOT showing from the waist up, ABSOLUTELY NO LEGS OR SHOES VISIBLE, symmetrical dual-subject composition, 50mm cinematic lens, shallow depth of field, both looking towards the smartphone, standing close together shoulder-to-shoulder, phone MUST be held high at face level or above face level with arm extended like a real selfie-taking posture, no side angle, no profile view, no tilt, equal visual weight between subjects.
+Close-up selfie exactly as per YouTube thumbnail format, BOTH subjects perfectly centered in frame, SINGLE UNIFIED SHOT (NO SPLIT-SCREEN, NO BORDERS, NO COLLAGE), STRICTLY CLOSE-UP SELFIE SHOT, ABSOLUTELY NO LEGS OR SHOES VISIBLE, symmetrical dual-subject composition, 50mm cinematic lens, shallow depth of field, both looking towards the smartphone, standing close together shoulder-to-shoulder, phone MUST be held high at face level or above face level with arm extended like a real selfie-taking posture, no side angle, no profile view, no tilt.
 ```
 
 **NOW Character Selfie Variant:**
@@ -344,12 +346,12 @@ This section defines the exact specifications for generating YouTube thumbnails 
 ┌─────────────────────────────────────┐
 │  Production Set Background          │
 │  (cameras, lights, rigging)         │
+│  Crew members (slightly blurred)    │
 │                                     │
-│   [YOUNG]  [OLDER + iPhone]       │
+│   [YOUNG]  [OLDER + iPhone]         │
 │    THEN          NOW                │
 │   (left)       (right)              │
 │                                     │
-│  Crew members (slightly blurred)    │
 └─────────────────────────────────────┘
 ```
 

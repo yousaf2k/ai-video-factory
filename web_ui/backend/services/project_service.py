@@ -133,6 +133,7 @@ class ProjectService:
                 # Generate story with shots directly
                 story_json = build_story_then_vs_now(
                     movie_name=request.idea,
+                    agent_name=request.story_agent or "then_vs_now/then_vs_now",
                     target_length=request.total_duration,
                     aspect_ratio=request.aspect_ratio
                 )

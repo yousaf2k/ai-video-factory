@@ -320,6 +320,12 @@ class GenerationService:
                 await asyncio.sleep(0.1)
 
             except Exception as e:
+                # Catch shutdown errors specifically to break the loop gracefully
+                error_msg = str(e).lower()
+                if "after shutdown" in error_msg or not self._queue_processor_running:
+                    logger.info(f"Queue processor loop terminating due to shutdown: {e}")
+                    break
+                    
                 logger.error(f"Error in queue processor loop: {e}")
                 await asyncio.sleep(1)
 

@@ -249,7 +249,7 @@ async def update_shots(project_id: str, request: UpdateShotsRequest):
 
         # Atomic update
         def modify_func(current_shots):
-            return shots_dicts
+            current_shots[:] = shots_dicts
         project_service.project_manager.update_shots_safely(project_id, modify_func)
 
         return {"status": "success", "count": len(shots_dicts)}
@@ -490,7 +490,7 @@ async def upload_shot_image(project_id: str, shot_id_or_index: str, variant: str
         
         contents = await file.read()
         with open(abs_dest, "wb") as f: f.write(contents)
-        rel_path = project_service.project_manager._relativize_path(abs_dest)
+        rel_path = project_service.project_manager.relativize_path(abs_dest)
         
         def modify_shot(shots):
             target = shots[shot_index - 1]
@@ -528,7 +528,7 @@ async def upload_shot_video(project_id: str, shot_id_or_index: str, variant: str
         
         contents = await file.read()
         with open(abs_dest, "wb") as f: f.write(contents)
-        rel_path = project_service.project_manager._relativize_path(abs_dest)
+        rel_path = project_service.project_manager.relativize_path(abs_dest)
         
         def modify_shot(shots):
             target = shots[shot_index - 1]

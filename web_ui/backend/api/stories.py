@@ -224,9 +224,10 @@ async def regenerate_story(project_id: str, request: RegenerateStoryRequest):
         if is_then_vs_now:
             from core.story_engine import build_story_then_vs_now
             
-            logger.info(f"Regenerating ThenVsNow story for movie: {idea}")
+            logger.info(f"Regenerating ThenVsNow story with agent: {request.agent}")
             story_json = build_story_then_vs_now(
                 movie_name=idea,
+                agent_name=request.agent,
                 target_length=target_length,
                 aspect_ratio=aspect_ratio
             )
