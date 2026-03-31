@@ -69,6 +69,20 @@ class ProjectManager:
             except Exception as e:
                 logger.warning(f"Failed to release project lock for {project_id}: {e}")
 
+    def update_shots_safely(self, project_id: str, modify_func):
+        """
+        Atomically loads, modifies, and saves shots.json with explicit file locking.
+        
+        Args:
+            project_id: The ID of the project.
+            modify_func: A callable that accepts a list of shot dictionaries or None and updates in-place.
+        """
+        with self.lock_project(project_id):
+            shots = self._load_shots(project_id)
+            modify_func(shots)
+            self._save_shots(project_id, shots)
+            return shots
+
     def update_meta_safely(self, project_id: str, modify_func):
         """
         Atomically loads, modifies, and saves project metadata with explicit file locking.
