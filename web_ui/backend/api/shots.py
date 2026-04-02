@@ -130,16 +130,16 @@ async def _resolve_shot(project_id: str, shot_id_or_index: str):
     """Helper to resolve a shot by ID or 1-based index"""
     shots = await get_shots(project_id)
     
-    # Try as numeric index first (1-based)
-    if shot_id_or_index.isdigit():
+    # Try as stable UUID first
+    for i, shot in enumerate(shots):
+        if shot.get('id') == str(shot_id_or_index):
+            return shot, i + 1
+            
+    # Fallback to numeric index (1-based)
+    if str(shot_id_or_index).isdigit():
         idx = int(shot_id_or_index)
         if 1 <= idx <= len(shots):
             return shots[idx - 1], idx
-            
-    # Try as stable UUID
-    for i, shot in enumerate(shots):
-        if shot.get('id') == shot_id_or_index:
-            return shot, i + 1
             
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -482,7 +482,7 @@ async def upload_shot_image(project_id: str, shot_id_or_index: str, variant: str
     try:
         shot, shot_index = await _resolve_shot(project_id, shot_id_or_index)
         ext = os.path.splitext(file.filename or "")[1] or ".png"
-        filename = f"upload_{shot_id_or_index}_{variant or 'default'}_{int(time.time())}{ext}"
+        filename = f"shot_{shot_index:03d}_upload_{variant or 'default'}_{int(time.time())}{ext}"
         project_dir = project_service.get_project_dir(project_id)
         images_dir = os.path.join(project_dir, "images")
         os.makedirs(images_dir, exist_ok=True)
@@ -520,7 +520,7 @@ async def upload_shot_video(project_id: str, shot_id_or_index: str, variant: str
     try:
         shot, shot_index = await _resolve_shot(project_id, shot_id_or_index)
         ext = os.path.splitext(file.filename or "")[1] or ".mp4"
-        filename = f"upload_{shot_id_or_index}_{variant or 'default'}_{int(time.time())}{ext}"
+        filename = f"shot_{shot_index:03d}_upload_{variant or 'default'}_{int(time.time())}{ext}"
         project_dir = project_service.get_project_dir(project_id)
         videos_dir = os.path.join(project_dir, "videos")
         os.makedirs(videos_dir, exist_ok=True)

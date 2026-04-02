@@ -1105,6 +1105,7 @@ export function ShotCard({
               appendImagePrompt: config.appendImagePrompt === "default" ? undefined : config.appendImagePrompt,
               generateSoundFX: config.generateSoundFX || false,
               draftLowResVideo: config.draftLowResVideo || false,
+              promptOverride: config.promptOverride?.trim() || undefined,
             });
             setViewMode("video");
             toast.info("Video regeneration started", {

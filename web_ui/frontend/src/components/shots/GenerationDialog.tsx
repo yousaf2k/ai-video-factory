@@ -62,16 +62,18 @@ export function GenerationDialog({
   const [appendImagePrompt, setAppendImagePrompt] = useState("default");
   const [generateSoundFX, setGenerateSoundFX] = useState(false);
   const [draftLowResVideo, setDraftLowResVideo] = useState(false);
+  
+  // Override toggle and custom prompt
+  const [useOverride, setUseOverride] = useState(false);
+  const DEFAULT_VIDEO_PROMPT = "(cinematic quality, consistent style), slowly departing the scene from the character's appearance, transitioning towards the next scene. focus on the departure motion and environment shift.";
 
   // Reset or initialize state
   useEffect(() => {
     if (isOpen) {
-      setForce(false);
-      setSeed("");
-      setPromptOverride(defaultPromptOverride);
-      setAppendImagePrompt("default");
       setGenerateSoundFX(false);
       setDraftLowResVideo(false);
+      setUseOverride(false);
+      setPromptOverride(defaultPromptOverride || "");
       
       if (type === "image") {
         const savedImageMode = localStorage.getItem(`image_mode_${projectId}`) || "comfyui";
@@ -118,7 +120,7 @@ export function GenerationDialog({
       mode,
       workflow,
       seed: type === "image" ? seed : undefined,
-      promptOverride: type === "image" ? promptOverride : undefined,
+      promptOverride: (type === "image" || useOverride) ? (promptOverride || undefined) : undefined,
       appendImagePrompt: type === "video" ? appendImagePrompt : undefined,
       generateSoundFX: type === "video" ? generateSoundFX : undefined,
       draftLowResVideo: type === "video" ? draftLowResVideo : undefined,
@@ -361,6 +363,44 @@ export function GenerationDialog({
                 <label htmlFor="regen-lowres" className="text-sm">
                   📉 Draft Low Res Video
                 </label>
+              </div>
+
+              <div className="space-y-4 pt-4 border-t">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="checkbox"
+                    id="regen-override"
+                    checked={useOverride}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setUseOverride(checked);
+                      if (checked && !promptOverride) {
+                        setPromptOverride(DEFAULT_VIDEO_PROMPT);
+                      }
+                    }}
+                    className="w-4 h-4 mr-2"
+                  />
+                  <label htmlFor="regen-override" className="text-sm font-semibold">
+                    Override the prompt
+                  </label>
+                </div>
+
+                {useOverride && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-medium text-muted-foreground">
+                      Custom Departure Prompt
+                    </label>
+                    <Textarea
+                      className="text-xs min-h-[80px]"
+                      value={promptOverride}
+                      onChange={(e) => setPromptOverride(e.target.value)}
+                      placeholder="Enter custom departure/motion prompt..."
+                    />
+                    <p className="text-[10px] text-muted-foreground italic">
+                      If unchecked, the prompt from shot JSON will be used.
+                    </p>
+                  </div>
+                )}
               </div>
             </>
           )}

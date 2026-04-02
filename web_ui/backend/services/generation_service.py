@@ -465,6 +465,7 @@ class GenerationService:
                 video_variant=video_variant,
                 append_image_prompt=item.append_image_prompt,
                 shot_id=item.shot_id,
+                prompt_override=item.prompt_override,
                 draft_low_res_video=getattr(item, 'draft_low_res_video', False),
                 prompt_id_callback=save_prompt_id,
                 existing_prompt_id=item.comfyui_prompt_id
@@ -638,6 +639,13 @@ class GenerationService:
         # Check if FLFI2V
         is_flfi2v = shot.get('is_flfi2v', False) if shot else False
 
+        # Extract prompt override based on generation type
+        prompt_override = None
+        if request:
+            prompt_override = getattr(request, 'prompt_override', None)
+            if not prompt_override and generation_type == GenerationType.DEPARTURE_VIDEO:
+                prompt_override = getattr(request, 'departure_prompt_override', None)
+
         return QueueItem(
             item_id="",  # Will be assigned by QueueService
             project_id=project_id,
@@ -652,7 +660,7 @@ class GenerationService:
             project_title=project_title,
             scene_name=scene_name,
             shot_id=shot_id,
-            prompt_override=getattr(request, 'prompt_override', None) if request else None,
+            prompt_override=prompt_override,
             seed=getattr(request, 'seed', None) if request else None,
             image_mode=getattr(request, 'image_mode', None) if request else None,
             image_workflow=getattr(request, 'image_workflow', None) if request else None,
@@ -792,18 +800,20 @@ class GenerationService:
         shot = None
         shot_index = -1
         
-        if isinstance(shot_id_or_index, int) or (isinstance(shot_id_or_index, str) and shot_id_or_index.isdigit()):
+        # Resolve shot by ID first
+        for i, s in enumerate(shots):
+            if s.get('id') == str(shot_id_or_index):
+                shot = s
+                shot_index = i + 1
+                break
+        
+        # Fallback to Index if not found as ID
+        if not shot and (isinstance(shot_id_or_index, int) or (isinstance(shot_id_or_index, str) and shot_id_or_index.isdigit())):
             idx = int(shot_id_or_index)
             if 1 <= idx <= len(shots):
                 shot = shots[idx - 1]
                 shot_index = idx
-        else:
-            # Assume it's an ID
-            for i, s in enumerate(shots):
-                if s.get('id') == shot_id_or_index:
-                    shot = s
-                    shot_index = i + 1
-                    break
+
         
         if not shot:
             logger.warning(f"Could not resolve shot '{shot_id_or_index}' for project {project_id}")
@@ -1526,7 +1536,7 @@ class GenerationService:
         project_title: Optional[str] = None, video_variant: str = None,
         append_image_prompt: Optional[str] = None, draft_low_res_video: bool = False,
         prompt_id_callback=None, existing_prompt_id=None,
-        shot_id: str = None
+        shot_id: str = None, prompt_override: Optional[str] = None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -1572,7 +1582,7 @@ class GenerationService:
                     project_id, shot_index, shot, force,
                     video_mode, video_workflow, project_title, video_variant,
                     draft_low_res_video=draft_low_res_video,
-                    shot_id=shot_id
+                    shot_id=shot_id, prompt_override=prompt_override
                 )
                 # Return the meeting video path for backward compatibility
                 # (UI will use meeting_video_path/departure_video_path for FLFI2V shots)
@@ -1621,7 +1631,8 @@ class GenerationService:
                 append_image_prompt,
                 draft_low_res_video=draft_low_res_video,
                 prompt_id_callback=prompt_id_callback,
-                existing_prompt_id=existing_prompt_id
+                existing_prompt_id=existing_prompt_id,
+                prompt_override=prompt_override
             )
 
             # Mark as rendered safely
@@ -2055,7 +2066,7 @@ class GenerationService:
         self, project_id: str, shot_index: int, shot: dict,
         force: bool, video_mode: Optional[str], video_workflow: Optional[str],
         project_title: Optional[str], video_variant: str, draft_low_res_video: bool = False,
-        shot_id: str = None
+        shot_id: str = None, prompt_override: Optional[str] = None
     ) -> dict:
         """Regenerate meeting and/or departure videos for FLFI2V shot"""
         shots = self.project_manager.get_shots(project_id)
@@ -2099,8 +2110,8 @@ class GenerationService:
 
         # Generate meeting video
         if video_variant in ["meeting", "both"]:
-            # Prompt fallback: use meeting_video_prompt OR motion_prompt
-            meeting_prompt = shot.get('meeting_video_prompt') or shot.get('motion_prompt')
+            # Prompt fallback: use override if provided, then meeting_video_prompt OR motion_prompt
+            meeting_prompt = prompt_override or shot.get('meeting_video_prompt') or shot.get('motion_prompt')
             logger.info(f"FLFI2V shot {shot_index} Meeting Resolved Prompt: {meeting_prompt}")
             
             if meeting_prompt and (not current_shot.get('meeting_video_rendered') or force):
@@ -2153,7 +2164,8 @@ class GenerationService:
                         meeting_seed,
                         None,  # last_frame_image_path
                         GenerationType.MEETING_VIDEO,  # generation_type for queue tracking
-                        draft_low_res_video=draft_low_res_video
+                        draft_low_res_video=draft_low_res_video,
+                        prompt_override=prompt_override
                     )
 
                     current_shot['meeting_video_rendered'] = True
@@ -2201,8 +2213,8 @@ class GenerationService:
 
         # Generate departure video
         if video_variant in ["departure", "both"]:
-            # Prompt fallback: use departure_video_prompt OR motion_prompt
-            departure_prompt = shot.get('departure_video_prompt') or shot.get('motion_prompt')
+            # Prompt fallback: use override if provided, then departure_video_prompt OR motion_prompt
+            departure_prompt = prompt_override or shot.get('departure_video_prompt') or shot.get('motion_prompt')
             logger.info(f"FLFI2V shot {shot_index} Departure Resolved Prompt: {departure_prompt}")
             
             if departure_prompt and (not current_shot.get('departure_video_rendered') or force):
@@ -2262,7 +2274,8 @@ class GenerationService:
                         departure_seed,
                         last_frame_image,
                         GenerationType.DEPARTURE_VIDEO,  # generation_type for queue tracking
-                        draft_low_res_video=draft_low_res_video
+                        draft_low_res_video=draft_low_res_video,
+                        prompt_override=prompt_override
                     )
 
                     current_shot['departure_video_rendered'] = True
@@ -2924,7 +2937,8 @@ class GenerationService:
                                append_image_prompt: Optional[str] = None,
                                draft_low_res_video: bool = False,
                                prompt_id_callback=None,
-                               existing_prompt_id=None) -> str:
+                               existing_prompt_id=None,
+                               prompt_override: Optional[str] = None) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
@@ -2947,7 +2961,7 @@ class GenerationService:
             else:
                 append_image_choice = 'none'
 
-        motion_prompt = shot.get('motion_prompt', '')
+        motion_prompt = prompt_override.strip() if prompt_override and prompt_override.strip() else shot.get('motion_prompt', '')
         image_prompt = shot.get('image_prompt', '')
 
         if append_image_choice != "none" and image_prompt:
@@ -3128,7 +3142,8 @@ class GenerationService:
         video_filename: str, seed: Optional[int] = None,
         last_frame_image_path: Optional[str] = None,
         generation_type: GenerationType = None,
-        draft_low_res_video: bool = False
+        draft_low_res_video: bool = False,
+        prompt_override: Optional[str] = None
     ) -> str:
         """Generate FLFI2V video for a single shot (synchronous)
 
@@ -3224,10 +3239,14 @@ class GenerationService:
                         logger.warning(f"Departure video last frame: Using current character's NOW image (fallback)")
 
         # Inject motion prompt based on variant
-        motion_prompt = shot.get(
-            'departure_video_prompt' if variant == 'departure' else 'meeting_video_prompt',
-            "Animate this scene"
-        )
+        if prompt_override and prompt_override.strip():
+            motion_prompt = prompt_override.strip()
+            logger.info(f"FLFI2V video using prompt_override: {motion_prompt[:50]}...")
+        else:
+            motion_prompt = shot.get(
+                'departure_video_prompt' if variant == 'departure' else 'meeting_video_prompt',
+                "Animate this scene"
+            )
 
         if motion_prompt_node_id in wf:
             wf[motion_prompt_node_id]["inputs"]["text"] = motion_prompt

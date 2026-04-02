@@ -59,8 +59,8 @@ export function useRegenerateVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo }: { shotIdOrIndex: string | number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean }) =>
-      api.regenerateShotVideo(projectId, shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo),
+    mutationFn: ({ shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride }: { shotIdOrIndex: string | number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean; promptOverride?: string }) =>
+      api.regenerateShotVideo(projectId, shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -96,6 +96,9 @@ export function useBatchRegenerate(projectId: string) {
       image_workflow?: string;
       video_workflow?: string;
       draft_low_res_video?: boolean;
+      append_image_prompt?: string;
+      generate_soundfx?: boolean;
+      departure_prompt_override?: string;
     }) => api.batchRegenerate(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });

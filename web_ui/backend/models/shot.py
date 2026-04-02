@@ -102,6 +102,7 @@ class RegenerateVideoRequest(BaseModel):
     append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
+    prompt_override: Optional[str] = Field(default=None, description="Override the motion prompt for this generation only")
 
 
 class BatchRegenerateRequest(BaseModel):
@@ -121,6 +122,7 @@ class BatchRegenerateRequest(BaseModel):
     append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
+    departure_prompt_override: Optional[str] = Field(default=None, description="Override standard departure prompt for batch generation")
 
 
 

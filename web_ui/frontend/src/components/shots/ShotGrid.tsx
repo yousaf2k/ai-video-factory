@@ -148,6 +148,11 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
 
   const [ttsMethod, setTtsMethod] = useState("local");
   const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
+  
+  // Batch Departure Override states
+  const [batchUseDepartureOverride, setBatchUseDepartureOverride] = useState(true);
+  const DEFAULT_DEPARTURE_PROMPT = "(cinematic quality, consistent style), slowly departing the scene from the character's appearance, transitioning towards the next scene. focus on the departure motion and environment shift.";
+  const [batchDeparturePrompt, setBatchDeparturePrompt] = useState(DEFAULT_DEPARTURE_PROMPT);
 
   const { data: agents } = useAgents();
   const { data: globalConfig } = useConfig();
@@ -377,6 +382,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           video_workflow: videoWorkflow,
           queue_setting: queueSetting,
           append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
+          departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
         });
       } catch (error) {
         console.error("Failed to start batch both generation:", error);
@@ -404,6 +410,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           video_mode: videoMode,
           video_workflow: videoWorkflow,
           append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
+          departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
         });
       } catch (error) {
         console.error("Failed to start batch video generation:", error);
@@ -1499,6 +1506,38 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
                         <SelectItem value="end">End (Motion + Image)</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="checkbox"
+                        id="batch-departure-override"
+                        checked={batchUseDepartureOverride}
+                        onChange={(e) => setBatchUseDepartureOverride(e.target.checked)}
+                        className="w-4 h-4 mr-2"
+                      />
+                      <label htmlFor="batch-departure-override" className="text-sm font-semibold">
+                        Override Departure Prompt for all shots
+                      </label>
+                    </div>
+
+                    {batchUseDepartureOverride && (
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-medium text-muted-foreground">
+                          Batch Departure Prompt
+                        </label>
+                        <Textarea
+                          className="text-xs min-h-[80px]"
+                          value={batchDeparturePrompt}
+                          onChange={(e) => setBatchDeparturePrompt(e.target.value)}
+                          placeholder="Standard departure prompt for all selected shots..."
+                        />
+                        <p className="text-[10px] text-muted-foreground italic">
+                          This prompt will be used for all departure videos in this batch.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

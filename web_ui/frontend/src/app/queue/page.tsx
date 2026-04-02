@@ -212,6 +212,18 @@ export default function QueuePage() {
     setSelectedItems(newSelected);
   };
 
+  const handleToggleGroupSelect = (itemIds: string[], select: boolean) => {
+    const newSelected = new Set(selectedItems);
+    itemIds.forEach(id => {
+      if (select) {
+        newSelected.add(id);
+      } else {
+        newSelected.delete(id);
+      }
+    });
+    setSelectedItems(newSelected);
+  };
+
     const handleClearSelected = async () => {
     if (selectedItems.size === 0) return;
 
@@ -443,6 +455,7 @@ export default function QueuePage() {
                 items={items}
                 selectedItems={selectedItems}
                 onSelectItem={handleToggleSelect}
+                onSelectGroup={handleToggleGroupSelect}
                 onCancelItem={handleCancelItem}
                 onRequeueItem={handleRequeueItem}
                 onForceStartItem={handleForceStartItem}

@@ -187,7 +187,8 @@ class ApiClient {
     videoVariant?: string,
     appendImagePrompt?: string,
     generateSoundFX?: boolean,
-    draftLowResVideo?: boolean
+    draftLowResVideo?: boolean,
+    promptOverride?: string
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/regenerate-video`, {
       force,
@@ -196,7 +197,8 @@ class ApiClient {
       video_variant: videoVariant || undefined,
       append_image_prompt: appendImagePrompt,
       generate_soundfx: generateSoundFX || false,
-      draft_low_res_video: draftLowResVideo || false
+      draft_low_res_video: draftLowResVideo || false,
+      prompt_override: promptOverride || undefined,
     });
   }
 
@@ -369,6 +371,7 @@ class ApiClient {
       append_image_prompt?: string;
       generate_soundfx?: boolean;
       draft_low_res_video?: boolean;
+      departure_prompt_override?: string;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/projects/${projectId}/shots/batch-regenerate`, data);
