@@ -23,6 +23,7 @@ export interface GenerationConfig {
   appendImagePrompt?: string; // e.g. "default", "none", "start", "end"
   generateSoundFX?: boolean;
   draftLowResVideo?: boolean;
+  resolution?: string;
 }
 
 interface GenerationDialogProps {
@@ -62,6 +63,7 @@ export function GenerationDialog({
   const [appendImagePrompt, setAppendImagePrompt] = useState("default");
   const [generateSoundFX, setGenerateSoundFX] = useState(false);
   const [draftLowResVideo, setDraftLowResVideo] = useState(false);
+  const [resolution, setResolution] = useState("720p");
   
   // Override toggle and custom prompt
   const [useOverride, setUseOverride] = useState(false);
@@ -108,6 +110,9 @@ export function GenerationDialog({
         
         const savedDraft = localStorage.getItem(`video_draft_${projectId}`);
         if (savedDraft) setDraftLowResVideo(savedDraft === "true");
+
+        const savedRes = localStorage.getItem(`video_resolution_${projectId}`);
+        if (savedRes) setResolution(savedRes);
       }
     }
   }, [isOpen, type, projectId, globalConfig]);
@@ -124,6 +129,7 @@ export function GenerationDialog({
       appendImagePrompt: type === "video" ? appendImagePrompt : undefined,
       generateSoundFX: type === "video" ? generateSoundFX : undefined,
       draftLowResVideo: type === "video" ? draftLowResVideo : undefined,
+      resolution: type === "video" ? resolution : undefined,
     });
   };
 
@@ -349,20 +355,26 @@ export function GenerationDialog({
                 </label>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Input
-                  type="checkbox"
-                  id="regen-lowres"
-                  checked={draftLowResVideo}
-                  onChange={(e) => {
-                    setDraftLowResVideo(e.target.checked);
-                    localStorage.setItem(`video_draft_${projectId}`, e.target.checked.toString());
-                  }}
-                  className="w-4 h-4 mr-2"
-                />
-                <label htmlFor="regen-lowres" className="text-sm">
-                  📉 Draft Low Res Video
+              <div className="space-y-1 mt-4 border-t pt-4">
+                <label className="block text-[10px] font-medium text-muted-foreground mb-1">
+                  Video Resolution
                 </label>
+                <Select
+                  value={resolution}
+                  onValueChange={(val) => {
+                    setResolution(val);
+                    localStorage.setItem(`video_resolution_${projectId}`, val);
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select Resolution" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="480p">480p (Fast)</SelectItem>
+                    <SelectItem value="720p">720p (HD)</SelectItem>
+                    <SelectItem value="1080p">1080p (Full HD)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-4 pt-4 border-t">

@@ -1,0 +1,1 @@
+uvx -p 3.13 --from git+https://github.com/oraios/serena serena start-mcp-server --help

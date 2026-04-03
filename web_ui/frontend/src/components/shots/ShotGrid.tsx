@@ -148,6 +148,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
 
   const [ttsMethod, setTtsMethod] = useState("local");
   const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
+  const [resolution, setResolution] = useState<string>("720p");
   
   // Batch Departure Override states
   const [batchUseDepartureOverride, setBatchUseDepartureOverride] = useState(true);
@@ -383,6 +384,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           queue_setting: queueSetting,
           append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
           departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
+          resolution: resolution,
         });
       } catch (error) {
         console.error("Failed to start batch both generation:", error);
@@ -411,6 +413,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           video_workflow: videoWorkflow,
           append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
           departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
+          resolution: resolution,
         });
       } catch (error) {
         console.error("Failed to start batch video generation:", error);
@@ -1504,6 +1507,25 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
                         <SelectItem value="none">None (Do Not Append)</SelectItem>
                         <SelectItem value="start">Start (Image + Motion)</SelectItem>
                         <SelectItem value="end">End (Motion + Image)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Video Resolution
+                    </label>
+                    <Select
+                      value={resolution}
+                      onValueChange={(val) => setResolution(val)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Resolution" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="480p">480p (Fast)</SelectItem>
+                        <SelectItem value="720p">720p (HD)</SelectItem>
+                        <SelectItem value="1080p">1080p (Full HD)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

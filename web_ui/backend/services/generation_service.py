@@ -467,6 +467,7 @@ class GenerationService:
                 shot_id=item.shot_id,
                 prompt_override=item.prompt_override,
                 draft_low_res_video=getattr(item, 'draft_low_res_video', False),
+                resolution=getattr(item, 'resolution', None),
                 prompt_id_callback=save_prompt_id,
                 existing_prompt_id=item.comfyui_prompt_id
             )
@@ -670,7 +671,8 @@ class GenerationService:
             video_variant=getattr(request, 'video_variant', None) if request else None,
             append_image_prompt=getattr(request, 'append_image_prompt', None) if request else None,
             generate_soundfx=getattr(request, 'generate_soundfx', False) if request else False,
-            draft_low_res_video=getattr(request, 'draft_low_res_video', False) if request else False
+            draft_low_res_video=getattr(request, 'draft_low_res_video', False) if request else False,
+            resolution=getattr(request, 'resolution', None) if request else None
         )
 
     def _get_queue_item_id(
@@ -1536,7 +1538,8 @@ class GenerationService:
         project_title: Optional[str] = None, video_variant: str = None,
         append_image_prompt: Optional[str] = None, draft_low_res_video: bool = False,
         prompt_id_callback=None, existing_prompt_id=None,
-        shot_id: str = None, prompt_override: Optional[str] = None
+        shot_id: str = None, prompt_override: Optional[str] = None,
+        resolution: Optional[str] = None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -1582,7 +1585,8 @@ class GenerationService:
                     project_id, shot_index, shot, force,
                     video_mode, video_workflow, project_title, video_variant,
                     draft_low_res_video=draft_low_res_video,
-                    shot_id=shot_id, prompt_override=prompt_override
+                    shot_id=shot_id, prompt_override=prompt_override,
+                    resolution=resolution
                 )
                 # Return the meeting video path for backward compatibility
                 # (UI will use meeting_video_path/departure_video_path for FLFI2V shots)
@@ -1632,7 +1636,8 @@ class GenerationService:
                 draft_low_res_video=draft_low_res_video,
                 prompt_id_callback=prompt_id_callback,
                 existing_prompt_id=existing_prompt_id,
-                prompt_override=prompt_override
+                prompt_override=prompt_override,
+                resolution=resolution
             )
 
             # Mark as rendered safely
@@ -2066,7 +2071,8 @@ class GenerationService:
         self, project_id: str, shot_index: int, shot: dict,
         force: bool, video_mode: Optional[str], video_workflow: Optional[str],
         project_title: Optional[str], video_variant: str, draft_low_res_video: bool = False,
-        shot_id: str = None, prompt_override: Optional[str] = None
+        shot_id: str = None, prompt_override: Optional[str] = None,
+        resolution: Optional[str] = None
     ) -> dict:
         """Regenerate meeting and/or departure videos for FLFI2V shot"""
         shots = self.project_manager.get_shots(project_id)
@@ -2165,7 +2171,8 @@ class GenerationService:
                         None,  # last_frame_image_path
                         GenerationType.MEETING_VIDEO,  # generation_type for queue tracking
                         draft_low_res_video=draft_low_res_video,
-                        prompt_override=prompt_override
+                        prompt_override=prompt_override,
+                        resolution=resolution
                     )
 
                     current_shot['meeting_video_rendered'] = True
@@ -2275,7 +2282,8 @@ class GenerationService:
                         last_frame_image,
                         GenerationType.DEPARTURE_VIDEO,  # generation_type for queue tracking
                         draft_low_res_video=draft_low_res_video,
-                        prompt_override=prompt_override
+                        prompt_override=prompt_override,
+                        resolution=resolution
                     )
 
                     current_shot['departure_video_rendered'] = True
@@ -2938,7 +2946,8 @@ class GenerationService:
                                draft_low_res_video: bool = False,
                                prompt_id_callback=None,
                                existing_prompt_id=None,
-                               prompt_override: Optional[str] = None) -> str:
+                               prompt_override: Optional[str] = None,
+                               resolution: Optional[str] = None) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
@@ -3058,7 +3067,7 @@ class GenerationService:
                     logger.warning(f"Deep Resume validation failed: {e}. Submitting new generation.")
 
             if not skip_submit:
-                template = load_workflow(workflow_path, video_length_seconds=shot_length, aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video, workflow_config=workflow_config)
+                template = load_workflow(workflow_path, video_length_seconds=shot_length, aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video, workflow_config=workflow_config, resolution=resolution)
                 wf = compile_workflow(template, shot, video_length_seconds=shot_length, workflow_config=workflow_config)
 
                 # Submit to ComfyUI
@@ -3143,7 +3152,8 @@ class GenerationService:
         last_frame_image_path: Optional[str] = None,
         generation_type: GenerationType = None,
         draft_low_res_video: bool = False,
-        prompt_override: Optional[str] = None
+        prompt_override: Optional[str] = None,
+        resolution: Optional[str] = None
     ) -> str:
         """Generate FLFI2V video for a single shot (synchronous)
 
@@ -3184,7 +3194,7 @@ class GenerationService:
         workflow_description = workflow_config.get('description', 'No description')
         logger.info(f"Using FLFI2V video workflow: {workflow_name} ({workflow_description})")
 
-        template = load_workflow(workflow_path, aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video, workflow_config=workflow_config)
+        template = load_workflow(workflow_path, aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video, workflow_config=workflow_config, resolution=resolution)
         wf = copy.deepcopy(template)
 
         # Get node IDs from config (with smart handles for missing keys)
