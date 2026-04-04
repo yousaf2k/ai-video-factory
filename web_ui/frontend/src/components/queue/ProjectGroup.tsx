@@ -34,7 +34,7 @@ export function ProjectGroup({
   onReorder,
   onImageClick
 }: ProjectGroupProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(items.some(item => item.status === QueueItemStatus.ACTIVE));
 
   // Project statistics
   const total = items.length;

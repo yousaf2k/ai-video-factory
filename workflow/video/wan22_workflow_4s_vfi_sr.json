@@ -131,7 +131,7 @@
     "inputs": {
       "fps": 64,
       "images": [
-        "118",
+        "120",
         0
       ]
     },
@@ -264,10 +264,25 @@
       "title": "Unet Loader (GGUF)"
     }
   },
-  "118": {
+  "119": {
+    "inputs": {
+      "ckpt_name": "film_net_fp32.pt",
+      "clear_cache_after_n_frames": 10,
+      "multiplier": 4,
+      "frames": [
+        "87",
+        0
+      ]
+    },
+    "class_type": "FILM VFI",
+    "_meta": {
+      "title": "FILM VFI"
+    }
+  },
+  "120": {
     "inputs": {
       "resize_type": "scale by multiplier",
-      "resize_type.scale": 4,
+      "resize_type.scale": 2,
       "quality": "ULTRA",
       "images": [
         "119",
@@ -277,21 +292,6 @@
     "class_type": "RTXVideoSuperResolution",
     "_meta": {
       "title": "RTX Video Super Resolution"
-    }
-  },
-  "119": {
-    "inputs": {
-      "ckpt_name": "film_net_fp32.pt",
-      "clear_cache_after_n_frames": 10,
-      "multiplier": 2,
-      "frames": [
-        "87",
-        0
-      ]
-    },
-    "class_type": "FILM VFI",
-    "_meta": {
-      "title": "FILM VFI"
     }
   }
 }

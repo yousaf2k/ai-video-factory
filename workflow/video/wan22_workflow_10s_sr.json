@@ -14,7 +14,7 @@
     "inputs": {
       "add_noise": "disable",
       "noise_seed": 0,
-      "steps": 4,
+      "steps": 10,
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
@@ -267,7 +267,7 @@
   "118": {
     "inputs": {
       "resize_type": "scale by multiplier",
-      "resize_type.scale": 4,
+      "resize_type.scale": 2,
       "quality": "ULTRA",
       "images": [
         "119",
@@ -283,7 +283,7 @@
     "inputs": {
       "ckpt_name": "film_net_fp32.pt",
       "clear_cache_after_n_frames": 10,
-      "multiplier": 2,
+      "multiplier": 4,
       "frames": [
         "87",
         0
