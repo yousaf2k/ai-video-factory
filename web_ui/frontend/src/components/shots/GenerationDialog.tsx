@@ -24,6 +24,7 @@ export interface GenerationConfig {
   generateSoundFX?: boolean;
   draftLowResVideo?: boolean;
   resolution?: string;
+  gemini_mode?: string;
 }
 
 interface GenerationDialogProps {
@@ -61,6 +62,7 @@ export function GenerationDialog({
   const [force, setForce] = useState(false);
   const [mode, setMode] = useState("comfyui");
   const [workflow, setWorkflow] = useState<string>("default");
+  const [geminiMode, setGeminiMode] = useState("Fast");
   
   // Image Specific State
   const [seed, setSeed] = useState<number | "">("");
@@ -96,6 +98,9 @@ export function GenerationDialog({
         } else {
           setWorkflow("flux2");
         }
+        
+        const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`) || globalConfig?.geminiweb_default_mode || "Fast";
+        setGeminiMode(savedGeminiMode);
       } else {
         const savedVideoMode = localStorage.getItem(`video_mode_${projectId}`) || "comfyui";
         setMode(savedVideoMode);
@@ -120,6 +125,9 @@ export function GenerationDialog({
 
         const savedRes = localStorage.getItem(`video_resolution_${projectId}`);
         if (savedRes) setResolution(savedRes);
+
+        const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`) || globalConfig?.geminiweb_default_mode || "Fast";
+        setGeminiMode(savedGeminiMode);
       }
     }
   }, [isOpen, type, projectId, globalConfig]);
@@ -137,6 +145,7 @@ export function GenerationDialog({
       generateSoundFX: type === "video" ? generateSoundFX : undefined,
       draftLowResVideo: type === "video" ? draftLowResVideo : undefined,
       resolution: type === "video" ? resolution : undefined,
+      gemini_mode: mode === "geminiweb" ? geminiMode : undefined,
     });
   };
 
@@ -193,6 +202,30 @@ export function GenerationDialog({
                   </SelectContent>
                 </Select>
               </div>
+
+              {mode === "geminiweb" && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    Gemini Mode
+                  </label>
+                  <Select
+                    value={geminiMode}
+                    onValueChange={(val) => {
+                      setGeminiMode(val);
+                      localStorage.setItem(`gemini_mode_${projectId}`, val);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Gemini Mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Fast">Fast</SelectItem>
+                      <SelectItem value="Thinking">Thinking</SelectItem>
+                      <SelectItem value="Pro">Pro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {mode === "comfyui" && (
                 <>
@@ -322,6 +355,30 @@ export function GenerationDialog({
                   </SelectContent>
                 </Select>
               </div>
+              
+              {mode === "geminiweb" && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    Gemini Mode
+                  </label>
+                  <Select
+                    value={geminiMode}
+                    onValueChange={(val) => {
+                      setGeminiMode(val);
+                      localStorage.setItem(`gemini_mode_${projectId}`, val);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Gemini Mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Fast">Fast</SelectItem>
+                      <SelectItem value="Thinking">Thinking</SelectItem>
+                      <SelectItem value="Pro">Pro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               
               {mode === "comfyui" && (
                 <div>

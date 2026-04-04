@@ -39,6 +39,7 @@ export default function ConfigPage() {
     gemini_watermark_tool_image: "",
     gemini_watermark_tool_video: "",
     watermark_removal_method: "builtin",
+    geminiweb_default_mode: "Fast",
   });
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function ConfigPage() {
         gemini_watermark_tool_image: config.gemini_watermark_tool_image || "",
         gemini_watermark_tool_video: config.gemini_watermark_tool_video || "",
         watermark_removal_method: config.watermark_removal_method || "builtin",
+        geminiweb_default_mode: config.geminiweb_default_mode || "Fast",
       });
     }
   }, [config]);
@@ -247,6 +249,32 @@ export default function ConfigPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/30 pt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Gemini Web Mode (Default)
+              </label>
+              <Select
+                value={formData.geminiweb_default_mode}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, geminiweb_default_mode: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Gemini Mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Fast">Fast</SelectItem>
+                  <SelectItem value="Thinking">Thinking</SelectItem>
+                  <SelectItem value="Pro">Pro</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Default model behavior for GeminiWeb image and video generation.
+              </p>
             </div>
           </div>
 

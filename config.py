@@ -1046,6 +1046,9 @@ GEMINIWEB_TIMEOUT = 300
 
 # Gemini web URL
 GEMINIWEB_URL = "https://gemini.google.com/app"
+
+# Default Gemini Mode: "Fast", "Thinking", or "Pro"
+GEMINIWEB_DEFAULT_MODE = os.getenv("GEMINIWEB_DEFAULT_MODE", "Fast")
 # ==========================================
 # Web UI Configuration
 # ==========================================

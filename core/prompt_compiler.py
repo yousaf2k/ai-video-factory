@@ -158,26 +158,43 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
         # Already in API format - set dimensions and video length
         wf = copy.deepcopy(workflow)
 
-        # Set dimensions in WanImageToVideo or WanFirstLastFrameToVideo node dynamically
-        wan_node_id = None
+        # Set dimensions in Wan nodes dynamically (supports multiple variants)
+        updated_nodes = []
+        wan_candidates = [
+            "WanImageToVideo", 
+            "WanFirstLastFrameToVideo",
+            "WanVideoTextToVideo", 
+            "WanVideoFirstLastFrameToVideo",
+            "WanVideoSampler", 
+            "WanSampler", 
+            "WanVideoGenerator",
+            "WanVideoGeneratorHigh",
+            "WanVideoGeneratorLow"
+        ]
+        
         for node_id, node in wf.items():
             # Check if node has class_type to avoid errors
             if isinstance(node, dict) and 'class_type' in node:
-                if node.get('class_type') in ['WanImageToVideo', 'WanFirstLastFrameToVideo']:
-                    wan_node_id = node_id
-                    break
+                class_type = node.get('class_type')
+                if class_type in wan_candidates or (isinstance(class_type, str) and "Wan" in class_type):
+                    old_w = node['inputs'].get('width', 'unknown')
+                    old_h = node['inputs'].get('height', 'unknown')
+                    node['inputs']['width'] = width
+                    node['inputs']['height'] = height
+                    updated_nodes.append(node_id)
+                    logger.info(f"[RESOLUTION] Updated Wan node {node_id} ({class_type}): {old_w}x{old_h} -> {width}x{height}")
 
-        if wan_node_id:
-            wan_node = wf[wan_node_id]
-            wan_node['inputs']['width'] = width
-            wan_node['inputs']['height'] = height
+                    # Set video length if specified
+                    if video_length_seconds:
+                        frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
+                        node['inputs']['length'] = frames
+                        logger.info(f"[RESOLUTION] Set video length for {node_id}: {video_length_seconds}s ({frames-1}+1 frames)")
 
-            # Set video length if specified
-            if video_length_seconds:
-                frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
-                wan_node['inputs']['length'] = frames
-                print(f"[INFO] Set video length: {video_length_seconds}s ({frames-1}+1 frames at {config.VIDEO_FPS}fps)")
-                print(f"[INFO] Set dimensions: {width}x{height} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
+        if not updated_nodes:
+            logger.warning(f"[RESOLUTION] No Wan nodes found in workflow for resolution injection! Candidates searched: {wan_candidates}")
+        else:
+            logger.info(f"[RESOLUTION] Successfully updated {len(updated_nodes)} nodes: {updated_nodes}")
+
 
         return wf
 

@@ -203,6 +203,7 @@ export interface GlobalConfig {
   gemini_watermark_tool_image?: string;
   gemini_watermark_tool_video?: string;
   watermark_removal_method?: string;
+  geminiweb_default_mode?: string;
 }
 
 export interface UpdateGlobalConfigRequest {
@@ -220,6 +221,7 @@ export interface UpdateGlobalConfigRequest {
   gemini_watermark_tool_image?: string;
   gemini_watermark_tool_video?: string;
   watermark_removal_method?: string;
+  geminiweb_default_mode?: string;
 }
 
 export interface UpdateStoryRequest {

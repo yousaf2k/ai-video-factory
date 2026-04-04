@@ -396,7 +396,8 @@ def generate_image_geminiweb(
     resolution: str = None,
     seed: int = None,
     project_title: str = None,
-    reference_image_path: str = None
+    reference_image_path: str = None,
+    gemini_mode: str = None
 ) -> Optional[str]:
     """
     Generate a single image using Gemini web UI via browser automation.
@@ -413,6 +414,7 @@ def generate_image_geminiweb(
         seed: Not used for GeminiWeb mode (kept for API consistency)
         project_title: Optional title for Gemini Web chat persistence
         reference_image_path: Optional path to an image to upload as a reference
+        gemini_mode: Optional mode for Gemini generation
 
     Returns:
         Path to the generated image file, or None if failed
@@ -431,27 +433,7 @@ def generate_image_geminiweb(
     import subprocess
     import sys
 
-    script_path = os.path.join(os.path.dirname(__file__), 'geminiweb_subprocess.py')
-
-    cmd = [
-        sys.executable, script_path,
-        prompt, output_path,
-    ]
-    with open(os.path.join(os.path.dirname(output_path), "cmd_debug.txt"), "w", encoding="utf-8") as f:
-        f.write(str(cmd))
-    if aspect_ratio:
-        cmd.extend(['--aspect-ratio', aspect_ratio])
-    if project_title:
-        cmd.extend(['--project-title', project_title])
-    if reference_image_path:
-        if isinstance(reference_image_path, list):
-            for img_path in reference_image_path:
-                cmd.extend(['--reference-image', img_path])
-        else:
-            cmd.extend(['--reference-image', reference_image_path])
-
     from core.geminiweb_pool import get_worker_id, release_worker_id
-    import shutil
     
     worker_id = get_worker_id()
     try:
@@ -474,6 +456,7 @@ def generate_image_geminiweb(
         logger.info(f"Checking out {profile_name} worker {worker_id}...")
         
         # Only copy if it doesn't exist to save disk I/O, and ignore heavy cache folders
+        import shutil
         if not os.path.exists(worker_profile) and os.path.exists(master_profile):
             ignore_func = shutil.ignore_patterns('*Cache*', '*cache*', 'Service Worker', 'Crashpad', '*OptGuideOnDeviceModel*', '*OptimizationGuide*')
             try:
@@ -498,9 +481,30 @@ def generate_image_geminiweb(
                 except Exception as e:
                     logger.warning(f"Failed to remove stale lock {lock_file}: {e}")
                     
-        cmd.extend(['--profile-dir', worker_profile])
+        cmd = [
+            sys.executable,
+            "-m",
+            "core.geminiweb_subprocess",
+            prompt,
+            output_path,
+        ]
+        
+        if aspect_ratio:
+            cmd.extend(["--aspect-ratio", aspect_ratio])
+        if project_title:
+            cmd.extend(["--project-title", project_title])
+        if reference_image_path:
+            if isinstance(reference_image_path, list):
+                for img in reference_image_path:
+                    cmd.extend(["--reference-image", img])
+            else:
+                cmd.extend(["--reference-image", reference_image_path])
+        if worker_profile:
+            cmd.extend(["--profile-dir", worker_profile])
+        if gemini_mode:
+            cmd.extend(["--gemini-mode", gemini_mode])
 
-        logger.info(f"Launching GeminiWeb subprocess: {script_path} (Worker {worker_id})")
+        logger.info(f"Launching GeminiWeb subprocess (Worker {worker_id})")
         result = subprocess.run(
             cmd,
             capture_output=True,

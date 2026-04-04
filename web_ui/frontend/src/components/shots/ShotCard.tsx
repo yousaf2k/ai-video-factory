@@ -1093,6 +1093,7 @@ export function ShotCard({
               seed: config.seed === "" ? undefined : config.seed,
               promptOverride: config.promptOverride?.trim() || undefined,
               imageVariant,
+              geminiMode: config.gemini_mode,
             });
             toast.info("Image regeneration started", {
               description: `Shot ${shot.index}${shot.is_flfi2v && imageVariant ? ` (${imageVariant.toUpperCase()})` : ""} image is being generated.`,
@@ -1109,6 +1110,7 @@ export function ShotCard({
               generateSoundFX: config.generateSoundFX || false,
               draftLowResVideo: config.draftLowResVideo || false,
               promptOverride: config.promptOverride?.trim() || undefined,
+              geminiMode: config.gemini_mode,
             });
             setViewMode("video");
             toast.info("Video regeneration started", {

@@ -45,8 +45,8 @@ export function useRegenerateImage(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIdOrIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant }: { shotIdOrIndex: string | number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number; promptOverride?: string; imageVariant?: string }) =>
-      api.regenerateShotImage(projectId, shotIdOrIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant),
+    mutationFn: ({ shotIdOrIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant, geminiMode }: { shotIdOrIndex: string | number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number; promptOverride?: string; imageVariant?: string; geminiMode?: string }) =>
+      api.regenerateShotImage(projectId, shotIdOrIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant, geminiMode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -59,8 +59,8 @@ export function useRegenerateVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride }: { shotIdOrIndex: string | number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean; promptOverride?: string }) =>
-      api.regenerateShotVideo(projectId, shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride),
+    mutationFn: ({ shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode }: { shotIdOrIndex: string | number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean; promptOverride?: string; resolution?: string; geminiMode?: string }) =>
+      api.regenerateShotVideo(projectId, shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -99,6 +99,9 @@ export function useBatchRegenerate(projectId: string) {
       append_image_prompt?: string;
       generate_soundfx?: boolean;
       departure_prompt_override?: string;
+      then_prompt_override?: string;
+      resolution?: string;
+      gemini_mode?: string;
     }) => api.batchRegenerate(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });

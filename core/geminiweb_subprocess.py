@@ -146,6 +146,56 @@ def _ensure_project_chat(page, project_title: str):
         logger.warning(f"Error while managing project chat: {e}")
 
 
+def _set_gemini_mode(page, mode: str):
+    """
+    Select the Gemini model mode (Fast, Thinking, Pro) via the UI.
+    Uses the data-test-id selectors provided by the user.
+    """
+    if not mode:
+        mode = getattr(config, 'GEMINIWEB_DEFAULT_MODE', 'Fast')
+    
+    # Standardize mode name to lowercase for selector mapping
+    mode_key = mode.lower().strip()
+    selectors = {
+        "fast": "bard-mode-option-fast",
+        "thinking": "bard-mode-option-thinking",
+        "pro": "bard-mode-option-pro"
+    }
+    
+    target_id = selectors.get(mode_key)
+    if not target_id:
+        logger.warning(f"Unknown Gemini mode '{mode}', skipping selection.")
+        return
+
+    logger.info(f"Setting Gemini mode to: {mode}")
+    try:
+        # 1. Click the model picker button
+        picker_btn = page.wait_for_selector('button[data-test-id="bard-mode-menu-button"]', timeout=10000)
+        if picker_btn:
+            # Check current mode to avoid redundant clicks
+            current_mode = picker_btn.inner_text().strip().lower()
+            if mode_key in current_mode:
+                logger.info(f"Gemini is already in {mode} mode.")
+                return
+
+            picker_btn.click()
+            time.sleep(1.5) # Wait for menu
+            
+            # 2. Click the specific mode option
+            option_sel = f'button[data-test-id="{target_id}"], [data-test-id="{target_id}"]'
+            option_btn = page.wait_for_selector(option_sel, timeout=5000)
+            if option_btn:
+                option_btn.click()
+                logger.info(f"Successfully selected {mode} mode.")
+                time.sleep(2) # Wait for mode switch to settle
+            else:
+                logger.warning(f"Could not find menu option for mode: {mode}")
+        else:
+            logger.warning("Could not find Gemini model picker button.")
+    except Exception as e:
+        logger.error(f"Error setting Gemini mode: {e}")
+
+
 def _wait_for_response_complete(page, timeout: int = 180):
     """Wait for Gemini to finish processing the response."""
     import time
@@ -790,7 +840,7 @@ def _remove_watermark(image_path: str, media_type: str = "image"):
         logger.error(f"Error in builtin watermark restoration: {e}")
 
 
-def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: str = None, reference_image_path: str = None, profile_dir: str = None) -> Optional[str]:
+def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: str = None, reference_image_path: str = None, profile_dir: str = None, gemini_mode: str = None) -> Optional[str]:
     """Main entry point — run Playwright and generate an image."""
     from playwright.sync_api import sync_playwright
 
@@ -810,6 +860,9 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
             # Increase navigation buffer to respect GEMINIWEB_TIMEOUT loaded above
             page.goto(gemini_url, wait_until='domcontentloaded', timeout=timeout * 1000)
             time.sleep(2)
+
+            # ── Set Gemini Mode (Fast/Thinking/Pro) ──────────────────────────
+            _set_gemini_mode(page, gemini_mode)
 
             # ── Ensure correct chat ──────────────────────────────────────────
             if project_title:
@@ -1046,10 +1099,11 @@ if __name__ == "__main__":
     parser.add_argument("--project-title", default=None)
     parser.add_argument("--reference-image", action="append", default=[])
     parser.add_argument("--profile-dir", default=None)
+    parser.add_argument("--gemini-mode", default=None)
     args = parser.parse_args()
 
     # Pass the list directly
-    result = run(args.prompt, args.output_path, args.aspect_ratio, args.project_title, args.reference_image, args.profile_dir)
+    result = run(args.prompt, args.output_path, args.aspect_ratio, args.project_title, args.reference_image, args.profile_dir, args.gemini_mode)
     if result:
         print(f"SUCCESS:{result}")
         sys.exit(0)

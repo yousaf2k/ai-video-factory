@@ -64,6 +64,7 @@ class QueueItem(BaseModel):
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
     aspect_ratio: Optional[str] = Field(None, description="Aspect ratio for thumbnails/standard shots")
     resolution: Optional[str] = Field(None, description="Resolution string ('480p', '720p', etc.)")
+    gemini_mode: Optional[str] = Field(None, description="Gemini model mode (Fast/Thinking/Pro)")
     is_poster: bool = Field(default=False, description="Is this a poster-style generation?")
 
     # Tracking for deep resume

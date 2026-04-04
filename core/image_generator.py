@@ -112,7 +112,7 @@ def generate_image_gemini(prompt: str, output_path: str, aspect_ratio: str = Non
         return None
 
 
-def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None, workflow_name: str = None, step_progress_callback=None, project_title: str = None, reference_image_path: str = None, prompt_id_callback=None, existing_prompt_id=None) -> str:
+def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, resolution: str = None, mode: str = None, seed: int = None, workflow_name: str = None, step_progress_callback=None, project_title: str = None, reference_images=None, prompt_id_callback=None, existing_prompt_id=None, gemini_mode: str = None) -> str:
     """
     Generate a single image using the configured mode (Gemini or ComfyUI).
 
@@ -138,16 +138,16 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         mode = config.IMAGE_GENERATION_MODE
 
     # Auto-switch to ComfyUI if reference image provided with non-ComfyUI mode
-    if reference_image_path and mode != "comfyui" and mode != "geminiweb":
+    if reference_images and mode != "comfyui" and mode != "geminiweb":
         logger.warning("Reference images require ComfyUI mode. Auto-switching from '%s' to 'comfyui'", mode)
         mode = "comfyui"
 
     if mode == "comfyui":
         from core.comfyui_image_generator import generate_image_comfyui
-        return generate_image_comfyui(prompt, output_path, seed=seed, workflow_name=workflow_name, aspect_ratio=aspect_ratio, progress_callback=step_progress_callback, reference_image_path=reference_image_path, prompt_id_callback=prompt_id_callback, existing_prompt_id=existing_prompt_id)
+        return generate_image_comfyui(prompt, output_path, seed=seed, workflow_name=workflow_name, aspect_ratio=aspect_ratio, progress_callback=step_progress_callback, reference_image_path=reference_images, prompt_id_callback=prompt_id_callback, existing_prompt_id=existing_prompt_id)
     elif mode == "geminiweb":
         from core.geminiweb_image_generator import generate_image_geminiweb
-        return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio, project_title=project_title, reference_image_path=reference_image_path)
+        return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio, project_title=project_title, reference_image_path=reference_images, gemini_mode=gemini_mode)
     else:
         return generate_image_gemini(prompt, output_path, aspect_ratio, resolution, seed)
 
@@ -203,7 +203,9 @@ def generate_images_for_shots(
     images_per_shot: int = 1,
     workflow_name: str = None,
     progress_callback=None,
-    retry_tracker=None
+    retry_tracker=None,
+    project_title: str = None,
+    gemini_mode: str = None
 ) -> Tuple[list, Optional['RetryTracker']]:
     """
     Generate images for all shots in the list, with multiple variations per shot.
@@ -218,6 +220,8 @@ def generate_images_for_shots(
         workflow_name: Workflow name for ComfyUI mode
         progress_callback: Optional callback function(shot_idx, image_path) called after each image generation
         retry_tracker: Optional RetryTracker instance for tracking failures
+        project_title: Optional title for Gemini Web chat persistence
+        gemini_mode: Optional mode for GeminiWeb
 
     Returns:
         Tuple of (shots, retry_tracker):
@@ -288,7 +292,9 @@ def generate_images_for_shots(
                 output_path=output_path,
                 mode=mode,
                 seed=seed,
-                workflow_name=workflow_name
+                workflow_name=workflow_name,
+                project_title=project_title,
+                gemini_mode=gemini_mode
             )
 
             if image_path:
@@ -364,7 +370,9 @@ def generate_images_for_shots(
                         output_path=output_path,
                         mode=mode,
                         seed=seed,
-                        workflow_name=workflow_name
+                        workflow_name=workflow_name,
+                        project_title=project_title,
+                        gemini_mode=gemini_mode
                     )
 
                     if image_path:

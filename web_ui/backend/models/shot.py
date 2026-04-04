@@ -4,6 +4,7 @@ Pydantic models for shot data
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
+import config
 
 class Shot(BaseModel):
     """Shot model"""
@@ -24,6 +25,7 @@ class Shot(BaseModel):
     character_name: Optional[str] = Field(default=None, description="Human-readable character name")
     scene_name: Optional[str] = Field(default=None, description="Human-readable scene name")
     order_in_scene: Optional[int] = Field(default=0, description="Position within scene (0-based)")
+    gemini_mode: Optional[str] = Field(default=config.GEMINIWEB_DEFAULT_MODE, description="Gemini model mode (Fast/Thinking/Pro)")
 
     # FLFI2V mode fields
     is_flfi2v: bool = Field(default=False, description="Whether this shot uses FLFI2V (first/last frame image to video)")
@@ -75,6 +77,7 @@ class UpdateShotRequest(BaseModel):
     camera: Optional[str] = None
     narration: Optional[str] = None
     scene_id: Optional[int] = None
+    gemini_mode: Optional[str] = None
     # FLFI2V fields
     then_image_prompt: Optional[str] = None
     now_image_prompt: Optional[str] = None
@@ -90,6 +93,7 @@ class RegenerateImageRequest(BaseModel):
     seed: Optional[int] = Field(default=None, description="Optional specific seed for regeneration")
     prompt_override: Optional[str] = Field(default=None, description="Override the image prompt for this generation only")
     image_variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then', 'now', or 'both'")
+    gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
 
 
 
@@ -104,6 +108,7 @@ class RegenerateVideoRequest(BaseModel):
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
     prompt_override: Optional[str] = Field(default=None, description="Override the motion prompt for this generation only")
     resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
+    gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
 
 
 class BatchRegenerateRequest(BaseModel):
@@ -126,6 +131,7 @@ class BatchRegenerateRequest(BaseModel):
     departure_prompt_override: Optional[str] = Field(default=None, description="Override standard departure prompt for batch generation")
     then_prompt_override: Optional[str] = Field(default=None, description="Override standard then prompt for batch generation")
     resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
+    gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
 
 
 

@@ -146,6 +146,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [batchSkipImages, setBatchSkipImages] = useState<boolean>(true);
   const [queueSetting, setQueueSetting] = useState<string>("all_images_then_videos");
   const [appendImagePrompt, setAppendImagePrompt] = useState<string>("default");
+  const [geminiMode, setGeminiMode] = useState<string>("Fast");
 
   const [ttsMethod, setTtsMethod] = useState("local");
   const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
@@ -231,6 +232,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   useEffect(() => {
     if (globalConfig?.video_workflow) {
       setVideoWorkflow(globalConfig.video_workflow);
+    }
+    if (globalConfig?.geminiweb_default_mode) {
+      setGeminiMode(globalConfig.geminiweb_default_mode);
     }
   }, [globalConfig]);
 
@@ -394,6 +398,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
           then_prompt_override: batchUseThenOverride ? batchThenPrompt : undefined,
           resolution: resolution,
+          gemini_mode: geminiMode,
         });
       } catch (error) {
         console.error("Failed to start batch both generation:", error);
@@ -408,6 +413,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           image_mode: imageMode,
           image_workflow: imageWorkflow,
           then_prompt_override: batchUseThenOverride ? batchThenPrompt : undefined,
+          gemini_mode: geminiMode,
         });
       } catch (error) {
         console.error("Failed to start batch image generation:", error);
@@ -424,6 +430,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
           departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
           resolution: resolution,
+          gemini_mode: geminiMode,
         });
       } catch (error) {
         console.error("Failed to start batch video generation:", error);
@@ -1419,6 +1426,27 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                     </Select>
                   </div>
 
+                  {imageMode === "geminiweb" && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Gemini Mode
+                      </label>
+                      <Select
+                        value={geminiMode}
+                        onValueChange={(val) => setGeminiMode(val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Gemini Mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Fast">Fast</SelectItem>
+                          <SelectItem value="Thinking">Thinking</SelectItem>
+                          <SelectItem value="Pro">Pro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   {imageMode === "comfyui" && (
                     <div>
                       <label className="block text-sm font-medium mb-1">
@@ -1517,6 +1545,27 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {videoMode === "geminiweb" && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Gemini Mode
+                      </label>
+                      <Select
+                        value={geminiMode}
+                        onValueChange={(val) => setGeminiMode(val)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Gemini Mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Fast">Fast</SelectItem>
+                          <SelectItem value="Thinking">Thinking</SelectItem>
+                          <SelectItem value="Pro">Pro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium mb-1">

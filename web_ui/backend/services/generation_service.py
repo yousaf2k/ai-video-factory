@@ -200,6 +200,8 @@ class GenerationService:
             'other': set()
         }
 
+        last_slot_log = 0
+
         while self._queue_processor_running:
             try:
                 # Get queue service
@@ -332,12 +334,37 @@ class GenerationService:
                         active_tasks_by_engine[engine] = set()
                     active_tasks_by_engine[engine].add(task)
 
-                # Small delay or wait for wake-up before checking for more items
-                try:
-                    await asyncio.wait_for(self._loop_wake_up.wait(), timeout=0.1)
-                    self._loop_wake_up.clear()
-                except asyncio.TimeoutError:
-                    pass
+                # Log slot status occasionally
+                if time.time() - last_slot_log > 30:
+                    last_slot_log = time.time()
+                    slot_info = ", ".join([f"{k}: {available_slots_by_engine[k]}" for k in available_slots_by_engine])
+                    logger.debug(f"Queue Status - Available Slots: {slot_info} | Active Tasks: {sum(len(v) for v in active_tasks_by_engine.values())}")
+
+                # Wait for any task to complete OR a manual wake-up event
+                # This makes the loop react instantly to task completion
+                all_tasks = [asyncio.create_task(self._loop_wake_up.wait())]
+                for engine_tasks in active_tasks_by_engine.values():
+                    all_tasks.extend([t for t in engine_tasks if not t.done()])
+                
+                if all_tasks:
+                    try:
+                        # Wait up to 5 seconds or until something happens
+                        done, pending = await asyncio.wait(all_tasks, timeout=5.0, return_when=asyncio.FIRST_COMPLETED)
+                        
+                        # Cleanup the wake-up task if it's still pending
+                        for t in pending:
+                            if t.get_coro().__name__ == 'wait': # It's our wake-up event task
+                                t.cancel()
+                    except Exception as wait_err:
+                        logger.debug(f"Wait interrupted: {wait_err}")
+                else:
+                    # No active tasks, just wait for wake-up or timeout
+                    try:
+                        await asyncio.wait_for(self._loop_wake_up.wait(), timeout=1.0)
+                    except asyncio.TimeoutError:
+                        pass
+                
+                self._loop_wake_up.clear()
 
             except Exception as e:
                 # Catch shutdown errors specifically to break the loop gracefully
@@ -395,7 +422,8 @@ class GenerationService:
                 seed=item.seed,
                 prompt_id_callback=save_prompt_id,
                 existing_prompt_id=item.comfyui_prompt_id,
-                shot_id=item.shot_id
+                shot_id=item.shot_id,
+                gemini_mode=item.gemini_mode
             )
 
             logger.info(f"Completed image generation for queue item {item.item_id}")
@@ -495,6 +523,9 @@ class GenerationService:
                     logger.debug(f"Saved ComfyUI video prompt ID {pid} for item {item.item_id}")
 
             # Call regenerate_shot_video with overrides from the queue item
+            res = getattr(item, 'resolution', None)
+            logger.info(f"[QUEUE] Processing video generation for shot {item.shot_index}. Resolution: {res or 'default'}")
+            
             await self.regenerate_shot_video(
                 item.project_id,
                 item.shot_index,
@@ -507,9 +538,10 @@ class GenerationService:
                 shot_id=item.shot_id,
                 prompt_override=item.prompt_override,
                 draft_low_res_video=getattr(item, 'draft_low_res_video', False),
-                resolution=getattr(item, 'resolution', None),
+                resolution=res,
                 prompt_id_callback=save_prompt_id,
-                existing_prompt_id=item.comfyui_prompt_id
+                existing_prompt_id=item.comfyui_prompt_id,
+                gemini_mode=item.gemini_mode
             )
 
             logger.info(f"Completed video generation for queue item {item.item_id}")
@@ -730,7 +762,8 @@ class GenerationService:
             append_image_prompt=getattr(request, 'append_image_prompt', None) if request else None,
             generate_soundfx=getattr(request, 'generate_soundfx', False) if request else False,
             draft_low_res_video=getattr(request, 'draft_low_res_video', False) if request else False,
-            resolution=getattr(request, 'resolution', None) if request else None
+            resolution=(getattr(request, 'resolution', None) or None) if request else None,
+            gemini_mode=(getattr(request, 'gemini_mode', None) or shot.get('gemini_mode', None) or config.GEMINIWEB_DEFAULT_MODE) if request else (shot.get('gemini_mode', None) or config.GEMINIWEB_DEFAULT_MODE)
         )
 
     def _get_queue_item_id(
@@ -1141,7 +1174,7 @@ class GenerationService:
         seed: Optional[int] = None, prompt_override: Optional[str] = None,
         project_title: Optional[str] = None, image_variant: str = None,
         prompt_id_callback=None, existing_prompt_id=None,
-        shot_id: str = None
+        shot_id: str = None, gemini_mode: str = None
     ) -> str:
         """
         Regenerate image for a single shot
@@ -1189,7 +1222,8 @@ class GenerationService:
                     project_id, shot_index, shot, story, force,
                     image_mode, image_workflow, seed, project_title, image_variant,
                     prompt_override=prompt_override,
-                    shot_id=shot_id
+                    shot_id=shot_id,
+                    gemini_mode=gemini_mode
                 )
                 # Return the NOW image path for backward compatibility
                 # (UI will use then_image_path/now_image_path for FLFI2V shots)
@@ -1205,7 +1239,7 @@ class GenerationService:
             old_image_path = shot.get('image_path')
             if old_image_path:
                 # We use update_shot_metadata which is atomic and handles path lists
-                self.project_manager.update_shot_metadata(project_id, {'image_path': old_image_path}, shot_id=shot.get('id'), shot_index=shot_index)
+                self.project_manager.update_shot_metadata(project_id, {'image_path': old_image_path}, shot_id=shot_id, shot_index=shot_index)
 
             # Generate image for single shot
             logger.info(f"Regenerating image for shot {shot_index}")
@@ -1261,10 +1295,7 @@ class GenerationService:
                 None,  # No variant for standard shots
                 reference_images,
                 None,  # generation_type
-                None,  # output_dir
-                None,  # filename_override
-                prompt_id_callback,
-                existing_prompt_id
+                gemini_mode=gemini_mode
             )
 
             # Mark as generated safely using shot_id
@@ -1306,7 +1337,8 @@ class GenerationService:
         force: bool, image_mode: Optional[str], image_workflow: Optional[str],
         seed: Optional[int], project_title: Optional[str], image_variant: str,
         prompt_override: Optional[str] = None,
-        shot_id: str = None
+        shot_id: str = None,
+        gemini_mode: str = None
     ) -> dict:
         """Regenerate THEN and/or NOW images for FLFI2V shot"""
         from web_ui.backend.models.story import ProjectType
@@ -1432,7 +1464,8 @@ class GenerationService:
 
                     result_path = await asyncio.to_thread(
                         self._generate_single_image, project_id, {**shot_to_use, 'image_prompt': now_prompt},
-                        image_mode, now_workflow, now_seed, None, project_title, "now", now_reference_to_use, GenerationType.NOW_IMAGE
+                        image_mode, now_workflow, now_seed, None, project_title, "now", now_reference_to_use, GenerationType.NOW_IMAGE,
+                        gemini_mode=gemini_mode
                     )
 
                     shot_to_use['now_image_generated'] = True
@@ -1479,7 +1512,7 @@ class GenerationService:
                         await self._regenerate_flfi2v_images(
                             project_id, shot_index, shot_to_use, story, True, 
                             image_mode, image_workflow, seed, project_title, "now",
-                            shot_id=shot_id
+                            shot_id=shot_id, gemini_mode=gemini_mode
                         )
                         # Refresh shot data after recursive call
                         shots = self.project_manager.get_shots(project_id)
@@ -1532,7 +1565,8 @@ class GenerationService:
 
                     result_path = await asyncio.to_thread(
                         self._generate_single_image, project_id, {**shot_to_use, 'image_prompt': then_prompt},
-                        image_mode, then_workflow, seed, active_prompt_override, project_title, "then", then_reference_to_use, GenerationType.THEN_IMAGE
+                        image_mode, then_workflow, seed, active_prompt_override, project_title, "then", then_reference_to_use, GenerationType.THEN_IMAGE,
+                        gemini_mode=gemini_mode
                     )
 
                     shot_to_use['then_image_generated'] = True
@@ -1587,8 +1621,6 @@ class GenerationService:
             if not rel_path.startswith('output/'):
                 rel_path = f'output/{rel_path}'
             return rel_path
-        return absolute_path
-
     async def regenerate_shot_video(
         self, project_id: str, shot_index: int, force: bool = False,
         video_mode: Optional[str] = None, video_workflow: Optional[str] = None,
@@ -1596,7 +1628,7 @@ class GenerationService:
         append_image_prompt: Optional[str] = None, draft_low_res_video: bool = False,
         prompt_id_callback=None, existing_prompt_id=None,
         shot_id: str = None, prompt_override: Optional[str] = None,
-        resolution: Optional[str] = None
+        resolution: Optional[str] = None, gemini_mode: Optional[str] = None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -1643,7 +1675,7 @@ class GenerationService:
                     video_mode, video_workflow, project_title, video_variant,
                     draft_low_res_video=draft_low_res_video,
                     shot_id=shot_id, prompt_override=prompt_override,
-                    resolution=resolution
+                    resolution=resolution, gemini_mode=gemini_mode
                 )
                 # Return the meeting video path for backward compatibility
                 # (UI will use meeting_video_path/departure_video_path for FLFI2V shots)
@@ -1694,7 +1726,8 @@ class GenerationService:
                 prompt_id_callback=prompt_id_callback,
                 existing_prompt_id=existing_prompt_id,
                 prompt_override=prompt_override,
-                resolution=resolution
+                resolution=resolution,
+                gemini_mode=gemini_mode
             )
 
             # Mark as rendered safely
@@ -2140,7 +2173,7 @@ class GenerationService:
         force: bool, video_mode: Optional[str], video_workflow: Optional[str],
         project_title: Optional[str], video_variant: str, draft_low_res_video: bool = False,
         shot_id: str = None, prompt_override: Optional[str] = None,
-        resolution: Optional[str] = None
+        resolution: Optional[str] = None, gemini_mode: Optional[str] = None
     ) -> dict:
         """Regenerate meeting and/or departure videos for FLFI2V shot"""
         shots = self.project_manager.get_shots(project_id)
@@ -2240,7 +2273,8 @@ class GenerationService:
                         GenerationType.MEETING_VIDEO,  # generation_type for queue tracking
                         draft_low_res_video=draft_low_res_video,
                         prompt_override=prompt_override,
-                        resolution=resolution
+                        resolution=resolution,
+                        gemini_mode=gemini_mode
                     )
 
                     current_shot['meeting_video_rendered'] = True
@@ -2351,7 +2385,8 @@ class GenerationService:
                         GenerationType.DEPARTURE_VIDEO,  # generation_type for queue tracking
                         draft_low_res_video=draft_low_res_video,
                         prompt_override=prompt_override,
-                        resolution=resolution
+                        resolution=resolution,
+                        gemini_mode=gemini_mode
                     )
 
                     current_shot['departure_video_rendered'] = True
@@ -2889,19 +2924,15 @@ class GenerationService:
 
         return max_version + 1
 
-    def _generate_single_image(self, project_id: str, shot: Dict[str, Any],
-                               mode: Optional[str] = None,
-                               workflow_name: Optional[str] = None,
-                               seed: Optional[int] = None,
-                               prompt_override: Optional[str] = None,
-                               project_title: Optional[str] = None,
-                               variant: str = None,
-                               reference_image_path: str = None,
-                               generation_type: GenerationType = None,
-                               output_dir: Optional[str] = None,
-                               filename_override: Optional[str] = None,
-                               prompt_id_callback=None,
-                               existing_prompt_id=None) -> str:
+    def _generate_single_image(
+        self, project_id: str, shot: Dict[str, Any],
+        image_mode: Optional[str], workflow_name: Optional[str],
+        seed: Optional[int] = None, prompt_override: Optional[str] = None,
+        project_title: Optional[str] = None, image_variant: str = None,
+        reference_images: Optional[List[str]] = None,
+        generation_type: GenerationType = None,
+        gemini_mode: Optional[str] = None
+    ) -> str:
         """Generate image for a single shot (synchronous)
 
         Args:
@@ -2913,7 +2944,7 @@ class GenerationService:
 
         project_dir = self.project_manager.get_project_dir(project_id)
         images_dir = os.path.join(project_dir, "images")
-        actual_dir = output_dir if output_dir else images_dir
+        actual_dir = images_dir
         os.makedirs(actual_dir, exist_ok=True)
 
         shot_index = shot['index']
@@ -2925,16 +2956,10 @@ class GenerationService:
         aspect_ratio = project_meta.get('aspect_ratio', '16:9')
 
         # Generate versioned filename with optional variant suffix
-        next_version = self._get_next_image_version(actual_dir, shot_index, variant, generation_type)
+        next_version = self._get_next_image_version(actual_dir, shot_index, image_variant, generation_type)
         
-        if filename_override:
-            # support versioning inside override if % format is present, or just use as is
-            if "%" in filename_override:
-                image_filename = filename_override % next_version
-            else:
-                image_filename = filename_override
-        elif variant:
-            image_filename = f"shot_{shot_index:03d}_{variant}_{next_version:03d}.png"
+        if image_variant:
+            image_filename = f"shot_{shot_index:03d}_{image_variant}_{next_version:03d}.png"
         else:
             image_filename = f"shot_{shot_index:03d}_{next_version:03d}.png"
         image_path = os.path.join(actual_dir, image_filename)
@@ -2991,14 +3016,13 @@ class GenerationService:
             prompt=prompt,
             output_path=image_path,
             aspect_ratio=aspect_ratio,  # Use project's aspect ratio
-            mode=mode, # If None, uses config.IMAGE_GENERATION_MODE
+            mode=image_mode, # If None, uses config.IMAGE_GENERATION_MODE
             seed=seed,
             workflow_name=workflow_name, # If None, uses config.IMAGE_WORKFLOW
             step_progress_callback=on_step_progress,
             project_title=project_title,
-            reference_image_path=reference_image_path,  # Pass reference image for IP-Adapter
-            prompt_id_callback=prompt_id_callback,
-            existing_prompt_id=existing_prompt_id
+            reference_images=reference_images,  # Pass reference image for IP-Adapter
+            gemini_mode=gemini_mode
         )
 
         if not result_path or not os.path.exists(result_path):
@@ -3015,7 +3039,8 @@ class GenerationService:
                                prompt_id_callback=None,
                                existing_prompt_id=None,
                                prompt_override: Optional[str] = None,
-                               resolution: Optional[str] = None) -> str:
+                               resolution: Optional[str] = None,
+                               gemini_mode: Optional[str] = None) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
@@ -3073,7 +3098,8 @@ class GenerationService:
                 image_path=abs_image_path,
                 motion_prompt=motion_prompt,
                 output_path=video_save_path,
-                project_title=project_title
+                project_title=project_title,
+                gemini_mode=gemini_mode
             )
             
             if not video_res:
@@ -3230,7 +3256,8 @@ class GenerationService:
         generation_type: GenerationType = None,
         draft_low_res_video: bool = False,
         prompt_override: Optional[str] = None,
-        resolution: Optional[str] = None
+        resolution: Optional[str] = None,
+        gemini_mode: Optional[str] = None
     ) -> str:
         """Generate FLFI2V video for a single shot (synchronous)
 

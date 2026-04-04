@@ -23,6 +23,7 @@ def generate_video_geminiweb(
     motion_prompt: str,
     output_path: str,
     project_title: str = None,
+    gemini_mode: str = None
 ) -> Optional[str]:
     """
     Generate a single video using Gemini web UI via browser automation.
@@ -106,25 +107,28 @@ def generate_video_geminiweb(
                     
         logger.debug(f"Starting subprocess with profile: {worker_profile} ...")
         
-        args = [
-            "python",
+        cmd = [
+            sys.executable,
             "-m",
             "core.geminiweb_video_subprocess",
             abs_image_path,
             motion_prompt,
-            abs_output_path
+            abs_output_path,
         ]
-        
         if project_title:
-            args.append(project_title)
+            cmd.append(project_title)
             
-        args.extend(["--profile-dir", worker_profile])
+        if worker_profile:
+            cmd.extend(["--profile-dir", worker_profile])
+            
+        if gemini_mode:
+            cmd.extend(["--gemini-mode", gemini_mode])
         
         try:
             # We use subprocess.run with capture_output=True to cleanly harvest
             # the printed result and avoid console garbling.
             process = subprocess.run(
-                args,
+                cmd,
                 cwd=getattr(config, 'PROJECT_ROOT', os.getcwd()),
                 capture_output=True,
                 text=True,

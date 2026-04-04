@@ -166,7 +166,8 @@ class ApiClient {
     imageWorkflow?: string,
     seed?: number,
     promptOverride?: string,
-    imageVariant?: string
+    imageVariant?: string,
+    geminiMode?: string
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/regenerate-image`, {
       force,
@@ -175,6 +176,7 @@ class ApiClient {
       seed,
       prompt_override: promptOverride || undefined,
       image_variant: imageVariant || undefined,
+      gemini_mode: geminiMode || undefined,
     });
   }
 
@@ -189,7 +191,8 @@ class ApiClient {
     generateSoundFX?: boolean,
     draftLowResVideo?: boolean,
     promptOverride?: string,
-    resolution?: string
+    resolution?: string,
+    geminiMode?: string
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/regenerate-video`, {
       force,
@@ -201,6 +204,7 @@ class ApiClient {
       draft_low_res_video: draftLowResVideo || false,
       prompt_override: promptOverride || undefined,
       resolution: resolution || undefined,
+      gemini_mode: geminiMode || undefined,
     });
   }
 
@@ -376,6 +380,7 @@ class ApiClient {
       departure_prompt_override?: string;
       then_prompt_override?: string;
       resolution?: string;
+      gemini_mode?: string;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/projects/${projectId}/shots/batch-regenerate`, data);
