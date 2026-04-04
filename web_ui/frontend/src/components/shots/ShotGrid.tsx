@@ -1530,37 +1530,40 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
                     </Select>
                   </div>
 
-                  <div className="space-y-4 pt-4 border-t">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="checkbox"
-                        id="batch-departure-override"
-                        checked={batchUseDepartureOverride}
-                        onChange={(e) => setBatchUseDepartureOverride(e.target.checked)}
-                        className="w-4 h-4 mr-2"
-                      />
-                      <label htmlFor="batch-departure-override" className="text-sm font-semibold">
-                        Override Departure Prompt for all shots
-                      </label>
-                    </div>
-
-                    {batchUseDepartureOverride && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-medium text-muted-foreground">
-                          Batch Departure Prompt
-                        </label>
-                        <Textarea
-                          className="text-xs min-h-[80px]"
-                          value={batchDeparturePrompt}
-                          onChange={(e) => setBatchDeparturePrompt(e.target.value)}
-                          placeholder="Standard departure prompt for all selected shots..."
+                  {/* Departure Prompt Override Section — ONLY for FLFI2V projects */}
+                  {shots.some(s => s.is_flfi2v) && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="checkbox"
+                          id="batch-departure-override"
+                          checked={batchUseDepartureOverride}
+                          onChange={(e) => setBatchUseDepartureOverride(e.target.checked)}
+                          className="w-4 h-4 mr-2"
                         />
-                        <p className="text-[10px] text-muted-foreground italic">
-                          This prompt will be used for all departure videos in this batch.
-                        </p>
+                        <label htmlFor="batch-departure-override" className="text-sm font-semibold">
+                          Override Departure Prompt for all shots
+                        </label>
                       </div>
-                    )}
-                  </div>
+
+                      {batchUseDepartureOverride && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-medium text-muted-foreground">
+                            Custom Departure Prompt
+                          </label>
+                          <Textarea
+                            className="text-xs min-h-[80px]"
+                            value={batchDeparturePrompt}
+                            onChange={(e) => setBatchDeparturePrompt(e.target.value)}
+                            placeholder="Enter custom departure/motion prompt..."
+                          />
+                          <p className="text-[10px] text-muted-foreground italic">
+                            Used for all selected shots when rendering departure videos.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

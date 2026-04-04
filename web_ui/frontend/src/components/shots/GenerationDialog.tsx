@@ -36,6 +36,7 @@ interface GenerationDialogProps {
   title?: string;
   defaultPromptOverride?: string;
   hidePrompt?: boolean;
+  isFLFI2V?: boolean;
 }
 
 export function GenerationDialog({
@@ -48,6 +49,7 @@ export function GenerationDialog({
   title,
   defaultPromptOverride = "",
   hidePrompt = false,
+  isFLFI2V = false,
 }: GenerationDialogProps) {
   const { data: globalConfig } = useConfig();
 
@@ -377,43 +379,46 @@ export function GenerationDialog({
                 </Select>
               </div>
 
-              <div className="space-y-4 pt-4 border-t">
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="checkbox"
-                    id="regen-override"
-                    checked={useOverride}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setUseOverride(checked);
-                      if (checked && !promptOverride) {
-                        setPromptOverride(DEFAULT_VIDEO_PROMPT);
-                      }
-                    }}
-                    className="w-4 h-4 mr-2"
-                  />
-                  <label htmlFor="regen-override" className="text-sm font-semibold">
-                    Override the prompt
-                  </label>
-                </div>
-
-                {useOverride && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-medium text-muted-foreground">
-                      Custom Departure Prompt
-                    </label>
-                    <Textarea
-                      className="text-xs min-h-[80px]"
-                      value={promptOverride}
-                      onChange={(e) => setPromptOverride(e.target.value)}
-                      placeholder="Enter custom departure/motion prompt..."
+              {/* Departure Prompt Override — ONLY for FLFI2V projects */}
+              {isFLFI2V && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="checkbox"
+                      id="regen-override"
+                      checked={useOverride}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUseOverride(checked);
+                        if (checked && !promptOverride) {
+                          setPromptOverride(DEFAULT_VIDEO_PROMPT);
+                        }
+                      }}
+                      className="w-4 h-4 mr-2"
                     />
-                    <p className="text-[10px] text-muted-foreground italic">
-                      If unchecked, the prompt from shot JSON will be used.
-                    </p>
+                    <label htmlFor="regen-override" className="text-sm font-semibold">
+                      Override the prompt
+                    </label>
                   </div>
-                )}
-              </div>
+
+                  {useOverride && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground">
+                        Custom Departure Prompt
+                      </label>
+                      <Textarea
+                        className="text-xs min-h-[80px]"
+                        value={promptOverride}
+                        onChange={(e) => setPromptOverride(e.target.value)}
+                        placeholder="Enter custom departure/motion prompt..."
+                      />
+                      <p className="text-[10px] text-muted-foreground italic">
+                        If unchecked, the prompt from shot JSON will be used.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>

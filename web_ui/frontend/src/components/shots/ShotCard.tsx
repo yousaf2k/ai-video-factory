@@ -1064,6 +1064,7 @@ export function ShotCard({
         onClose={() => setShowRegenModal(null)}
         type={showRegenModal || "image"}
         projectId={projectId}
+        isFLFI2V={shot.is_flfi2v}
         isPending={
           regenerateImage.isPending ||
           regenerateVideo.isPending ||

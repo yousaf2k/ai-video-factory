@@ -1624,9 +1624,9 @@ class GenerationService:
                 "progress": 0
             })
 
-            # Run in thread pool to avoid blocking
-            video_path = await asyncio.to_thread(
-                self._generate_single_video,
+            # Since _generate_single_video is async def, await it directly!
+            # (Was incorrectly using asyncio.to_thread before)
+            video_path = await self._generate_single_video(
                 project_id,
                 shot,
                 video_mode,
@@ -1879,7 +1879,18 @@ class GenerationService:
         sfx_filename = f"{base_name}_sfx{ext}"
         sfx_save_path = os.path.join(videos_dir, sfx_filename)
 
-        source_path = get_output_file_path(video_info)
+        # Extraction of filename from video_info dict
+        source_filename = video_info.get('filename') if isinstance(video_info, dict) else video_info
+        source_subfolder = video_info.get('subfolder') if isinstance(video_info, dict) else None
+        
+        logger.debug(f"[SOUNDFX] Resolving output path: filename={source_filename}, subfolder={source_subfolder}")
+        source_path = get_output_file_path(source_filename, project_id, subfolder=source_subfolder)
+        
+        if not isinstance(source_path, str):
+            logger.error(f"[SOUNDFX] source_path is NOT a string: {type(source_path)}")
+            if hasattr(source_path, '__await__'):
+                logger.error("[SOUNDFX] CRITICAL: source_path is a coroutine! get_output_file_path might be async.")
+
         if os.path.exists(source_path):
             shutil.copy2(source_path, sfx_save_path)
             logger.info(f"Sound FX video copied: {sfx_filename} ({os.path.getsize(sfx_save_path):,} bytes)")
@@ -3133,7 +3144,16 @@ class GenerationService:
             video_info = video_outputs[0]
             video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_index)
 
-            source_path = get_output_file_path(video_info)
+            # Extraction of filename from video_info dict
+            source_filename = video_info.get('filename') if isinstance(video_info, dict) else video_info
+            source_subfolder = video_info.get('subfolder') if isinstance(video_info, dict) else None
+            
+            logger.debug(f"[VIDEO] Resolving output path: filename={source_filename}, subfolder={source_subfolder}")
+            source_path = get_output_file_path(source_filename, project_id, subfolder=source_subfolder)
+            
+            if not isinstance(source_path, str):
+                 logger.error(f"[VIDEO] source_path is NOT a string: {type(source_path)}")
+
             if os.path.exists(source_path):
                 shutil.copy2(source_path, video_save_path)
                 logger.info(f"Video copied: {video_filename} ({os.path.getsize(video_save_path):,} bytes)")
@@ -3317,7 +3337,16 @@ class GenerationService:
 
         # Copy video to project folder
         video_info = video_outputs[0]
-        source_path = get_output_file_path(video_info)
+        
+        # Extraction of filename from video_info dict
+        source_filename = video_info.get('filename') if isinstance(video_info, dict) else video_info
+        source_subfolder = video_info.get('subfolder') if isinstance(video_info, dict) else None
+        
+        logger.debug(f"[FLFI2V] Resolving output path: filename={source_filename}, subfolder={source_subfolder}")
+        source_path = get_output_file_path(source_filename, project_id, subfolder=source_subfolder)
+
+        if not isinstance(source_path, str):
+            logger.error(f"[FLFI2V] source_path is NOT a string: {type(source_path)}")
 
         if os.path.exists(source_path):
             shutil.copy2(source_path, video_save_path)
