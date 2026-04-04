@@ -71,10 +71,10 @@ Group characters into unique logical scenes. Each actor must have exactly 1 scen
       "scene_id": 0,
       "then_age": 25,
       "now_age": 55,
-      "then_prompt": "Strictly close-up portrait of young [Actor Name] in [Year/Era] with [Specific facial attributes of that era]. ONLY the face, neck, and shoulders are visible. Pure white studio background. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED. Photorealistic.",
-      "now_prompt": "Strictly close-up portrait of older [Actor Name] today, featuring [Custom visual description of their current aged face, hair color, wrinkles, etc.]. ONLY the face, neck, and shoulders are visible. Pure white studio background. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED. Photorealistic.",
-      "meeting_prompt": "The younger character (THEN) reaches up with their hand, grabs their face, and pulls it off like a silicon mask to reveal the older character (NOW) underneath. Smooth transformation animation, realistic hand movement, seamless face reveal.",
-      "departure_prompt": "Camera moves right from the older character (NOW) in a continuous smooth horizontal pan to transition to the younger face of the next actor. Smooth transition, sweeping pan right."
+      "then_prompt": "Strictly close-up portrait of older [Actor Name] today, featuring [Custom visual description of their current aged face, hair color, wrinkles, etc.]. ONLY the face, neck, and shoulders are visible. Pure white studio background. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED. Photorealistic.",
+      "now_prompt": "Strictly close-up portrait of young [Actor Name] in [Year/Era] with [Specific facial attributes of that era]. ONLY the face, neck, and shoulders are visible. Pure white studio background. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED. Photorealistic.",
+      "meeting_prompt": "[0-1.0s]: The video begins as a static portrait of the person in Image 1. The subject's own hand reaches up from their own chest/shoulder area into the frame, with the elbow pointing downwards, clearly belonging to the subject. The fingers firmly grip a thick, synthetic silicone edge hidden along the subject's own jawline. [1.0-3.5s]: In one fluid, high-tension motion, the subject pulls the mask upwards and away from their face. As the silicone stretches and peels, the face of Image 2 is progressively revealed directly underneath the moving edge of the mask. The eyes, nose, and skin of Image 2 appear exactly where the mask is lifted, as if Image 2 was a physical layer beneath a shell. [3.5-4.5s]: The hand pulls the mask completely over the top of the head and out of the frame. The subject's arm drops back down. The face of Image 2 is now fully exposed, with the lighting and shadows naturally hitting the new facial structure. [4.5-5.0s]: The camera remains locked on the final portrait of Image 2. The subject is still, settling into a perfect match of the final reference frame.",
+      "departure_prompt": "Camera moves right from the younger character (NOW) in a continuous smooth horizontal pan to transition to the older face of the next actor. Smooth transition, sweeping pan right."
     }
   ]
 }
@@ -89,18 +89,18 @@ Group characters into unique logical scenes. Each actor must have exactly 1 scen
 
 This section defines the exact specifications for generating character images.
 
-### A. THEN SOLO (Younger appearance)
-**Format:**
-```
-Strictly close-up portrait of young [Actor Name] in [Year/Era]. ONLY the face, neck, and shoulders are visible. Pure white studio background, seamless white infinity cove. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL FRAMING. Overcast diffused studio lighting. Rendering style: Ultra-realistic, cinematic, photorealistic, 4K detail.
-```
-
-### B. NOW SOLO (Current appearance)
+### A. THEN SOLO (Current appearance)
 Do not use a hardcoded or identical prompt for every actor. **Custom-write** the prompt to vividly describe each actor's actual current physical appearance (e.g., "silver hair", "visible wrinkles around the eyes", "salt-and-pepper beard").
 
 **Format:**
 ```
 Strictly close-up portrait of older [Actor Name] today, featuring [Custom visual description of their current aged face and hair]. ONLY the face, neck, and shoulders are visible. Detailed modern attire suitable for their real-life persona. Pure white studio background, seamless white infinity cove. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL FRAMING. Overcast diffused studio lighting. Rendering style: Ultra-realistic, cinematic, photorealistic, 4K detail.
+```
+
+### B. NOW SOLO (Younger appearance)
+**Format:**
+```
+Strictly close-up portrait of young [Actor Name] in [Year/Era]. ONLY the face, neck, and shoulders are visible. Pure white studio background, seamless white infinity cove. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL FRAMING. Overcast diffused studio lighting. Rendering style: Ultra-realistic, cinematic, photorealistic, 4K detail.
 ```
 
 ## ANIMATION / MOTION PROMPT GUIDELINES
@@ -110,7 +110,13 @@ Strictly close-up portrait of older [Actor Name] today, featuring [Custom visual
 
 **Motion Prompt Template:**
 ```
-The younger character (THEN) reaches up with their hand, grabs their face, and pulls it off like a silicon mask to reveal the older character (NOW) underneath. Smooth transformation animation, realistic hand movement, seamless face reveal. The background remains pure white.
+[0-1.0s]: The video begins as a static portrait of the person in Image 1. The subject's own hand reaches up from their own chest/shoulder area into the frame, with the elbow pointing downwards, clearly belonging to the subject. The fingers firmly grip a thick, synthetic silicone edge hidden along the subject's own jawline.
+
+[1.0-3.5s]: In one fluid, high-tension motion, the subject pulls the mask upwards and away from their face. As the silicone stretches and peels, the face of Image 2 is progressively revealed directly underneath the moving edge of the mask. The eyes, nose, and skin of Image 2 appear exactly where the mask is lifted, as if Image 2 was a physical layer beneath a shell.
+
+[3.5-4.5s]: The hand pulls the mask completely over the top of the head and out of the frame. The subject's arm drops back down. The face of Image 2 is now fully exposed, with the lighting and shadows naturally hitting the new facial structure.
+
+[4.5-5.0s]: The camera remains locked on the final portrait of Image 2. The subject is still, settling into a perfect match of the final reference frame.
 ```
 
 ### 2. DEPARTURE VIDEO: Transition (Camera Pan)
@@ -118,7 +124,7 @@ The younger character (THEN) reaches up with their hand, grabs their face, and p
 
 **Motion Prompt Template:**
 ```
-Camera moves right from the older character (NOW) in a continuous smooth horizontal pan to transition to the younger face of the next actor. Smooth physical pan to the right, fluid sweeping motion. The background remains pure white.
+Camera moves right from the younger character (NOW) in a continuous smooth horizontal pan to transition to the older face of the next actor. Smooth physical pan to the right, fluid sweeping motion. The background remains pure white.
 ```
 
 ## Guidelines
