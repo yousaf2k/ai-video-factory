@@ -374,6 +374,7 @@ class ApiClient {
       generate_soundfx?: boolean;
       draft_low_res_video?: boolean;
       departure_prompt_override?: string;
+      then_prompt_override?: string;
       resolution?: string;
     }
   ): Promise<any> {

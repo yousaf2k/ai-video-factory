@@ -37,6 +37,8 @@ interface GenerationDialogProps {
   defaultPromptOverride?: string;
   hidePrompt?: boolean;
   isFLFI2V?: boolean;
+  isThenImage?: boolean;
+  defaultUseOverride?: boolean;
 }
 
 export function GenerationDialog({
@@ -50,6 +52,8 @@ export function GenerationDialog({
   defaultPromptOverride = "",
   hidePrompt = false,
   isFLFI2V = false,
+  isThenImage = false,
+  defaultUseOverride = false,
 }: GenerationDialogProps) {
   const { data: globalConfig } = useConfig();
 
@@ -68,16 +72,17 @@ export function GenerationDialog({
   const [resolution, setResolution] = useState("720p");
   
   // Override toggle and custom prompt
-  const [useOverride, setUseOverride] = useState(false);
+  const [useOverride, setUseOverride] = useState(defaultUseOverride);
   const DEFAULT_VIDEO_PROMPT = "(cinematic quality, consistent style), slowly departing the scene from the character's appearance, transitioning towards the next scene. focus on the departure motion and environment shift.";
+  const DEFAULT_THEN_PROMPT = "Remove only the person standing on the right side of this reference image. No change in background set or environment, no side angle, no profile view, no tilt. Make the left person looking directly into camera in center of the frame with happy, cheerful smiling expressions. Do NOT remove or change any background crew members, equipment, or props. ";
 
   // Reset or initialize state
   useEffect(() => {
     if (isOpen) {
       setGenerateSoundFX(false);
       setDraftLowResVideo(false);
-      setUseOverride(false);
-      setPromptOverride(defaultPromptOverride || "");
+      setUseOverride(defaultUseOverride);
+      setPromptOverride(defaultUseOverride && isThenImage ? DEFAULT_THEN_PROMPT : (defaultPromptOverride || ""));
       
       if (type === "image") {
         const savedImageMode = localStorage.getItem(`image_mode_${projectId}`) || "comfyui";
@@ -243,20 +248,48 @@ export function GenerationDialog({
 
               {/* Prompt Override — visible for ALL image modes */}
               {!hidePrompt && (
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
-                    Prompt Override
-                  </label>
-                  <Textarea
-                    value={promptOverride}
-                    onChange={(e) => setPromptOverride(e.target.value)}
-                    rows={4}
-                    placeholder="Leave blank to use saved prompt…"
-                    className="text-xs resize-y"
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Edits here are one-time only — they won't change the saved prompt.
-                  </p>
+                <div className="space-y-4 pt-4 border-t">
+                  {/* Then Prompt Override — ONLY for THEN image of FLFI2V projects */}
+                  {isFLFI2V && isThenImage && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="checkbox"
+                        id="regen-override-then"
+                        checked={useOverride}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setUseOverride(checked);
+                          if (checked && (!promptOverride || promptOverride === defaultPromptOverride)) {
+                            setPromptOverride(DEFAULT_THEN_PROMPT);
+                          } else if (!checked) {
+                            setPromptOverride(defaultPromptOverride || "");
+                          }
+                        }}
+                        className="w-4 h-4 mr-2"
+                      />
+                      <label htmlFor="regen-override-then" className="text-sm font-semibold">
+                        Then Prompt Override
+                      </label>
+                    </div>
+                  )}
+
+                  {(!isFLFI2V || !isThenImage || useOverride) && (
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Prompt Override
+                      </label>
+                      <Textarea
+                        value={promptOverride}
+                        onChange={(e) => setPromptOverride(e.target.value)}
+                        rows={4}
+                        placeholder="Leave blank to use saved prompt…"
+                        className="text-xs resize-y"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Edits here are one-time only — they won't change the saved prompt.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </>

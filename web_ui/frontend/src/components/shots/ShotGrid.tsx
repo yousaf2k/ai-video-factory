@@ -62,9 +62,10 @@ interface ShotGridProps {
   projectId: string;
   scenes?: Scene[];
   aspectRatio?: string;
+  projectAgent?: string;
 }
 
-export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: ShotGridProps) {
+export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", projectAgent }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<
     "image" | "video" | "both" | "narration" | null
@@ -154,6 +155,13 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
   const [batchUseDepartureOverride, setBatchUseDepartureOverride] = useState(true);
   const DEFAULT_DEPARTURE_PROMPT = "(cinematic quality, consistent style), slowly departing the scene from the character's appearance, transitioning towards the next scene. focus on the departure motion and environment shift.";
   const [batchDeparturePrompt, setBatchDeparturePrompt] = useState(DEFAULT_DEPARTURE_PROMPT);
+
+  // Batch Then Override states
+  const isAgentOverrideDefault = projectAgent === "then_vs_now_closeup" || projectAgent === "then_vs_now";
+  const [batchUseThenOverride, setBatchUseThenOverride] = useState(isAgentOverrideDefault);
+  const DEFAULT_THEN_PROMPT = "Remove only the person standing on the right side of this reference image. No change in background set or environment, no side angle, no profile view, no tilt. Make the left person looking directly into camera in center of the frame with happy, cheerful smiling expressions. Do NOT remove or change any background crew members, equipment, or props. ";
+  const [batchThenPrompt, setBatchThenPrompt] = useState(isAgentOverrideDefault ? DEFAULT_THEN_PROMPT : "");
+
 
   const { data: agents } = useAgents();
   const { data: globalConfig } = useConfig();
@@ -384,6 +392,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           queue_setting: queueSetting,
           append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
           departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
+          then_prompt_override: batchUseThenOverride ? batchThenPrompt : undefined,
           resolution: resolution,
         });
       } catch (error) {
@@ -398,6 +407,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           force_images: !batchSkipImages,
           image_mode: imageMode,
           image_workflow: imageWorkflow,
+          then_prompt_override: batchUseThenOverride ? batchThenPrompt : undefined,
         });
       } catch (error) {
         console.error("Failed to start batch image generation:", error);
@@ -1436,6 +1446,49 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
                             )}
                         </SelectContent>
                       </Select>
+                    </div>
+                  )}
+
+                  {/* Then Prompt Override Section — ONLY for FLFI2V projects */}
+                  {shots.some(s => s.is_flfi2v) && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="checkbox"
+                          id="batch-then-override"
+                          checked={batchUseThenOverride}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setBatchUseThenOverride(checked);
+                            if (checked && (!batchThenPrompt || batchThenPrompt === "")) {
+                              setBatchThenPrompt(DEFAULT_THEN_PROMPT);
+                            } else if (!checked) {
+                              setBatchThenPrompt("");
+                            }
+                          }}
+                          className="w-4 h-4 mr-2"
+                        />
+                        <label htmlFor="batch-then-override" className="text-sm font-semibold">
+                          Override Then Prompt for all shots
+                        </label>
+                      </div>
+
+                      {batchUseThenOverride && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-medium text-muted-foreground">
+                            Custom Then Prompt
+                          </label>
+                          <Textarea
+                            className="text-xs min-h-[80px]"
+                            value={batchThenPrompt}
+                            onChange={(e) => setBatchThenPrompt(e.target.value)}
+                            placeholder="Enter custom then prompt..."
+                          />
+                          <p className="text-[10px] text-muted-foreground italic">
+                            Used for all selected shots when rendering THEN images.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

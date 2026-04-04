@@ -124,6 +124,7 @@ class BatchRegenerateRequest(BaseModel):
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
     departure_prompt_override: Optional[str] = Field(default=None, description="Override standard departure prompt for batch generation")
+    then_prompt_override: Optional[str] = Field(default=None, description="Override standard then prompt for batch generation")
     resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
 
 

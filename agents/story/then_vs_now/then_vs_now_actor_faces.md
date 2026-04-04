@@ -71,8 +71,8 @@ Group characters into unique logical scenes. Each actor must have exactly 1 scen
       "scene_id": 0,
       "then_age": 25,
       "now_age": 55,
-      "then_prompt": "Strictly close-up portrait of young [Actor Name] in [Year/Era]. ONLY the face, neck, and shoulders are visible. Pure white studio background. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED. Photorealistic.",
-      "now_prompt": "Strictly close-up portrait of older [Actor Name] today. ONLY the face, neck, and shoulders are visible. Pure white studio background. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED. Photorealistic.",
+      "then_prompt": "Strictly close-up portrait of young [Actor Name] in [Year/Era] with [Specific facial attributes of that era]. ONLY the face, neck, and shoulders are visible. Pure white studio background. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED. Photorealistic.",
+      "now_prompt": "Strictly close-up portrait of older [Actor Name] today, featuring [Custom visual description of their current aged face, hair color, wrinkles, etc.]. ONLY the face, neck, and shoulders are visible. Pure white studio background. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED. Photorealistic.",
       "meeting_prompt": "The younger character (THEN) reaches up with their hand, grabs their face, and pulls it off like a silicon mask to reveal the older character (NOW) underneath. Smooth transformation animation, realistic hand movement, seamless face reveal.",
       "departure_prompt": "Camera moves right from the older character (NOW) in a continuous smooth horizontal pan to transition to the younger face of the next actor. Smooth transition, sweeping pan right."
     }
@@ -96,9 +96,11 @@ Strictly close-up portrait of young [Actor Name] in [Year/Era]. ONLY the face, n
 ```
 
 ### B. NOW SOLO (Current appearance)
+Do not use a hardcoded or identical prompt for every actor. **Custom-write** the prompt to vividly describe each actor's actual current physical appearance (e.g., "silver hair", "visible wrinkles around the eyes", "salt-and-pepper beard").
+
 **Format:**
 ```
-Strictly close-up portrait of older [Actor Name] today. ONLY the face, neck, and shoulders are visible. Detailed modern attire suitable for their real-life persona. Pure white studio background, seamless white infinity cove. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL FRAMING. Overcast diffused studio lighting. Rendering style: Ultra-realistic, cinematic, photorealistic, 4K detail.
+Strictly close-up portrait of older [Actor Name] today, featuring [Custom visual description of their current aged face and hair]. ONLY the face, neck, and shoulders are visible. Detailed modern attire suitable for their real-life persona. Pure white studio background, seamless white infinity cove. STRAIGHT-ON EYE-LEVEL CAMERA, PERFECTLY CENTERED SYMMETRICAL FRAMING. Overcast diffused studio lighting. Rendering style: Ultra-realistic, cinematic, photorealistic, 4K detail.
 ```
 
 ## ANIMATION / MOTION PROMPT GUIDELINES

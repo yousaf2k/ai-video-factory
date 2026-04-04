@@ -592,6 +592,7 @@ export default function ProjectEditPage() {
               projectId={projectId}
               scenes={project?.story?.scenes}
               aspectRatio={project?.aspect_ratio || "16:9"}
+              projectAgent={project?.story_agent}
             />
           </div>
 

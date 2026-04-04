@@ -77,6 +77,7 @@ interface ShotCardProps {
   viewModeOverride?: "image" | "video" | null;
   scenes?: any[];
   aspectRatio?: string;
+  projectAgent?: string;
 }
 
 export function ShotCard({
@@ -96,6 +97,7 @@ export function ShotCard({
   viewModeOverride,
   scenes,
   aspectRatio = "16:9",
+  projectAgent,
 }: ShotCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);

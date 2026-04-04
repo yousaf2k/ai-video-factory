@@ -71,6 +71,7 @@ class GenerationService:
         self._queue_processor_task = None # This is no longer used for the main loop, but might be for other tasks
         self._queue_processor_started = False
         self._queue_processor_thread: Optional[threading.Thread] = None # New thread object
+        self._loop_wake_up: Optional[asyncio.Event] = None
 
     def is_item_running(self, item_id: str) -> bool:
         """Check if an item is physically doing backend work right now"""
@@ -122,6 +123,9 @@ class GenerationService:
     async def _queue_processor_loop(self):
         """Background loop that processes queue items with concurrency limit"""
         import config
+
+        # Initialize wake-up event in the correct loop
+        self._loop_wake_up = asyncio.Event()
 
         debug_file = config.resolve_path("startup_debug.txt")
         with open(debug_file, "a") as f: f.write("[DEBUG] loop: started\n")
@@ -203,7 +207,11 @@ class GenerationService:
 
                 # Check if queue is paused
                 if queue_service.is_paused():
-                    await asyncio.sleep(1)
+                    try:
+                        await asyncio.wait_for(self._loop_wake_up.wait(), timeout=5.0)
+                        self._loop_wake_up.clear()
+                    except asyncio.TimeoutError:
+                        pass
                     continue
 
                 # Clean up completed tasks
@@ -214,8 +222,12 @@ class GenerationService:
                 queued_items = queue_service.get_queue(status=QueueItemStatus.QUEUED)
 
                 if not queued_items:
-                    # No items to process, wait a bit
-                    await asyncio.sleep(0.5)
+                    # No items to process, wait for wake-up or timeout
+                    try:
+                        await asyncio.wait_for(self._loop_wake_up.wait(), timeout=2.0)
+                        self._loop_wake_up.clear()
+                    except asyncio.TimeoutError:
+                        pass
                     continue
 
                 # Sort items to prioritize images, then by priority
@@ -290,7 +302,10 @@ class GenerationService:
                                         is_ready = False
                                         skip_reason = "THEN or NOW images not generated"
                                 elif item.generation_type == GenerationType.THEN_IMAGE:
-                                    if not shot.get('now_image_generated', False):
+                                    # DECISION: For 'Then vs now Actor Face' agent, we don't require NOW image first
+                                    is_actor_face = self._is_actor_face_agent(item.project_id)
+                                    
+                                    if not is_actor_face and not shot.get('now_image_generated', False):
                                         is_ready = False
                                         skip_reason = "NOW image not generated"
                         
@@ -317,8 +332,12 @@ class GenerationService:
                         active_tasks_by_engine[engine] = set()
                     active_tasks_by_engine[engine].add(task)
 
-                # Small delay before checking for more items
-                await asyncio.sleep(0.1)
+                # Small delay or wait for wake-up before checking for more items
+                try:
+                    await asyncio.wait_for(self._loop_wake_up.wait(), timeout=0.1)
+                    self._loop_wake_up.clear()
+                except asyncio.TimeoutError:
+                    pass
 
             except Exception as e:
                 # Catch shutdown errors specifically to break the loop gracefully
@@ -430,7 +449,28 @@ class GenerationService:
 
         # Execute immediately
         asyncio.create_task(run_now())
+        self._wake_up_processor()
         return {"message": "Item force started successfully"}
+
+    def _wake_up_processor(self):
+        """Wake up the queue processor loop from its sleep/wait state"""
+        if self._loop_wake_up:
+            try:
+                # Use call_soon_threadsafe if called from another thread
+                loop = None
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    pass
+                
+                if loop and loop.is_running():
+                    loop.call_soon_threadsafe(self._loop_wake_up.set)
+                else:
+                    # If we can't find a loop or it's not running, we can't set it easily
+                    # But usually this is called within a loop or from a thread during generation
+                    pass
+            except Exception as e:
+                logger.debug(f"Failed to wake up processor: {e}")
 
     async def _process_video_generation(self, item: QueueItem):
         """Process video generation for a queue item"""
@@ -558,14 +598,17 @@ class GenerationService:
         if project_id in self.queued_shots:
             self.queued_shots.pop(project_id)
 
-        # Also cancel all queued items in QueueService
+        # Also cancel all queued/active items in QueueService
         queue_service = get_queue_service()
         queued_items = queue_service.get_queue(project_id=project_id)
         for item in queued_items:
-            if item.status == QueueItemStatus.QUEUED:
+            if item.status in [QueueItemStatus.QUEUED, QueueItemStatus.ACTIVE]:
                 queue_service.mark_cancelled(item.item_id)
+                if item.status == QueueItemStatus.ACTIVE:
+                    logger.info(f"Marking active item {item.item_id} as CANCELLED for project {project_id}")
 
         logger.info(f"Marked project {project_id} as cancelled. Future queued items will be skipped.")
+        self._wake_up_processor()
 
     def cancel_single_shot(self, project_id: str, shot_index: int):
         """Mark a single shot as cancelled to halt it from entering the queue."""
@@ -575,12 +618,14 @@ class GenerationService:
         if project_id in self.queued_shots and shot_index in self.queued_shots[project_id]:
             self.queued_shots[project_id].remove(shot_index)
 
-        # Also cancel queued items in QueueService for this shot
+        # Also cancel queued/active items in QueueService for this shot
         queue_service = get_queue_service()
         queued_items = queue_service.get_queue(project_id=project_id)
         for item in queued_items:
-            if item.shot_index == shot_index and item.status == QueueItemStatus.QUEUED:
+            if item.shot_index == shot_index and item.status in [QueueItemStatus.QUEUED, QueueItemStatus.ACTIVE]:
                 queue_service.mark_cancelled(item.item_id)
+                if item.status == QueueItemStatus.ACTIVE:
+                    logger.info(f"Marking active item {item.item_id} as CANCELLED for shot {shot_index}")
 
         # If this is the currently actively generating shot, tell ComfyUI to stop
         if self.active_shots.get(project_id) == shot_index:
@@ -589,6 +634,7 @@ class GenerationService:
             interrupt_generation()
 
         logger.info(f"Marked shot {shot_index} in project {project_id} as cancelled.")
+        self._wake_up_processor()
 
     def cancel_scene_narration(self, project_id: str, scene_id: int):
         """Mark a scene narration as cancelled."""
@@ -598,6 +644,15 @@ class GenerationService:
         if project_id in self.queued_scenes and scene_id in self.queued_scenes[project_id]:
             self.queued_scenes[project_id].remove(scene_id)
             
+        # Also cancel queued/active items in QueueService for this scene
+        queue_service = get_queue_service()
+        queued_items = queue_service.get_queue(project_id=project_id)
+        for item in queued_items:
+            if item.scene_id == scene_id and item.status in [QueueItemStatus.QUEUED, QueueItemStatus.ACTIVE]:
+                queue_service.mark_cancelled(item.item_id)
+                if item.status == QueueItemStatus.ACTIVE:
+                    logger.info(f"Marking active item {item.item_id} as CANCELLED for scene {scene_id}")
+
         # If this is the currently actively generating scene, tell ComfyUI to stop
         if self.active_scenes.get(project_id) == scene_id:
             from core.comfy_client import interrupt_generation
@@ -605,6 +660,7 @@ class GenerationService:
             interrupt_generation()
             
         logger.info(f"Marked scene {scene_id} narration in project {project_id} as cancelled.")
+        self._wake_up_processor()
 
     def _create_queue_item(
         self,
@@ -646,6 +702,8 @@ class GenerationService:
             prompt_override = getattr(request, 'prompt_override', None)
             if not prompt_override and generation_type == GenerationType.DEPARTURE_VIDEO:
                 prompt_override = getattr(request, 'departure_prompt_override', None)
+            if not prompt_override and generation_type == GenerationType.THEN_IMAGE:
+                prompt_override = getattr(request, 'then_prompt_override', None)
 
         return QueueItem(
             item_id="",  # Will be assigned by QueueService
@@ -851,6 +909,7 @@ class GenerationService:
         
         queue_service = get_queue_service()
         added_items = queue_service.add_items(items_to_add)
+        self._wake_up_processor()
         return added_items
 
     def add_background_to_queue(
@@ -897,6 +956,7 @@ class GenerationService:
         
         queue_service = get_queue_service()
         added_items = queue_service.add_items([item])
+        self._wake_up_processor()
         return added_items
 
     async def run_batch_generation(self, project_id: str, request: Any):
@@ -1408,8 +1468,11 @@ class GenerationService:
         if image_variant in ["then", "both"]:
             if not shot_to_use.get('then_image_generated') or force:
                 try:
+                    # DECISION: For 'Then vs now Actor Face' agent, we don't require or use NOW image
+                    is_actor_face = self._is_actor_face_agent(project_id)
                     current_now = shot_to_use.get('now_image_path')
-                    if not current_now:
+                    
+                    if not is_actor_face and not current_now:
                         logger.info(f"NOW image missing for shot {shot_index}. Auto-generating NOW image first.")
                         # Call self recursively with variant="now" to ensure it's generated
                         # We use force=True to ensure it's actually generated since we're here because it's missing
@@ -1445,16 +1508,6 @@ class GenerationService:
                     active_prompt_override = prompt_override
                     if active_prompt_override and active_prompt_override == shot_to_use.get('then_image_prompt'):
                         active_prompt_override = None
-                    
-                    if current_now and actual_mode in ["geminiweb", "gemini"]:
-                        # When using Gemini Web Edit, we often use a specific edit instruction as the prompt
-                        edit_instructions = (
-                            "Remove only the person standing on the right side of this reference image. "
-                            "No change in background set or environment, no side angle, no profile view, no tilt."
-                            "Make the left person looking directly into camera in center of the frame with happy, cheerful smiling expressions. "
-                            "Do NOT remove or change any background crew members, equipment, or props. "
-                        )
-                        then_prompt = edit_instructions
 
                     self._mark_queue_item_active(project_id, shot_index, GenerationType.THEN_IMAGE)
                     manager.broadcast_sync(project_id, {
@@ -1463,7 +1516,11 @@ class GenerationService:
                     })
 
                     then_workflow = image_workflow
-                    then_reference_to_use = [config.resolve_path(current_now)]
+                    
+                    # For Actor Face agent, we don't use 'now' as reference
+                    then_reference_to_use = []
+                    if not is_actor_face and current_now:
+                        then_reference_to_use.append(config.resolve_path(current_now))
                     
                     if actual_mode in ["geminiweb", "gemini"] and then_reference:
                         then_reference_to_use.append(config.resolve_path(then_reference))
@@ -3354,6 +3411,18 @@ class GenerationService:
             return video_save_path
         else:
             raise RuntimeError(f"FLFI2V video source file not found: {source_path}")
+
+
+    def _is_actor_face_agent(self, project_id: str) -> bool:
+        """Check if project uses the 'Then vs now Actor Face' agent"""
+        try:
+            meta = self.project_manager.get_project(project_id)
+            agent = meta.get('story_agent', '')
+            # Match against the exact agent name (likely includes the path)
+            return "then_vs_now/then_vs_now_actor_faces" in agent
+        except Exception as e:
+            logger.error(f"Error checking agent for project {project_id}: {e}")
+            return False
 
 
 # Global singleton instance
