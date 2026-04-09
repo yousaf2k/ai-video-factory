@@ -733,7 +733,9 @@ class GenerationService:
         if request:
             prompt_override = getattr(request, 'prompt_override', None)
             if not prompt_override and generation_type == GenerationType.DEPARTURE_VIDEO:
-                prompt_override = getattr(request, 'departure_prompt_override', None)
+                # NEW: Don't override departure prompt for 'Then vs now Actor Face' agent
+                if not self._is_actor_face_agent(project_id):
+                    prompt_override = getattr(request, 'departure_prompt_override', None)
             if not prompt_override and generation_type == GenerationType.THEN_IMAGE:
                 prompt_override = getattr(request, 'then_prompt_override', None)
 
@@ -1808,12 +1810,12 @@ class GenerationService:
                 "progress": 0
             })
 
-            # Run in thread pool to avoid blocking
-            soundfx_path = await asyncio.to_thread(
-                self._generate_soundfx_comfyui,
+            # Run async generator
+            soundfx_path = await self._generate_soundfx_comfyui(
                 project_id,
                 shot
             )
+
 
             # Update shot with soundfx path atomically
             self.project_manager.update_shot_metadata(
@@ -1856,8 +1858,8 @@ class GenerationService:
             })
             raise
 
-    def _generate_soundfx_comfyui(self, project_id: str, shot: Dict[str, Any]) -> str:
-        """Generate sound effects for a shot video using MMAudio ComfyUI workflow (synchronous).
+    async def _generate_soundfx_comfyui(self, project_id: str, shot: Dict[str, Any]) -> str:
+        """Generate sound effects for a shot video using MMAudio ComfyUI workflow (asynchronous).
 
         Loads the workflow/soundfx/mmaudio.json template, uploads the shot video
         to ComfyUI, sets the prompt, submits, waits, and copies the output.
@@ -1865,7 +1867,7 @@ class GenerationService:
         import shutil
         import config
         import requests as http_requests
-        from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
+        from core.comfy_client import submit, async_wait_for_prompt_completion_with_progress, get_output_file_path
 
         shot_index = shot['index']
         videos_dir = self.project_manager.get_videos_dir(project_id)
@@ -1883,7 +1885,7 @@ class GenerationService:
         video_filename = os.path.basename(video_abs_path)
         upload_url = f"{comfy_url}/upload/image"
         with open(video_abs_path, 'rb') as f:
-            resp = http_requests.post(
+            resp = await asyncio.to_thread(http_requests.post,
                 upload_url,
                 files={"image": (video_filename, f, "video/mp4")},
                 data={"subfolder": "", "type": "input"}
@@ -1947,11 +1949,12 @@ class GenerationService:
             })
 
         # Wait for completion with progress callback
-        wait_result = wait_for_prompt_completion_with_progress(
+        wait_result = await async_wait_for_prompt_completion_with_progress(
             prompt_id,
             progress_callback=on_step_progress,
             timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
         )
+
 
         if not wait_result.get('success'):
             raise RuntimeError(f"Sound FX generation failed for shot {shot_index}: {wait_result.get('error')}")
@@ -2259,8 +2262,7 @@ class GenerationService:
                     temp_shot = shot.copy()
                     temp_shot['meeting_video_prompt'] = meeting_prompt
 
-                    result_path = await asyncio.to_thread(
-                        self._generate_flfi2v_video,
+                    result_path = await self._generate_flfi2v_video(
                         project_id,
                         temp_shot,
                         "meeting",
@@ -2371,8 +2373,7 @@ class GenerationService:
                     temp_shot = shot.copy()
                     temp_shot['departure_video_prompt'] = departure_prompt
 
-                    result_path = await asyncio.to_thread(
-                        self._generate_flfi2v_video,
+                    result_path = await self._generate_flfi2v_video(
                         project_id,
                         temp_shot,
                         "departure",
@@ -3109,7 +3110,7 @@ class GenerationService:
             return video_save_path
         else:
             from core.prompt_compiler import load_workflow, compile_workflow
-            from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
+            from core.comfy_client import submit, async_wait_for_prompt_completion_with_progress, get_output_file_path
 
             # Load project to get aspect_ratio
             project_meta = self.project_manager.load_project(project_id)
@@ -3207,11 +3208,12 @@ class GenerationService:
                 })
 
             # Wait for completion with progress updates
-            wait_result = wait_for_prompt_completion_with_progress(
+            wait_result = await async_wait_for_prompt_completion_with_progress(
                 prompt_id, 
                 progress_callback=on_step_progress,
                 timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
             )
+
 
             if not wait_result.get('success'):
                 raise RuntimeError(f"Video render failed for shot {shot_index}: {wait_result.get('error')}")
@@ -3247,7 +3249,7 @@ class GenerationService:
             else:
                 raise RuntimeError(f"Video source file not found: {source_path}")
 
-    def _generate_flfi2v_video(
+    async def _generate_flfi2v_video(
         self, project_id: str, shot: Dict[str, Any],
         variant: str, video_mode: Optional[str],
         workflow_name: Optional[str], project_title: Optional[str],
@@ -3259,7 +3261,7 @@ class GenerationService:
         resolution: Optional[str] = None,
         gemini_mode: Optional[str] = None
     ) -> str:
-        """Generate FLFI2V video for a single shot (synchronous)
+        """Generate FLFI2V video for a single shot (asynchronous)
 
         Args:
             variant: "meeting" or "departure"
@@ -3276,7 +3278,7 @@ class GenerationService:
         import copy
         import config
         from core.prompt_compiler import load_workflow
-        from core.comfy_client import submit, wait_for_prompt_completion_with_progress, get_output_file_path
+        from core.comfy_client import submit, async_wait_for_prompt_completion_with_progress, get_output_file_path
 
         videos_dir = self.project_manager.get_videos_dir(project_id)
         os.makedirs(videos_dir, exist_ok=True)
@@ -3403,11 +3405,12 @@ class GenerationService:
             })
 
         # Wait for completion
-        wait_result = wait_for_prompt_completion_with_progress(
+        wait_result = await async_wait_for_prompt_completion_with_progress(
             prompt_id,
             progress_callback=on_step_progress,
             timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
         )
+
 
         if not wait_result.get('success'):
             raise RuntimeError(f"FLFI2V video render failed for shot {shot_index}: {wait_result.get('error')}")

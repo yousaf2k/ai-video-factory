@@ -71,8 +71,14 @@ class ProjectService:
         project_dir = self.project_manager.get_project_dir(project_id)
         story_path = os.path.join(project_dir, "story.json")
         if os.path.exists(story_path):
-            with open(story_path, 'r', encoding='utf-8') as f:
-                story = json.load(f)
+            try:
+                with open(story_path, 'r', encoding='utf-8') as f:
+                    story = json.load(f)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Malformed story.json for project {project_id}: {e}")
+                story = None
 
         # Load shots if exist
         shots = self.project_manager.get_shots(project_id)

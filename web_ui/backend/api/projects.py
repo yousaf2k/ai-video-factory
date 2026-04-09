@@ -190,13 +190,13 @@ async def get_project_narration(project_id: str, filename: str):
         project_dir = project_service.get_project_dir(project_id)
         narration_dir = os.path.join(project_dir, "narration")
         audio_path = os.path.join(narration_dir, filename)
-        
+
         if not os.path.exists(audio_path) or not os.path.isfile(audio_path):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Narration {filename} not found for project {project_id}"
             )
-            
+
         return FileResponse(audio_path)
     except HTTPException:
         raise
@@ -205,6 +205,56 @@ async def get_project_narration(project_id: str, filename: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to serve narration: {str(e)}"
+        )
+
+
+@router.get("/{project_id}/audio/{filename}", response_class=FileResponse)
+async def get_project_audio(project_id: str, filename: str):
+    """Serve a project audio file directly (custom uploads)"""
+    try:
+        project_dir = project_service.get_project_dir(project_id)
+        audio_dir = os.path.join(project_dir, "audio")
+        audio_path = os.path.join(audio_dir, filename)
+
+        if not os.path.exists(audio_path) or not os.path.isfile(audio_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Audio {filename} not found for project {project_id}"
+            )
+
+        return FileResponse(audio_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving audio {filename} for project {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve audio: {str(e)}"
+        )
+
+
+@router.get("/{project_id}/editor/{filename}", response_class=FileResponse)
+async def get_project_editor_file(project_id: str, filename: str):
+    """Serve editor-related files (timeline JSONs, etc.)"""
+    try:
+        project_dir = project_service.get_project_dir(project_id)
+        editor_dir = os.path.join(project_dir, "editor")
+        file_path = os.path.join(editor_dir, filename)
+
+        if not os.path.exists(file_path) or not os.path.isfile(file_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Editor file {filename} not found for project {project_id}"
+            )
+
+        return FileResponse(file_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving editor file {filename} for project {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve editor file: {str(e)}"
         )
 
 

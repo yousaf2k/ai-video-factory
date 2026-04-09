@@ -493,6 +493,31 @@ class QueueService:
                     return True
             return False
 
+    def update_item(self, item: QueueItem) -> bool:
+        """
+        Update an existing queue item with new data and persist.
+        
+        Args:
+            item: The updated QueueItem object
+            
+        Returns:
+            True if item was found and updated
+        """
+        with self._queue_lock:
+            for i, existing_item in enumerate(self._queue):
+                if existing_item.item_id == item.item_id:
+                    self._queue[i] = item
+                    self._save_queue()
+                    
+                    # Broadcast update to UI
+                    manager.broadcast_sync('global', {
+                        'type': 'queue.item_updated',
+                        'data': item.model_dump(mode='json')
+                    })
+                    return True
+            return False
+
+
     def requeue_item(self, item_id: str) -> bool:
         """
         Requeue a failed or cancelled item.

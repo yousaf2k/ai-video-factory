@@ -19,7 +19,7 @@ import config
 if sys.platform == 'win32':
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-from web_ui.backend.api import projects, stories, shots, config as config_api, queue
+from web_ui.backend.api import projects, stories, shots, config as config_api, queue, editor
 from web_ui.backend.websocket.manager import manager
 
 # Configure logging
@@ -88,26 +88,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Step 2: Add the Private Network Access middleware (OUTERMOST)
-# In Starlette/FastAPI, the last added middleware is the first to receive the request 
-# and the last to receive the response. We need this to be outermost 
-# to catch OPTIONS responses from CORSMiddleware.
-@app.middleware("http")
-async def add_private_network_access_header(request: Request, call_next):
+class PrivateNetworkMiddleware:
     """
-    Handle Chrome's Private Network Access (PNA) by adding the 
-    Access-Control-Allow-Private-Network header to preflight and regular requests.
+    ASGI middleware that adds 'Access-Control-Allow-Private-Network: true' 
+    headers when requested by the browser. 
+    Unlike BaseHTTPMiddleware, this raw ASGI implementation is 100% 
+    compatible with WebSocket protocol upgrades.
     """
-    if request.method == "OPTIONS":
-        response = await call_next(request)
-        if "Access-Control-Request-Private-Network" in request.headers:
-            response.headers["Access-Control-Allow-Private-Network"] = "true"
-        return response
-    
-    response = await call_next(request)
-    if "Access-Control-Request-Private-Network" in request.headers:
-        response.headers["Access-Control-Allow-Private-Network"] = "true"
-    return response
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            # Pass WebSocket and other non-HTTP scopes through untouched
+            return await self.app(scope, receive, send)
+
+        # Check if this is a Private Network Access preflight or request
+        is_pna_request = False
+        for name, value in scope.get("headers", []):
+            if name.lower() == b"access-control-request-private-network" and value.lower() == b"true":
+                is_pna_request = True
+                break
+
+        if not is_pna_request:
+            return await self.app(scope, receive, send)
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"access-control-allow-private-network", b"true"))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+# Add the middleware
+app.add_middleware(PrivateNetworkMiddleware)
 
 # Include routers
 app.include_router(projects.router)
@@ -115,6 +131,7 @@ app.include_router(stories.router)
 app.include_router(shots.router)
 app.include_router(config_api.router)
 app.include_router(queue.router)
+app.include_router(editor.router)
 
 @app.get("/")
 async def root():

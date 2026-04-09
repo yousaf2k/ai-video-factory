@@ -189,29 +189,27 @@ def cancel_all():
     return interrupted or cleared
 
 
-def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, timeout=1800):
+async def async_wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, timeout=1800):
     """
     Wait for a specific prompt to complete using WebSockets to get real-time progress.
-    
-    Args:
-        prompt_id: The prompt ID to wait for
-        progress_callback: Function called with (current_step, total_steps)
-        timeout: Maximum time to wait in seconds
+    Async version.
     """
     import asyncio
     import json
     import websockets
     from urllib.parse import urlparse
+    import uuid
+    import time
+    from core.comfy_client import wait_for_prompt_completion, http_session
 
     # Convert http://... to ws://...
     parsed_url = urlparse(config.COMFY_URL)
     ws_url = f"ws://{parsed_url.netloc}/ws?clientId={str(uuid.uuid4())}"
 
     # First, check if it's already in history (fast execution)
-    from core.comfy_client import wait_for_prompt_completion
     for attempt in range(2): # Try twice with a tiny delay
         try:
-            check_response = http_session.get(f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
+            check_response = await asyncio.to_thread(http_session.get, f"{config.COMFY_URL}/history/{prompt_id}", timeout=2)
             if check_response.status_code == 200:
                 history = check_response.json()
                 if prompt_id in history:
@@ -223,7 +221,7 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
             logger.debug(f"Initial history check attempt {attempt+1} failed: {e}")
         
         if attempt == 0:
-            time.sleep(0.1) # Tiny sleep before second attempt
+            await asyncio.sleep(0.1) # Tiny sleep before second attempt
 
     async def _listen():
         logger.info(f"Connecting to ComfyUI WebSocket: {ws_url}")
@@ -348,11 +346,37 @@ def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, 
 
     # Run the async listener
     try:
-        return asyncio.run(_listen())
+        return await _listen()
+    except Exception as e:
+        logger.error(f"Error in async wait: {e}")
+        # Always fallback to standard polling
+        return wait_for_prompt_completion(prompt_id, timeout=timeout)
+
+def wait_for_prompt_completion_with_progress(prompt_id, progress_callback=None, timeout=1800):
+    """
+    Wait for a specific prompt to complete using WebSockets to get real-time progress.
+    Synchronous wrapper for async_wait_for_prompt_completion_with_progress.
+    """
+    import asyncio
+    
+    try:
+        # Check if we are already in an event loop
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                # Cannot use asyncio.run() inside a running loop.
+                # Fallback to synchronous polling for safety in this edge case.
+                logger.warning(f"wait_for_prompt_completion_with_progress called from running loop. Falling back to polling.")
+                return wait_for_prompt_completion(prompt_id, timeout=timeout)
+        except RuntimeError:
+            pass
+
+        return asyncio.run(async_wait_for_prompt_completion_with_progress(prompt_id, progress_callback, timeout))
     except Exception as e:
         logger.error(f"Error running asyncio loop in comfy_client: {e}")
         # Always fallback to standard polling
         return wait_for_prompt_completion(prompt_id, timeout=timeout)
+
 
 
 def wait_for_prompt_completion(prompt_id, timeout=1800):

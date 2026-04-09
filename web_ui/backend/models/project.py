@@ -34,6 +34,7 @@ class ProjectMetadata(BaseModel):
     completed_at: Optional[str] = None
     steps: ProjectStep = Field(default_factory=ProjectStep)
     stats: ProjectStats = Field(default_factory=ProjectStats)
+    aspect_ratio: str = "16:9"
 
     model_config = {
         "extra": "allow"

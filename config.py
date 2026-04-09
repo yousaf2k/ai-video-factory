@@ -708,7 +708,7 @@ VIDEO_ASPECT_RATIO = "16:9"
 # Video resolution (options: "512", "720", "1024", "1080", "1280" "2048")
 # For landscape: width = resolution, height calculated from aspect ratio
 # For portrait: height = resolution, width calculated from aspect ratio
-VIDEO_RESOLUTION = "1280"  # 720p HD (1280x720 for 16:9)
+VIDEO_RESOLUTION = os.getenv("VIDEO_RESOLUTION", "1280")  # 720p HD (1280x720 for 16:9)
 
 # Append image prompt to motion prompt for video generation
 # When enabled, the image_prompt will be concatenated with motion_prompt
