@@ -395,7 +395,7 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
       });
 
       console.log('Clip positions on timeline:');
-      let dropClip = null;
+      let dropClip: any = null;
       trackClips.forEach((clip: any) => {
         const pixelStart = clip.startAt * zoom;
         const pixelEnd = (clip.startAt + clip.duration) * zoom;
@@ -426,7 +426,7 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
           // Use actual pixel position to find which clip area you're closest to
           console.log('Finding closest clip to drop position (Track 1 queue mode)...');
 
-          let closestClip = null;
+          let closestClip: any = null;
           let closestDistance = Infinity;
 
           trackClips.forEach((clip: any) => {

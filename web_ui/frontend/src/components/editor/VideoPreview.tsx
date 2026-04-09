@@ -117,6 +117,12 @@ function MediaElement({
       const audio = nativeAudioRef.current;
       if (!audio || !isLoaded) return;
 
+      // Gentle sync for audio - only correct if drifting significantly
+      const drift = Math.abs(audio.currentTime - localTime);
+      if (drift > 0.5) {
+        audio.currentTime = localTime;
+      }
+
       // Check if clip is currently active in timeline
       const clipStart = clip.startAt;
       const clipEnd = clip.startAt + clip.duration;
@@ -131,7 +137,11 @@ function MediaElement({
         if (now - lastPlayCall.current < 100) return;
         lastPlayCall.current = now;
 
-        console.log('[MediaElement] ▶️ Playing audio:', clip.name);
+        console.log('[MediaElement] ▶️ Playing audio:', clip.name, {
+          currentTime: audio.currentTime.toFixed(2),
+          localTime: localTime.toFixed(2),
+          sourceStart: clip.sourceStart.toFixed(2)
+        });
 
         audio.play().catch(e => {
           if (e.name !== 'AbortError') {
@@ -224,12 +234,7 @@ function MediaElement({
     const el = mediaRef.current;
     if (!el || !isLoaded) return;
 
-    // For audio, don't sync at all - let it play smoothly
-    if ((clip.type as any) === 'audio') {
-      return; // Audio plays naturally without forced sync
-    }
-
-    // For video, use the original tighter sync
+    // For both audio and video, sync position to match sourceStart
     const drift = Math.abs(el.currentTime - localTime);
     if (drift > 0.2) {
       el.currentTime = localTime;
@@ -318,12 +323,12 @@ function MediaElement({
 export function VideoPreview() {
   const currentTime = useEditorStore((state: any) => state.currentTime);
   const clips = useEditorStore((state: any) => state.clips);
+  const tracks = useEditorStore((state: any) => state.tracks);
   const duration = useEditorStore((state: any) => state.duration);
   const isPlaying = useEditorStore((state: any) => state.isPlaying);
   const setIsPlaying = useEditorStore((state: any) => state.setIsPlaying);
   const setCurrentTime = useEditorStore((state: any) => state.setCurrentTime);
 
-  const [isMuted, setIsMuted] = useState(false);
   const [loadCount, setLoadCount] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
   const [isEditingTime, setIsEditingTime] = useState(false);
@@ -340,10 +345,27 @@ export function VideoPreview() {
   }, []);
 
   const activeClips = useMemo(() => {
-    return clips.filter((c: any) =>
-      currentTime >= c.startAt && currentTime <= (c.startAt + c.duration)
-    );
-  }, [clips, currentTime]);
+    return clips.filter((c: any) => {
+      // Check if clip is currently visible based on playhead position only
+      const isVisible = currentTime >= c.startAt && currentTime <= (c.startAt + c.duration);
+      if (!isVisible) return false;
+
+      // Check if the track is visible (for video) - don't filter by mute state here
+      // Mute state is handled in the MediaRenderer component
+      const track = tracks.find((t: any) => t.id === c.trackId);
+      if (!track) return false;
+
+      if (c.type === 'video') {
+        // Video track: check isVisible property only (mute is handled separately)
+        return track.isVisible !== false; // Default to visible if not set
+      } else if (c.type === 'audio') {
+        // Audio track: always include active audio clips (mute is handled separately)
+        return true;
+      }
+
+      return true;
+    });
+  }, [clips, currentTime, tracks]);
 
   const topVideoClip = useMemo(() => {
     const videos = activeClips.filter((c: any) => c.type === 'video');
@@ -422,28 +444,7 @@ export function VideoPreview() {
               </div>
             )}
         </div>
-
-        <button 
-           onClick={() => setIsMuted(!isMuted)}
-           className={`p-2.5 rounded-full backdrop-blur-md border border-white/10 transition shadow-lg ${isMuted ? 'bg-red-500/80 hover:bg-red-600 ring-4 ring-red-500/20' : 'bg-slate-800/80 hover:bg-slate-700'}`}
-        >
-           {isMuted ? (
-             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
-           ) : (
-             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-           )}
-        </button>
       </div>
-
-      {/* Muted Notification */}
-      {isMuted && isPlaying && (
-        <div className="absolute top-20 right-4 z-40 animate-bounce">
-            <div className="bg-indigo-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-xl border border-indigo-400 flex items-center gap-2">
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-                CLICK UNMUTE FOR SOUND
-            </div>
-        </div>
-      )}
 
       {/* Error Overlays */}
       {errors.length > 0 && (
@@ -492,18 +493,25 @@ export function VideoPreview() {
 
       {/* Actual Media Container */}
       <div className="absolute inset-0 flex items-center justify-center bg-black">
-        {activeClips.map((clip: any) => (
-          <MediaElement
-            key={clip.id}
-            clip={clip}
-            globalTime={currentTime}
-            isPlaying={isPlaying}
-            isMuted={isMuted}
-            onReady={handleReady}
-            onError={handleError}
-            isVisible={topVideoClip?.id === clip.id}
-          />
-        ))}
+        {activeClips.map((clip: any) => {
+          // Calculate mute state from track
+          const track = tracks.find((t: any) => t.id === clip.trackId);
+          const trackIsMuted = track?.isMuted ?? false;
+          const isClipMuted = trackIsMuted; // Use track's mute state
+
+          return (
+            <MediaElement
+              key={clip.id}
+              clip={clip}
+              globalTime={currentTime}
+              isPlaying={isPlaying}
+              isMuted={isClipMuted}
+              onReady={handleReady}
+              onError={handleError}
+              isVisible={topVideoClip?.id === clip.id}
+            />
+          );
+        })}
 
         {activeClips.length === 0 && (
           <div className="flex flex-col items-center opacity-40">

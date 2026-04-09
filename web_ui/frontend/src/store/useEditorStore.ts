@@ -81,8 +81,8 @@ export const useEditorStore: any = create<EditorState>((set: any) => ({
   aspectRatio: '16:9', // Default to landscape
 
   tracks: [
-    { id: 'v2', name: 'Video 2', type: 'video', order: 0, isVisible: true },
-    { id: 'v1', name: 'Video 1', type: 'video', order: 1, isVisible: true },
+    { id: 'v2', name: 'Video 2', type: 'video', order: 0, isVisible: true, isMuted: false },
+    { id: 'v1', name: 'Video 1', type: 'video', order: 1, isVisible: true, isMuted: false },
     { id: 'a1', name: 'Narration', type: 'audio', order: 2, isMuted: false },
     { id: 'a2', name: 'BGM / SFX', type: 'audio', order: 3, isMuted: false },
   ],

@@ -18,6 +18,8 @@ export function Timeline() {
   const splitClip = useEditorStore((state: any) => state.splitClip);
   const dragMode = useEditorStore((state: any) => state.dragMode);
   const setDragMode = useEditorStore((state: any) => state.setDragMode);
+  const toggleTrackVisibility = useEditorStore((state: any) => state.toggleTrackVisibility);
+  const toggleTrackMute = useEditorStore((state: any) => state.toggleTrackMute);
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
@@ -448,8 +450,11 @@ export function Timeline() {
           <div className="flex-1 overflow-y-auto hidden-scrollbar">
             {tracks.map((track: any) => {
               const isVideoTrack = track.type === 'video';
+              const isVisible = track.isVisible !== undefined ? track.isVisible : true;
+              const isMuted = track.isMuted !== undefined ? track.isMuted : false;
+
               return (
-                <div key={track.id} className="h-12 border-b border-slate-800 flex items-center px-4 font-medium text-xs text-slate-300 gap-2">
+                <div key={track.id} className={`h-12 border-b border-slate-800 flex items-center px-3 font-medium text-xs gap-2`}>
                   {isVideoTrack ? (
                     // Video icon
                     <svg className="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -461,7 +466,70 @@ export function Timeline() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                     </svg>
                   )}
-                  <span>{track.name}</span>
+
+                  <span className="flex-1 truncate">{track.name}</span>
+
+                  {/* Controls */}
+                  <div className="flex items-center gap-1">
+                    {/* Video tracks: Show both visibility and mute controls */}
+                    {isVideoTrack ? (
+                      <>
+                        {/* Eye icon - visibility toggle */}
+                        <button
+                          onClick={() => toggleTrackVisibility(track.id)}
+                          className={`flex-shrink-0 p-1 hover:bg-slate-800 rounded transition-colors ${!isVisible ? 'opacity-50' : ''}`}
+                          title={isVisible ? 'Hide track (won\'t export)' : 'Show track (will export)'}
+                        >
+                          {isVisible ? (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l4.242-4.243M9 12h.01" />
+                            </svg>
+                          )}
+                        </button>
+
+                        {/* Speaker icon - audio mute toggle */}
+                        <button
+                          onClick={() => toggleTrackMute(track.id)}
+                          className={`flex-shrink-0 p-1 hover:bg-slate-800 rounded transition-colors ${isMuted ? 'opacity-50' : ''}`}
+                          title={isMuted ? 'Unmute audio (won\'t export)' : 'Mute audio (will export)'}
+                        >
+                          {isMuted ? (
+                            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-.777 1.337-1.707 1.293L5.586 15z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-.777 1.337-1.707 1.293L5.586 15z" />
+                            </svg>
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      /* Audio tracks: Only show mute control */
+                      <button
+                        onClick={() => toggleTrackMute(track.id)}
+                        className={`flex-shrink-0 p-1 hover:bg-slate-800 rounded transition-colors ${isMuted ? 'opacity-50' : ''}`}
+                        title={isMuted ? 'Unmute track (will export)' : 'Mute track (won\'t export)'}
+                      >
+                        {isMuted ? (
+                          <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-.777 1.337-1.707 1.293L5.586 15z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-.777 1.337-1.707 1.293L5.586 15z" />
+                          </svg>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
