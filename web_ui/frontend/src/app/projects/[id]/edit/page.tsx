@@ -54,6 +54,8 @@ export default function ProjectEditPage() {
     const projectType = project?.story?.project_type;
     if (projectType === ProjectType.ThenVsNow) {
       return agent.category === "then_vs_now";
+    } else if (projectType === ProjectType.AsmrGlassCutting) {
+      return agent.category === "asmr" || agent.id.startsWith("asmr/");
     } else if (projectType === ProjectType.Movie) {
       return agent.category === "movie";
     } else {
