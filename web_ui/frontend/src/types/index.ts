@@ -106,7 +106,11 @@ export interface Story {
   style: string;
   master_script?: string;
   total_duration?: number;
-  scenes: Scene[];
+  scenes?: Scene[];  // Optional for ASMR and ThenVsNow projects
+  shots?: Shot[];     // Direct shots for ASMR and ThenVsNow projects
+  expanded_objects?: string[];  // For ASMR projects
+  user_input?: string;  // For ASMR projects
+  aspect_ratio?: string;  // For ASMR projects
   project_type: ProjectType;
   characters?: Character[];
   youtube_metadata?: YouTubeMetadata;

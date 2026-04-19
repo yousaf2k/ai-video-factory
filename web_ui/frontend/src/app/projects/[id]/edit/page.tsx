@@ -117,7 +117,12 @@ export default function ProjectEditPage() {
   }, []);
 
   const handleUpdateScene = async (index: number, updatedScene: Scene) => {
-    if (!story) return;
+    if (!story || !story.scenes) {
+      toast.error("Cannot edit scenes", {
+        description: "This project type does not support scene editing.",
+      });
+      return;
+    }
 
     const confirmed = await confirmDialog.showDialog({
       title: "Save Scene Changes",
@@ -159,7 +164,12 @@ export default function ProjectEditPage() {
   };
 
   const handleDeleteScene = async (index: number) => {
-    if (!story) return;
+    if (!story || !story.scenes) {
+      toast.error("Cannot delete scenes", {
+        description: "This project type does not support scene editing.",
+      });
+      return;
+    }
 
     const sceneToDelete = story.scenes[index];
     const confirmed = await confirmDialog.showDialog({
@@ -201,7 +211,12 @@ export default function ProjectEditPage() {
   };
 
   const handleReorderScenes = async (newScenes: Scene[]) => {
-    if (!story) return;
+    if (!story || !story.scenes) {
+      toast.error("Cannot reorder scenes", {
+        description: "This project type does not support scene editing.",
+      });
+      return;
+    }
 
     const confirmed = await confirmDialog.showDialog({
       title: "Reorder Scenes",
@@ -240,7 +255,12 @@ export default function ProjectEditPage() {
   };
 
   const handleAddScene = async () => {
-    if (!story) return;
+    if (!story || !story.scenes) {
+      toast.error("Cannot add scenes", {
+        description: "This project type does not support scene editing.",
+      });
+      return;
+    }
 
     const confirmed = await confirmDialog.showDialog({
       title: "Add New Scene",
@@ -361,10 +381,10 @@ export default function ProjectEditPage() {
   }
 
   // Calculate total duration
-  const totalDuration = story.scenes.reduce(
-    (sum, scene) => sum + (scene.scene_duration || 0),
-    0,
-  );
+  // ASMR and ThenVsNow projects use total_duration from story, others calculate from scenes
+  const totalDuration = story.total_duration ||
+    (story.scenes?.reduce((sum, scene) => sum + (scene.scene_duration || 0), 0)) ||
+    0;
 
   // Flat media lists for Dialogs
   const allImages = shots?.flatMap(shot => {
@@ -437,7 +457,7 @@ export default function ProjectEditPage() {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Total Scenes</p>
-            <p className="text-xl font-bold">{story.scenes.length}</p>
+            <p className="text-xl font-bold">{story.scenes?.length || story.shots?.length || 0}</p>
           </div>
         </div>
         <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
@@ -537,26 +557,36 @@ export default function ProjectEditPage() {
                 Regenerate Story
               </button>
             </div>
-            <SceneList
-              scenes={story.scenes}
-              onUpdate={handleUpdateScene}
-              onDelete={handleDeleteScene}
-              onReorder={handleReorderScenes}
-              onAdd={handleAddScene}
-              projectType={story.project_type}
-            />
+            {story.scenes && story.scenes.length > 0 ? (
+              <SceneList
+                scenes={story.scenes}
+                onUpdate={handleUpdateScene}
+                onDelete={handleDeleteScene}
+                onReorder={handleReorderScenes}
+                onAdd={handleAddScene}
+                projectType={story.project_type}
+              />
+            ) : (
+              <div className="p-8 bg-muted/50 rounded-lg border border-dashed border-border text-center">
+                <p className="text-muted-foreground">
+                  This project type does not use scenes. Shots are managed directly.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Instructions */}
-          <div className="mt-8 p-4 bg-muted rounded-lg">
-            <h3 className="font-semibold mb-2">Tips for editing scenes:</h3>
-            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-              <li>Drag scenes to reorder them in the story</li>
-              <li>Click the edit icon to modify scene details</li>
-              <li>Adjust scene durations to control pacing</li>
-              <li>Click "Save Changes" to persist your edits</li>
-            </ul>
-          </div>
+          {story.scenes && story.scenes.length > 0 && (
+            <div className="mt-8 p-4 bg-muted rounded-lg">
+              <h3 className="font-semibold mb-2">Tips for editing scenes:</h3>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>Drag scenes to reorder them in the story</li>
+                <li>Click the edit icon to modify scene details</li>
+                <li>Adjust scene durations to control pacing</li>
+                <li>Click "Save Changes" to persist your edits</li>
+              </ul>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="shots" className="mt-6">
