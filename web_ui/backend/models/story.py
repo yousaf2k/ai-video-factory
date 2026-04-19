@@ -11,6 +11,7 @@ class ProjectType(IntEnum):
     DOCUMENTARY = 1
     THEN_VS_NOW = 2
     MOVIE = 3
+    ASMR_GLASS_CUTTING = 4
 
 
 class MovieMetadata(BaseModel):
