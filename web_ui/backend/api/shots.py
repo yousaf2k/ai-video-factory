@@ -12,10 +12,14 @@ import shutil
 import time
 
 # Add parent directory to path FIRST
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../..")))
 
-# NOW import config (it will find the root config.py)
-import config
+# Import config module explicitly from root
+# Use importlib to avoid picking up other config packages in sys.path
+import importlib.util
+spec = importlib.util.spec_from_file_location("config", os.path.join(os.path.dirname(__file__), "../../../..", "config.py"))
+config = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(config)
 
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
