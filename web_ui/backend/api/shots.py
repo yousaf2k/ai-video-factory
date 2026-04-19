@@ -10,10 +10,12 @@ import uuid
 import re
 import shutil
 import time
-import config
 
-# Add parent directory to path
+# Add parent directory to path FIRST
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
+
+# NOW import config (it will find the root config.py)
+import config
 
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
