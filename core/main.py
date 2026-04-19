@@ -1470,17 +1470,60 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
             with open(story_path, 'r', encoding='utf-8') as f:
                 story_json = f.read()
 
-    # STEP 3: Scene Graph
-    if not steps.get('scene_graph', False):
+    # Detect if this is an ASMR or ThenVsNow project (shots already in story)
+    is_asmr_project = False
+    is_then_vs_now_project = False
+
+    if story_json:
+        try:
+            story_data = json.loads(story_json) if isinstance(story_json, str) else story_json
+            project_type = story_data.get('project_type', '')
+            # Check both string and enum values
+            is_asmr_project = project_type in ['asmr_glass_cutting', 'asmr_glass_cutting', 4]
+            is_then_vs_now_project = project_type in ['then_vs_now', 'then_vs_now', 2]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # STEP 3: Scene Graph (skip for ASMR and ThenVsNow)
+    if is_asmr_project or is_then_vs_now_project:
+        print("\n[SKIP] STEP 3: Scene Graph (not needed for this project type)")
+        project_mgr.mark_step_complete(project_id, 'scene_graph')
+        graph = None
+    elif not steps.get('scene_graph', False):
         logger.info("STEP 3: Scene Graph")
         print("\nSTEP 3: Scene Graph")
         project_mgr.mark_step_complete(project_id, 'scene_graph')
         graph = build_scene_graph(story_json)
     else:
         print("\n[SKIP] STEP 3: Scene Graph already created")
+        # Reload graph
+        graph_dir = project_mgr.get_project_dir(project_id)
+        graph_path = os.path.join(graph_dir, "scene_graph.json")
+        with open(graph_path, 'r', encoding='utf-8') as f:
+            graph = json.load(f)
 
-    # STEP 4: Shot Planning (with max_shots if specified)
-    if not steps.get('shots', False):
+    # STEP 4: Shot Planning (skip for ASMR and ThenVsNow - shots already in story)
+    if is_asmr_project or is_then_vs_now_project:
+        print("\n[SKIP] STEP 4: Shot Planning (shots already generated)")
+        # Extract shots from story JSON
+        if isinstance(story_json, str):
+            story_data = json.loads(story_json)
+        else:
+            story_data = story_json
+
+        shots = story_data.get('shots', [])
+        if not shots:
+            raise ValueError("No shots found in story JSON for ASMR/ThenVsNow project")
+
+        # Save shots to separate file
+        project_mgr.save_shots(project_id, shots)
+
+        # Enhance motion prompts with trigger keywords for LoRA activation
+        shots = enhance_motion_prompts_with_triggers(shots)
+        project_mgr.save_shots(project_id, shots)
+
+        print(f"[INFO] Loaded {len(shots)} shots from story JSON")
+    elif not steps.get('shots', False):
         logger.info("STEP 4: Shot Planning")
         print("\nSTEP 4: Shot Planning")
         shots = plan_shots(graph, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)

@@ -1,169 +1,148 @@
 # ASMR Glass Sculpture Cutting Story Generator
 
 ## Task
-Generate ASMR glass cutting video prompts in JSON format. Each video will feature precision glass sculpting with satisfying audio feedback and visual crack propagation effects.
+Generate ASMR glass cutting video shots in JSON format. Each video will feature precision glass sculpting with satisfying audio feedback and visual crack propagation effects.
+
+Extract objects from natural language input. For specific objects (e.g., "create videos of strawberry, apple, and tomato"), use exactly those objects. For categories (e.g., "red fruits", "tropical fruits"), expand to 5-10 specific objects.
 
 ## Input
 {USER_INPUT}
+
+## Object Extraction Rules
+
+1. **Specific Objects**: If user lists specific objects (e.g., "strawberry, apple, tomato"), use those exact objects
+2. **Categories**: If user provides a category (e.g., "red fruits", "tropical fruits"), expand to 5-10 specific examples
+3. **Natural Language**: Parse sentences like "create videos for the fruits strawberry, banana, orange" correctly
+4. **Multiple Objects**: Support any number of objects from 1 to 10
 
 ## Glass Sculpture Style Guidelines
 
 ### Material Quality
 - **Crystal Clear Glass**: Ultra-transparent, refractive light beams showing rainbow prisms
-- **Precision Cuts**: Laser-guided cutting tools with visible laser beams
-- **Textured Surfaces**: Smooth finish with subtle imperfections that catch light
-- **Realistic Shards**: Glass pieces that realistically reflect and refract light
+- **Realistic Texture**: Glass sculptures with realistic internal structures
+- **Reflective Surfaces**: Slightly tinted, sparkling internal highlights
+- **Photorealistic**: Ultra 8K quality, professional food ASMR style
 
 ### Visual Quality
-- **4K Ultra HD**: Photorealistic textures, intricate details, sharp focus
-- **Cinematic Lighting**: Soft backlighting, rim lighting, and internal refraction
-- **Depth of Field**: Shallow DOF emphasizing cutting tools, blurred background
-- **Slow Motion**: 60fps smooth motion for satisfying cutting movements
-
-### Setting
-- **Professional Studio**: Clean workbench with glass cutting equipment
-- **Minimalist Background**: Blurred workspace with specialized tools
-- **Professional Atmosphere**: Focus on craftsmanship and precision
-- **Equipment Visibility**: Specialized glass cutting tools, measuring devices, safety equipment
+- **Macro Close-up**: Shallow depth of field, blurred background
+- **Cinematic Lighting**: Soft backlighting, rim lighting, internal refraction
+- **Wooden Cutting Board**: Professional ASMR setting
+- **No Background Distractions**: Focus on the glass sculpture
 
 ### Action Description
-- **Precision Cutting**: Detailed descriptions of glass cutting techniques
-- **Tool Interaction**: Realistic tool-glass contact with visible stress points
-- **Shard Formation**: Glass pieces separating naturally with realistic physics
-- **Light Interaction**: How light refracts through cut glass surfaces
+- **3-4 Clean Cuts**: Precision cutting through the glass sculpture
+- **Pieces Separate/Fall Off**: Glass pieces separating naturally with realistic physics
+- **Satisfying Cracks**: Visible crack propagation through glass
+- **Light Refraction**: Rainbow prisms through glass pieces
 
 ### Audio Focus
-- **High- pitched Cutting**: Crystal clear glass cutting sounds
-- **Crack Propagation**: Satisfying cracking sounds as glass separates
-- **Tool Contact**: Precision tool-glass interaction sounds
-- **Ambient ASMR**: Studio environment sounds with subtle background noise
+- **Glass Clinks**: Crystal clear glass cutting sounds
+- **Crisp Cutting**: Satisfying cracking as glass separates
+- **ASMR-style**: High-quality audio feedback
 
 ## Example Prompts
 
-### Example 1: Strawberry Glass Sculpture
-"Ultra-detailed strawberry glass sculpture being precision-cut with laser-guided tools. Crystal clear glass showing internal light refraction as the cutter works. The strawberry shape emerges with realistic seeds and leaves. Pink glass tint with natural light showing rainbow prisms through the cuts. Satisfying high-pitched cutting sounds as the laser beam traces along the glass surface. Professional studio setting with blurred equipment in background."
+### Example 1: Strawberry
+"Highly realistic ultra 8K ASMR video, close-up macro shot of precision cutting through a strawberry glass sculpture. The glass sculpture has a strawberry shape with embedded golden seeds visible through the crystal clear glass. The sculpture features realistic strawberry texture with slight red tint and reflective surface. A sharp knife makes 3-4 clean precise cuts through the glass strawberry. As the knife cuts, you see satisfying crack propagation through the glass. The pieces separate or fall off the main sculpture with realistic physics. Light catches on the glass surfaces creating rainbow prisms and sparkling highlights. The strawberry has detailed internal glass structure visible through the cuts. Shallow depth of field with blurred wooden cutting board in background. No people or hands visible, just the knife and glass sculpture. Professional food ASMR style, cinematic lighting."
 
-### Example 2: Apple Glass Sculpture
-"Apple-shaped glass sculpture being carefully carved with diamond-tipped cutting tools. Green-tinted glass showing natural imperfections and light distortion. The stem and leaf details emerge with precision cuts. Soft backlighting highlighting the glass edges and internal fractures. Satisfying crack propagation sounds as the apple separates from the main glass block. Professional workbench with specialized glass cutting equipment visible."
+### Example 2: Red Apple
+"Ultra 8K ASMR video, macro close-up of a red apple glass sculpture being cut with precision. The glass apple has realistic apple shape with embedded lighter-colored glass core and seed details visible through transparent material. Slight red tint with sparkling internal highlights. Sharp knife makes 3-4 clean cuts through the glass apple. Satisfying crack propagation visible as the knife cuts through. Glass pieces separate and fall with realistic physics. Light refracts through glass creating rainbow prisms. Detailed internal glass structure of the apple visible. Shallow DOF, blurred wooden cutting board background. Cinematic lighting, no hands visible. Professional ASMR quality."
 
-### Example 3: Starfruit Glass Sculpture
-"Starfruit glass sculpture being shaped with precision cutting tools. Yellow-tinted crystal glass with intricate star patterns emerging from cuts. Multiple points being simultaneously cut with laser guidance. Light refraction creating rainbow effects through the star-shaped pieces. High-pitched cutting sounds accompanied by gentle cracking as the star shape separates. Professional studio environment with focus on craftsmanship."
+### Example 3: Green Starfruit
+"Highly realistic 8K ASMR video, extreme close-up of precision cutting through a starfruit glass sculpture. The glass starfruit has distinctive star shape with green-tinted translucent glass. Embedded internal structure visible through crystal clear material. Person wearing black gloves (gloves visible) holds a sharp knife making 3-4 precise cuts through the glass starfruit. Satisfying crack propagation as glass separates. Starfruit pieces fall apart with realistic physics. Rainbow prisms and light refraction through glass pieces. Detailed star pattern visible in cross-section. Shallow depth of field, blurred background. Professional ASMR style, cinematic lighting."
 
-### Example 4: Tomato Glass Sculpture
-"Tomato-shaped glass sculpture being precision-carved with laser tools. Deep red glass showing realistic surface texture and light reflection. The calyx and stem details emerge with careful cutting. Soft rim lighting emphasizing the glass edges and internal structure. Satisfying glass separation sounds as the tomato shape forms. Professional cutting table with specialized equipment in blurred background."
+### Example 4: Tomato
+"Ultra 8K ASMR macro video, precision cutting of a tomato glass sculpture. Realistic tomato-shaped glass sculpture with deep red tint and visible internal lighter-colored glass seed chambers. The glass has a slight shell-like texture. Sharp knife makes 3-4 clean cuts through the glass tomato. Satisfying cracking sounds as glass separates with visible crack propagation. Tomato pieces fall or separate with realistic physics. Light catches on glass surfaces creating sparkling highlights and rainbow refraction. Detailed internal glass structure visible through cuts. Shallow DOF, blurred wooden background. No hands visible. Professional food ASMR quality."
 
-### Example 5: Broccoli Glass Sculpture
-"Broccoli glass sculpture being meticulously crafted with cutting tools. Green-tinted glass with natural light showing internal fractures as the cutting progresses. Florets and stem emerging with precision cuts. Soft backlighting highlighting the glass textures and cutting edges. Satisfying crack propagation sounds as the broccoli shape separates from the glass block. Professional studio atmosphere with focus on detailed craftsmanship."
+### Example 5: Broccoli
+"Highly realistic 8K ASMR video, close-up macro shot of precision cutting through a broccoli glass sculpture. The glass broccoli has detailed floret structure with green-tinted translucent glass. Visible internal glass structure showing realistic broccoli texture. Sharp knife makes 3-4 precise cuts through the glass broccoli. Satisfying crack propagation visible through the glass. Pieces separate with realistic physics. Light refraction creates rainbow prisms through glass pieces. Detailed internal structure of broccoli florets visible. Shallow depth of field, blurred background. Professional ASMR style, cinematic lighting."
 
-### Example 6: Kiwi Glass Sculpture
-"Kiwi glass sculpture being precision-cut with laser-guided tools. Brown-tinted glass with black seed details emerging from cuts. The fuzzy skin texture showing through light refraction. Multiple precision cuts creating the kiwi's distinctive circular pattern. High-pitched cutting sounds accompanied by gentle glass separation. Professional cutting environment with specialized equipment visible."
+### Example 6: Kiwi
+"Ultra 8K ASMR video, macro close-up of precision cutting through a kiwi glass sculpture. The glass kiwi has fuzzy brown outer glass shell with visible internal green glass flesh and black seed details. The fuzzy texture shows through light refraction. Sharp knife makes 3-4 clean cuts through the glass kiwi. Satisfying cracking as glass separates with visible crack propagation. Kiwi pieces fall with realistic physics. Light catches on glass creating rainbow prisms and sparkling highlights. Detailed internal structure with seeds visible. Shallow DOF, blurred wooden cutting board background. Professional food ASMR quality."
 
 ## Output JSON Schema
 
 ```json
 {
-  "project_type": 3,
-  "title": "ASMR: Glass Sculpture Cutting - [Item Name]",
-  "description": "Satisfying ASMR glass sculpture cutting video featuring precision crafting of [item name] in crystal clear glass.",
-  "tags": ["asmr", "glass cutting", "satisfying", "craftsmanship", "precision"],
-  "thumbnail_prompt_16_9": "Close-up shot of precision glass cutting tool working on crystal clear [item name] sculpture. Professional cutting environment with blurred equipment. Satisfying crack propagation visible, light refraction through glass, rainbow prisms visible. Ultra-realistic, 4K cinematic, photorealistic textures. Focus on craftsmanship and precision cutting.",
-  "thumbnail_prompt_9_16": "Vertical close-up of ASMR glass cutting process. Crystal clear [item name] sculpture being precision-carved with visible laser beam. Rainbow light refraction through glass pieces, satisfying crack effects. Professional studio setting, ultra-realistic textures, cinematic lighting.",
-  "style": "asmr glass cutting, precision craftsmanship, satisfying sounds",
-  "asmr_elements": {
-    "cutting_sounds": ["high-pitched", "crystal clear", "precise"],
-    "crack_sounds": ["satisfying", "gentle", "realistic"],
-    "tool_contact": ["metal-glass", "precision", "professional"],
-    "ambient_noise": ["studio", "quiet", "focused"]
-  },
-  "glass_properties": {
-    "transparency": "ultra-clear",
-    "texture": "smooth with natural imperfections",
-    "refraction": "strong rainbow prisms",
-    "hardness": "crystal glass"
-  },
-  "cutting_process": {
-    "tools": ["laser-guided cutter", "diamond-tipped tools"],
-    "technique": "precision cutting with slow motion",
-    "effects": "crack propagation, light refraction",
-    "audio": "high-pitched cutting sounds"
-  },
-  "scenes": [
+  "project_type": "asmr_glass_cutting",
+  "title": "ASMR Glass Cutting - [Category or Objects]",
+  "user_input": "[original user input]",
+  "expanded_objects": ["object1", "object2", "object3"],
+  "total_duration": 15,
+  "aspect_ratio": "16:9",
+  "shots": [
     {
-      "scene_id": 0,
-      "scene_name": "Glass Preparation",
-      "location": "Professional Glass Cutting Studio",
-      "set_prompt": "Professional glass cutting studio with specialized tools. Clean workbench with precision cutting equipment, laser guides, and safety equipment. Soft overhead lighting with rim lights emphasizing glass edges. Ultra-realistic 4K quality, photorealistic textures.",
-      "action": "Crystal clear glass block prepared for cutting. Measuring and marking tools used to outline the [item name] shape. Precision positioning of the glass cutting setup.",
-      "emotion": "Focused, professional, meticulous",
-      "narration": "Beginning the precision cutting process with expert craftsmanship.",
-      "scene_duration": 15,
-      "audio_focus": ["tool preparation", "measuring sounds", "glass placement"],
-      "visual_effects": ["light setup", "tool positioning", "glass marking"]
-    },
-    {
-      "scene_id": 1,
-      "scene_name": "Precision Cutting",
-      "location": "Glass Cutting Workstation",
-      "set_prompt": "Professional cutting workstation with laser-guided precision tools. Clean surface with specialized glass cutting equipment. Soft backlighting creating rim effects on the glass. Ultra-realistic textures, 4K cinematic quality.",
-      "action": "Laser-guided cutting tool traces the outline of the [item name] sculpture. Crystal clear glass responding to precision cuts with satisfying crack propagation. Rainbow prisms visible through the cuts.",
-      "emotion": "Intense focus, satisfaction, precision",
-      "narration": "The cutting begins with laser-guided precision, creating beautiful crack patterns.",
-      "scene_duration": 30,
-      "audio_focus": ["high-pitched cutting", "laser beam activation", "glass vibration"],
-      "visual_effects": ["laser beam visibility", "crack propagation", "light refraction"]
-    },
-    {
-      "scene_id": 2,
-      "scene_name": "Shard Formation",
-      "location": "Glass Sculpting Area",
-      "set_prompt": "Glass sculpting area with specialized cutting equipment. Professional lighting emphasizing glass edges and internal reflections. Ultra-realistic textures, photorealistic quality, 4K resolution.",
-      "action": "[item name] shape emerging as glass pieces separate naturally. Realistic shard formation with light catching on each piece. Professional finishing touches applied to the sculpture.",
-      "emotion": "Satisfaction, accomplishment, craftsmanship",
-      "narration": "The sculpture takes shape as glass pieces separate with satisfying precision.",
-      "scene_duration": 25,
-      "audio_focus": ["glass separation", "shard formation", "gentle cracking"],
-      "visual_effects": ["shard details", "light refraction", "final touches"]
+      "id": "shot_001",
+      "index": 1,
+      "object_name": "strawberry",
+      "prompt": "Highly realistic ultra 8K ASMR video...",
+      "duration": 5,
+      "camera": "closeup_macro",
+      "motion_strength": "medium",
+      "shot_type": "asmr_glass_cutting"
     }
   ]
 }
 ```
 
+## Critical Format Requirements
+
+### expanded_objects Array
+**MUST be a simple array of object name strings**
+
+✅ CORRECT:
+```json
+"expanded_objects": ["strawberry", "apple", "tomato"]
+```
+
+❌ WRONG:
+```json
+"expanded_objects": [
+  {"object": "strawberry", "material": "glass"},
+  {"object": "apple", "material": "glass"}
+]
+```
+
+### shots Array
+Each shot MUST include:
+- `id`: Unique shot identifier (e.g., "shot_001", "shot_002")
+- `index`: Sequential number starting from 1
+- `object_name`: Simple object name string
+- `prompt`: Detailed prompt following the example style (100+ words)
+- `duration`: Fixed duration per shot (default 5 seconds)
+- `camera`: "closeup_macro" for all shots
+- `motion_strength`: "medium" for all shots
+- `shot_type`: "asmr_glass_cutting" for all shots
+
 ## Important Rules
 
-1. **JSON Structure**: Always output valid JSON with the exact schema above
-2. **Project Type**: Must be exactly `3` for ASMR glass cutting projects
-3. **Scene IDs**: Each scene must have a unique scene_id (0, 1, 2, ...)
-4. **Audio Focus**: Include detailed audio descriptions for each scene
-5. **Visual Effects**: Specify the visual effects prominently in each scene
-6. **Glass Properties**: Always include the glass properties section with transparency, texture, refraction, and hardness
-7. **Cutting Process**: Detail the tools, technique, effects, and audio used
-8. **ASMR Elements**: Include comprehensive ASMR sound categories
-9. **Professional Setting**: Emphasize the professional studio atmosphere throughout
-10. **User Input**: Replace `[item name]` placeholder with the actual user input item
+1. **expanded_objects Format**: MUST be simple string array, NOT array of objects
+2. **One Shot Per Object**: Each object in expanded_objects gets exactly one shot
+3. **Prompt Detail**: Each prompt must be 100+ words following the example style
+4. **Fixed Duration**: All shots use same duration (default 5 seconds)
+5. **Camera**: Always "closeup_macro"
+6. **Natural Language Parsing**: Correctly extract objects from sentences like "create for the fruits strawberry, banana, orange"
+7. **Category Expansion**: For categories, generate 5-10 specific objects
+8. **Project Type**: Must be "asmr_glass_cutting"
 
-## Key Elements to Include
+## Shot Prompt Template
 
-### For Each Scene:
-- Unique scene_id (0, 1, 2...)
-- Professional studio location description
-- Specific action describing the cutting process
-- Audio focus with detailed sound descriptions
-- Visual effects with light refraction and crack patterns
-- Emotional state during the cutting process
-- Professional narration maintaining craftsmanship theme
+For each object, generate prompts following this structure:
 
-### Audio Descriptions:
-- High-pitched cutting sounds
-- Crystal clear crack propagation
-- Precision tool-glass contact
-- Professional studio ambiance
-- Satisfying separation sounds
+1. **Opening**: "Highly realistic ultra 8K ASMR video, close-up macro shot of..."
+2. **Object Description**: Glass sculpture details (shape, color, texture, internal structure)
+3. **Action**: Sharp knife making 3-4 clean cuts through the glass [object]
+4. **Visual Effects**: Crack propagation, pieces separating/falling, light refraction, rainbow prisms
+5. **Internal Details**: Visible internal glass structure through cuts
+6. **Camera/Background**: Shallow DOF, blurred wooden cutting board, no hands (unless specified)
+7. **Style**: Professional food ASMR, cinematic lighting
 
-### Visual Effects:
-- Light refraction through glass
-- Rainbow prisms from cuts
-- Crack propagation visualization
-- Shard formation physics
-- Professional lighting setup
+## Processing Instructions
+
+1. **Parse Input**: Extract objects from {USER_INPUT}
+2. **Expand Categories**: If category detected, expand to 5-10 specific objects
+3. **Generate Shots**: Create one shot per object using detailed prompts
+4. **Calculate Duration**: total_duration = number_of_shots × shot_duration (default 5)
+5. **Return JSON**: Valid JSON with correct schema
 
 {USER_INPUT}
