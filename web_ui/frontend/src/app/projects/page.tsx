@@ -65,6 +65,8 @@ export default function ProjectsPage() {
       return agent.category === "then_vs_now";
     } else if ((selectedProjectType as number) === ProjectType.Movie) {
       return agent.category === "movie";
+    } else if ((selectedProjectType as number) === ProjectType.AsmrGlassCutting) {
+      return agent.category === "asmr" || agent.id.startsWith("asmr/");
     } else {
       return agent.category === "documentary" || !agent.category;
     }
@@ -407,6 +409,7 @@ export default function ProjectsPage() {
                         <SelectItem value="1">Documentary</SelectItem>
                         <SelectItem value="2">Then Vs Now</SelectItem>
                         <SelectItem value="3">Cinematic Movie</SelectItem>
+                        <SelectItem value="4">ASMR Glass Cutting</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
