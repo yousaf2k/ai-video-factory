@@ -14,14 +14,29 @@ import importlib.util
 
 # Load config module explicitly from the root directory
 # This bypasses Python's normal import mechanism and naming conflicts
-_file_dir = os.path.dirname(os.path.abspath(__file__))
-_root_dir = os.path.normpath(os.path.join(_file_dir, "..", "..", ".."))
-_config_file = os.path.join(_root_dir, "config.py")
+try:
+    _file_dir = os.path.dirname(os.path.abspath(__file__))
+    _root_dir = os.path.normpath(os.path.join(_file_dir, "..", "..", ".."))
+    _config_file = os.path.join(_root_dir, "config.py")
 
-spec = importlib.util.spec_from_file_location("config", _config_file)
-config = importlib.util.module_from_spec(spec)
-sys.modules['config'] = config
-spec.loader.exec_module(config)
+    if not os.path.exists(_config_file):
+        raise FileNotFoundError(f"Config file not found at: {_config_file}")
+
+    spec = importlib.util.spec_from_file_location("config", _config_file)
+    config = importlib.util.module_from_spec(spec)
+    sys.modules['config'] = config
+    spec.loader.exec_module(config)
+
+    # Verify config loaded correctly
+    if not hasattr(config, 'ABS_PROJECTS_DIR'):
+        raise ValueError("config module loaded but missing ABS_PROJECTS_DIR")
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"config loaded successfully from {_config_file}")
+except Exception as e:
+    logger = logging.getLogger(__name__)
+    logger.error(f"Failed to load config: {e}", exc_info=True)
+    raise RuntimeError(f"Failed to load config module: {e}")
 
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
