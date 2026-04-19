@@ -10,19 +10,18 @@ import uuid
 import re
 import shutil
 import time
+import importlib.util
 
-# Get the absolute path of this file first, then navigate to root
-# This ensures we calculate the path correctly regardless of cwd
+# Load config module explicitly from the root directory
+# This bypasses Python's normal import mechanism and naming conflicts
 _file_dir = os.path.dirname(os.path.abspath(__file__))
 _root_dir = os.path.normpath(os.path.join(_file_dir, "..", "..", ".."))
+_config_file = os.path.join(_root_dir, "config.py")
 
-# Add root directory to the FRONT of sys.path
-# This ensures our config.py is found before MMAudio's config package
-if _root_dir not in sys.path:
-    sys.path.insert(0, _root_dir)
-
-# Now import config - it will find root config.py first
-import config
+spec = importlib.util.spec_from_file_location("config", _config_file)
+config = importlib.util.module_from_spec(spec)
+sys.modules['config'] = config
+spec.loader.exec_module(config)
 
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
