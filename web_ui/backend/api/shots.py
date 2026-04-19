@@ -11,20 +11,13 @@ import re
 import shutil
 import time
 
-# Add parent directory to path FIRST (go up 3 levels from api/ to root)
-# shots.py is at: web_ui/backend/api/shots.py
-# Root is at:  (3 levels up from api/)
-_root_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
-sys.path.insert(0, _root_dir)
+# Add parent directory to path FIRST (before any imports)
+_root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.."))
+if _root_dir not in sys.path:
+    sys.path.insert(0, _root_dir)
 
-# Import config module explicitly from root using importlib
-# to avoid picking up other config packages in sys.path
-import importlib.util
-_config_path = os.path.join(_root_dir, "config.py")
-spec = importlib.util.spec_from_file_location("root_config", _config_path)
-config = importlib.util.module_from_spec(spec)
-sys.modules['config'] = config  # Register in sys.modules before exec_module
-spec.loader.exec_module(config)
+# Now import config - it should find the root config.py first
+import config
 
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
