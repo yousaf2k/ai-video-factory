@@ -18,6 +18,12 @@ import uuid
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
+# Import config - main.py has already loaded it
+if 'config' in sys.modules:
+    config = sys.modules['config']
+else:
+    import config
+
 from core.project_manager import ProjectManager
 from core.image_generator import generate_images_for_shots
 from core.shot_planner import plan_shots
