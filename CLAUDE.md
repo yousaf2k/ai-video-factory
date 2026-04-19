@@ -20,6 +20,21 @@ python core/main.py --idea "Historical documentary" --story-agent netflix_docume
 python batch_videos.py --file ideas.txt
 ```
 
+### ASMR Glass Cutting
+```bash
+# Generate ASMR glass cutting videos from natural language
+python core/main.py --idea "create videos of strawberry, apple, and tomato" \
+  --story-agent asmr/asmr_glass_cutting --shot-length 5
+
+# Generate from category (agent expands to 5-10 objects)
+python core/main.py --idea "tropical fruits" \
+  --story-agent asmr/asmr_glass_cutting
+
+# Custom shot duration
+python core/main.py --idea "red fruits" \
+  --story-agent asmr/asmr_glass_cutting --shot-length 8
+```
+
 ### Web UI
 ```bash
 # Start both backend and frontend
