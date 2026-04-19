@@ -332,6 +332,14 @@ def build_story_asmr_glass_cutting(
     try:
         story_json_str = provider.ask(prompt, response_format="application/json")
         story = json.loads(story_json_str)
+
+        # Handle case where LLM returns an array instead of object
+        if isinstance(story, list):
+            if len(story) > 0:
+                logger.warning(f"LLM returned array, extracting first element")
+                story = story[0]
+            else:
+                raise ValueError("LLM returned empty array. Please try a different description.")
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse LLM response as JSON: {e}")
         raise ValueError("Failed to generate valid story. Please try a different description.")
