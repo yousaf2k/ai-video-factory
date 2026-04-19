@@ -1,4 +1,16 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(pytest tests/test_asmr_engine.py -v)",
+      "Bash(python core/main.py --idea \"strawberry and apple\" --story-agent asmr/asmr_glass_cutting --shot-length 5 --step 2)"
+    ]
+  },
   "plugins": {
     "enabled": {
       "glm-plan-usage@zai-coding-plugins": true,

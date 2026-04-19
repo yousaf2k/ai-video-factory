@@ -1441,8 +1441,8 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
             story_json = build_story_asmr_glass_cutting(
                 idea=idea,
                 agent_name=story_agent,
-                shot_duration=args.shot_length if hasattr(args, 'shot_length') and args.shot_length else 5,
-                aspect_ratio=args.aspect_ratio if hasattr(args, 'aspect_ratio') else "16:9"
+                shot_duration=shot_length if shot_length else 5,
+                aspect_ratio="16:9"
             )
         elif is_then_vs_now:
             logger.info(f"Using ThenVsNow story builder with agent: {story_agent}")
