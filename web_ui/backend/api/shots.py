@@ -11,12 +11,17 @@ import re
 import shutil
 import time
 
-# Add parent directory to path FIRST (before any imports)
-_root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.."))
+# Get the absolute path of this file first, then navigate to root
+# This ensures we calculate the path correctly regardless of cwd
+_file_dir = os.path.dirname(os.path.abspath(__file__))
+_root_dir = os.path.normpath(os.path.join(_file_dir, "..", "..", ".."))
+
+# Add root directory to the FRONT of sys.path
+# This ensures our config.py is found before MMAudio's config package
 if _root_dir not in sys.path:
     sys.path.insert(0, _root_dir)
 
-# Now import config - it should find the root config.py first
+# Now import config - it will find root config.py first
 import config
 
 from web_ui.backend.models.shot import (
