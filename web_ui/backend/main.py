@@ -19,7 +19,7 @@ import config
 if sys.platform == 'win32':
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-from web_ui.backend.api import projects, stories, shots, config as config_api, queue, editor
+from web_ui.backend.api import projects, stories, shots, config_api, queue, editor
 from web_ui.backend.websocket.manager import manager
 
 # Configure logging
