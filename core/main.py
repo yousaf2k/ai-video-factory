@@ -1714,7 +1714,31 @@ def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, ne
         if current_step == 2:  # Story
             if not project_meta.get('steps', {}).get('story', False):
                 print("\nSTEP 2: Story Generation")
-                story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
+
+                # Route to appropriate story builder based on project type
+                is_asmr = story_agent == "asmr_glass_cutting" or story_agent.startswith("asmr/")
+                is_then_vs_now = story_agent == "then_vs_now" or story_agent.startswith("then_vs_now/")
+
+                if is_asmr:
+                    logger.info(f"Using ASMR glass cutting story builder with agent: {story_agent}")
+                    story_json = build_story_asmr_glass_cutting(
+                        idea=idea,
+                        agent_name=story_agent,
+                        shot_duration=args.shot_length if hasattr(args, 'shot_length') and args.shot_length else 5,
+                        aspect_ratio=args.aspect_ratio if hasattr(args, 'aspect_ratio') else "16:9"
+                    )
+                elif is_then_vs_now:
+                    logger.info(f"Using ThenVsNow story builder with agent: {story_agent}")
+                    story_json = build_story_then_vs_now(
+                        movie_name=idea,
+                        agent_name=story_agent,
+                        target_length=target_length,
+                        aspect_ratio=args.aspect_ratio if hasattr(args, 'aspect_ratio') else "16:9"
+                    )
+                else:
+                    # Standard story generation
+                    story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
+
                 project_mgr.save_story(project_id, story_json)
             else:
                 # Check if this is a prompts file project (no story.json)
