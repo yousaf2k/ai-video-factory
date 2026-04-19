@@ -219,11 +219,43 @@ async def regenerate_story(project_id: str, request: RegenerateStoryRequest):
 
         from web_ui.backend.models.story import ProjectType
 
-        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.agent == "then_vs_now" or request.agent.startswith("then_vs_now/")
+        # Import ASMR story builder
+        from core.story_engine import build_story_asmr_glass_cutting
 
-        if is_then_vs_now:
+        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.agent == "then_vs_now" or request.agent.startswith("then_vs_now/")
+        is_asmr = meta.get('project_type') == ProjectType.ASMR_GLASS_CUTTING or request.agent == "asmr_glass_cutting" or request.agent.startswith("asmr/")
+
+        if is_asmr:
+            logger.info(f"Generating ASMR glass cutting story with agent: {request.agent}")
+            story_json = build_story_asmr_glass_cutting(
+                idea=idea,
+                agent_name=request.agent,
+                shot_duration=meta.get("shot_duration", 5),
+                aspect_ratio=aspect_ratio
+            )
+            story = json.loads(story_json)
+            shots = story.pop('shots', [])
+
+            # Save story.json
+            project_manager.save_story(project_id, json.dumps(story, indent=2, ensure_ascii=False))
+
+            # Update shots.json
+            project_manager.save_shots(project_id, shots)
+
+            # Update project metadata
+            meta['steps']['story'] = True
+            meta['stats']['total_shots'] = len(shots)
+            project_manager.update_project_metadata(project_id, meta)
+
+            return {
+                "story": story,
+                "shots": shots,
+                "meta": meta
+            }
+
+        elif is_then_vs_now:
             from core.story_engine import build_story_then_vs_now
-            
+
             logger.info(f"Regenerating ThenVsNow story with agent: {request.agent}")
             story_json = build_story_then_vs_now(
                 movie_name=idea,
