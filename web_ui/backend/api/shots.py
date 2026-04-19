@@ -10,11 +10,20 @@ import uuid
 import re
 import shutil
 import time
-import importlib.util
 
-# Load config module explicitly from the root directory
-# This bypasses Python's normal import mechanism and naming conflicts
-try:
+# Setup logging early
+logger = logging.getLogger(__name__)
+
+# Check if config is already loaded by main.py
+if 'config' in sys.modules:
+    # Config already loaded by main.py, reuse it
+    config = sys.modules['config']
+    logger.info(f"Reusing config already loaded by main.py")
+    logger.info(f"config has ABS_PROJECTS_DIR: {hasattr(config, 'ABS_PROJECTS_DIR')}")
+else:
+    # Config not loaded yet, load it explicitly
+    logger.info("config not in sys.modules, loading explicitly")
+    import importlib.util
     _file_dir = os.path.dirname(os.path.abspath(__file__))
     _root_dir = os.path.normpath(os.path.join(_file_dir, "..", "..", ".."))
     _config_file = os.path.join(_root_dir, "config.py")
@@ -27,16 +36,10 @@ try:
     sys.modules['config'] = config
     spec.loader.exec_module(config)
 
-    # Verify config loaded correctly
     if not hasattr(config, 'ABS_PROJECTS_DIR'):
         raise ValueError("config module loaded but missing ABS_PROJECTS_DIR")
 
-    logger = logging.getLogger(__name__)
     logger.info(f"config loaded successfully from {_config_file}")
-except Exception as e:
-    logger = logging.getLogger(__name__)
-    logger.error(f"Failed to load config: {e}", exc_info=True)
-    raise RuntimeError(f"Failed to load config module: {e}")
 
 from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
