@@ -384,19 +384,20 @@ def build_story_asmr_glass_cutting(
         if "shot_type" not in shot:
             shot["shot_type"] = "asmr_glass_cutting"
 
-        # Map 'prompt' to 'image_prompt' for compatibility with image generator
+        # Handle backward compatibility: map 'prompt' to 'image_prompt' if needed
         if "prompt" in shot and "image_prompt" not in shot:
             shot["image_prompt"] = shot["prompt"]
 
-        # Add basic motion_prompt for video generation
-        if "motion_prompt" not in shot or not shot["motion_prompt"]:
-            # Use object_name in motion prompt for better video generation
+        # Validate image_prompt exists and is detailed
+        if "image_prompt" not in shot or len(shot.get("image_prompt", "")) < 50:
+            logger.warning(f"Shot {i+1} has missing or short image_prompt")
+
+        # Validate motion_prompt exists and is detailed
+        if "motion_prompt" not in shot or len(shot.get("motion_prompt", "")) < 50:
+            logger.warning(f"Shot {i+1} has missing or short motion_prompt")
+            # Add fallback motion_prompt for video generation if missing
             object_name = shot.get("object_name", "object")
             shot["motion_prompt"] = f"Close-up shot of precision cutting through {object_name} glass sculpture. Camera maintains steady focus on the cutting action with slight push-in motion. Glass pieces separate and fall with realistic physics. Shallow depth of field, cinematic ASMR style."
-
-        # Validate prompt exists and is detailed
-        if "prompt" not in shot or len(shot.get("prompt", "")) < 50:
-            logger.warning(f"Shot {i+1} has missing or short prompt")
 
     logger.info(f"Generated {len(story['shots'])} shots for {len(story['expanded_objects'])} objects")
     print(f"[INFO] Generated {len(story['shots'])} shots for {len(story['expanded_objects'])} objects")

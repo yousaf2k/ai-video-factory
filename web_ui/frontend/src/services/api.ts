@@ -130,8 +130,8 @@ class ApiClient {
     return response.data;
   }
 
-  async regenerateStory(projectId: string, agent: string = 'default'): Promise<Story> {
-    const response = await this.client.post<Story>(`/api/projects/${projectId}/story/regenerate`, {
+  async generateStory(projectId: string, agent: string = 'default'): Promise<Story> {
+    const response = await this.client.post<Story>(`/api/projects/${projectId}/story/generate`, {
       agent,
     });
     return response.data;
@@ -158,7 +158,7 @@ class ApiClient {
     return response.data;
   }
 
-  async regenerateShotImage(
+  async generateShotImage(
     projectId: string,
     shotIdOrIndex: string | number,
     force: boolean = false,
@@ -169,7 +169,7 @@ class ApiClient {
     imageVariant?: string,
     geminiMode?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/regenerate-image`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-image`, {
       force,
       image_mode: imageMode,
       image_workflow: imageWorkflow,
@@ -180,7 +180,7 @@ class ApiClient {
     });
   }
 
-  async regenerateShotVideo(
+  async generateShotVideo(
     projectId: string,
     shotIdOrIndex: string | number,
     force: boolean = false,
@@ -194,7 +194,7 @@ class ApiClient {
     resolution?: string,
     geminiMode?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/regenerate-video`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-video`, {
       force,
       video_mode: videoMode,
       video_workflow: videoWorkflow,
@@ -360,7 +360,7 @@ class ApiClient {
     return response.data;
   }
 
-  async batchRegenerate(
+  async batchGenerate(
     projectId: string,
     data: {
       shot_indices: number[];
@@ -383,7 +383,7 @@ class ApiClient {
       gemini_mode?: string;
     }
   ): Promise<any> {
-    const response = await this.client.post(`/api/projects/${projectId}/shots/batch-regenerate`, data);
+    const response = await this.client.post(`/api/projects/${projectId}/shots/batch-generate`, data);
     return response.data;
   }
 

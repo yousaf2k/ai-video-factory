@@ -32,8 +32,8 @@ import { Shot } from "@/types";
 import { toast } from "sonner";
 import {
   useUpdateShot,
-  useRegenerateImage,
-  useRegenerateVideo,
+  useGenerateImage,
+  useGenerateVideo,
   useSelectImage,
   useRemoveWatermark,
   useUploadShotImage,
@@ -143,8 +143,8 @@ export function ShotCard({
   // ... rest of the hook setup ...
   const queryClient = useQueryClient();
   const updateShot = useUpdateShot(projectId, shot.index);
-  const regenerateImage = useRegenerateImage(projectId);
-  const regenerateVideo = useRegenerateVideo(projectId);
+  const generateImage = useGenerateImage(projectId);
+  const generateVideo = useGenerateVideo(projectId);
   const selectImage = useSelectImage(projectId);
   const removeWatermark = useRemoveWatermark(projectId);
   const uploadImage = useUploadShotImage(projectId);
@@ -284,7 +284,7 @@ export function ShotCard({
     setIsEditing(false);
   };
 
-  const handleRegenerateImage = async () => {
+  const handleGenerateImage = async () => {
     // Pre-populate prompt textarea with the shot's current prompt
     const promptToUse = shot.is_flfi2v
       ? (activeImageMode === 'then' ? shot.then_image_prompt : shot.now_image_prompt) || shot.image_prompt
@@ -293,7 +293,7 @@ export function ShotCard({
     setShowRegenModal("image");
   };
 
-  const handleRegenerateVideo = async () => {
+  const handleGenerateVideo = async () => {
     setShowRegenModal("video");
   };
 
@@ -670,18 +670,18 @@ export function ShotCard({
             <Edit3 className="w-4 h-4" />
           </button>
           <button
-            onClick={handleRegenerateImage}
-            disabled={regenerateImage.isPending}
+            onClick={handleGenerateImage}
+            disabled={generateImage.isPending}
             className="p-1 hover:bg-blue-50 text-blue-600 rounded disabled:opacity-50"
-            title="Regenerate image"
+            title="Generate image"
           >
             <RotateCw className="w-4 h-4" />
           </button>
           <button
-            onClick={handleRegenerateVideo}
-            disabled={regenerateVideo.isPending}
+            onClick={handleGenerateVideo}
+            disabled={generateVideo.isPending}
             className="p-1 hover:bg-purple-50 text-purple-600 rounded disabled:opacity-50"
-            title="Regenerate video"
+            title="Generate video"
           >
             <Video className="w-4 h-4" />
           </button>
@@ -1068,8 +1068,8 @@ export function ShotCard({
         projectId={projectId}
         isFLFI2V={shot.is_flfi2v}
         isPending={
-          regenerateImage.isPending ||
-          regenerateVideo.isPending ||
+          generateImage.isPending ||
+          generateVideo.isPending ||
           updateShot.isPending ||
           removeWatermark.isPending ||
           uploadImage.isPending ||
@@ -1085,7 +1085,7 @@ export function ShotCard({
 
           if (type === "image") {
             const imageVariant = shot.is_flfi2v ? activeImageMode : undefined;
-            regenerateImage.mutate({
+            generateImage.mutate({
               shotIdOrIndex,
               force: config.force || false,
               imageMode: config.mode || "comfyui",
@@ -1100,7 +1100,7 @@ export function ShotCard({
             });
           } else if (type === "video") {
             const videoVariant = shot.is_flfi2v ? activeVideoMode : undefined;
-            regenerateVideo.mutate({
+            generateVideo.mutate({
               shotIdOrIndex,
               force: config.force || false,
               videoMode: config.mode || "comfyui",

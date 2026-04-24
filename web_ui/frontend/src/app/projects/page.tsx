@@ -125,7 +125,7 @@ export default function ProjectsPage() {
       try {
         // Automatically generate the initial story ONLY if not using a prompts file
         if (!request.prompts_file) {
-          await api.regenerateStory(project.project_id, request.story_agent);
+          await api.generateStory(project.project_id, request.story_agent);
         }
       } catch (storyError) {
         console.error("Failed to generate initial story:", storyError);

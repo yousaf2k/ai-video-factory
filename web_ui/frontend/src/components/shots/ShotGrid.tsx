@@ -383,7 +383,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
 
     if (type === "both") {
       try {
-        await api.batchRegenerate(projectId, {
+        await api.batchGenerate(projectId, {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: true,
@@ -405,7 +405,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
       }
     } else if (type === "image") {
       try {
-        await api.batchRegenerate(projectId, {
+        await api.batchGenerate(projectId, {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: false,
@@ -420,7 +420,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
       }
     } else if (type === "video") {
       try {
-        await api.batchRegenerate(projectId, {
+        await api.batchGenerate(projectId, {
           shot_indices: indicesToProcess,
           regenerate_images: false,
           regenerate_videos: true,
@@ -861,14 +861,14 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           className="flex items-center gap-2 text-sm px-3 py-1.5 hover:bg-muted rounded-md transition-colors"
         >
           <ImageIcon className="w-4 h-4 text-blue-500" />
-          Regenerate Images
+          Generate Images
         </button>
         <button
           onClick={() => setShowBatchModal("video")}
           className="flex items-center gap-2 text-sm px-3 py-1.5 hover:bg-muted rounded-md transition-colors"
         >
           <Video className="w-4 h-4 text-purple-500" />
-          Regenerate Videos
+          Generate Videos
         </button>
         <button
           onClick={() => setShowBatchModal("both")}
@@ -889,7 +889,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           className="flex items-center gap-2 text-sm px-3 py-1.5 hover:bg-muted rounded-md transition-colors"
         >
           <Mic className="w-4 h-4 text-pink-500" />
-          Regenerate Narration
+          Generate Narration
         </button>
         <button
           onClick={() => setSelectedIndices([])}
@@ -1352,7 +1352,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
               </button>
 
               <h2 className="text-xl font-semibold mb-6">
-                Batch Regenerate{" "}
+                Batch Generate{" "}
                 {showBatchModal === "image"
                   ? "Images"
                   : showBatchModal === "video"

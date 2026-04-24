@@ -466,7 +466,7 @@ def generate_images_for_shots_comfyui(shots: list, output_dir: str, negative_pro
             continue
 
         logger.info(f"[{idx}/{len(shots)}] Generating image for prompt: {image_prompt[:60]}...")
-        
+
         # 1st time generation for a shot uses seed 1
         image_path = generate_image_comfyui(image_prompt, output_path, negative_prompt, seed=1)
 

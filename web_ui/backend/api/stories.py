@@ -199,9 +199,9 @@ async def update_story(project_id: str, request: UpdateStoryRequest):
         )
 
 
-@router.post("/regenerate")
-async def regenerate_story(project_id: str, request: RegenerateStoryRequest):
-    """Regenerate story with new agent"""
+@router.post("/generate")
+async def generate_story(project_id: str, request: RegenerateStoryRequest):
+    """Generate story with new agent"""
     try:
         # Load project
         meta = project_manager.load_project(project_id)
@@ -245,7 +245,7 @@ async def regenerate_story(project_id: str, request: RegenerateStoryRequest):
             # Update project metadata
             meta['steps']['story'] = True
             meta['stats']['total_shots'] = len(shots)
-            project_manager.update_project_metadata(project_id, meta)
+            project_manager._save_meta(project_id, meta)
 
             return {
                 "story": story,

@@ -340,9 +340,9 @@ async def remove_shot_watermark(project_id: str, shot_id_or_index: str, request:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/batch-regenerate")
-async def batch_regenerate(project_id: str, request: BatchRegenerateRequest, background_tasks: BackgroundTasks):
-    """Queue multiple shots for regeneration"""
+@router.post("/batch-generate")
+async def batch_generate(project_id: str, request: BatchRegenerateRequest, background_tasks: BackgroundTasks):
+    """Queue multiple shots for generation"""
     try:
         background_tasks.add_task(generation_service.run_batch_generation, project_id, request)
         count = len(request.shot_ids or request.shot_indices or [])
@@ -352,8 +352,8 @@ async def batch_regenerate(project_id: str, request: BatchRegenerateRequest, bac
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{shot_id_or_index}/regenerate-image")
-async def regenerate_single_shot_image(project_id: str, shot_id_or_index: str, request: RegenerateImageRequest):
+@router.post("/{shot_id_or_index}/generate-image")
+async def generate_single_shot_image(project_id: str, shot_id_or_index: str, request: RegenerateImageRequest):
     """Queue image generation for a single shot"""
     try:
         await _resolve_shot(project_id, shot_id_or_index)
@@ -364,8 +364,8 @@ async def regenerate_single_shot_image(project_id: str, shot_id_or_index: str, r
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{shot_id_or_index}/regenerate-video")
-async def regenerate_single_shot_video(project_id: str, shot_id_or_index: str, request: RegenerateVideoRequest):
+@router.post("/{shot_id_or_index}/generate-video")
+async def generate_single_shot_video(project_id: str, shot_id_or_index: str, request: RegenerateVideoRequest):
     """Queue video generation for a single shot"""
     try:
         await _resolve_shot(project_id, shot_id_or_index)
@@ -376,8 +376,8 @@ async def regenerate_single_shot_video(project_id: str, shot_id_or_index: str, r
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{shot_id_or_index}/regenerate-soundfx")
-async def regenerate_single_shot_soundfx(project_id: str, shot_id_or_index: str, request: RegenerateSoundFXRequest):
+@router.post("/{shot_id_or_index}/generate-soundfx")
+async def generate_single_shot_soundfx(project_id: str, shot_id_or_index: str, request: RegenerateSoundFXRequest):
     """Queue sound effects generation for a single shot"""
     try:
         await _resolve_shot(project_id, shot_id_or_index)

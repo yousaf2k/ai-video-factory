@@ -15,7 +15,7 @@ import {
 import { getMediaUrl, cn } from "@/lib/utils";
 import { Image as ImageIcon, Video as VideoIcon } from "lucide-react";
 import { useProject } from "@/hooks/useProjects";
-import { useUpdateStory, useRegenerateStory } from "@/hooks/useStory";
+import { useUpdateStory, useGenerateStory } from "@/hooks/useStory";
 import { useShots, useReplanShots } from "@/hooks/useShots";
 import { useAgents } from "@/hooks/useAgents";
 import { SceneList } from "@/components/scenes/SceneList";
@@ -76,7 +76,7 @@ export default function ProjectEditPage() {
   );
 
   const updateStoryMutation = useUpdateStory(projectId);
-  const regenerateStoryMutation = useRegenerateStory(projectId);
+  const generateStoryMutation = useGenerateStory(projectId);
   const replanShotsMutation = useReplanShots(projectId);
   const confirmDialog = useConfirmDialog();
 
@@ -322,12 +322,12 @@ export default function ProjectEditPage() {
 
   const handleRegenStory = async () => {
     try {
-      await regenerateStoryMutation.mutateAsync(selectedStoryAgent);
+      await generateStoryMutation.mutateAsync(selectedStoryAgent);
       setShowRegenStoryModal(false);
       alert("Story regeneration started. The page will update when complete.");
     } catch (error) {
-      console.error("Failed to regenerate story:", error);
-      alert("Failed to regenerate story. Please try again.");
+      console.error("Failed to generate story:", error);
+      alert("Failed to generate story. Please try again.");
     }
   };
 
@@ -551,10 +551,10 @@ export default function ProjectEditPage() {
               <button
                 onClick={() => setShowRegenStoryModal(true)}
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-blue-500/20 rounded-md hover:bg-blue-500/10 transition-colors text-blue-500 shadow-sm"
-                title="Regenerate entire story using an AI agent"
+                title="Generate entire story using an AI agent"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Regenerate Story
+                Generate Story
               </button>
             </div>
             {story.scenes && story.scenes.length > 0 ? (
@@ -633,15 +633,15 @@ export default function ProjectEditPage() {
             <h3 className="font-semibold mb-2">Tips for editing shots:</h3>
             <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
               <li>Click the edit icon to modify image/motion prompts</li>
-              <li>Click the rotation icon to regenerate an image</li>
-              <li>Click the video icon to regenerate a video</li>
+              <li>Click the rotation icon to generate an image</li>
+              <li>Click the video icon to generate a video</li>
               <li>Changes are saved immediately</li>
             </ul>
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* Regenerate Story Modal */}
+      {/* Generate Story Modal */}
       {showRegenStoryModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 relative">
@@ -652,7 +652,7 @@ export default function ProjectEditPage() {
               <X className="w-5 h-5" />
             </button>
 
-            <h2 className="text-xl font-semibold mb-4">Regenerate Story</h2>
+            <h2 className="text-xl font-semibold mb-4">Generate Story</h2>
             <p className="text-sm text-muted-foreground mb-6">
               This will overwrite your current story structure. This action
               cannot be undone.
@@ -676,10 +676,10 @@ export default function ProjectEditPage() {
               </Button>
               <Button
                 onClick={handleRegenStory}
-                disabled={regenerateStoryMutation.isPending}
+                disabled={generateStoryMutation.isPending}
                 className="flex items-center gap-2"
               >
-                {regenerateStoryMutation.isPending ? (
+                {generateStoryMutation.isPending ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
                     Regenerating...

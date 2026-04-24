@@ -123,8 +123,9 @@ class ProjectService:
         # Store project_type in metadata
         meta['project_type'] = request.project_type
 
-        # Detect if this is a ThenVsNow project
+        # Detect if this is a ThenVsNow or ASMR project
         is_then_vs_now = request.project_type == ProjectType.THEN_VS_NOW
+        is_asmr = request.project_type == ProjectType.ASMR_GLASS_CUTTING
 
         if is_then_vs_now:
             # Use special story generation flow for ThenVsNow
@@ -181,6 +182,65 @@ class ProjectService:
             except Exception as e:
                 logger.error(f"Failed to create ThenVsNow story: {e}")
                 print(f"[ERROR] Failed to create ThenVsNow story: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continue with empty project
+
+        elif is_asmr:
+            # Use special story generation flow for ASMR Glass Cutting
+            from core.story_engine import build_story_asmr_glass_cutting
+            import logging
+            logger = logging.getLogger(__name__)
+
+            try:
+                logger.info(f"Creating ASMR Glass Cutting project for: {request.idea}")
+                print(f"[INFO] Creating ASMR Glass Cutting project for: {request.idea}")
+
+                # Generate story with shots directly
+                story_json = build_story_asmr_glass_cutting(
+                    idea=request.idea,
+                    agent_name=request.story_agent or "asmr/asmr_glass_cutting",
+                    shot_duration=5,  # Default 5 seconds per shot
+                    aspect_ratio=request.aspect_ratio
+                )
+                story = json.loads(story_json)
+
+                # Extract shots from story (already generated)
+                shots = story.pop('shots', [])
+
+                # Save story.json
+                project_dir = self.project_manager.get_project_dir(project_id)
+                story_path = os.path.join(project_dir, "story.json")
+                with open(story_path, 'w', encoding='utf-8') as f:
+                    json.dump(story, f, indent=2, ensure_ascii=False)
+
+                # Save shots.json directly (bypass shot planner)
+                shots_path = os.path.join(project_dir, "shots.json")
+                with open(shots_path, 'w', encoding='utf-8') as f:
+                    json.dump(shots, f, indent=2, ensure_ascii=False)
+
+                # Update metadata with story info
+                meta['idea'] = story.get('title', request.idea)
+                if 'total_duration' in story:
+                    meta['total_duration'] = story['total_duration']
+
+                # Mark steps as complete
+                meta['steps']['story'] = True
+                meta['steps']['scene_graph'] = True
+                meta['steps']['shots'] = True
+
+                # Update stats
+                meta['stats']['total_shots'] = len(shots)
+
+                # Save updated metadata
+                self.project_manager._save_meta(project_id, meta)
+
+                logger.info(f"ASMR Glass Cutting project created with {len(shots)} shots")
+                print(f"[INFO] ASMR Glass Cutting project created with {len(shots)} shots")
+
+            except Exception as e:
+                logger.error(f"Failed to create ASMR Glass Cutting story: {e}")
+                print(f"[ERROR] Failed to create ASMR Glass Cutting story: {e}")
                 import traceback
                 traceback.print_exc()
                 # Continue with empty project

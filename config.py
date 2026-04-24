@@ -588,16 +588,42 @@ if os.path.exists(_image_workflow_dir):
                     if _ksampler_node_id:
                         _sampler_node = _wf_nodes.get(_ksampler_node_id)
                         _inputs = _sampler_node.get("inputs", {})
-                        
-                        # Trace Positive Prompt
+
+                        # Trace Positive Prompt - follow full chain until CLIPTextEncode
                         if not _text_node_id:
                             for _pos_input in ["positive", "conditioning", "guider"]:
                                 if _pos_input in _inputs:
                                     _p_val = _inputs[_pos_input]
                                     if isinstance(_p_val, list) and len(_p_val) > 0:
-                                        _text_node_id = str(_p_val[0])
+                                        _current_node_id = str(_p_val[0])
+
+                                        # Follow the chain recursively (max 10 hops to prevent infinite loops)
+                                        for _hop in range(10):
+                                            _current_node = _wf_nodes.get(_current_node_id)
+                                            if not _current_node:
+                                                break
+
+                                            _class_type = _current_node.get("class_type", "")
+
+                                            # Found CLIPTextEncode - this is the target
+                                            if "CLIPTextEncode" in _class_type:
+                                                _text_node_id = _current_node_id
+                                                break
+
+                                            # For guider nodes, trace through their conditioning input
+                                            _current_inputs = _current_node.get("inputs", {})
+                                            if "conditioning" in _current_inputs:
+                                                _c_val = _current_inputs["conditioning"]
+                                                if isinstance(_c_val, list) and len(_c_val) > 0:
+                                                    _current_node_id = str(_c_val[0])
+                                                    continue
+
+                                            # Not a guider or CLIPTextEncode, stop tracing
+                                            break
+
+                                    if _text_node_id:
                                         break
-                                        
+
                         # Trace Negative Prompt
                         if not _neg_text_node_id and "negative" in _inputs:
                             _n_val = _inputs["negative"]

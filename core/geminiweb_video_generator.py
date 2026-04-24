@@ -2,10 +2,11 @@
 GeminiWeb Video Generator - Browser-based video generation via gemini.google.com
 
 Uses Playwright to automate Chrome browser, navigate to Gemini web UI,
-upload a reference image, submit video generation prompts (using Veo 3.1), 
+upload a reference image, submit video generation prompts (using Veo 3.1),
 and download the resulting video.
 """
 import os
+import sys
 import time
 import subprocess
 from pathlib import Path
