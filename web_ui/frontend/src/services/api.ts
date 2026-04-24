@@ -192,7 +192,9 @@ class ApiClient {
     draftLowResVideo?: boolean,
     promptOverride?: string,
     resolution?: string,
-    geminiMode?: string
+    geminiMode?: string,
+    soundfxWorkflow?: string,
+    soundfxPrompt?: string
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-video`, {
       force,
@@ -205,16 +207,22 @@ class ApiClient {
       prompt_override: promptOverride || undefined,
       resolution: resolution || undefined,
       gemini_mode: geminiMode || undefined,
+      soundfx_workflow: soundfxWorkflow || undefined,
+      soundfx_prompt: soundfxPrompt || undefined,
     });
   }
 
   async generateSoundFX(
     projectId: string,
     shotIdOrIndex: string | number,
-    force: boolean = false
+    force: boolean = false,
+    workflow?: string,
+    promptOverride?: string
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-soundfx`, {
-      force
+      force,
+      workflow,
+      prompt_override: promptOverride
     });
   }
 
@@ -381,6 +389,8 @@ class ApiClient {
       then_prompt_override?: string;
       resolution?: string;
       gemini_mode?: string;
+      soundfx_workflow?: string;
+      soundfx_prompt?: string;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/projects/${projectId}/shots/batch-generate`, data);

@@ -561,7 +561,7 @@ class GenerationService:
                     story = self.project_manager.get_story(item.project_id)
                     shot = shots[item.shot_index - 1] if item.shot_index <= len(shots) else None
                     sfx_item = self._create_queue_item(
-                        item.project_id, item.shot_index, GenerationType.SOUNDFX, shot, story
+                        item.project_id, item.shot_index, GenerationType.SOUNDFX, shot, story, request=item
                     )
                     queue_service.add_items([sfx_item])
                     logger.info(f"Queued auto-chain SOUNDFX item for shot {item.shot_index}")
@@ -622,7 +622,9 @@ class GenerationService:
             await self.generate_soundfx(
                 item.project_id,
                 item.shot_index,
-                force=True
+                force=getattr(item, 'force', True),
+                workflow=getattr(item, 'soundfx_workflow', None),
+                prompt_override=getattr(item, 'soundfx_prompt', None)
             )
 
             logger.info(f"Completed sound FX generation for queue item {item.item_id}")
@@ -745,6 +747,21 @@ class GenerationService:
             if not prompt_override and generation_type == GenerationType.THEN_IMAGE:
                 prompt_override = getattr(request, 'then_prompt_override', None)
 
+        # Extract soundfx prompt override
+        soundfx_prompt = None
+        if request:
+            # For standalone soundfx generation, 'prompt_override' is the sfx prompt
+            if generation_type == GenerationType.SOUNDFX:
+                soundfx_prompt = getattr(request, 'prompt_override', None)
+            
+            # For video/batch generation, check 'soundfx_prompt' specifically
+            if not soundfx_prompt:
+                soundfx_prompt = getattr(request, 'soundfx_prompt', None)
+        
+        # Final fallback to shot data
+        if not soundfx_prompt and shot:
+            soundfx_prompt = shot.get('soundfx_prompt')
+
         return QueueItem(
             item_id="",  # Will be assigned by QueueService
             project_id=project_id,
@@ -769,6 +786,8 @@ class GenerationService:
             video_variant=getattr(request, 'video_variant', None) if request else None,
             append_image_prompt=getattr(request, 'append_image_prompt', None) if request else None,
             generate_soundfx=getattr(request, 'generate_soundfx', False) if request else False,
+            soundfx_workflow=getattr(request, 'soundfx_workflow', getattr(request, 'workflow', None)) if request else None,
+            soundfx_prompt=soundfx_prompt,
             draft_low_res_video=getattr(request, 'draft_low_res_video', False) if request else False,
             resolution=(getattr(request, 'resolution', None) or None) if request else None,
             gemini_mode=(getattr(request, 'gemini_mode', None) or shot.get('gemini_mode', None) or config.GEMINIWEB_DEFAULT_MODE) if request else (shot.get('gemini_mode', None) or config.GEMINIWEB_DEFAULT_MODE)
@@ -1770,7 +1789,7 @@ class GenerationService:
 
 
     async def generate_soundfx(
-        self, project_id: str, shot_index: int, force: bool = False
+        self, project_id: str, shot_index: int, force: bool = False, workflow: str = None, prompt_override: str = None
     ) -> str:
         """
         Generate sound effects for a shot's video using MMAudio ComfyUI workflow.
@@ -1819,7 +1838,9 @@ class GenerationService:
             # Run async generator
             soundfx_path = await self._generate_soundfx_comfyui(
                 project_id,
-                shot
+                shot,
+                workflow_key=workflow,
+                prompt_override=prompt_override
             )
 
 
@@ -1864,10 +1885,10 @@ class GenerationService:
             })
             raise
 
-    async def _generate_soundfx_comfyui(self, project_id: str, shot: Dict[str, Any]) -> str:
-        """Generate sound effects for a shot video using MMAudio ComfyUI workflow (asynchronous).
+    async def _generate_soundfx_comfyui(self, project_id: str, shot: Dict[str, Any], workflow_key: str = None, prompt_override: str = None) -> str:
+        """Generate sound effects for a shot video using ComfyUI workflow (asynchronous).
 
-        Loads the workflow/soundfx/mmaudio.json template, uploads the shot video
+        Loads the specified (or default) soundfx workflow template, uploads the shot video
         to ComfyUI, sets the prompt, submits, waits, and copies the output.
         """
         import shutil
@@ -1901,24 +1922,49 @@ class GenerationService:
         uploaded_name = resp.json().get('name', video_filename)
         logger.info(f"Uploaded video to ComfyUI input: {uploaded_name}")
 
-        # Load mmaudio workflow template
-        workflow_path = os.path.join(config.PROJECT_ROOT, 'workflow', 'soundfx', 'mmaudio.json')
+        # Select workflow
+        wf_key = workflow_key or getattr(config, 'SOUNDFX_WORKFLOW', 'mmaudio')
+        all_wfs = getattr(config, 'SOUNDFX_WORKFLOWS', {})
+        
+        if wf_key not in all_wfs and "default" in all_wfs:
+            wf_key = "default"
+        
+        if wf_key not in all_wfs:
+            # Fallback to hardcoded path if no discovery results
+            workflow_path = os.path.join(config.PROJECT_ROOT, 'workflow', 'soundfx', 'mmaudio.json')
+            wf_info = {
+                "workflow_path": workflow_path,
+                "load_video_node_id": "91",
+                "sampler_node_id": "92",
+                "combine_node_id": "97"
+            }
+        else:
+            wf_info = all_wfs[wf_key]
+            workflow_path = wf_info["workflow_path"]
+
+        logger.info(f"Using soundfx workflow: {wf_key} ({workflow_path})")
+
         with open(workflow_path, 'r', encoding='utf-8') as f:
             wf = json.load(f)
 
         # Set inputs on the workflow nodes
-        # Node 91: VHS_LoadVideo - set the video input
-        if '91' in wf:
-            wf['91']['inputs']['video'] = uploaded_name
+        # Load Video Node
+        video_node_id = wf_info.get("load_video_node_id")
+        if video_node_id and video_node_id in wf:
+            wf[video_node_id]['inputs']['video'] = uploaded_name
 
-        # Node 92: MMAudioSampler - set the prompt (use motion prompt as scene audio description)
-        if '92' in wf:
-            prompt_text = shot.get('motion_prompt', '')
-            wf['92']['inputs']['prompt'] = prompt_text
+        # Sampler Node - set the prompt
+        sampler_node_id = wf_info.get("sampler_node_id")
+        if sampler_node_id and sampler_node_id in wf:
+            # Use override, then shot's specific prompt, then fallback to motion prompt
+            prompt_text = prompt_override or shot.get('soundfx_prompt') or shot.get('motion_prompt', '')
+            logger.info(f"Using sound FX prompt: {prompt_text[:100]}...")
+            wf[sampler_node_id]['inputs']['prompt'] = prompt_text
 
-        # Node 97: VHS_VideoCombine - set filename prefix
-        if '97' in wf:
-            wf['97']['inputs']['filename_prefix'] = f"soundfx_{shot_index:03d}"
+        # Combine Node - set filename prefix
+        combine_node_id = wf_info.get("combine_node_id")
+        if combine_node_id and combine_node_id in wf:
+            wf[combine_node_id]['inputs']['filename_prefix'] = f"soundfx_{shot_index:03d}"
 
         # Submit to ComfyUI
         result = submit(wf)

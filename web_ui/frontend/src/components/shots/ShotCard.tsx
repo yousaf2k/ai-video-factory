@@ -136,7 +136,7 @@ export function ShotCard({
 
   // Regeneration modal state
   const [showRegenModal, setShowRegenModal] = useState<
-    "image" | "video" | null
+    "image" | "video" | "soundfx" | null
   >(null);
   const [defaultPromptOverride, setDefaultPromptOverride] = useState("");
 
@@ -160,6 +160,7 @@ export function ShotCard({
   const [fullscreenVariationIndex, setFullscreenVariationIndex] = useState<number | null>(null);
   const [isImagePromptExpanded, setIsImagePromptExpanded] = useState(false);
   const [isMotionPromptExpanded, setIsMotionPromptExpanded] = useState(false);
+  const [isSoundfxPromptExpanded, setIsSoundfxPromptExpanded] = useState(false);
 
   const uploadVideo = useUploadShotVideo(projectId);
   const selectVideo = useSelectVideo(projectId);
@@ -333,7 +334,6 @@ export function ShotCard({
           selected && "border-primary ring-1 ring-primary",
         )}
       >
-        {/* ... editing UI ... */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-muted-foreground">
             Shot {shot.index}
@@ -364,7 +364,7 @@ export function ShotCard({
               <div>
                 <label className="text-xs text-purple-600 font-semibold">THEN Image Prompt</label>
                 <Textarea
-                  value={editedShot.then_image_prompt || ''}
+                  value={editedShot.then_image_prompt || ""}
                   onChange={(e) =>
                     setEditedShot({ ...editedShot, then_image_prompt: e.target.value })
                   }
@@ -376,7 +376,7 @@ export function ShotCard({
               <div>
                 <label className="text-xs text-pink-600 font-semibold">NOW Image Prompt</label>
                 <Textarea
-                  value={editedShot.now_image_prompt || ''}
+                  value={editedShot.now_image_prompt || ""}
                   onChange={(e) =>
                     setEditedShot({ ...editedShot, now_image_prompt: e.target.value })
                   }
@@ -406,7 +406,7 @@ export function ShotCard({
               <div>
                 <label className="text-xs text-purple-600 font-semibold">Meeting Video Prompt</label>
                 <Textarea
-                  value={editedShot.meeting_video_prompt || ''}
+                  value={editedShot.meeting_video_prompt || ""}
                   onChange={(e) =>
                     setEditedShot({ ...editedShot, meeting_video_prompt: e.target.value })
                   }
@@ -418,7 +418,7 @@ export function ShotCard({
               <div>
                 <label className="text-xs text-pink-600 font-semibold">Departure Video Prompt</label>
                 <Textarea
-                  value={editedShot.departure_video_prompt || ''}
+                  value={editedShot.departure_video_prompt || ""}
                   onChange={(e) =>
                     setEditedShot({ ...editedShot, departure_video_prompt: e.target.value })
                   }
@@ -428,18 +428,37 @@ export function ShotCard({
               </div>
             </>
           ) : (
-            <div>
-              <label className="text-xs text-muted-foreground">
-                Motion Prompt
-              </label>
-              <Textarea
-                value={editedShot.motion_prompt}
-                onChange={(e) =>
-                  setEditedShot({ ...editedShot, motion_prompt: e.target.value })
-                }
-                className="mt-1 min-h-[120px]"
-              />
-            </div>
+            <>
+              <div>
+                <label className="text-xs text-muted-foreground">
+                  Motion Prompt
+                </label>
+                <Textarea
+                  value={editedShot.motion_prompt}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, motion_prompt: e.target.value })
+                  }
+                  className="mt-1 min-h-[120px]"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+                  Sound FX Prompt
+                </label>
+                <Textarea
+                  value={editedShot.soundfx_prompt || ""}
+                  onChange={(e) =>
+                    setEditedShot({ ...editedShot, soundfx_prompt: e.target.value })
+                  }
+                  placeholder="Describe sounds: wind, footsteps, crowd..."
+                  className="mt-1 min-h-[60px] bg-muted/20"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Visible cues from motion prompt will be used if left blank.
+                </p>
+              </div>
+            </>
           )}
 
           <div className="grid grid-cols-2 gap-3">
@@ -489,7 +508,6 @@ export function ShotCard({
               </Select>
             </div>
           )}
-
         </div>
       </div>
     );
@@ -699,17 +717,7 @@ export function ShotCard({
           )}
           <button
             onClick={async () => {
-              try {
-                // Use ID if available, otherwise index (string or number)
-                const shotIdOrIndex = shot.id || shot.index;
-                await generateSoundFX.mutateAsync({ shotIdOrIndex, force: true });
-                toast.info("Sound FX generation started", {
-                  description: `Shot ${shot.index} sound FX is being generated.`,
-                });
-              } catch (error) {
-                console.error("Failed to generate sound FX:", error);
-                toast.error("Failed to generate sound FX");
-              }
+              setShowRegenModal("soundfx");
             }}
             disabled={generateSoundFX.isPending || !(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)}
             className="p-1 hover:bg-orange-50 text-orange-600 rounded disabled:opacity-50"
@@ -1053,6 +1061,36 @@ export function ShotCard({
           </div>
         </div>
       </div>
+      
+      {/* Sound FX Prompt */}
+      <div className="p-2 bg-muted rounded mt-2">
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+            Sound FX Prompt
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(shot.soundfx_prompt || shot.motion_prompt || "");
+              setCopiedField("soundfx");
+              setTimeout(() => setCopiedField(null), 1500);
+            }}
+            className="p-0.5 hover:bg-background rounded text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {copiedField === "soundfx" ? (
+              <ClipboardCheck className="w-3.5 h-3.5 text-green-500" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
+        <div className="text-xs">
+          {shot.soundfx_prompt || (
+            <span className="text-muted-foreground italic text-[10px]">
+              Using motion prompt default
+            </span>
+          )}
+        </div>
+      </div>
 
       {/* Narration */}
       {shot.narration && (
@@ -1077,6 +1115,7 @@ export function ShotCard({
           generateSoundFX.isPending
         }
         defaultPromptOverride={defaultPromptOverride}
+        defaultSoundFXPrompt={shot.soundfx_prompt || shot.motion_prompt}
         onSubmit={(config) => {
           // Use ID if available, otherwise index (string or number)
           const shotIdOrIndex = shot.id || shot.index;
@@ -1110,11 +1149,24 @@ export function ShotCard({
               generateSoundFX: config.generateSoundFX || false,
               draftLowResVideo: config.draftLowResVideo || false,
               promptOverride: config.promptOverride?.trim() || undefined,
+              resolution: config.resolution,
               geminiMode: config.gemini_mode,
+              soundfxWorkflow: config.soundfxWorkflow,
+              soundfxPrompt: config.soundfxPrompt,
             });
             setViewMode("video");
             toast.info("Video regeneration started", {
               description: `Shot ${shot.index}${shot.is_flfi2v && videoVariant ? ` (${videoVariant.charAt(0).toUpperCase() + videoVariant.slice(1)})` : ""} video is being generated.`,
+            });
+          } else if (type === "soundfx") {
+            generateSoundFX.mutate({
+              shotIdOrIndex,
+              force: config.force || false,
+              workflow: config.soundfxWorkflow,
+              promptOverride: config.soundfxPrompt,
+            });
+            toast.info("Sound FX generation started", {
+              description: `Shot ${shot.index} sound FX is being generated.`,
             });
           } else if (type === "watermark") {
             removeWatermark.mutate({

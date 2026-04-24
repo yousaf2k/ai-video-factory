@@ -65,6 +65,8 @@ class QueueItem(BaseModel):
     aspect_ratio: Optional[str] = Field(None, description="Aspect ratio for thumbnails/standard shots")
     resolution: Optional[str] = Field(None, description="Resolution string ('480p', '720p', etc.)")
     gemini_mode: Optional[str] = Field(None, description="Gemini model mode (Fast/Thinking/Pro)")
+    soundfx_workflow: Optional[str] = Field(None, description="Override Sound FX Workflow template")
+    soundfx_prompt: Optional[str] = Field(None, description="Prompt override for sound FX generation")
     is_poster: bool = Field(default=False, description="Is this a poster-style generation?")
 
     # Tracking for deep resume

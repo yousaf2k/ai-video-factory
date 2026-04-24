@@ -171,6 +171,7 @@ export interface Shot {
   // Sound FX fields
   soundfx_path?: string;
   soundfx_generated?: boolean;
+  soundfx_prompt?: string;
 }
 export interface CreateProjectRequest {
   idea: string;
@@ -204,6 +205,7 @@ export interface GlobalConfig {
   image_workflow?: string;
   available_video_workflows?: string[];
   available_image_workflows?: string[];
+  available_soundfx_workflows?: string[];
   playwright_browser?: string;
   gemini_watermark_tool_image?: string;
   gemini_watermark_tool_video?: string;
@@ -217,6 +219,7 @@ export interface UpdateGlobalConfigRequest {
   video_generation_mode?: string;
   video_workflow?: string;
   image_workflow?: string;
+  soundfx_workflow?: string;
   comfy_url?: string;
   target_video_length?: number;
   gemini_api_key?: string;
@@ -244,6 +247,7 @@ export interface UpdateShotRequest {
   now_image_prompt?: string;
   meeting_video_prompt?: string;
   departure_video_prompt?: string;
+  soundfx_prompt?: string;
 }
 
 export interface ProgressEvent {

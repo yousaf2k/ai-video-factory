@@ -968,6 +968,111 @@ TTS_WORKFLOWS = {
     }
 }
 
+# ==========================================
+# SOUNDFX CONFIGURATION
+# ==========================================
+# Active soundfx workflow to use (must exist in SOUNDFX_WORKFLOWS)
+SOUNDFX_WORKFLOW = "mmaudio"
+
+# SoundFX workflow definitions
+# Each workflow is auto-detected from the workflow/soundfx directory
+SOUNDFX_WORKFLOWS = {}
+
+# ==========================================
+# DYNAMIC SOUNDFX WORKFLOW DISCOVERY
+# ==========================================
+# Auto-discover any new soundfx workflows in the workflow/soundfx directory
+_soundfx_workflow_dir = resolve_path("workflow/soundfx")
+if os.path.exists(_soundfx_workflow_dir):
+    for _wf_file in os.listdir(_soundfx_workflow_dir):
+        if _wf_file.endswith(".json"):
+            _wf_key = os.path.splitext(_wf_file)[0]
+            if _wf_key not in SOUNDFX_WORKFLOWS:
+                _wf_path = os.path.join(_soundfx_workflow_dir, _wf_file)
+                try:
+                    with open(_wf_path, "r", encoding="utf-8") as _f:
+                        _wf_raw = json.load(_f)
+                    
+                    # Normalize workflow format (API JSON vs Workflow JSON)
+                    _wf_nodes = {}
+                    if "nodes" in _wf_raw and isinstance(_wf_raw["nodes"], list):
+                        # Workflow JSON format
+                        for _n in _wf_raw["nodes"]:
+                            _n_id = str(_n.get("id", ""))
+                            if _n_id:
+                                _wf_nodes[_n_id] = {
+                                    "class_type": _n.get("type", ""),
+                                    "_meta": {"title": _n.get("title", "")}
+                                }
+                    elif isinstance(_wf_raw, dict):
+                        # API JSON format
+                        _wf_nodes = _wf_raw
+                    
+                    _load_video_node_id = None
+                    _sampler_node_id = None
+                    _combine_node_id = None
+                    
+                    # Candidates
+                    _load_video_candidates = []
+                    _sampler_candidates = []
+                    _combine_candidates = []
+                    
+                    # 1. First pass: strict tag matching and gathering candidates
+                    for _n_id, _n_data in _wf_nodes.items():
+                        if not isinstance(_n_data, dict): continue
+                        _title = _n_data.get("_meta", {}).get("title", "")
+                        if not _title: _title = ""
+                        _title = _title.lower()
+                        _class_type = _n_data.get("class_type", "")
+                        
+                        # Explicit title tag discovery
+                        if any(tag in _title for tag in ["[video_in]", "[in_video]", "[input_video]", "[load_video]"]):
+                            _load_video_node_id = _n_id
+                        elif any(tag in _title for tag in ["[sampler]", "[prompt]", "[generator]", "[woosh_sampler]"]):
+                            _sampler_node_id = _n_id
+                        elif any(tag in _title for tag in ["[video_out]", "[out_video]", "[combine]", "[video_combine]", "[save_video]"]):
+                            _combine_node_id = _n_id
+                            
+                        # Candidate gathering for heuristics
+                        if _class_type in ["VHS_LoadVideo", "WooshLoadVideo"]:
+                            _load_video_candidates.append(_n_id)
+                        if _class_type in ["MMAudioSampler", "WooshSample"]:
+                            _sampler_candidates.append(_n_id)
+                        if _class_type in ["VHS_VideoCombine"]:
+                            _combine_candidates.append(_n_id)
+                    
+                    # 2. Heuristics fallbacks for missing IDs
+                    if not _load_video_node_id and _load_video_candidates:
+                        # Prefer VHS_LoadVideo if multiple candidates exist during heuristics
+                        _vhs_loads = [cid for cid in _load_video_candidates if _wf_nodes.get(cid, {}).get("class_type") == "VHS_LoadVideo"]
+                        _load_video_node_id = _vhs_loads[0] if _vhs_loads else _load_video_candidates[0]
+                        
+                    if not _sampler_node_id and _sampler_candidates:
+                        _sampler_node_id = _sampler_candidates[0]
+                    if not _combine_node_id and _combine_candidates:
+                        _combine_node_id = _combine_candidates[0]
+
+                    # Always add the workflow if it was parseable
+                    SOUNDFX_WORKFLOWS[_wf_key] = {
+                        "workflow_path": _wf_path,
+                        "load_video_node_id": _load_video_node_id,
+                        "sampler_node_id": _sampler_node_id,
+                        "combine_node_id": _combine_node_id,
+                        "description": f"Auto-detected soundfx workflow: {_wf_key}"
+                    }
+                        
+                except Exception as e:
+                    # Silently skip unparseable files
+                    pass
+
+# Ensure a "default" soundfx workflow exists
+if "default" not in SOUNDFX_WORKFLOWS:
+    if "mmaudio" in SOUNDFX_WORKFLOWS:
+        SOUNDFX_WORKFLOWS["default"] = SOUNDFX_WORKFLOWS["mmaudio"]
+    elif SOUNDFX_WORKFLOWS:
+        _first_key = list(SOUNDFX_WORKFLOWS.keys())[0]
+        SOUNDFX_WORKFLOWS["default"] = SOUNDFX_WORKFLOWS[_first_key]
+
 # Legacy single workflow setting (deprecated)
 TTS_WORKFLOW_PATH = resolve_path("workflow/voice/tts_workflow.json")
 

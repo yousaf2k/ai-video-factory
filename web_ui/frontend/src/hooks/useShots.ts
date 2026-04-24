@@ -59,8 +59,8 @@ export function useGenerateVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode }: { shotIdOrIndex: string | number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean; promptOverride?: string; resolution?: string; geminiMode?: string }) =>
-      api.generateShotVideo(projectId, shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode),
+    mutationFn: ({ shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode, soundfxWorkflow, soundfxPrompt }: { shotIdOrIndex: string | number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean; promptOverride?: string; resolution?: string; geminiMode?: string; soundfxWorkflow?: string; soundfxPrompt?: string }) =>
+      api.generateShotVideo(projectId, shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode, soundfxWorkflow, soundfxPrompt),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -73,8 +73,8 @@ export function useGenerateSoundFX(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIdOrIndex, force }: { shotIdOrIndex: string | number; force?: boolean }) =>
-      api.generateSoundFX(projectId, shotIdOrIndex, force),
+    mutationFn: ({ shotIdOrIndex, force, workflow, promptOverride }: { shotIdOrIndex: string | number; force?: boolean; workflow?: string; promptOverride?: string }) =>
+      api.generateSoundFX(projectId, shotIdOrIndex, force, workflow, promptOverride),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -102,6 +102,8 @@ export function useBatchGenerate(projectId: string) {
       then_prompt_override?: string;
       resolution?: string;
       gemini_mode?: string;
+      soundfx_workflow?: string;
+      soundfx_prompt?: string;
     }) => api.batchGenerate(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });

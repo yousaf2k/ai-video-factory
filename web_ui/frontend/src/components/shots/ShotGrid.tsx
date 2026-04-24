@@ -151,6 +151,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [ttsMethod, setTtsMethod] = useState("local");
   const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
   const [resolution, setResolution] = useState<string>("720p");
+  const [generateSoundFX, setGenerateSoundFX] = useState<boolean>(true);
+  const [soundfxWorkflow, setSoundfxWorkflow] = useState<string>("default");
+  const [batchSoundfxPrompt, setBatchSoundfxPrompt] = useState<string>("");
   
   // Batch Departure Override states
   const [batchUseDepartureOverride, setBatchUseDepartureOverride] = useState(true);
@@ -235,6 +238,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
     }
     if (globalConfig?.geminiweb_default_mode) {
       setGeminiMode(globalConfig.geminiweb_default_mode);
+    }
+    if (globalConfig?.available_soundfx_workflows && globalConfig.available_soundfx_workflows.length > 0) {
+      setSoundfxWorkflow(globalConfig.available_soundfx_workflows[0]);
     }
   }, [globalConfig]);
 
@@ -399,6 +405,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           then_prompt_override: batchUseThenOverride ? batchThenPrompt : undefined,
           resolution: resolution,
           gemini_mode: geminiMode,
+          generate_soundfx: generateSoundFX,
+          soundfx_workflow: generateSoundFX ? soundfxWorkflow : undefined,
+          soundfx_prompt: generateSoundFX && batchSoundfxPrompt ? batchSoundfxPrompt : undefined,
         });
       } catch (error) {
         console.error("Failed to start batch both generation:", error);
@@ -431,6 +440,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
           resolution: resolution,
           gemini_mode: geminiMode,
+          generate_soundfx: generateSoundFX,
+          soundfx_workflow: generateSoundFX ? soundfxWorkflow : undefined,
+          soundfx_prompt: generateSoundFX && batchSoundfxPrompt ? batchSoundfxPrompt : undefined,
         });
       } catch (error) {
         console.error("Failed to start batch video generation:", error);
@@ -1630,6 +1642,64 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                         <SelectItem value="1080p">1080p (Full HD)</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="checkbox"
+                        id="batch-generate-soundfx"
+                        checked={generateSoundFX}
+                        onChange={(e) => setGenerateSoundFX(e.target.checked)}
+                        className="w-4 h-4 mr-2"
+                      />
+                      <label htmlFor="batch-generate-soundfx" className="text-sm font-semibold">
+                        🔊 Generate Sound FX after video
+                      </label>
+                    </div>
+
+                    {generateSoundFX && (
+                      <div className="ml-6 space-y-3 border-l-2 pl-3 py-1">
+                        {globalConfig?.available_soundfx_workflows && globalConfig.available_soundfx_workflows.length > 1 && (
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                              Sound FX Workflow
+                            </label>
+                            <Select
+                              value={soundfxWorkflow}
+                              onValueChange={(val) => setSoundfxWorkflow(val)}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select Sound FX Workflow" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {globalConfig.available_soundfx_workflows.map((wf) => (
+                                  <SelectItem key={wf} value={wf} className="text-xs">
+                                    {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                            Global Sound FX Prompt Override
+                          </label>
+                          <Textarea
+                            value={batchSoundfxPrompt}
+                            onChange={(e) => setBatchSoundfxPrompt(e.target.value)}
+                            rows={2}
+                            placeholder="Describe sounds for all selected shots: wind, explosion..."
+                            className="text-xs min-h-[60px] bg-muted/20"
+                          />
+                          <p className="text-[10px] text-muted-foreground italic">
+                            If left blank, each shot's specific SFX prompt (or motion prompt) will be used.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Departure Prompt Override Section — ONLY for FLFI2V projects */}

@@ -33,6 +33,7 @@ class UpdateConfigRequest(BaseModel):
     elevenlabs_api_key: Optional[str] = None
     video_workflow: Optional[str] = None
     image_workflow: Optional[str] = None
+    soundfx_workflow: Optional[str] = None
     playwright_browser: Optional[str] = None
     gemini_watermark_tool_image: Optional[str] = None
     gemini_watermark_tool_video: Optional[str] = None
@@ -115,6 +116,7 @@ async def get_config():
             "image_workflow": getattr(config, 'IMAGE_WORKFLOW', 'flux'),
             "video_generation_mode": getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui'),
             "video_workflow": getattr(config, 'VIDEO_WORKFLOW', 'wan22'),
+            "soundfx_workflow": getattr(config, 'SOUNDFX_WORKFLOW', 'mmaudio'),
             "default_story_agent": getattr(config, 'DEFAULT_STORY_AGENT', 'default'),
             "default_shots_agent": getattr(config, 'DEFAULT_SHOTS_AGENT', 'default'),
             "comfy_url": getattr(config, 'COMFY_URL', 'http://127.0.0.1:8188'),
@@ -122,6 +124,7 @@ async def get_config():
             "default_max_shots": getattr(config, 'DEFAULT_MAX_SHOTS', 0),
             "available_video_workflows": list(getattr(config, 'VIDEO_WORKFLOWS', {}).keys()),
             "available_image_workflows": list(getattr(config, 'IMAGE_WORKFLOWS', {}).keys()),
+            "available_soundfx_workflows": list(getattr(config, 'SOUNDFX_WORKFLOWS', {}).keys()),
             "playwright_browser": (
                 getattr(config, 'PLAYWRIGHT_CHANNEL', '') if getattr(config, 'PLAYWRIGHT_CHANNEL', '') in ['chrome', 'msedge'] 
                 else getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium')
@@ -168,6 +171,8 @@ async def update_config(request: UpdateConfigRequest):
             updates["VIDEO_WORKFLOW"] = request.video_workflow
         if hasattr(request, 'image_workflow') and request.image_workflow is not None:
             updates["IMAGE_WORKFLOW"] = request.image_workflow
+        if hasattr(request, 'soundfx_workflow') and request.soundfx_workflow is not None:
+            updates["SOUNDFX_WORKFLOW"] = request.soundfx_workflow
         if hasattr(request, 'playwright_browser') and request.playwright_browser is not None:
             browser = request.playwright_browser
             if browser in ["chrome", "msedge"]:

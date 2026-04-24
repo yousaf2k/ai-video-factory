@@ -46,6 +46,7 @@ class Shot(BaseModel):
     # Sound FX fields
     soundfx_path: Optional[str] = Field(default=None, description="Path to video with generated sound effects")
     soundfx_generated: bool = Field(default=False, description="Whether sound effects have been generated")
+    soundfx_prompt: Optional[str] = Field(default=None, description="Prompt for sound effects generation")
 
     class Config:
         json_schema_extra = {
@@ -83,6 +84,7 @@ class UpdateShotRequest(BaseModel):
     now_image_prompt: Optional[str] = None
     meeting_video_prompt: Optional[str] = None
     departure_video_prompt: Optional[str] = None
+    soundfx_prompt: Optional[str] = None
 
 
 class RegenerateImageRequest(BaseModel):
@@ -109,6 +111,8 @@ class RegenerateVideoRequest(BaseModel):
     prompt_override: Optional[str] = Field(default=None, description="Override the motion prompt for this generation only")
     resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
     gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
+    soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")
+    soundfx_prompt: Optional[str] = Field(default=None, description="Prompt override for sound FX generation")
 
 
 class BatchRegenerateRequest(BaseModel):
@@ -132,6 +136,8 @@ class BatchRegenerateRequest(BaseModel):
     then_prompt_override: Optional[str] = Field(default=None, description="Override standard then prompt for batch generation")
     resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
     gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
+    soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")
+    soundfx_prompt: Optional[str] = Field(default=None, description="Prompt override for sound FX generation")
 
 
 
@@ -162,4 +168,6 @@ class RemoveWatermarkRequest(BaseModel):
 class RegenerateSoundFXRequest(BaseModel):
     """Request to generate sound effects for a shot video"""
     force: bool = Field(default=False, description="Force regeneration even if sound FX exists")
+    workflow: Optional[str] = Field(default=None, description="Specific sound FX workflow to use")
+    prompt_override: Optional[str] = Field(default=None, description="Override the sound FX prompt")
 
