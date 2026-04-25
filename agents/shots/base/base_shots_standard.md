@@ -7,6 +7,7 @@ Return a JSON list where each item contains:
 - `scene_id`: The 0-based index of the scene (from input).
 - `image_prompt`: High-fidelity prompt for Flux2.Dev.
 - `motion_prompt`: Immersive motion prompt for Wan 2.2.
+- `soundfx_prompt`: Descriptive sound tags for audio generation (e.g., "wind howling, gravel crunching, low hum").
 - `camera`: One of [static, pan, dolly, drone, orbit, tracking, arc, whip pan, handheld].
 
 ## Prompt Engineering Rules (Flux2.Dev)
@@ -20,6 +21,12 @@ Return a JSON list where each item contains:
 - Describe real-world physics and movement.
 - Focus on: [Subject Movement] + [Environmental/Atmospheric Effects] + [Camera Motion].
 - Example: "The character walks forward through the tall grass, blades of grass swaying in the wind, soft golden particles floating in the air, slow dolly push forward."
+
+## Sound FX Prompt Rules (MMAudio / Woosh)
+- Focus on atmospheric sounds, foley, and mechanical noises.
+- Use comma-separated tags describing clear audio events.
+- Examples: "heavy thunderstorm, thunder crack, rain on metal roof" or "cinematic woosh, deep bass hit, futuristic energy hum".
+- **DO NOT** include music or dialogue descriptions.
 
 ## Shot Distribution & Variety
 - **Follow Requests**: Generate the EXACT number of shots requested per scene (as provided in {USER_INPUT}).
