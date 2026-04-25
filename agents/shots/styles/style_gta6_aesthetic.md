@@ -17,5 +17,5 @@ You are capturing the hyper-realistic, high-energy world of modern Florida (Leon
 - **Group Dynamics**: Descriptions of "Influencers posing for selfies", "Police chases in background", "Crowded beach parties".
 
 ## Technical Guidelines
-- Keywords: "Cinematic game engine style", "4K HDR", "Hyper-realistic rendering", "Ray-traced reflections", "Vibrant tropical color palette".
-- **STRICT RULE**: Avoid looking like "cheap 3D animation" or "cartoonish graphics". Aim for "near-indistinguishable from reality gaming".
+- Keywords: "Grand Theft Auto VI game engine rendering", "Rockstar RAGE engine visual style", "High-fidelity video game graphics", "Ray-traced reflections on game assets", "Saturated cinematic game trailer look".
+- **STRICT RULE**: The image MUST look like a high-end video game, not a real-life photograph. Emphasize "3D character models", "game asset textures", and "cinematic game engine lighting". Avoid "photorealistic" or "National Geographic" style photography. Aim for the "RAGE engine" aesthetic from the official Rockstar trailers.

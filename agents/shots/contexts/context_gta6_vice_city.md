@@ -6,9 +6,9 @@
 - **Beach Life**: Sun-bleached sand, turquoise ocean water, jet skis, crowded beach clubs, vibrant swimwear, midday heat haze.
 
 ## Culture & Atmosphere
-- **The Hustle**: Underworld dealings, high-stakes robberies, fast cars, luxury fashion, gold chains, flashy jewelry.
-- **Social Media Era**: Vertical video influence, viral street moments, smartphone photography vibe, modern viral culture.
-- **Florida Gothic**: Eccentric local characters, wild animals (alligators), chaotic street life, "Leonida Man" energy.
+- **The Hustle**: Underworld mission vibes, high-stakes robberies, fast cars, luxury fashion, gold chains, flashy jewelry.
+- **Social Media Era**: In-game social media feed style, viral street moments, smartphone UI vibe, modern viral culture within the game world.
+- **Florida Gothic**: Eccentric in-game NPCs, wild animals (alligators), chaotic street life, "Leonida Man" random events.
 
 ## Atmospheric & Lighting
 - **Golden Hour**: Intense orange and purple sunsets, long dramatic shadows, sun-kissed skin, deep blue ocean gradients.

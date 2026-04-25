@@ -1,9 +1,9 @@
 # Shot Agent: Rockstar Games Cinematic Camera Layer
 # Hardware Specs
-- **Engine Style**: "Next-gen engine rendering", "GTA VI cinematic engine".
-- **Camera Types**: "Dynamic third-person orbit", "Cinematic dashboard camera", "Low-angle hero tracking".
-- **Lenses**: "Wide-angle action lens (18mm - 24mm)", "Cinematic anamorphic for cutscenes".
-- **Characteristics**: "High-speed motion blur", "Enhanced volumetric fog reflections", "Realistic ray-traced shadows".
+- **Engine Style**: "Rockstar RAGE Engine 9 rendering", "GTA VI in-game graphics", "Video game cinematic engine".
+- **Camera Types**: "Dynamic third-person gameplay camera", "Rockstar cinematic cutscene camera", "In-game action tracking".
+- **Lenses**: "Virtual wide-angle lens", "Game engine anamorphic".
+- **Characteristics**: "Screen-space reflections", "Game engine volumetric lighting", "RAGE engine motion blur".
 
 ## Camera Angles & Movement
 - **Vehicle Pursuit**: "Low-angle chase cam", "Vibrating handheld for high-speed intensity", "Whip pan during turns".
