@@ -76,7 +76,7 @@ class AgentLoader:
         for item in agent_dir.iterdir():
             # Skip hidden folders and partial/internal folders
             if item.is_dir():
-                if item.name.startswith(("_", ".")) or item.name in ["base", "styles", "contexts", "cameras", "common"]:
+                if item.name.startswith(("_", ".")) or item.name in ["base", "common"]:
                     continue
                 
                 for file in item.glob("*.md"):

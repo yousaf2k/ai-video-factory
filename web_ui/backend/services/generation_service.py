@@ -87,7 +87,7 @@ class GenerationService:
     def get_item_engine(item: QueueItem) -> str:
         """Resolve which engine will process this item"""
         import config
-        if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.THUMBNAIL, GenerationType.BACKGROUND]:
+        if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.THUMBNAIL, GenerationType.BACKGROUND, GenerationType.CHARACTER_IMAGE]:
             return item.image_mode or getattr(config, 'IMAGE_GENERATION_MODE', 'comfyui')
         elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
             return item.video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
@@ -169,6 +169,8 @@ class GenerationService:
                     if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]:
                         print(f"[DEBUG] routing to process_image_generation", flush=True)
                         await self._process_image_generation(item)
+                    elif item.generation_type == GenerationType.CHARACTER_IMAGE:
+                        await self._process_character_generation(item)
                     elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
                         print(f"[DEBUG] routing to process_video_generation", flush=True)
                         await self._process_video_generation(item)
@@ -244,6 +246,7 @@ class GenerationService:
                         GenerationType.IMAGE: 0,
                         GenerationType.THEN_IMAGE: 0,
                         GenerationType.NOW_IMAGE: 0,
+                        GenerationType.CHARACTER_IMAGE: 0,
                         GenerationType.NARRATION: 1,
                         GenerationType.BACKGROUND: 1,
                         GenerationType.VIDEO: 2,
@@ -439,6 +442,111 @@ class GenerationService:
             logger.error(f"Error processing image generation for {item.item_id}: {e}")
             raise
 
+    async def _process_character_generation(self, item: QueueItem):
+        """Process character reference image generation"""
+        try:
+            story = self.project_manager.get_story(item.project_id)
+            characters = story.get('characters', [])
+            if item.character_index is None or item.character_index < 0 or item.character_index >= len(characters):
+                raise ValueError(f"Invalid character_index {item.character_index}")
+                
+            character = characters[item.character_index]
+            variant = item.image_variant # "face" or "full"
+            
+            # Use prompt override if provided, else use the correct prompt
+            prompt = item.prompt_override
+            if not prompt:
+                if variant == "face":
+                    prompt = character.get("image_prompt_face")
+                elif variant == "full":
+                    prompt = character.get("image_prompt_full")
+                else:
+                    raise ValueError(f"Unknown character variant {variant}")
+                    
+            if not prompt:
+                raise ValueError(f"No prompt available for character {character.get('name')} variant {variant}")
+                
+            project_title = story.get('title', item.project_id)
+            
+            # Fake a shot dict for _generate_single_image
+            fake_shot = {
+                'id': f"char_{item.character_index}_{variant}",
+                'index': item.character_index,
+                'image_prompt': prompt,
+                'character_name': character.get('name')
+            }
+            
+            # Use a generic approach for marking active since it checks for shot_index logic
+            queue_service = get_queue_service()
+            item.status = QueueItemStatus.ACTIVE
+            item.started_at = __import__('datetime').datetime.utcnow()
+            queue_service.update_item(item)
+            
+            manager.broadcast_sync(item.project_id, {
+                "type": "progress", "project_id": item.project_id, "shot_index": None,
+                "character_index": item.character_index,
+                "generation_type": "character_image", "progress": 0
+            })
+            
+            # Run in thread pool
+            image_path = await asyncio.to_thread(
+                self._generate_single_image,
+                item.project_id,
+                fake_shot,
+                item.image_mode,
+                item.image_workflow,
+                item.seed,
+                prompt,
+                project_title,
+                variant,
+                None, # reference_images
+                GenerationType.CHARACTER_IMAGE,
+                gemini_mode=item.gemini_mode
+            )
+            
+            # Update story.json
+            relative_path = self._get_relative_path(image_path)
+            if variant == "face":
+                character['face_reference_image_path'] = relative_path
+            elif variant == "full":
+                character['full_reference_image_path'] = relative_path
+                
+            story_path = os.path.join(self.project_manager.get_project_dir(item.project_id), "story.json")
+            with open(story_path, 'w', encoding='utf-8') as f:
+                json.dump(story, f, indent=4, ensure_ascii=False)
+                
+            item.status = QueueItemStatus.COMPLETED
+            item.completed_at = __import__('datetime').datetime.utcnow()
+            item.progress = 100
+            queue_service.update_item(item)
+            
+            manager.broadcast_sync(item.project_id, {
+                "type": "story_updated",
+                "project_id": item.project_id,
+                "story": story
+            })
+            
+            manager.broadcast_sync(item.project_id, {
+                "type": "completed", "project_id": item.project_id, "shot_index": None,
+                "character_index": item.character_index,
+                "generation_type": "character_image"
+            })
+            
+            logger.info(f"Completed character image generation for queue item {item.item_id}")
+            
+        except Exception as e:
+            logger.error(f"Error generating character image: {e}")
+            item.status = QueueItemStatus.FAILED
+            item.error_message = str(e)
+            item.completed_at = __import__('datetime').datetime.utcnow()
+            queue_service.update_item(item)
+            manager.broadcast_sync(item.project_id, {
+                "type": "cancelled", "project_id": item.project_id, "shot_index": None,
+                "character_index": getattr(item, 'character_index', 0),
+                "generation_type": "character_image", "error": str(e)
+            })
+            raise
+
     async def force_start_item(self, item_id: str):
         """
         Force start a queue item immediately, bypassing processor throttles.
@@ -466,6 +574,8 @@ class GenerationService:
             try:
                 if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]:
                     await self._process_image_generation(item)
+                elif item.generation_type == GenerationType.CHARACTER_IMAGE:
+                    await self._process_character_generation(item)
                 elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
                     await self._process_video_generation(item)
                 elif item.generation_type == GenerationType.NARRATION:
@@ -766,7 +876,8 @@ class GenerationService:
             item_id="",  # Will be assigned by QueueService
             project_id=project_id,
             shot_index=shot_index,
-            scene_id=shot.get('scene_id') if shot else None,
+            scene_id=shot.get('scene_id') if shot else getattr(request, 'scene_id', None),
+            character_index=getattr(request, 'character_index', None) if request else None,
             generation_type=generation_type,
             status=QueueItemStatus.QUEUED,
             progress=0,
@@ -1012,6 +1123,40 @@ class GenerationService:
             seed=getattr(request, 'seed', None),
             image_mode=getattr(request, 'image_model', None),
             image_workflow=getattr(request, 'workflow', None)
+        )
+        
+        queue_service = get_queue_service()
+        added_items = queue_service.add_items([item])
+        self._wake_up_processor()
+        return added_items
+
+    def queue_character_image(self, project_id: str, character_index: int, request: Any):
+        """Add character image to queue"""
+        self._ensure_queue_processor_started()
+        
+        # Get story to get title
+        story = self.project_manager.get_story(project_id)
+        project_title = story.get('title', project_id) if story else project_id
+        
+        characters = story.get('characters', [])
+        character_name = characters[character_index].get('name') if 0 <= character_index < len(characters) else None
+        
+        item = QueueItem(
+            item_id="",
+            project_id=project_id,
+            character_index=character_index,
+            generation_type=GenerationType.CHARACTER_IMAGE,
+            image_variant=getattr(request, 'variant', None),
+            prompt_override=getattr(request, 'prompt_override', None),
+            image_mode=getattr(request, 'image_mode', None),
+            image_workflow=getattr(request, 'image_workflow', None),
+            seed=getattr(request, 'seed', None),
+            gemini_mode=getattr(request, 'gemini_mode', None),
+            status=QueueItemStatus.QUEUED,
+            progress=0,
+            priority=40, # Characters higher priority
+            project_title=project_title,
+            character_name=character_name
         )
         
         queue_service = get_queue_service()
@@ -1290,24 +1435,41 @@ class GenerationService:
             actual_mode = image_mode or config.IMAGE_GENERATION_MODE
             if story.get('characters'):
                 character_name = shot.get('character_name')
-                character = None
-                for char in story['characters']:
-                    if char.get('name') == character_name:
-                        character = char
-                        break
-                if character:
-                    then_ref = character.get('then_reference_image_path')
-                    now_ref = character.get('now_reference_image_path')
-                    if actual_mode in ["geminiweb", "gemini"]:
-                        reference_images = []
-                        if then_ref:
-                            reference_images.append(config.resolve_path(then_ref))
-                        if now_ref:
-                            reference_images.append(config.resolve_path(now_ref))
-                        if not reference_images:
-                            reference_images = None
-                    else:
-                        reference_images = then_ref or now_ref
+                shot_prompt = shot.get('image_prompt', '').lower()
+                matched_characters = []
+                
+                if character_name:
+                    for char in story['characters']:
+                        if char.get('name') == character_name:
+                            matched_characters.append(char)
+                            break
+                            
+                sorted_chars = sorted(story['characters'], key=lambda c: len(c.get('name', '')), reverse=True)
+                for char in sorted_chars:
+                    name = char.get('name', '')
+                    if name and name.lower() in shot_prompt and char not in matched_characters:
+                        matched_characters.append(char)
+
+                if matched_characters:
+                    reference_images = []
+                    for char in matched_characters:
+                        then_ref = char.get('then_reference_image_path')
+                        now_ref = char.get('now_reference_image_path')
+                        face_ref = char.get('face_reference_image_path')
+                        full_ref = char.get('full_reference_image_path')
+                        
+                        if actual_mode in ["geminiweb", "gemini"]:
+                            if then_ref: reference_images.append(config.resolve_path(then_ref))
+                            if now_ref: reference_images.append(config.resolve_path(now_ref))
+                            if face_ref: reference_images.append(config.resolve_path(face_ref))
+                            elif full_ref: reference_images.append(config.resolve_path(full_ref))
+                        else:
+                            ref = face_ref or full_ref or then_ref or now_ref
+                            if ref:
+                                reference_images.append(config.resolve_path(ref))
+                                
+                    if not reference_images:
+                        reference_images = None
 
             # Run in thread pool to avoid blocking
             image_path = await asyncio.to_thread(
@@ -1723,7 +1885,12 @@ class GenerationService:
             if old_video_path:
                 if 'video_paths' not in shot:
                     shot['video_paths'] = []
-                if old_video_path not in shot['video_paths']:
+                
+                # Normalize both for reliable comparison
+                abs_old = config.resolve_path(old_video_path)
+                abs_list = [config.resolve_path(p) for p in shot['video_paths']]
+                
+                if abs_old not in abs_list:
                     shot['video_paths'].append(old_video_path)
                     # Save updated video_paths immediately
                     self.project_manager.update_shot_metadata(project_id, {'video_paths': shot['video_paths']}, shot_id=shot_id)
@@ -2264,10 +2431,17 @@ class GenerationService:
         if recovered_variations:
             if 'video_paths' not in current_shot:
                 current_shot['video_paths'] = []
+            
+            # Resolve existing paths for comparison
+            existing_abs = [config.resolve_path(p) for p in current_shot['video_paths']]
+            
             for v in recovered_variations:
-                rel_v = self._get_relative_path(v)
-                if rel_v not in current_shot['video_paths']:
+                abs_v = os.path.abspath(v)
+                if abs_v not in existing_abs:
+                    rel_v = self._get_relative_path(v)
                     current_shot['video_paths'].append(rel_v)
+                    existing_abs.append(abs_v) # Update for next iteration
+            
             self.project_manager.update_shot_metadata(project_id, {'video_paths': current_shot['video_paths']}, shot_id=shot_id)
 
         # Generate meeting video
@@ -2283,7 +2457,11 @@ class GenerationService:
                     if old_meeting_path:
                         if 'video_paths' not in current_shot:
                             current_shot['video_paths'] = []
-                        if old_meeting_path not in current_shot['video_paths']:
+                        
+                        abs_old = config.resolve_path(old_meeting_path)
+                        existing_abs = [config.resolve_path(p) for p in current_shot['video_paths']]
+                        
+                        if abs_old not in existing_abs:
                             current_shot['video_paths'].append(old_meeting_path)
 
                     next_version = self._get_next_video_version(
@@ -2335,11 +2513,8 @@ class GenerationService:
                     current_shot['meeting_video_path'] = self._get_relative_path(result_path)
                     results['meeting'] = current_shot['meeting_video_path']
 
-                    # Append to general video_paths for variations tracking
-                    if 'video_paths' not in current_shot:
-                        current_shot['video_paths'] = []
-                    if current_shot['meeting_video_path'] not in current_shot['video_paths']:
-                        current_shot['video_paths'].append(current_shot['meeting_video_path'])
+                    # update_shot_metadata will automatically append the new meeting_video_path
+                    # to video_paths uniquely. No manual append needed here.
 
 
                     # Mark MEETING_VIDEO queue item as completed
@@ -2387,7 +2562,11 @@ class GenerationService:
                     if old_departure_path:
                         if 'video_paths' not in current_shot:
                             current_shot['video_paths'] = []
-                        if old_departure_path not in current_shot['video_paths']:
+                        
+                        abs_old = config.resolve_path(old_departure_path)
+                        existing_abs = [config.resolve_path(p) for p in current_shot['video_paths']]
+                        
+                        if abs_old not in existing_abs:
                             current_shot['video_paths'].append(old_departure_path)
 
                     next_version = self._get_next_video_version(
@@ -2446,11 +2625,8 @@ class GenerationService:
                     current_shot['departure_video_path'] = self._get_relative_path(result_path)
                     results['departure'] = current_shot['departure_video_path']
 
-                    # Append to general video_paths for variations tracking
-                    if 'video_paths' not in current_shot:
-                        current_shot['video_paths'] = []
-                    if current_shot['departure_video_path'] not in current_shot['video_paths']:
-                        current_shot['video_paths'].append(current_shot['departure_video_path'])
+                    # update_shot_metadata will automatically append the new departure_video_path
+                    # to video_paths uniquely. No manual append needed here.
 
 
                     # Mark DEPARTURE_VIDEO queue item as completed

@@ -97,6 +97,11 @@ export default function ProjectEditPage() {
   // Selection states
   const [selectedStoryAgent, setSelectedStoryAgent] = useState("default");
   const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
+  const [shotsAgentMode, setShotsAgentMode] = useState<"predefined" | "custom">("predefined");
+  const [selectedCamera, setSelectedCamera] = useState<string>("none");
+  const [selectedStyle, setSelectedStyle] = useState<string>("none");
+  const [selectedContext, setSelectedContext] = useState<string>("none");
+  const [selectedSoundFX, setSelectedSoundFX] = useState<string>("none");
   const [maxShots, setMaxShots] = useState(0);
 
   // Initialize and sync story when project loads
@@ -333,9 +338,21 @@ export default function ProjectEditPage() {
 
   const handleReplanShots = async () => {
     try {
+      let finalAgent = selectedShotsAgent;
+      if (shotsAgentMode === "custom") {
+        const parts = [
+          "base/base_shots_standard",
+          selectedCamera === "none" ? "" : selectedCamera,
+          selectedStyle === "none" ? "" : selectedStyle,
+          selectedContext === "none" ? "" : selectedContext,
+          selectedSoundFX === "none" ? "" : selectedSoundFX
+        ].filter(Boolean);
+        finalAgent = parts.join(", ");
+      }
+
       await replanShotsMutation.mutateAsync({
         max_shots: maxShots,
-        shots_agent: selectedShotsAgent,
+        shots_agent: finalAgent,
       });
       setShowReplanShotsModal(false);
       alert("Shot re-planning started.");
@@ -534,6 +551,12 @@ export default function ProjectEditPage() {
                       onUpdate={() => {
                         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
                       }}
+                      onPromptChange={(promptKey, newPrompt) => {
+                        const newCharacters = [...(story.characters || [])];
+                        newCharacters[idx] = { ...newCharacters[idx], [promptKey]: newPrompt };
+                        setStory({ ...story, characters: newCharacters });
+                        setHasChanges(true);
+                      }}
                     />
                   </div>
                 ))}
@@ -712,12 +735,91 @@ export default function ProjectEditPage() {
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
-                <MultiAgentSelector
-                  availableAgents={agents?.shots || []}
-                  selectedValue={selectedShotsAgent}
-                  onChange={setSelectedShotsAgent}
-                  label="Select Shots Building Blocks"
-                />
+                <div>
+                  <label className="block text-sm font-medium mb-1">Predefined Agent</label>
+                  <Select
+                    value={shotsAgentMode === "custom" ? "custom" : selectedShotsAgent}
+                    onValueChange={(val) => {
+                      if (val === "custom") {
+                        setShotsAgentMode("custom");
+                      } else {
+                        setShotsAgentMode("predefined");
+                        setSelectedShotsAgent(val);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select predefined agent" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="custom">Custom (Build your own)</SelectItem>
+                      {agents?.shots
+                        ?.filter((a: any) => !a.category && a.id === "default")
+                        .map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
+                      {agents?.shots
+                        ?.filter((a: any) => !a.category && a.id !== "default")
+                        .sort((a: any, b: any) => a.name.localeCompare(b.name))
+                        .map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {shotsAgentMode === "custom" && (
+                  <div className="space-y-3 p-4 border rounded-md bg-muted/30">
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Camera Agent</label>
+                      <Select value={selectedCamera} onValueChange={setSelectedCamera}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select camera..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {agents?.shots?.filter((a: any) => a.category === 'cameras').map((a: any) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Style Agent</label>
+                      <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select style..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {agents?.shots?.filter((a: any) => a.category === 'styles').map((a: any) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Context Agent</label>
+                      <Select value={selectedContext} onValueChange={setSelectedContext}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select context..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {agents?.shots?.filter((a: any) => a.category === 'contexts').map((a: any) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Sound FX Agent</label>
+                      <Select value={selectedSoundFX} onValueChange={setSelectedSoundFX}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select soundfx..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {agents?.shots?.filter((a: any) => a.category === 'soundfx').map((a: any) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

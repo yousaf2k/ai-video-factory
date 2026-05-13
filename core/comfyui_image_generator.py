@@ -151,10 +151,14 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
 
         # Inject reference image for IP-Adapter if provided
         if reference_image_path and load_reference_node_id and load_reference_node_id in api_format:
-            # Convert to absolute path and normalize
-            ref_path = config.resolve_path(reference_image_path).replace('\\', '/')
-            api_format[load_reference_node_id]["inputs"]["image"] = ref_path
-            logger.debug(f"Injected reference image into node {load_reference_node_id}: {ref_path}")
+            # ComfyUI workflow currently only supports a single reference image via this node
+            actual_ref_path = reference_image_path[0] if isinstance(reference_image_path, list) and len(reference_image_path) > 0 else reference_image_path
+            
+            if isinstance(actual_ref_path, str):
+                # Convert to absolute path and normalize
+                ref_path = config.resolve_path(actual_ref_path).replace('\\', '/')
+                api_format[load_reference_node_id]["inputs"]["image"] = ref_path
+                logger.debug(f"Injected reference image into node {load_reference_node_id}: {ref_path}")
 
         # Set random seed if provided
         if seed is not None:

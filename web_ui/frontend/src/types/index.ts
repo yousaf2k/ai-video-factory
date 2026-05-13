@@ -34,6 +34,14 @@ export interface Character {
   now_reference_image_path?: string;
   then_age?: number;
   now_age?: number;
+  // Non ThenVsNow fields
+  image_prompt_face?: string;
+  image_prompt_full?: string;
+  face_reference_image_path?: string;
+  full_reference_image_path?: string;
+  voice_type?: string;
+  personality?: string;
+  attire?: string;
 }
 
 export interface ProjectStep {

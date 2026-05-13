@@ -998,6 +998,58 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 except Exception as thumb_err:
                     logger.warning(f"Timeout waiting for thumbnail preview: {thumb_err}. Proceeding anyway.")
 
+            # ── Click "Create image" tool if available ───────────────────────
+            try:
+                logger.info("Looking for 'Create image' button...")
+                tools_btn = None
+                for sel in [
+                    'button:has(span.mdc-button__label:has-text("Tools"))',
+                    'button.toolbox-drawer-button:has-text("Tools")',
+                    'button:has-text("Tools")'
+                ]:
+                    try:
+                        btn = page.query_selector(sel)
+                        if btn and btn.is_visible():
+                            tools_btn = btn
+                            break
+                    except Exception:
+                        continue
+                
+                if tools_btn:
+                    tools_btn.click(force=True)
+                    time.sleep(2)  # Wait longer for the drawer to slide open
+                
+                create_img_selectors = [
+                    'button:has(.mat-icon[data-mat-icon-name="photo_prints"])',
+                    'button.toolbox-drawer-item-list-button:has-text("Create image")',
+                    'button:has-text("Create image")',
+                    '.mdc-list-item__content:has-text("Create image")',
+                    'div.label:has-text("Create image")'
+                ]
+                clicked_create_image = False
+                for sel in create_img_selectors:
+                    try:
+                        loc = page.locator(sel)
+                        if loc.count() > 0:
+                            # Bypass Playwright's strict visibility/interactability checks
+                            # by directly dispatching a click event in the browser DOM.
+                            loc.first.evaluate("el => el.click()")
+                            time.sleep(1.5)
+                            clicked_create_image = True
+                            logger.info(f"Clicked 'Create image' button using JS evaluate on {sel}")
+                            break
+                    except Exception as e:
+                        logger.debug(f"Failed to click Create image using {sel}: {e}")
+                        continue
+                
+                if tools_btn and not clicked_create_image:
+                    logger.warning("Could not find 'Create image' in Tools drawer, closing drawer...")
+                    tools_btn.click(force=True) # Click tools button again to toggle drawer closed
+                    time.sleep(1)
+
+            except Exception as e:
+                logger.warning(f"Error while trying to click 'Create image' button: {e}")
+
             # ── Inject the prompt (no clipboard / copy-paste) ────────────────
             injected = _inject_text_into_input(page, input_element, full_prompt)
             if not injected:

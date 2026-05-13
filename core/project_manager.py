@@ -127,19 +127,30 @@ class ProjectManager:
                     target_shot[key] = value
                 
                 # Special handling for path lists (image_paths, video_paths)
-                if 'image_path' in updates:
-                    path = updates['image_path']
-                    if 'image_paths' not in target_shot:
-                        target_shot['image_paths'] = []
-                    if path and path not in target_shot['image_paths']:
-                        target_shot['image_paths'].append(path)
+                # Map specific path fields to their corresponding variation lists
+                path_to_list_map = {
+                    'image_path': 'image_paths',
+                    'then_image_path': 'image_paths',
+                    'now_image_path': 'image_paths',
+                    'video_path': 'video_paths',
+                    'meeting_video_path': 'video_paths',
+                    'departure_video_path': 'video_paths'
+                }
                 
-                if 'video_path' in updates:
-                    path = updates['video_path']
-                    if 'video_paths' not in target_shot:
-                        target_shot['video_paths'] = []
-                    if path and path not in target_shot['video_paths']:
-                        target_shot['video_paths'].append(path)
+                for update_key, list_key in path_to_list_map.items():
+                    if update_key in updates:
+                        path = updates[update_key]
+                        if path:
+                            # Normalize path to absolute for reliable comparison
+                            # (_load_shots ensures existing list items are also absolute)
+                            abs_path = config.resolve_path(path)
+                            
+                            if list_key not in target_shot:
+                                target_shot[list_key] = []
+                            
+                            # Check for existence using absolute path
+                            if abs_path not in target_shot[list_key]:
+                                target_shot[list_key].append(abs_path)
             else:
                 logger.warning(f"Could not find shot to update: ID={shot_id}, Index={shot_index}")
                 return  # Move to next step if no shot for stats update
@@ -352,9 +363,14 @@ class ProjectManager:
         if not path:
             return path
             
-        # Normalize slashes
+        # Normalize slashes first for consistent checking
         path = path.replace('\\', '/')
         
+        # If it doesn't look like an absolute path (no drive letter or leading slash on non-windows)
+        # and it's already starting with "output/", return as is
+        if not os.path.isabs(path) and path.startswith('output/'):
+            return path
+            
         # 1. Check PROJECT_ROOT (Standard case)
         project_root = getattr(config, 'PROJECT_ROOT', None)
         if project_root:

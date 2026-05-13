@@ -19,6 +19,16 @@ from web_ui.backend.models.story import (
     GenerateSceneNarrationRequest, BatchGenerateNarrationRequest,
     SelectSceneNarrationRequest, BackgroundGenerationRequest
 )
+from pydantic import BaseModel, Field
+from typing import Optional
+
+class GenerateCharacterReferenceRequest(BaseModel):
+    variant: str = Field(..., description="'face' or 'full' (or 'then'/'now')")
+    prompt_override: Optional[str] = None
+    image_mode: Optional[str] = None
+    image_workflow: Optional[str] = None
+    seed: Optional[int] = None
+    gemini_mode: Optional[str] = None
 from web_ui.backend.services.project_service import ProjectService
 from web_ui.backend.services.generation_service import get_generation_service
 from core.story_engine import build_story
@@ -323,10 +333,10 @@ async def upload_character_reference(
     """
     try:
         # Validate variant
-        if variant not in ["then", "now"]:
+        if variant not in ["then", "now", "face", "full"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid variant '{variant}'. Must be 'then' or 'now'"
+                detail=f"Invalid variant '{variant}'. Must be 'then', 'now', 'face', or 'full'"
             )
 
         # Load story
@@ -407,6 +417,42 @@ async def upload_character_reference(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload reference image: {str(e)}"
+        )
+
+
+@router.post("/characters/{character_index}/generate-reference")
+async def generate_character_reference(
+    project_id: str,
+    character_index: int,
+    request: GenerateCharacterReferenceRequest
+):
+    """Generate reference image for a character using AI"""
+    try:
+        if request.variant not in ["then", "now", "face", "full"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid variant '{request.variant}'. Must be 'then', 'now', 'face', or 'full'"
+            )
+
+        generation_service.queue_character_image(
+            project_id=project_id,
+            character_index=character_index,
+            request=request
+        )
+
+        return {
+            "status": "queued",
+            "character_index": character_index,
+            "variant": request.variant,
+            "message": f"{request.variant.upper()} reference image generation added to queue"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error queueing character reference generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to queue reference image generation: {str(e)}"
         )
 
 

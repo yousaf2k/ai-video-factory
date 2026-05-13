@@ -1,5 +1,6 @@
 # Agent: GTA 6 Vision - Leonida Chronicles
 {{include:base/base_shots_standard}}
+{{include:soundfx/soundfx_default}}
 {{include:cameras/camera_rockstar_cinematic}}
 {{include:styles/style_gta6_aesthetic}}
 {{include:contexts/context_gta6_vice_city}}

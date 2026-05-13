@@ -19,7 +19,7 @@
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 8,
-      "end_at_step": 14,
+      "end_at_step": 1000,
       "return_with_leftover_noise": "disable",
       "model": [
         "103",
@@ -55,7 +55,7 @@
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 4,
-      "end_at_step": 1000,
+      "end_at_step": 8,
       "return_with_leftover_noise": "enable",
       "model": [
         "104",

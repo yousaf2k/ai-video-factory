@@ -62,6 +62,7 @@ Return JSON list (each shot):
    "scene_id": 0,
    "image_prompt":"",
    "motion_prompt":"",
+   "soundfx_prompt":"",
    "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]
@@ -658,6 +659,7 @@ Return JSON list (each shot):
    "scene_index": 0,
    "image_prompt":"",
    "motion_prompt":"",
+   "soundfx_prompt":"",
    "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]

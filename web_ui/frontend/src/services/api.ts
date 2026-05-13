@@ -158,6 +158,25 @@ class ApiClient {
     return response.data;
   }
 
+  async generateCharacterReferenceImage(
+    projectId: string,
+    characterIndex: number,
+    request: {
+      variant: string;
+      prompt_override?: string;
+      image_mode?: string;
+      image_workflow?: string;
+      seed?: number;
+      gemini_mode?: string;
+    }
+  ): Promise<any> {
+    const response = await this.client.post(
+      `/api/projects/${projectId}/story/characters/${characterIndex}/generate-reference`,
+      request
+    );
+    return response.data;
+  }
+
   async generateShotImage(
     projectId: string,
     shotIdOrIndex: string | number,

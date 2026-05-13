@@ -11,6 +11,7 @@ You are creating a story for a **{VIDEO_LENGTH}-second video**.
 You MUST assign a `scene_duration` (in seconds) to each scene.
 
 **Rules**:
+
 1. Each scene must have `scene_duration` field (integer, in seconds)
 2. Sum of all scene_duration must equal {VIDEO_LENGTH}
 3. Minimum scene duration: 15 seconds

@@ -146,7 +146,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [batchSkipImages, setBatchSkipImages] = useState<boolean>(true);
   const [queueSetting, setQueueSetting] = useState<string>("all_images_then_videos");
   const [appendImagePrompt, setAppendImagePrompt] = useState<string>("default");
-  const [geminiMode, setGeminiMode] = useState<string>("Fast");
+  const [geminiMode, setGeminiMode] = useState<string>(() => {
+    return localStorage.getItem(`gemini_mode_${projectId}`) || "Fast";
+  });
 
   const [ttsMethod, setTtsMethod] = useState("local");
   const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
@@ -236,13 +238,18 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
     if (globalConfig?.video_workflow) {
       setVideoWorkflow(globalConfig.video_workflow);
     }
-    if (globalConfig?.geminiweb_default_mode) {
+    
+    const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`);
+    if (savedGeminiMode) {
+      setGeminiMode(savedGeminiMode);
+    } else if (globalConfig?.geminiweb_default_mode) {
       setGeminiMode(globalConfig.geminiweb_default_mode);
     }
+    
     if (globalConfig?.available_soundfx_workflows && globalConfig.available_soundfx_workflows.length > 0) {
       setSoundfxWorkflow(globalConfig.available_soundfx_workflows[0]);
     }
-  }, [globalConfig]);
+  }, [globalConfig, projectId]);
 
   // Extract unique camera values for the dropdown
   const cameraOptions = useMemo(() => {
@@ -1445,7 +1452,10 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                       </label>
                       <Select
                         value={geminiMode}
-                        onValueChange={(val) => setGeminiMode(val)}
+                        onValueChange={(val) => {
+                          setGeminiMode(val);
+                          localStorage.setItem(`gemini_mode_${projectId}`, val);
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select Gemini Mode" />
@@ -1565,7 +1575,10 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                       </label>
                       <Select
                         value={geminiMode}
-                        onValueChange={(val) => setGeminiMode(val)}
+                        onValueChange={(val) => {
+                          setGeminiMode(val);
+                          localStorage.setItem(`gemini_mode_${projectId}`, val);
+                        }}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select Gemini Mode" />

@@ -19,6 +19,7 @@ class GenerationType(str, Enum):
     BACKGROUND = "background"
     SOUNDFX = "soundfx"
     THUMBNAIL = "thumbnail"
+    CHARACTER_IMAGE = "character_image"
 
 
 class QueueItemStatus(str, Enum):
@@ -37,6 +38,7 @@ class QueueItem(BaseModel):
     project_id: str = Field(..., description="Project identifier")
     shot_index: Optional[int] = Field(None, description="Shot index (1-based)")
     scene_id: Optional[int] = Field(None, description="Scene ID for narrations/backgrounds")
+    character_index: Optional[int] = Field(None, description="Character index for character generations (0-based)")
     generation_type: GenerationType = Field(..., description="Type of generation")
     status: QueueItemStatus = Field(default=QueueItemStatus.QUEUED, description="Current status")
     progress: int = Field(default=0, ge=0, le=100, description="Progress percentage (0-100)")

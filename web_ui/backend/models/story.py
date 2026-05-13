@@ -42,6 +42,15 @@ class Character(BaseModel):
     now_reference_image_path: Optional[str] = Field(default=None, description="Path to NOW reference photo for facial consistency")
     then_age: Optional[int] = Field(default=None, description="Age of character/actor during the 'Then' period")
     now_age: Optional[int] = Field(default=None, description="Current age of character/actor")
+    
+    # Non ThenVsNow Fields
+    image_prompt_face: Optional[str] = Field(default=None, description="Prompt for face reference image")
+    image_prompt_full: Optional[str] = Field(default=None, description="Prompt for full body reference image")
+    face_reference_image_path: Optional[str] = Field(default=None, description="Path to face reference image")
+    full_reference_image_path: Optional[str] = Field(default=None, description="Path to full body reference image")
+    voice_type: Optional[str] = Field(default=None, description="Character voice type")
+    personality: Optional[str] = Field(default=None, description="Character personality")
+    attire: Optional[str] = Field(default=None, description="Character attire")
 
 
 class Scene(BaseModel):
