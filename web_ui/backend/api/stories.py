@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 class GenerateCharacterReferenceRequest(BaseModel):
-    variant: str = Field(..., description="'face' or 'full' (or 'then'/'now')")
+    variant: str = Field(..., description="'then', 'now', or 'character'")
     prompt_override: Optional[str] = None
     image_mode: Optional[str] = None
     image_workflow: Optional[str] = None
@@ -328,15 +328,15 @@ async def upload_character_reference(
     Args:
         project_id: Project identifier
         character_index: 0-based index of the character in story.characters
-        variant: "then" or "now" - which variant to upload
+        variant: "then", "now", or "character" - which variant to upload
         file: Image file to upload
     """
     try:
         # Validate variant
-        if variant not in ["then", "now", "face", "full"]:
+        if variant not in ["then", "now", "character"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid variant '{variant}'. Must be 'then', 'now', 'face', or 'full'"
+                detail=f"Invalid variant '{variant}'. Must be 'then', 'now', or 'character'"
             )
 
         # Load story
@@ -428,10 +428,10 @@ async def generate_character_reference(
 ):
     """Generate reference image for a character using AI"""
     try:
-        if request.variant not in ["then", "now", "face", "full"]:
+        if request.variant not in ["then", "now", "character"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid variant '{request.variant}'. Must be 'then', 'now', 'face', or 'full'"
+                detail=f"Invalid variant '{request.variant}'. Must be 'then', 'now', or 'character'"
             )
 
         generation_service.queue_character_image(

@@ -35,10 +35,8 @@ export interface Character {
   then_age?: number;
   now_age?: number;
   // Non ThenVsNow fields
-  image_prompt_face?: string;
-  image_prompt_full?: string;
-  face_reference_image_path?: string;
-  full_reference_image_path?: string;
+  image_prompt?: string;
+  character_reference_image_path?: string;
   voice_type?: string;
   personality?: string;
   attire?: string;

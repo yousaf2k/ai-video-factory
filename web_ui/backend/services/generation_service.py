@@ -453,18 +453,39 @@ class GenerationService:
             character = characters[item.character_index]
             variant = item.image_variant # "face" or "full"
             
-            # Use prompt override if provided, else use the correct prompt
-            prompt = item.prompt_override
-            if not prompt:
-                if variant == "face":
-                    prompt = character.get("image_prompt_face")
-                elif variant == "full":
-                    prompt = character.get("image_prompt_full")
-                else:
-                    raise ValueError(f"Unknown character variant {variant}")
-                    
-            if not prompt:
-                raise ValueError(f"No prompt available for character {character.get('name')} variant {variant}")
+            # Determine the base description to use
+            base_desc = item.prompt_override
+            if not base_desc:
+                # 1. Use combined image_prompt (new standard)
+                base_desc = character.get("image_prompt")
+                
+                # 2. Handle ThenVsNow variants
+                if not base_desc:
+                    if variant == "then":
+                        base_desc = character.get("then_prompt")
+                    elif variant == "now":
+                        base_desc = character.get("now_prompt")
+                
+            if not base_desc:
+                base_desc = character.get("description", "")
+
+            # Determine if we should apply the default photorealistic style
+            # If the user has already specified a style (e.g., "Studio Ghibli style"), we skip the default.
+            default_style = ""
+            if "style" not in base_desc.lower() and "aesthetic" not in base_desc.lower():
+                default_style = "The style must be photorealistic, life-like live action shot on a DSLR camera with 35mm film and muted color tones, "
+
+            # Apply the professional character reference sheet template
+            # This template ensures high consistency by generating 8 views (4 full-body, 4 face close-ups)
+            prompt = (
+                f'create a professional character reference sheet for "{base_desc}, white background, detailed skin texture" '
+                f'divide the sheet into four different vertical columns, each representing a different angle for a total of eight shots, '
+                f'TOP ROW: Full-body views from head to toe facing four different directions (front,side,three-qarter view, back). '
+                f'All subjects in the top row must be fully visible including feet, with no cropping at the ankles, knees, or head. '
+                f'BOTTOM ROW: Four close-up shots of the face (including front and profile views) corresponding to each of the full-body shots above. '
+                f'{default_style}'
+                f'do not add any text.'
+            )
                 
             project_title = story.get('title', item.project_id)
             
@@ -506,10 +527,12 @@ class GenerationService:
             
             # Update story.json
             relative_path = self._get_relative_path(image_path)
-            if variant == "face":
-                character['face_reference_image_path'] = relative_path
-            elif variant == "full":
-                character['full_reference_image_path'] = relative_path
+            if variant == "character":
+                character['character_reference_image_path'] = relative_path
+            elif variant == "then":
+                character['then_reference_image_path'] = relative_path
+            elif variant == "now":
+                character['now_reference_image_path'] = relative_path
                 
             story_path = os.path.join(self.project_manager.get_project_dir(item.project_id), "story.json")
             with open(story_path, 'w', encoding='utf-8') as f:
@@ -1438,6 +1461,7 @@ class GenerationService:
                 shot_prompt = shot.get('image_prompt', '').lower()
                 matched_characters = []
                 
+                import re
                 if character_name:
                     for char in story['characters']:
                         if char.get('name') == character_name:
@@ -1447,24 +1471,43 @@ class GenerationService:
                 sorted_chars = sorted(story['characters'], key=lambda c: len(c.get('name', '')), reverse=True)
                 for char in sorted_chars:
                     name = char.get('name', '')
-                    if name and name.lower() in shot_prompt and char not in matched_characters:
+                    if not name or char in matched_characters:
+                        continue
+                    
+                    name_lower = name.lower()
+                    # 1. Direct match (e.g. "FirstName LastName" in prompt)
+                    if name_lower in shot_prompt:
                         matched_characters.append(char)
+                        continue
+                        
+                    # 2. Word-based match (e.g. "FirstName" in prompt matches character "FirstName LastName")
+                    # We check if any significant word of the name exists as a whole word in the prompt
+                    name_parts = [re.escape(w.lower()) for w in name.split() if len(w) >= 3]
+                    for part in name_parts:
+                        if re.search(rf'\b{part}\b', shot_prompt):
+                            matched_characters.append(char)
+                            break
 
                 if matched_characters:
                     reference_images = []
                     for char in matched_characters:
+                        # Prioritize the new unified character_reference_image_path
+                        char_ref = char.get('character_reference_image_path')
                         then_ref = char.get('then_reference_image_path')
                         now_ref = char.get('now_reference_image_path')
                         face_ref = char.get('face_reference_image_path')
                         full_ref = char.get('full_reference_image_path')
                         
                         if actual_mode in ["geminiweb", "gemini"]:
+                            # Gemini can handle multiple images
+                            if char_ref: reference_images.append(config.resolve_path(char_ref))
                             if then_ref: reference_images.append(config.resolve_path(then_ref))
                             if now_ref: reference_images.append(config.resolve_path(now_ref))
                             if face_ref: reference_images.append(config.resolve_path(face_ref))
-                            elif full_ref: reference_images.append(config.resolve_path(full_ref))
+                            if full_ref: reference_images.append(config.resolve_path(full_ref))
                         else:
-                            ref = face_ref or full_ref or then_ref or now_ref
+                            # ComfyUI/Standard usually takes one reference primary
+                            ref = char_ref or face_ref or full_ref or then_ref or now_ref
                             if ref:
                                 reference_images.append(config.resolve_path(ref))
                                 
@@ -2123,8 +2166,8 @@ class GenerationService:
         # Sampler Node - set the prompt
         sampler_node_id = wf_info.get("sampler_node_id")
         if sampler_node_id and sampler_node_id in wf:
-            # Use override, then shot's specific prompt, then fallback to motion prompt
-            prompt_text = prompt_override or shot.get('soundfx_prompt') or shot.get('motion_prompt', '')
+            # Use override, then shot's specific prompt, or empty string
+            prompt_text = prompt_override or shot.get('soundfx_prompt') or ""
             logger.info(f"Using sound FX prompt: {prompt_text[:100]}...")
             wf[sampler_node_id]['inputs']['prompt'] = prompt_text
 

@@ -33,8 +33,7 @@ Respond with valid JSON only:
   "characters": [
     {
       "name": "Character Name",
-      "image_prompt_face": "Cinematic close-up face prompt",
-      "image_prompt_full": "Full standing view horror prompt",
+      "image_prompt": "Cinematic prompt defining both face and full body appearance",
       "voice_type": "Voice (e.g., breathless, whispered)",
       "personality": "Primary character trait",
       "attire": "Description of clothing"

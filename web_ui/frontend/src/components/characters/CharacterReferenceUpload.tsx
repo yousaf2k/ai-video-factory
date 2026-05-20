@@ -28,16 +28,14 @@ export default function CharacterReferenceUpload({
   const [previews, setPreviews] = useState<Record<string, string | null>>({
     then: character.then_reference_image_path || null,
     now: character.now_reference_image_path || null,
-    face: character.face_reference_image_path || null,
-    full: character.full_reference_image_path || null
+    character: character.character_reference_image_path || null
   });
 
   useEffect(() => {
     setPreviews({
       then: character.then_reference_image_path || null,
       now: character.now_reference_image_path || null,
-      face: character.face_reference_image_path || null,
-      full: character.full_reference_image_path || null
+      character: character.character_reference_image_path || null
     });
   }, [character]);
 
@@ -147,8 +145,13 @@ export default function CharacterReferenceUpload({
         { key: 'now', label: 'NOW (Current Version)', prompt: character.now_prompt, promptKey: 'now_prompt', ref: previews.now }
       ]
     : [
-        { key: 'face', label: 'Face Reference', prompt: character.image_prompt_face, promptKey: 'image_prompt_face', ref: previews.face },
-        { key: 'full', label: 'Full Body Reference', prompt: character.image_prompt_full, promptKey: 'image_prompt_full', ref: previews.full }
+        { 
+          key: 'character', 
+          label: 'Character Reference', 
+          prompt: character.image_prompt || "", 
+          promptKey: 'image_prompt', 
+          ref: previews.character
+        }
       ];
 
   return (

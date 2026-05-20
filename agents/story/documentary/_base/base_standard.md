@@ -51,8 +51,7 @@ You must respond with valid JSON only. No markdown, no explanations, just JSON:
   "characters": [
     {
       "name": "Character Name",
-      "image_prompt_face": "Detailed face prompt on white background",
-      "image_prompt_full": "Full standing view prompt",
+      "image_prompt": "Detailed cinematic prompt defining both face and full body appearance on white background",
       "voice_type": "Voice requirements",
       "personality": "Key personality traits",
       "attire": "Description of clothing"

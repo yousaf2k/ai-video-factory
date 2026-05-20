@@ -623,7 +623,7 @@ export function GenerationDialog({
                   className="text-xs resize-y"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Visible cues from motion prompt will be used if left blank.
+                  Leave blank for generic environmental sounds.
                 </p>
               </div>
             </div>
