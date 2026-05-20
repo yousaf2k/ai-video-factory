@@ -16,7 +16,8 @@ import {
   Clock,
   Layers,
   FolderPlus,
-  Sparkles
+  Sparkles,
+  Archive
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -63,6 +64,10 @@ export default function ProjectsPage() {
   const filteredStoryAgents = agents?.story?.filter((agent: any) => {
     if ((selectedProjectType as number) === ProjectType.ThenVsNow) {
       return agent.category === "then_vs_now";
+    } else if ((selectedProjectType as number) === ProjectType.Movie) {
+      return agent.category === "movie";
+    } else if ((selectedProjectType as number) === ProjectType.AsmrGlassCutting) {
+      return agent.category === "asmr" || agent.id.startsWith("asmr/");
     } else {
       return agent.category === "documentary" || !agent.category;
     }
@@ -121,7 +126,7 @@ export default function ProjectsPage() {
       try {
         // Automatically generate the initial story ONLY if not using a prompts file
         if (!request.prompts_file) {
-          await api.regenerateStory(project.project_id, request.story_agent);
+          await api.generateStory(project.project_id, request.story_agent);
         }
       } catch (storyError) {
         console.error("Failed to generate initial story:", storyError);
@@ -212,140 +217,197 @@ export default function ProjectsPage() {
 
       {/* Projects Grid */}
       {projects && projects.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-          {projects.map((project) => (
-            <div
-              key={project.project_id}
-              className="group relative flex flex-col gap-3 transition-all duration-300 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-1 overflow-hidden"
-            >
-              {/* Thumbnail Container */}
-              <div className="relative aspect-video w-full overflow-hidden bg-muted">
-                {project.thumbnail_url ? (
-                  <img
-                    src={getMediaUrl(project.thumbnail_url)}
-                    alt={project.idea}
-                    className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="flex w-full h-full flex-col items-center justify-center bg-muted text-muted-foreground relative">
-                    <ImageIcon className="w-10 h-10 mb-2 opacity-30" />
-                  </div>
-                )}
-                
-                {/* Generate Button Overlay */}
-                {!project.thumbnail_url && (
-                  <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="gap-2 shadow-lg hover:scale-105 transition-transform"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        handleGenerateThumbnail(project.project_id);
-                      }}
-                      disabled={generatingThumbnails[project.project_id]}
-                    >
-                      {generatingThumbnails[project.project_id] ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-4 h-4" />
-                      )}
-                      {generatingThumbnails[project.project_id]
-                        ? "Generating..."
-                        : "Generate Thumbnail"}
-                    </Button>
-                  </div>
-                )}
+        <div className="space-y-12">
+          {(() => {
+            const isArchived = (dateStr?: string) => {
+              if (!dateStr) return false;
+              const projectDate = new Date(dateStr).getTime();
+              const now = new Date().getTime();
+              const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+              return (now - projectDate) > thirtyDaysMs;
+            };
 
-                {/* Status Badges on Thumbnail */}
-                <div className="absolute top-2 left-2 z-10">
-                  <span className={`px-2 py-1 text-xs font-semibold rounded-md shadow-sm backdrop-blur-md ${
-                    project.completed 
-                      ? "bg-green-500/80 text-white" 
-                      : "bg-blue-500/80 text-white"
-                  }`}>
-                    {project.completed ? "Done" : "In Progress"}
-                  </span>
-                </div>
-                
-                {/* Duration Overlay */}
-                <div className="absolute bottom-2 right-2 px-2 py-1 text-xs font-medium text-white bg-black/70 backdrop-blur-sm rounded-md z-10 flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {project.started_at
-                    ? (() => {
-                        try {
-                          return formatDistanceToNow(
-                            new Date(project.started_at),
-                            { addSuffix: true },
-                          );
-                        } catch (e) {
-                          return "Unknown";
-                        }
-                      })()
-                    : "New"}
-                </div>
-              </div>
+            const projectTypeNames: Record<number, string> = {
+              [ProjectType.Documentary]: "Documentaries",
+              [ProjectType.ThenVsNow]: "Then Vs Now",
+              [ProjectType.Movie]: "Cinematic Movies",
+              [ProjectType.AsmrGlassCutting]: "ASMR Glass Cutting",
+            };
 
-              {/* Details & Actions Section */}
-              <div className="flex flex-col p-4 flex-grow">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3
-                    className="text-base font-semibold line-clamp-2 leading-tight text-card-foreground group-hover:text-primary transition-colors"
-                    title={project.idea}
-                  >
-                    {project.story?.title || project.idea}
-                  </h3>
-                </div>
-                
-                <div className="flex items-center gap-4 text-xs text-muted-foreground mt-auto pt-4 border-t border-border/40">
-                  <div className="flex items-center gap-1.5" title="Rendered Videos">
-                    <Video className="w-3.5 h-3.5" />
-                    <span>{project.videos_rendered || 0}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5" title="Total Shots">
-                    <Layers className="w-3.5 h-3.5" />
-                    <span>{project.total_shots || 0}</span>
-                  </div>
-                </div>
-              </div>
+            const archivedProjects = projects.filter((p) => isArchived(p.started_at || p.timestamp));
+            const activeProjects = projects.filter((p) => !isArchived(p.started_at || p.timestamp));
 
-              {/* Clickable Area Overlay */}
-              <Link
-                href={`/projects/${project.project_id}`}
-                className="absolute inset-0 z-10"
+            const groupedActiveProjects = activeProjects.reduce((acc, project) => {
+              const type = project.story?.project_type || ProjectType.Documentary;
+              if (!acc[type]) acc[type] = [];
+              acc[type].push(project);
+              return acc;
+            }, {} as Record<number, typeof activeProjects>);
+
+            const renderProjectCard = (project: any, isArchive: boolean = false) => (
+              <div
+                key={project.project_id}
+                className={`group relative flex flex-col gap-3 transition-all duration-300 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-1 overflow-hidden ${isArchive ? 'opacity-75 hover:opacity-100 grayscale-[0.2]' : ''}`}
               >
-                <span className="sr-only">View Project</span>
-              </Link>
+                {/* Thumbnail Container */}
+                <div className="relative aspect-video w-full overflow-hidden bg-muted">
+                  {project.thumbnail_url ? (
+                    <img
+                      src={getMediaUrl(project.thumbnail_url)}
+                      alt={project.idea}
+                      className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex w-full h-full flex-col items-center justify-center bg-muted text-muted-foreground relative">
+                      <ImageIcon className="w-10 h-10 mb-2 opacity-30" />
+                    </div>
+                  )}
+                  
+                  {/* Generate Button Overlay */}
+                  {!project.thumbnail_url && (
+                    <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="gap-2 shadow-lg hover:scale-105 transition-transform"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleGenerateThumbnail(project.project_id);
+                        }}
+                        disabled={generatingThumbnails[project.project_id]}
+                      >
+                        {generatingThumbnails[project.project_id] ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-4 h-4" />
+                        )}
+                        {generatingThumbnails[project.project_id]
+                          ? "Generating..."
+                          : "Generate Thumbnail"}
+                      </Button>
+                    </div>
+                  )}
 
-              {/* Action Menu overlay in corner */}
-              <div className="absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-2">
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="w-8 h-8 rounded-full shadow-md bg-background/90 hover:bg-background hover:scale-110 transition-transform"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleDuplicateProject(project.project_id);
-                  }}
-                  title="Duplicate project"
+                  {/* Status Badges on Thumbnail */}
+                  <div className="absolute top-2 left-2 z-10">
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-md shadow-sm backdrop-blur-md ${
+                      project.completed 
+                        ? "bg-green-500/80 text-white" 
+                        : "bg-blue-500/80 text-white"
+                    }`}>
+                      {project.completed ? "Done" : "In Progress"}
+                    </span>
+                  </div>
+                  
+                  {/* Duration Overlay */}
+                  <div className="absolute bottom-2 right-2 px-2 py-1 text-xs font-medium text-white bg-black/70 backdrop-blur-sm rounded-md z-10 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {project.started_at
+                      ? (() => {
+                          try {
+                            return formatDistanceToNow(
+                              new Date(project.started_at),
+                              { addSuffix: true },
+                            );
+                          } catch (e) {
+                            return "Unknown";
+                          }
+                        })()
+                      : "New"}
+                  </div>
+                </div>
+
+                {/* Details & Actions Section */}
+                <div className="flex flex-col p-4 flex-grow">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <h3
+                      className="text-base font-semibold line-clamp-2 leading-tight text-card-foreground group-hover:text-primary transition-colors"
+                      title={project.idea}
+                    >
+                      {project.story?.title || project.idea}
+                    </h3>
+                  </div>
+                  
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground mt-auto pt-4 border-t border-border/40">
+                    <div className="flex items-center gap-1.5" title="Rendered Videos">
+                      <Video className="w-3.5 h-3.5" />
+                      <span>{project.videos_rendered || 0}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5" title="Total Shots">
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>{project.total_shots || 0}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Clickable Area Overlay */}
+                <Link
+                  href={`/projects/${project.project_id}`}
+                  className="absolute inset-0 z-10"
                 >
-                   <Copy className="w-4 h-4" />
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  className="w-8 h-8 rounded-full shadow-md hover:scale-110 transition-transform"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleDeleteProject(project.project_id);
-                  }}
-                  title="Delete project"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                  <span className="sr-only">View Project</span>
+                </Link>
+
+                {/* Action Menu overlay in corner */}
+                <div className="absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-2">
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="w-8 h-8 rounded-full shadow-md bg-background/90 hover:bg-background hover:scale-110 transition-transform"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDuplicateProject(project.project_id);
+                    }}
+                    title="Duplicate project"
+                  >
+                     <Copy className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="w-8 h-8 rounded-full shadow-md hover:scale-110 transition-transform"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDeleteProject(project.project_id);
+                    }}
+                    title="Delete project"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+
+            return (
+              <>
+                {Object.keys(projectTypeNames).map((typeKey) => {
+                  const type = parseInt(typeKey);
+                  const typeProjects = groupedActiveProjects[type];
+                  if (!typeProjects || typeProjects.length === 0) return null;
+
+                  return (
+                    <div key={type} className="space-y-4">
+                      <h2 className="text-2xl font-bold tracking-tight border-b pb-2">{projectTypeNames[type]}</h2>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                        {typeProjects.map((p) => renderProjectCard(p, false))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {archivedProjects.length > 0 && (
+                  <div className="space-y-4 mt-16 pt-8 border-t border-dashed">
+                    <h2 className="text-2xl font-bold tracking-tight text-muted-foreground flex items-center gap-2 mb-2">
+                      <Archive className="w-6 h-6" /> Archived Projects (30+ days)
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                      {archivedProjects.map((p) => renderProjectCard(p, true))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-20 px-4 text-center border-2 border-dashed rounded-2xl bg-card/30">
@@ -404,6 +466,8 @@ export default function ProjectsPage() {
                       <SelectContent>
                         <SelectItem value="1">Documentary</SelectItem>
                         <SelectItem value="2">Then Vs Now</SelectItem>
+                        <SelectItem value="3">Cinematic Movie</SelectItem>
+                        <SelectItem value="4">ASMR Glass Cutting</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

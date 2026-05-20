@@ -1,32 +1,46 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Character } from '@/types';
+import { Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { GenerationDialog } from '../shots/GenerationDialog';
+import { api } from '@/services/api';
 
 interface CharacterReferenceUploadProps {
   character: Character;
   characterIndex: number;
   projectId: string;
   onUpdate?: () => void;
+  onPromptChange?: (promptKey: string, newPrompt: string) => void;
 }
 
 export default function CharacterReferenceUpload({
   character,
   characterIndex,
   projectId,
-  onUpdate
+  onUpdate,
+  onPromptChange
 }: CharacterReferenceUploadProps) {
-  const [uploading, setUploading] = useState<{ then: boolean; now: boolean }>({
-    then: false,
-    now: false
-  });
-  const [previews, setPreviews] = useState<{
-    then: string | null;
-    now: string | null;
-  }>({
+  const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  
+  // Use local state for optimistic updates during upload, but sync with props
+  const [previews, setPreviews] = useState<Record<string, string | null>>({
     then: character.then_reference_image_path || null,
-    now: character.now_reference_image_path || null
+    now: character.now_reference_image_path || null,
+    character: character.character_reference_image_path || null
   });
+
+  useEffect(() => {
+    setPreviews({
+      then: character.then_reference_image_path || null,
+      now: character.now_reference_image_path || null,
+      character: character.character_reference_image_path || null
+    });
+  }, [character]);
+
+  const [showGenerationDialog, setShowGenerationDialog] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
 
   const getMediaUrl = (path: string) => {
     if (!path) return '';
@@ -39,7 +53,7 @@ export default function CharacterReferenceUpload({
   };
 
   const handleUpload = useCallback(async (
-    variant: 'then' | 'now',
+    variant: string,
     file: File
   ) => {
     setUploading(prev => ({ ...prev, [variant]: true }));
@@ -85,7 +99,7 @@ export default function CharacterReferenceUpload({
 
   const handleDrop = useCallback((
     e: React.DragEvent<HTMLDivElement>,
-    variant: 'then' | 'now'
+    variant: string
   ) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
@@ -96,13 +110,49 @@ export default function CharacterReferenceUpload({
 
   const handleFileSelect = useCallback((
     e: React.ChangeEvent<HTMLInputElement>,
-    variant: 'then' | 'now'
+    variant: string
   ) => {
     const file = e.target.files?.[0];
     if (file) {
       handleUpload(variant, file);
     }
   }, [handleUpload]);
+
+  const handleGenerate = async (options: any) => {
+    if (!selectedVariant) return;
+    try {
+      await api.generateCharacterReferenceImage(projectId, characterIndex, {
+        variant: selectedVariant,
+        prompt_override: options.promptOverride,
+        image_mode: options.mode,
+        image_workflow: options.workflow,
+        seed: options.seed ? Number(options.seed) : undefined,
+        gemini_mode: options.gemini_mode
+      });
+      setShowGenerationDialog(false);
+      setSelectedVariant(null);
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      console.error("Failed to generate character image:", error);
+      alert(`Failed to generate character image: ${error}`);
+    }
+  };
+
+  const isThenVsNow = !!character.then_prompt || !!character.now_prompt;
+  const variants = isThenVsNow 
+    ? [
+        { key: 'then', label: 'THEN (Young Version)', prompt: character.then_prompt, promptKey: 'then_prompt', ref: previews.then },
+        { key: 'now', label: 'NOW (Current Version)', prompt: character.now_prompt, promptKey: 'now_prompt', ref: previews.now }
+      ]
+    : [
+        { 
+          key: 'character', 
+          label: 'Character Reference', 
+          prompt: character.image_prompt || "", 
+          promptKey: 'image_prompt', 
+          ref: previews.character
+        }
+      ];
 
   return (
     <div className="space-y-4">
@@ -111,7 +161,7 @@ export default function CharacterReferenceUpload({
           Reference Photos
         </h4>
         <span className="text-xs text-gray-500">
-          Upload photos for facial consistency
+          Upload or generate photos for character consistency
         </span>
       </div>
 
@@ -132,140 +182,110 @@ export default function CharacterReferenceUpload({
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        {/* THEN Reference */}
-        <div className="space-y-2">
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
-            THEN (Young Version)
-          </label>
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => handleDrop(e, 'then')}
-            onClick={() => document.getElementById(`then-input-${characterIndex}`)?.click()}
-            className={`
-              relative border-2 border-dashed rounded-lg p-4 text-center
-              transition-colors duration-200 cursor-pointer
-              ${uploading.then
-                ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
-              }
-            `}
-          >
-            {previews.then ? (
-              <div className="space-y-2">
-                <img
-                  src={getMediaUrl(previews.then)}
-                  alt="THEN reference"
-                  className="w-full h-32 object-cover rounded"
+        {variants.map(v => (
+          <div key={v.key} className="space-y-2">
+            <div className="flex justify-between items-start h-6 mb-2">
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 truncate pr-2" title={v.label}>
+                {v.label}
+              </label>
+              {v.prompt && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap shrink-0"
+                  onClick={() => { setSelectedVariant(v.key); setShowGenerationDialog(true); }}
+                >
+                  <Sparkles className="w-3 h-3 mr-1" /> Generate
+                </Button>
+              )}
+            </div>
+            
+            {v.prompt !== undefined && (
+              <div className="mb-2">
+                <textarea
+                  className="w-full text-[10px] text-muted-foreground leading-tight p-2 border border-border rounded-md bg-transparent focus:bg-background focus:ring-1 focus:ring-primary focus:outline-none min-h-[48px] resize-y"
+                  value={v.prompt}
+                  onChange={(e) => onPromptChange && onPromptChange(v.promptKey, e.target.value)}
+                  placeholder="Enter prompt for this character reference..."
+                  disabled={!onPromptChange}
                 />
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    document.getElementById(`then-input-${characterIndex}`)?.click();
-                  }}
-                  className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                >
-                  Replace Photo
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <svg
-                  className="mx-auto h-8 w-8 text-gray-400"
-                  stroke="currentColor"
-                  fill="none"
-                  viewBox="0 0 48 48"
-                >
-                  <path
-                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  Drag & drop or click to upload
-                </p>
               </div>
             )}
 
-            <input
-              id={`then-input-${characterIndex}`}
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleFileSelect(e, 'then')}
-              className="hidden"
-              disabled={uploading.then}
-            />
-          </div>
-        </div>
-
-        {/* NOW Reference */}
-        <div className="space-y-2">
-          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
-            NOW (Current Version)
-          </label>
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => handleDrop(e, 'now')}
-            onClick={() => document.getElementById(`now-input-${characterIndex}`)?.click()}
-            className={`
-              relative border-2 border-dashed rounded-lg p-4 text-center
-              transition-colors duration-200 cursor-pointer
-              ${uploading.now
-                ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
-              }
-            `}
-          >
-            {previews.now ? (
-              <div className="space-y-2">
-                <img
-                  src={getMediaUrl(previews.now)}
-                  alt="NOW reference"
-                  className="w-full h-32 object-cover rounded"
-                />
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    document.getElementById(`now-input-${characterIndex}`)?.click();
-                  }}
-                  className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                >
-                  Replace Photo
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <svg
-                  className="mx-auto h-8 w-8 text-gray-400"
-                  stroke="currentColor"
-                  fill="none"
-                  viewBox="0 0 48 48"
-                >
-                  <path
-                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, v.key)}
+              onClick={() => document.getElementById(`${v.key}-input-${characterIndex}`)?.click()}
+              className={`
+                relative border-2 border-dashed rounded-lg p-4 text-center
+                transition-colors duration-200 cursor-pointer
+                ${uploading[v.key]
+                  ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                  : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
+                }
+              `}
+            >
+              {v.ref ? (
+                <div className="space-y-2">
+                  <img
+                    src={getMediaUrl(v.ref)}
+                    alt={`${v.key} reference`}
+                    className="w-full h-32 object-cover rounded"
                   />
-                </svg>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
-                  Drag & drop or click to upload
-                </p>
-              </div>
-            )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      document.getElementById(`${v.key}-input-${characterIndex}`)?.click();
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                  >
+                    Replace Photo
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <svg
+                    className="mx-auto h-8 w-8 text-gray-400"
+                    stroke="currentColor"
+                    fill="none"
+                    viewBox="0 0 48 48"
+                  >
+                    <path
+                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    Drag & drop or click to upload
+                  </p>
+                </div>
+              )}
 
-            <input
-              id={`now-input-${characterIndex}`}
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleFileSelect(e, 'now')}
-              className="hidden"
-              disabled={uploading.now}
-            />
+              <input
+                id={`${v.key}-input-${characterIndex}`}
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileSelect(e, v.key)}
+                className="hidden"
+                disabled={uploading[v.key]}
+              />
+            </div>
           </div>
-        </div>
+        ))}
       </div>
+
+      {showGenerationDialog && selectedVariant && (
+        <GenerationDialog
+          isOpen={showGenerationDialog}
+          onClose={() => { setShowGenerationDialog(false); setSelectedVariant(null); }}
+          onSubmit={handleGenerate}
+          projectId={projectId}
+          type="image"
+          defaultPromptOverride={variants.find(v => v.key === selectedVariant)?.prompt || ""}
+        />
+      )}
     </div>
   );
 }

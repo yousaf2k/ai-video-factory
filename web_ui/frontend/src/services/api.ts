@@ -95,6 +95,27 @@ class ApiClient {
     return response.data.thumbnail_url;
   }
 
+  async uploadThumbnail(
+    projectId: string,
+    file: File,
+    aspectRatio: string = '16:9',
+    isPoster: boolean = false
+  ): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('aspect_ratio', aspectRatio);
+    formData.append('is_poster', isPoster ? 'true' : 'false');
+    
+    const response = await this.client.post<{ status: string, thumbnail_url: string }>(
+      `/api/projects/${projectId}/thumbnail/upload`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }
+    );
+    return response.data.thumbnail_url;
+  }
+
   // Story
   async getStory(projectId: string): Promise<Story> {
     const project = await this.getProject(projectId);
@@ -109,8 +130,8 @@ class ApiClient {
     return response.data;
   }
 
-  async regenerateStory(projectId: string, agent: string = 'default'): Promise<Story> {
-    const response = await this.client.post<Story>(`/api/projects/${projectId}/story/regenerate`, {
+  async generateStory(projectId: string, agent: string = 'default'): Promise<Story> {
+    const response = await this.client.post<Story>(`/api/projects/${projectId}/story/generate`, {
       agent,
     });
     return response.data;
@@ -129,63 +150,98 @@ class ApiClient {
     return response.data;
   }
 
-  async updateShot(projectId: string, shotIndex: number, request: UpdateShotRequest): Promise<Shot> {
+  async updateShot(projectId: string, shotIdOrIndex: string | number, request: UpdateShotRequest): Promise<Shot> {
     const response = await this.client.put<Shot>(
-      `/api/projects/${projectId}/shots/${shotIndex}`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}`,
       request
     );
     return response.data;
   }
 
-  async regenerateShotImage(
+  async generateCharacterReferenceImage(
     projectId: string,
-    shotIndex: number,
+    characterIndex: number,
+    request: {
+      variant: string;
+      prompt_override?: string;
+      image_mode?: string;
+      image_workflow?: string;
+      seed?: number;
+      gemini_mode?: string;
+    }
+  ): Promise<any> {
+    const response = await this.client.post(
+      `/api/projects/${projectId}/story/characters/${characterIndex}/generate-reference`,
+      request
+    );
+    return response.data;
+  }
+
+  async generateShotImage(
+    projectId: string,
+    shotIdOrIndex: string | number,
     force: boolean = false,
     imageMode?: string,
     imageWorkflow?: string,
     seed?: number,
     promptOverride?: string,
-    imageVariant?: string
+    imageVariant?: string,
+    geminiMode?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/regenerate-image`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-image`, {
       force,
       image_mode: imageMode,
       image_workflow: imageWorkflow,
       seed,
       prompt_override: promptOverride || undefined,
       image_variant: imageVariant || undefined,
+      gemini_mode: geminiMode || undefined,
     });
   }
 
-  async regenerateShotVideo(
+  async generateShotVideo(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     force: boolean = false,
     videoMode?: string,
     videoWorkflow?: string,
     videoVariant?: string,
     appendImagePrompt?: string,
     generateSoundFX?: boolean,
-    draftLowResVideo?: boolean
+    draftLowResVideo?: boolean,
+    promptOverride?: string,
+    resolution?: string,
+    geminiMode?: string,
+    soundfxWorkflow?: string,
+    soundfxPrompt?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/regenerate-video`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-video`, {
       force,
       video_mode: videoMode,
       video_workflow: videoWorkflow,
       video_variant: videoVariant || undefined,
       append_image_prompt: appendImagePrompt,
       generate_soundfx: generateSoundFX || false,
-      draft_low_res_video: draftLowResVideo || false
+      draft_low_res_video: draftLowResVideo || false,
+      prompt_override: promptOverride || undefined,
+      resolution: resolution || undefined,
+      gemini_mode: geminiMode || undefined,
+      soundfx_workflow: soundfxWorkflow || undefined,
+      soundfx_prompt: soundfxPrompt || undefined,
     });
   }
 
   async generateSoundFX(
     projectId: string,
-    shotIndex: number,
-    force: boolean = false
+    shotIdOrIndex: string | number,
+    force: boolean = false,
+    workflow?: string,
+    promptOverride?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/generate-soundfx`, {
-      force
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-soundfx`, {
+      force,
+      workflow,
+      prompt_override: promptOverride
     });
   }
 
@@ -195,13 +251,14 @@ class ApiClient {
     await this.client.post(`/api/projects/${projectId}/shots/cancel-generation`);
   }
 
-  async cancelShotGeneration(projectId: string, shotIndex: number): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/cancel-generation`);
+  async cancelShotGeneration(projectId: string, shotIdOrIndex: string | number): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/cancel-generation`);
   }
 
-  async removeWatermark(projectId: string, shotIndex: number, variant?: string): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/remove-watermark`, {
+  async removeWatermark(projectId: string, shotIdOrIndex: string | number, variant?: string, type: string = "image"): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/remove-watermark`, {
       variant: variant || null,
+      type: type
     });
   }
 
@@ -212,21 +269,23 @@ class ApiClient {
 
   async selectShotImage(
     projectId: string,
-    shotIndex: number,
-    imagePath: string
+    shotIdOrIndex: string | number,
+    imagePath: string,
+    variant?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/select-image`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/select-image`, {
       image_path: imagePath,
+      variant: variant || undefined,
     });
   }
 
   async deleteVariationImage(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     imagePath: string
   ): Promise<{ remaining: number; active_image_path: string | null }> {
     const response = await this.client.delete<{ status: string; remaining: number; active_image_path: string | null }>(
-      `/api/projects/${projectId}/shots/${shotIndex}/images`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}/images`,
       { params: { image_path: imagePath } }
     );
     return response.data;
@@ -234,21 +293,23 @@ class ApiClient {
 
   async selectShotVideo(
     projectId: string,
-    shotIndex: number,
-    videoPath: string
+    shotIdOrIndex: string | number,
+    videoPath: string,
+    variant?: string
   ): Promise<void> {
-    await this.client.post(`/api/projects/${projectId}/shots/${shotIndex}/select-video`, {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/select-video`, {
       video_path: videoPath,
+      variant: variant || undefined,
     });
   }
 
   async deleteVariationVideo(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     videoPath: string
   ): Promise<{ remaining: number; active_video_path: string | null }> {
     const response = await this.client.delete<{ status: string; remaining: number; active_video_path: string | null }>(
-      `/api/projects/${projectId}/shots/${shotIndex}/videos`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}/videos`,
       { params: { video_path: videoPath } }
     );
     return response.data;
@@ -290,14 +351,14 @@ class ApiClient {
 
   async uploadShotImage(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     file: File,
     variant?: string
   ): Promise<{ image_path: string; filename: string }> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await this.client.post<{ status: string; image_path: string; filename: string }>(
-      `/api/projects/${projectId}/shots/${shotIndex}/upload-image`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}/upload-image`,
       formData,
       { 
         params: { variant },
@@ -309,14 +370,14 @@ class ApiClient {
 
   async uploadShotVideo(
     projectId: string,
-    shotIndex: number,
+    shotIdOrIndex: string | number,
     file: File,
     variant?: string
   ): Promise<{ video_path: string; filename: string }> {
     const formData = new FormData();
     formData.append('file', file);
     const response = await this.client.post<{ status: string; video_path: string; filename: string }>(
-      `/api/projects/${projectId}/shots/${shotIndex}/upload-video`,
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}/upload-video`,
       formData,
       { 
         params: { variant },
@@ -326,7 +387,7 @@ class ApiClient {
     return response.data;
   }
 
-  async batchRegenerate(
+  async batchGenerate(
     projectId: string,
     data: {
       shot_indices: number[];
@@ -343,9 +404,15 @@ class ApiClient {
       append_image_prompt?: string;
       generate_soundfx?: boolean;
       draft_low_res_video?: boolean;
+      departure_prompt_override?: string;
+      then_prompt_override?: string;
+      resolution?: string;
+      gemini_mode?: string;
+      soundfx_workflow?: string;
+      soundfx_prompt?: string;
     }
   ): Promise<any> {
-    const response = await this.client.post(`/api/projects/${projectId}/shots/batch-regenerate`, data);
+    const response = await this.client.post(`/api/projects/${projectId}/shots/batch-generate`, data);
     return response.data;
   }
 

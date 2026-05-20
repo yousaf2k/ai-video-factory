@@ -4,6 +4,7 @@ Pydantic models for shot data
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
+import config
 
 class Shot(BaseModel):
     """Shot model"""
@@ -24,6 +25,7 @@ class Shot(BaseModel):
     character_name: Optional[str] = Field(default=None, description="Human-readable character name")
     scene_name: Optional[str] = Field(default=None, description="Human-readable scene name")
     order_in_scene: Optional[int] = Field(default=0, description="Position within scene (0-based)")
+    gemini_mode: Optional[str] = Field(default=config.GEMINIWEB_DEFAULT_MODE, description="Gemini model mode (Fast/Thinking/Pro)")
 
     # FLFI2V mode fields
     is_flfi2v: bool = Field(default=False, description="Whether this shot uses FLFI2V (first/last frame image to video)")
@@ -44,6 +46,7 @@ class Shot(BaseModel):
     # Sound FX fields
     soundfx_path: Optional[str] = Field(default=None, description="Path to video with generated sound effects")
     soundfx_generated: bool = Field(default=False, description="Whether sound effects have been generated")
+    soundfx_prompt: Optional[str] = Field(default=None, description="Prompt for sound effects generation")
 
     class Config:
         json_schema_extra = {
@@ -75,11 +78,13 @@ class UpdateShotRequest(BaseModel):
     camera: Optional[str] = None
     narration: Optional[str] = None
     scene_id: Optional[int] = None
+    gemini_mode: Optional[str] = None
     # FLFI2V fields
     then_image_prompt: Optional[str] = None
     now_image_prompt: Optional[str] = None
     meeting_video_prompt: Optional[str] = None
     departure_video_prompt: Optional[str] = None
+    soundfx_prompt: Optional[str] = None
 
 
 class RegenerateImageRequest(BaseModel):
@@ -90,6 +95,7 @@ class RegenerateImageRequest(BaseModel):
     seed: Optional[int] = Field(default=None, description="Optional specific seed for regeneration")
     prompt_override: Optional[str] = Field(default=None, description="Override the image prompt for this generation only")
     image_variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then', 'now', or 'both'")
+    gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
 
 
 
@@ -102,11 +108,17 @@ class RegenerateVideoRequest(BaseModel):
     append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
+    prompt_override: Optional[str] = Field(default=None, description="Override the motion prompt for this generation only")
+    resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
+    gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
+    soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")
+    soundfx_prompt: Optional[str] = Field(default=None, description="Prompt override for sound FX generation")
 
 
 class BatchRegenerateRequest(BaseModel):
     """Request to batch regenerate shots"""
-    shot_indices: List[int] = Field(..., description="List of shot indices to regenerate")
+    shot_indices: Optional[List[int]] = Field(default=None, description="List of shot indices to regenerate (legacy)")
+    shot_ids: Optional[List[str]] = Field(default=None, description="List of shot stable IDs to regenerate (preferred)")
     regenerate_images: bool = Field(default=True, description="Regenerate images")
     regenerate_videos: bool = Field(default=True, description="Regenerate videos")
     force: bool = Field(default=False, description="Force regeneration (legacy, use granular flags)")
@@ -120,6 +132,12 @@ class BatchRegenerateRequest(BaseModel):
     append_image_prompt: Optional[str] = Field(default=None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
+    departure_prompt_override: Optional[str] = Field(default=None, description="Override standard departure prompt for batch generation")
+    then_prompt_override: Optional[str] = Field(default=None, description="Override standard then prompt for batch generation")
+    resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
+    gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
+    soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")
+    soundfx_prompt: Optional[str] = Field(default=None, description="Prompt override for sound FX generation")
 
 
 
@@ -142,11 +160,14 @@ class SelectVideoRequest(BaseModel):
 
 
 class RemoveWatermarkRequest(BaseModel):
-    """Request to remove watermark from a shot image"""
+    """Request to remove watermark from a shot image or video"""
     variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then' or 'now'")
+    type: str = Field(default="image", description="Media type: 'image' or 'video'")
 
 
 class RegenerateSoundFXRequest(BaseModel):
     """Request to generate sound effects for a shot video"""
     force: bool = Field(default=False, description="Force regeneration even if sound FX exists")
+    workflow: Optional[str] = Field(default=None, description="Specific sound FX workflow to use")
+    prompt_override: Optional[str] = Field(default=None, description="Override the sound FX prompt")
 

@@ -148,6 +148,10 @@ async def cancel_queue_item(item_id: str):
                 from core.comfy_client import interrupt_generation
                 interrupt_generation()
 
+        # Wake up processor to pick up the next item
+        from web_ui.backend.services.generation_service import get_generation_service
+        get_generation_service()._wake_up_processor()
+
         return {"message": "Item cancelled successfully"}
     except HTTPException:
         raise
@@ -175,6 +179,10 @@ async def pause_queue_item(item_id: str):
                 from core.comfy_client import interrupt_generation
                 interrupt_generation()
 
+        # Wake up processor
+        from web_ui.backend.services.generation_service import get_generation_service
+        get_generation_service()._wake_up_processor()
+
         return {"message": "Item paused successfully"}
     except HTTPException:
         raise
@@ -192,13 +200,15 @@ async def resume_queue_item(item_id: str):
         if not success:
             raise HTTPException(status_code=400, detail=f"Item {item_id} not found or not paused")
 
-        # Ensure queue processor is running
+        # Ensure queue processor is running and wake it up
         try:
             from web_ui.backend.services.generation_service import get_generation_service
-            get_generation_service()._ensure_queue_processor_started()
+            gen_service = get_generation_service()
+            gen_service._ensure_queue_processor_started()
+            gen_service._wake_up_processor()
         except Exception as e:
             import logging
-            logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+            logging.getLogger(__name__).warning(f"Failed to wake up queue processor: {e}")
 
         return {"message": "Item resumed successfully"}
     except HTTPException:
@@ -248,6 +258,10 @@ async def bulk_pause_items(request: BulkActionRequest):
             from core.comfy_client import interrupt_generation
             interrupt_generation()
 
+        # Wake up processor
+        from web_ui.backend.services.generation_service import get_generation_service
+        get_generation_service()._wake_up_processor()
+
         return {"message": f"Paused {paused_count} items", "count": paused_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -267,10 +281,12 @@ async def bulk_resume_items(request: BulkActionRequest):
         if resumed_count > 0:
             try:
                 from web_ui.backend.services.generation_service import get_generation_service
-                get_generation_service()._ensure_queue_processor_started()
+                gen_service = get_generation_service()
+                gen_service._ensure_queue_processor_started()
+                gen_service._wake_up_processor()
             except Exception as e:
                 import logging
-                logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+                logging.getLogger(__name__).warning(f"Failed to wake up queue processor: {e}")
 
         return {"message": f"Resumed {resumed_count} items", "count": resumed_count}
     except Exception as e:
@@ -291,10 +307,12 @@ async def bulk_requeue_items(request: BulkActionRequest):
         if requeued_count > 0:
             try:
                 from web_ui.backend.services.generation_service import get_generation_service
-                get_generation_service()._ensure_queue_processor_started()
+                gen_service = get_generation_service()
+                gen_service._ensure_queue_processor_started()
+                gen_service._wake_up_processor()
             except Exception as e:
                 import logging
-                logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+                logging.getLogger(__name__).warning(f"Failed to wake up queue processor: {e}")
 
         return {"message": f"Requeued {requeued_count} items", "count": requeued_count}
     except Exception as e:
@@ -311,13 +329,15 @@ async def requeue_queue_item(item_id: str):
         if not success:
             raise HTTPException(status_code=400, detail=f"Item {item_id} not found or not in a requeueable state")
         
-        # Ensure queue processor is running
+        # Ensure queue processor is running and wake it up
         try:
             from web_ui.backend.services.generation_service import get_generation_service
-            get_generation_service()._ensure_queue_processor_started()
+            gen_service = get_generation_service()
+            gen_service._ensure_queue_processor_started()
+            gen_service._wake_up_processor()
         except Exception as e:
             import logging
-            logging.getLogger(__name__).warning(f"Failed to start queue processor: {e}")
+            logging.getLogger(__name__).warning(f"Failed to wake up queue processor: {e}")
 
         return {"message": "Item requeued successfully"}
     except HTTPException:
@@ -349,8 +369,11 @@ async def resume_queue():
     """
     try:
         changed = queue_service.resume_queue()
-        if not changed:
-            return {"message": "Queue is not paused", "is_paused": False}
+        if changed:
+            try:
+                from web_ui.backend.services.generation_service import get_generation_service
+                get_generation_service()._wake_up_processor()
+            except: pass
         return {"message": "Queue resumed successfully", "is_paused": False}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

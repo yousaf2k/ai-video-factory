@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useConfig } from "@/hooks/useAgents";
 
-export type GenerationType = "image" | "video";
+export type GenerationType = "image" | "video" | "soundfx";
 
 export interface GenerationConfig {
   force?: boolean;
@@ -23,6 +23,10 @@ export interface GenerationConfig {
   appendImagePrompt?: string; // e.g. "default", "none", "start", "end"
   generateSoundFX?: boolean;
   draftLowResVideo?: boolean;
+  resolution?: string;
+  gemini_mode?: string;
+  soundfxWorkflow?: string;
+  soundfxPrompt?: string;
 }
 
 interface GenerationDialogProps {
@@ -34,7 +38,11 @@ interface GenerationDialogProps {
   onSubmit: (config: GenerationConfig) => void;
   title?: string;
   defaultPromptOverride?: string;
+  defaultSoundFXPrompt?: string;
   hidePrompt?: boolean;
+  isFLFI2V?: boolean;
+  isThenImage?: boolean;
+  defaultUseOverride?: boolean;
 }
 
 export function GenerationDialog({
@@ -46,7 +54,11 @@ export function GenerationDialog({
   onSubmit,
   title,
   defaultPromptOverride = "",
+  defaultSoundFXPrompt = "",
   hidePrompt = false,
+  isFLFI2V = false,
+  isThenImage = false,
+  defaultUseOverride = false,
 }: GenerationDialogProps) {
   const { data: globalConfig } = useConfig();
 
@@ -54,24 +66,32 @@ export function GenerationDialog({
   const [force, setForce] = useState(false);
   const [mode, setMode] = useState("comfyui");
   const [workflow, setWorkflow] = useState<string>("default");
+  const [soundfxWorkflow, setSoundfxWorkflow] = useState<string>("mmaudio");
+  const [geminiMode, setGeminiMode] = useState("Fast");
   
   // Image Specific State
   const [seed, setSeed] = useState<number | "">("");
   const [promptOverride, setPromptOverride] = useState(defaultPromptOverride);
+  const [soundfxPrompt, setSoundfxPrompt] = useState(defaultSoundFXPrompt);
 
   const [appendImagePrompt, setAppendImagePrompt] = useState("default");
   const [generateSoundFX, setGenerateSoundFX] = useState(false);
   const [draftLowResVideo, setDraftLowResVideo] = useState(false);
+  const [resolution, setResolution] = useState("720p");
+  
+  // Override toggle and custom prompt
+  const [useOverride, setUseOverride] = useState(defaultUseOverride);
+  const DEFAULT_VIDEO_PROMPT = "(cinematic quality, consistent style), slowly departing the scene from the character's appearance, transitioning towards the next scene. focus on the departure motion and environment shift.";
+  const DEFAULT_THEN_PROMPT = "Remove only the person standing on the right side of this reference image. No change in background set or environment, no side angle, no profile view, no tilt. Make the left person looking directly into camera in center of the frame with happy, cheerful smiling expressions. Do NOT remove or change any background crew members, equipment, or props. ";
 
   // Reset or initialize state
   useEffect(() => {
     if (isOpen) {
-      setForce(false);
-      setSeed("");
-      setPromptOverride(defaultPromptOverride);
-      setAppendImagePrompt("default");
       setGenerateSoundFX(false);
       setDraftLowResVideo(false);
+      setUseOverride(defaultUseOverride);
+      setPromptOverride(defaultUseOverride && isThenImage ? DEFAULT_THEN_PROMPT : (defaultPromptOverride || ""));
+      setSoundfxPrompt(defaultSoundFXPrompt || "");
       
       if (type === "image") {
         const savedImageMode = localStorage.getItem(`image_mode_${projectId}`) || "comfyui";
@@ -84,6 +104,18 @@ export function GenerationDialog({
           setWorkflow(globalConfig.available_image_workflows[0]);
         } else {
           setWorkflow("flux2");
+        }
+        
+        const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`) || globalConfig?.geminiweb_default_mode || "Fast";
+        setGeminiMode(savedGeminiMode);
+      } else if (type === "soundfx") {
+        const savedSoundfxWf = localStorage.getItem(`soundfx_workflow_${projectId}`);
+        if (savedSoundfxWf && (!globalConfig?.available_soundfx_workflows || globalConfig.available_soundfx_workflows.includes(savedSoundfxWf))) {
+          setSoundfxWorkflow(savedSoundfxWf);
+        } else if (globalConfig?.available_soundfx_workflows?.length) {
+          setSoundfxWorkflow(globalConfig.available_soundfx_workflows[0]);
+        } else {
+          setSoundfxWorkflow("mmaudio");
         }
       } else {
         const savedVideoMode = localStorage.getItem(`video_mode_${projectId}`) || "comfyui";
@@ -98,6 +130,15 @@ export function GenerationDialog({
           setWorkflow("wan22");
         }
         
+        const savedSoundfxWf = localStorage.getItem(`soundfx_workflow_${projectId}`);
+        if (savedSoundfxWf && (!globalConfig?.available_soundfx_workflows || globalConfig.available_soundfx_workflows.includes(savedSoundfxWf))) {
+          setSoundfxWorkflow(savedSoundfxWf);
+        } else if (globalConfig?.available_soundfx_workflows?.length) {
+          setSoundfxWorkflow(globalConfig.available_soundfx_workflows[0]);
+        } else {
+          setSoundfxWorkflow("mmaudio");
+        }
+        
         const savedAppend = localStorage.getItem(`video_append_${projectId}`);
         if (savedAppend) setAppendImagePrompt(savedAppend);
         
@@ -106,6 +147,12 @@ export function GenerationDialog({
         
         const savedDraft = localStorage.getItem(`video_draft_${projectId}`);
         if (savedDraft) setDraftLowResVideo(savedDraft === "true");
+ 
+        const savedRes = localStorage.getItem(`video_resolution_${projectId}`);
+        if (savedRes) setResolution(savedRes);
+ 
+        const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`) || globalConfig?.geminiweb_default_mode || "Fast";
+        setGeminiMode(savedGeminiMode);
       }
     }
   }, [isOpen, type, projectId, globalConfig]);
@@ -118,10 +165,14 @@ export function GenerationDialog({
       mode,
       workflow,
       seed: type === "image" ? seed : undefined,
-      promptOverride: type === "image" ? promptOverride : undefined,
+      promptOverride: (type === "image" || useOverride) ? (promptOverride || undefined) : undefined,
       appendImagePrompt: type === "video" ? appendImagePrompt : undefined,
       generateSoundFX: type === "video" ? generateSoundFX : undefined,
       draftLowResVideo: type === "video" ? draftLowResVideo : undefined,
+      resolution: type === "video" ? resolution : undefined,
+      gemini_mode: mode === "geminiweb" ? geminiMode : undefined,
+      soundfxWorkflow: (type === "soundfx" || generateSoundFX) ? soundfxWorkflow : undefined,
+      soundfxPrompt: (type === "soundfx" || generateSoundFX) ? (soundfxPrompt || undefined) : undefined,
     });
   };
 
@@ -136,7 +187,7 @@ export function GenerationDialog({
         </button>
 
         <h2 className="text-lg font-semibold mb-4">
-          {title || `Generate ${type === "image" ? "Image" : "Video"}`}
+          {title || `Generate ${type === "image" ? "Image" : type === "video" ? "Video" : "Sound FX"}`}
         </h2>
 
         <div className="space-y-4">
@@ -178,6 +229,30 @@ export function GenerationDialog({
                   </SelectContent>
                 </Select>
               </div>
+
+              {mode === "geminiweb" && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    Gemini Mode
+                  </label>
+                  <Select
+                    value={geminiMode}
+                    onValueChange={(val) => {
+                      setGeminiMode(val);
+                      localStorage.setItem(`gemini_mode_${projectId}`, val);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Gemini Mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Fast">Fast</SelectItem>
+                      <SelectItem value="Thinking">Thinking</SelectItem>
+                      <SelectItem value="Pro">Pro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {mode === "comfyui" && (
                 <>
@@ -233,20 +308,48 @@ export function GenerationDialog({
 
               {/* Prompt Override — visible for ALL image modes */}
               {!hidePrompt && (
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
-                    Prompt Override
-                  </label>
-                  <Textarea
-                    value={promptOverride}
-                    onChange={(e) => setPromptOverride(e.target.value)}
-                    rows={4}
-                    placeholder="Leave blank to use saved prompt…"
-                    className="text-xs resize-y"
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Edits here are one-time only — they won't change the saved prompt.
-                  </p>
+                <div className="space-y-4 pt-4 border-t">
+                  {/* Then Prompt Override — ONLY for THEN image of FLFI2V projects */}
+                  {isFLFI2V && isThenImage && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="checkbox"
+                        id="regen-override-then"
+                        checked={useOverride}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setUseOverride(checked);
+                          if (checked && (!promptOverride || promptOverride === defaultPromptOverride)) {
+                            setPromptOverride(DEFAULT_THEN_PROMPT);
+                          } else if (!checked) {
+                            setPromptOverride(defaultPromptOverride || "");
+                          }
+                        }}
+                        className="w-4 h-4 mr-2"
+                      />
+                      <label htmlFor="regen-override-then" className="text-sm font-semibold">
+                        Then Prompt Override
+                      </label>
+                    </div>
+                  )}
+
+                  {(!isFLFI2V || !isThenImage || useOverride) && (
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Prompt Override
+                      </label>
+                      <Textarea
+                        value={promptOverride}
+                        onChange={(e) => setPromptOverride(e.target.value)}
+                        rows={4}
+                        placeholder="Leave blank to use saved prompt…"
+                        className="text-xs resize-y"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Edits here are one-time only — they won't change the saved prompt.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -279,6 +382,30 @@ export function GenerationDialog({
                   </SelectContent>
                 </Select>
               </div>
+              
+              {mode === "geminiweb" && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    Gemini Mode
+                  </label>
+                  <Select
+                    value={geminiMode}
+                    onValueChange={(val) => {
+                      setGeminiMode(val);
+                      localStorage.setItem(`gemini_mode_${projectId}`, val);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Gemini Mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Fast">Fast</SelectItem>
+                      <SelectItem value="Thinking">Thinking</SelectItem>
+                      <SelectItem value="Pro">Pro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               
               {mode === "comfyui" && (
                 <div>
@@ -347,22 +474,159 @@ export function GenerationDialog({
                 </label>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Input
-                  type="checkbox"
-                  id="regen-lowres"
-                  checked={draftLowResVideo}
-                  onChange={(e) => {
-                    setDraftLowResVideo(e.target.checked);
-                    localStorage.setItem(`video_draft_${projectId}`, e.target.checked.toString());
-                  }}
-                  className="w-4 h-4 mr-2"
-                />
-                <label htmlFor="regen-lowres" className="text-sm">
-                  📉 Draft Low Res Video
+              {generateSoundFX && (
+                <div className="ml-6 mt-3 space-y-2 border-l-2 pl-3 py-1">
+                  {globalConfig?.available_soundfx_workflows && globalConfig.available_soundfx_workflows.length > 1 && (
+                    <div className="mb-2">
+                      <label className="block text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                        Sound FX Workflow
+                      </label>
+                      <Select
+                        value={soundfxWorkflow}
+                        onValueChange={(val) => {
+                          setSoundfxWorkflow(val);
+                          localStorage.setItem(`soundfx_workflow_${projectId}`, val);
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-[10px]">
+                          <SelectValue placeholder="Select Sound FX Workflow" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {globalConfig.available_soundfx_workflows.map((wf) => (
+                            <SelectItem key={wf} value={wf} className="text-[10px]">
+                              {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  
+                  <div>
+                    <label className="block text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                      Sound FX Prompt
+                    </label>
+                    <Textarea
+                      value={soundfxPrompt}
+                      onChange={(e) => setSoundfxPrompt(e.target.value)}
+                      rows={2}
+                      placeholder="Describe sounds: wind, footsteps, crowd..."
+                      className="text-[10px] min-h-[50px] bg-muted/30"
+                    />
+                    <p className="text-[9px] text-muted-foreground italic">
+                      Overrides the default SFX prompt for this generation.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1 mt-4 border-t pt-4">
+                <label className="block text-[10px] font-medium text-muted-foreground mb-1">
+                  Video Resolution
                 </label>
+                <Select
+                  value={resolution}
+                  onValueChange={(val) => {
+                    setResolution(val);
+                    localStorage.setItem(`video_resolution_${projectId}`, val);
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Select Resolution" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="480p">480p (Fast)</SelectItem>
+                    <SelectItem value="720p">720p (HD)</SelectItem>
+                    <SelectItem value="1080p">1080p (Full HD)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {/* Departure Prompt Override — ONLY for FLFI2V projects */}
+              {isFLFI2V && (
+                <div className="space-y-4 pt-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="checkbox"
+                      id="regen-override"
+                      checked={useOverride}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUseOverride(checked);
+                        if (checked && !promptOverride) {
+                          setPromptOverride(DEFAULT_VIDEO_PROMPT);
+                        }
+                      }}
+                      className="w-4 h-4 mr-2"
+                    />
+                    <label htmlFor="regen-override" className="text-sm font-semibold">
+                      Override the prompt
+                    </label>
+                  </div>
+
+                  {useOverride && (
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground">
+                        Custom Departure Prompt
+                      </label>
+                      <Textarea
+                        className="text-xs min-h-[80px]"
+                        value={promptOverride}
+                        onChange={(e) => setPromptOverride(e.target.value)}
+                        placeholder="Enter custom departure/motion prompt..."
+                      />
+                      <p className="text-[10px] text-muted-foreground italic">
+                        If unchecked, the prompt from shot JSON will be used.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
+          )}
+
+          {type === "soundfx" && (
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Sound FX Workflow
+              </label>
+              <Select
+                value={soundfxWorkflow}
+                onValueChange={(val) => {
+                  setSoundfxWorkflow(val);
+                  localStorage.setItem(`soundfx_workflow_${projectId}`, val);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Sound FX Workflow" />
+                </SelectTrigger>
+                <SelectContent>
+                  {globalConfig?.available_soundfx_workflows?.map((wf) => (
+                    <SelectItem key={wf} value={wf}>
+                      {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                    </SelectItem>
+                  )) || (
+                    <SelectItem value="mmaudio">MMAudio</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              
+              <div className="mt-4">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Sound FX Prompt
+                </label>
+                <Textarea
+                  value={soundfxPrompt}
+                  onChange={(e) => setSoundfxPrompt(e.target.value)}
+                  rows={4}
+                  placeholder="Describe sounds: wind, footsteps, crowd..."
+                  className="text-xs resize-y"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Leave blank for generic environmental sounds.
+                </p>
+              </div>
+            </div>
           )}
         </div>
 

@@ -1,7 +1,7 @@
 """
 Projects API endpoints
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from typing import List, Optional
 import logging
@@ -190,13 +190,13 @@ async def get_project_narration(project_id: str, filename: str):
         project_dir = project_service.get_project_dir(project_id)
         narration_dir = os.path.join(project_dir, "narration")
         audio_path = os.path.join(narration_dir, filename)
-        
+
         if not os.path.exists(audio_path) or not os.path.isfile(audio_path):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Narration {filename} not found for project {project_id}"
             )
-            
+
         return FileResponse(audio_path)
     except HTTPException:
         raise
@@ -205,6 +205,56 @@ async def get_project_narration(project_id: str, filename: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to serve narration: {str(e)}"
+        )
+
+
+@router.get("/{project_id}/audio/{filename}", response_class=FileResponse)
+async def get_project_audio(project_id: str, filename: str):
+    """Serve a project audio file directly (custom uploads)"""
+    try:
+        project_dir = project_service.get_project_dir(project_id)
+        audio_dir = os.path.join(project_dir, "audio")
+        audio_path = os.path.join(audio_dir, filename)
+
+        if not os.path.exists(audio_path) or not os.path.isfile(audio_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Audio {filename} not found for project {project_id}"
+            )
+
+        return FileResponse(audio_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving audio {filename} for project {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve audio: {str(e)}"
+        )
+
+
+@router.get("/{project_id}/editor/{filename}", response_class=FileResponse)
+async def get_project_editor_file(project_id: str, filename: str):
+    """Serve editor-related files (timeline JSONs, etc.)"""
+    try:
+        project_dir = project_service.get_project_dir(project_id)
+        editor_dir = os.path.join(project_dir, "editor")
+        file_path = os.path.join(editor_dir, filename)
+
+        if not os.path.exists(file_path) or not os.path.isfile(file_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Editor file {filename} not found for project {project_id}"
+            )
+
+        return FileResponse(file_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving editor file {filename} for project {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve editor file: {str(e)}"
         )
 
 
@@ -265,7 +315,7 @@ async def generate_thumbnail(project_id: str, request: GenerateThumbnailRequest)
         from web_ui.backend.services.generation_service import get_generation_service
         gen_service = get_generation_service()
         
-        image_path = await gen_service.generate_thumbnail(
+        item_id = await gen_service.generate_thumbnail(
             project_id, 
             aspect_ratio=request.aspect_ratio, 
             force=request.force,
@@ -275,14 +325,38 @@ async def generate_thumbnail(project_id: str, request: GenerateThumbnailRequest)
             is_poster=request.is_poster
         )
         
-        filename = os.path.basename(image_path)
-        thumbnail_url = f"/api/projects/{project_id}/images/{filename}"
-        
-        return {"status": "success", "thumbnail_url": thumbnail_url}
+        return {"status": "success", "item_id": item_id}
     except Exception as e:
         logger.error(f"Error generating thumbnail: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate thumbnail: {str(e)}"
+        )
+
+
+@router.post("/{project_id}/thumbnail/upload")
+async def upload_thumbnail(
+    project_id: str,
+    file: UploadFile = File(...),
+    aspect_ratio: str = Form("16:9"),
+    is_poster: str = Form("false")
+):
+    """Upload a custom thumbnail for the project"""
+    try:
+        # Convert string form value to boolean
+        is_poster_bool = is_poster.lower() == "true"
+        
+        image_path = await project_service.upload_thumbnail(
+            project_id, 
+            file, 
+            is_poster=is_poster_bool, 
+            aspect_ratio=aspect_ratio
+        )
+        return {"status": "success", "thumbnail_url": image_path}
+    except Exception as e:
+        logger.error(f"Error uploading thumbnail: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload thumbnail: {str(e)}"
         )
 

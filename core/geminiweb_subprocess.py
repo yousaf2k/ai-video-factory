@@ -146,6 +146,56 @@ def _ensure_project_chat(page, project_title: str):
         logger.warning(f"Error while managing project chat: {e}")
 
 
+def _set_gemini_mode(page, mode: str):
+    """
+    Select the Gemini model mode (Fast, Thinking, Pro) via the UI.
+    Uses the data-test-id selectors provided by the user.
+    """
+    if not mode:
+        mode = getattr(config, 'GEMINIWEB_DEFAULT_MODE', 'Fast')
+    
+    # Standardize mode name to lowercase for selector mapping
+    mode_key = mode.lower().strip()
+    selectors = {
+        "fast": "bard-mode-option-fast",
+        "thinking": "bard-mode-option-thinking",
+        "pro": "bard-mode-option-pro"
+    }
+    
+    target_id = selectors.get(mode_key)
+    if not target_id:
+        logger.warning(f"Unknown Gemini mode '{mode}', skipping selection.")
+        return
+
+    logger.info(f"Setting Gemini mode to: {mode}")
+    try:
+        # 1. Click the model picker button
+        picker_btn = page.wait_for_selector('button[data-test-id="bard-mode-menu-button"]', timeout=10000)
+        if picker_btn:
+            # Check current mode to avoid redundant clicks
+            current_mode = picker_btn.inner_text().strip().lower()
+            if mode_key in current_mode:
+                logger.info(f"Gemini is already in {mode} mode.")
+                return
+
+            picker_btn.click()
+            time.sleep(1.5) # Wait for menu
+            
+            # 2. Click the specific mode option
+            option_sel = f'button[data-test-id="{target_id}"], [data-test-id="{target_id}"]'
+            option_btn = page.wait_for_selector(option_sel, timeout=5000)
+            if option_btn:
+                option_btn.click()
+                logger.info(f"Successfully selected {mode} mode.")
+                time.sleep(2) # Wait for mode switch to settle
+            else:
+                logger.warning(f"Could not find menu option for mode: {mode}")
+        else:
+            logger.warning("Could not find Gemini model picker button.")
+    except Exception as e:
+        logger.error(f"Error setting Gemini mode: {e}")
+
+
 def _wait_for_response_complete(page, timeout: int = 180):
     """Wait for Gemini to finish processing the response."""
     import time
@@ -274,13 +324,13 @@ def _inject_text_into_input(page, input_element, text: str) -> bool:
     # ── Attempt 1: Fast Keyboard Insert (Universal & Robust) ──────────────────
     try:
         page.evaluate("(el) => el.focus()", input_element)
-        time.sleep(0.2)
+        time.sleep(0.05)
         page.keyboard.press('Control+A')
         page.keyboard.press('Delete')
-        time.sleep(0.1)
+        time.sleep(0.05)
         # Use insert_text for instantaneous content deployment
         page.keyboard.insert_text(text)
-        time.sleep(0.3)
+        time.sleep(0.1)
         actual = input_element.inner_text().strip()
         if len(actual) >= max(10, len(text) // 2):
             logger.info("Prompt injected via keyboard.insert_text()")
@@ -325,84 +375,33 @@ def _inject_text_into_input(page, input_element, text: str) -> bool:
 
 def _try_download_native(page, output_path: str) -> Optional[str]:
     """
-    Download the latest generated image using Playwright's native download API.
-
-    Gemini renders generated images inside clickable image buttons. When you
-    hover over one, a toolbar with a download icon appears. This function:
-      1. Locates the last generated image element.
-      2. Waits for Gemini to prepare the full-resolution version.
-      3. Hovers over it to reveal the action toolbar.
-      4. Clicks the download button and intercepts the file via expect_download().
-      5. If the file is suspiciously small, waits and retries for full quality.
-
-    Args:
-        page: Playwright page object
-        output_path: Where to save the downloaded file
-
-    Returns:
-        Path to the saved image, or None if download was not possible
+    Download the latest generated image using multiple strategies.
+    Optimized for high-resolution capture by persisting the lightbox view.
     """
-    # Selectors for the image wrapper buttons Gemini renders
     image_container_selectors = [
         'button.image-button',
         'button.generated-image-button',
         '[data-message-id] div[jsname] img',
     ]
 
-    # Selectors for the download button (appears in toolbar on hover)
+    # Standard and high-res button selectors
     download_button_selectors = [
+        'button[data-test-id="download-generated-image-button"]',
+        'button[aria-label="Download full size image"]',
         'button[aria-label="Download full-sized image"]',
+        'button[aria-label="Download image"]',
         'button[aria-label="Download"]',
-        'button[jsname][aria-label*="ownload"]',
+        'button.image-button[aria-label*="Download"]',
+        'a[aria-label*="Download"]',
+        'mat-icon[fonticon="download"]',
         'a[download]',
     ]
 
-    # Minimum expected file size for a full-res Gemini image (4 MB)
-    MIN_FULL_RES_SIZE = 4 * 1024 * 1024
-
-    def _do_hover_and_download(image_container) -> Optional[str]:
-        """Hover over the image container and click the download button."""
-        # ── Step 1: Direct Click attempt (Playwright implicitly hovers)
-        for btn_sel in download_button_selectors:
-            try:
-                btns = page.query_selector_all(btn_sel)
-                if btns:
-                    btn = btns[-1]
-                    if btn.is_visible():
-                        logger.info(f"Direct clicking download button: {btn_sel}")
-                        with page.expect_download(timeout=120000) as dl_info:
-                            btn.click()
-                        dl = dl_info.value
-                        dl.save_as(output_path)
-                        logger.info(f"Direct download saved: {output_path}")
-                        return output_path
-            except Exception as e:
-                logger.debug(f"Direct click attempt via '{btn_sel}' failed: {e}")
-                continue
-
-        # ── Step 2: Hover Fallback (if direct failed or buttons hidden)
-        logger.info("Direct download button not visible. Hovering to reveal toolbar...")
-        image_container.hover()
-        time.sleep(2.0)  # give the toolbar animation time to complete
-
-        for btn_sel in download_button_selectors:
-            try:
-                btns = page.query_selector_all(btn_sel)
-                if btns:
-                    btn = btns[-1]
-                    if btn.is_visible():
-                        logger.info(f"Clicking revealed download button: {btn_sel}")
-                        # Increase download wait timeout support 5 mins to align with full res generation wait
-                        with page.expect_download(timeout=300000) as dl_info:
-                            btn.click()
-                        dl = dl_info.value
-                        dl.save_as(output_path)
-                        logger.info(f"Native download saved: {output_path}")
-                        return output_path
-            except Exception as e:
-                logger.debug(f"Download attempt via '{btn_sel}' failed: {e}")
-                continue
-        return None
+    lightbox_close_selectors = [
+        'button[aria-label="Close"]',
+        'button[jsname][aria-label*="lose"]',
+        'div.close-button',
+    ]
 
     try:
         # Find the last rendered image container
@@ -411,161 +410,346 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
             containers = page.query_selector_all(sel)
             if containers:
                 image_container = containers[-1]
-                logger.debug(f"Found image container: {sel}")
                 break
 
         if not image_container:
+            logger.warning("No image container found for native download")
             return None
 
-        # ── Wait for Gemini to prepare the full-resolution image ─────────────
-        # Gemini generates images asynchronously; the thumbnail appears first
-        # and the full-res version becomes available several seconds later.
-        logger.info("Waiting 5s for Gemini to prepare full-resolution image...")
-        time.sleep(5)
+        # Trigger lightbox interaction
+        logger.info("Step 0: Triggering image interaction (hover + click)...")
+        try:
+            image_container.scroll_into_view_if_needed()
+            image_container.hover()
+            time.sleep(1.0)
+            
+            # Strategy: Click 'Download' once to potentially trigger High-Res generation/swap
+            # Some high-res buttons only appear on hover or after an initial interaction.
+            try:
+                # Force hover on the main image to reveal overlay buttons
+                main_img = page.query_selector('img.main-image, div.lightbox img, div[role="dialog"] img')
+                if main_img:
+                    main_img.hover()
+                    time.sleep(1.0)
 
-        # ── Download with retries (handles network errors + low-res files) ───
-        best_size = 0
-        for attempt in range(3):
-            if attempt > 0:
-                wait = 10
-                logger.warning(f"Retry {attempt}/2: waiting {wait}s before re-attempting download...")
-                time.sleep(wait)
-                # Re-hover since toolbar may have disappeared
-                image_container.hover()
-                time.sleep(1)
+                primary_trigger = page.query_selector('button[data-test-id="download-generated-image-button"]') or \
+                                  page.query_selector('button[aria-label="Download full size image"]') or \
+                                  page.query_selector('a[aria-label="Download image"], a[jsname="A47GAd"]') or \
+                                  page.query_selector('button[aria-label="Download image"]')
+                
+                if primary_trigger:
+                    logger.debug(f"Initial trigger click on '{primary_trigger.tag_name}' to start High-Res preparation...")
+                    primary_trigger.click()
+                    time.sleep(3.0) # Wait brief moment for potential swap/menu
+            except Exception: pass
 
-            result = _do_hover_and_download(image_container)
-            if not result:
-                logger.warning(f"Download attempt {attempt+1} failed (no download triggered)")
+            # Polling wait for the "full size" version (Gemini can be slow to generate/swap)
+            logger.info("Waiting for 'Download full size image' button to appear (~45s max)...")
+            full_res_btn_sel = 'button[data-test-id="download-generated-image-button"], button[aria-label="Download full size image"]'
+            found_full = False
+            for i in range(45): 
+                try:
+                    btn = page.query_selector(full_res_btn_sel)
+                    if btn and btn.is_visible():
+                        logger.info(f"Detected 'Download full size image' button at {i}s!")
+                        found_full = True
+                        break
+                    
+                    # Also check if image natural width has increased (indicating a high-res swap happened)
+                    dims = page.evaluate("""
+                        () => {
+                            const img = document.querySelector('img.main-image, .picker-dialog img, div[role="dialog"] img');
+                            return img ? { w: img.naturalWidth } : null;
+                        }
+                    """)
+                    if dims and dims['w'] > 2000:
+                        logger.info("Detected high-res natural image swap!")
+                        found_full = True # We can try to download now even if button label didn't change (e.g. jsevent)
+                        break
+                except Exception: pass
+                time.sleep(1.0)
+            
+            if not found_full:
+                logger.debug("Full-sized button not found after 45s wait. Proceeding with standard capture.")
+
+
+            # Ensure lightbox img is visible
+            lightbox_img_sel = 'img.main-image, div.lightbox img, div[role="dialog"] img, .picker-dialog img'
+            try:
+                page.wait_for_selector(lightbox_img_sel, timeout=5000, state='visible')
+                logger.debug("Lightbox image visible.")
+            except Exception: 
+                logger.warning("Lightbox image not stabilized, proceeding anyway")
+        except Exception as click_err:
+            logger.debug(f"Lightbox interaction error: {click_err}")
+            image_container.hover()
+            time.sleep(1.0)
+
+        # ── Strategy 1: expect_download() ──
+        logger.info("Strategy 1: Attempting native browser download (Prioritizing Original)...")
+        for btn_sel in download_button_selectors:
+            try:
+                btns = page.locator(btn_sel).all()
+                if btns:
+                    btn = btns[-1] 
+                    if btn.is_visible():
+                        logger.info(f"Targeting download button: '{btn_sel}'")
+                        try:
+                            # If it's the full-sized one, give it more time to generate
+                            if "full-sized" in btn_sel: time.sleep(1.5)
+                            
+                            # Gemini occasionally fails with a "Could not download image" toast.
+                            # We retry up to 3 times before failing Strategy 1.
+                            for retry_attempt in range(3):
+                                try:
+                                    with page.expect_download(timeout=10000) as dl_info:
+                                        btn.click()
+                                    dl = dl_info.value
+                                    dl.save_as(output_path)
+                                    break # Success
+                                except Exception as dl_err:
+                                    # Check for "Could not download image" toast or similar
+                                    error_toast = page.query_selector('div:has-text("Could not download image"), snack-bar:has-text("Could not download")')
+                                    if error_toast and error_toast.is_visible():
+                                        logger.warning(f"Strategy 1: Detected error toast (attempt {retry_attempt+1}). Retrying in 2s...")
+                                        time.sleep(2)
+                                        continue
+                                    
+                                    # If it's the last attempt or not a recognized toast error, let it bubble up
+                                    if retry_attempt == 2:
+                                        raise dl_err
+                                    logger.debug(f"Strategy 1 attempt {retry_attempt+1} failed: {dl_err}. Retrying...")
+                                    time.sleep(1)
+                            
+                            fsize = os.path.getsize(output_path)
+                            if fsize > 3000000: # IDEAL SUCCESS: > 3MB (likely original)
+                                logger.info(f"Strategy 1 IDEAL SUCCESS: {output_path} ({fsize:,} bytes)")
+                                return output_path
+                            elif fsize > 1000000: # GOOD SUCCESS: > 1MB (likely high-res preview)
+                                logger.info(f"Strategy 1 GOOD SUCCESS: {output_path} ({fsize:,} bytes). Continuing to check for better copies...")
+                                # We'll keep this but continue the loop if "full-sized" wasn't hit yet
+                                if "full-sized" in btn_sel: return output_path
+                                # If we hit a non-full-sized but it's okay, maybe try one more button
+                            else:
+                                logger.warning(f"Strategy 1 file small ({fsize:,} bytes). Retrying alternatives...")
+                                # os.remove(output_path) # Don't remove yet, keep as backup if ALL else fails
+                        except Exception as dl_err:
+                            logger.debug(f"expect_download failed for '{btn_sel}': {dl_err}")
+                            
+                            # Check for new tab (Strategy 1.1)
+                            pages = page.context.pages
+                            if len(pages) > 1:
+                                new_page = pages[-1]
+                                logger.info(f"New tab detected at {new_page.url[:60]}")
+                                time.sleep(3)
+                                new_url = new_page.url
+                                if 'googleusercontent' in new_url or 'blob:' in new_url:
+                                    fetch_url = new_url
+                                    if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
+                                        fetch_url = fetch_url.split('=')[0] + '=s0'
+                                    
+                                    logger.info(f"Fetching from new tab: {fetch_url[:80]}...")
+                                    resp = page.request.get(fetch_url)
+                                    body = resp.body()
+                                    if resp.ok and len(body) > 200000:
+                                        with open(output_path, 'wb') as f:
+                                            f.write(body)
+                                        new_page.close()
+                                        logger.info(f"Strategy 1.1 SUCCESS: Extracted {len(body):,} bytes from tab")
+                                        return output_path
+                                    
+                                    # Screenshot fallback for tab
+                                    img_el = new_page.query_selector('img')
+                                    if img_el:
+                                        img_el.screenshot(path=output_path)
+                                        fsize_ss = os.path.getsize(output_path)
+                                        logger.warning(f"Strategy 1.1 SCREENSHOT: {fsize_ss:,} bytes")
+                                        new_page.close()
+                                        if fsize_ss > 200000: return output_path
+            except Exception as e:
+                logger.debug(f"Strategy 1 internal loop error: {e}")
                 continue
 
-            file_size = os.path.getsize(output_path)
-            logger.info(f"Attempt {attempt+1} downloaded: {file_size:,} bytes")
+        # ── Strategy 2: Direct High-Res URL Fetch ──
+        logger.info("Strategy 2: Attempting direct authenticated URL fetch (=s0)...")
+        img_selectors = [
+            'img.main-image', 
+            'div.lightbox img', 
+            'div[role="dialog"] img', 
+            '.picker-dialog img',
+            'button.image-button img', 
+            'div[data-message-id] img[src*="googleusercontent"]'
+        ]
+        for img_sel in img_selectors:
+            try:
+                imgs = page.query_selector_all(img_sel)
+                for img in reversed(imgs):
+                    src = img.get_attribute('src')
+                    if not src or src.startswith('data:image/svg') or 'avatar' in src.lower(): continue
+                    
+                    is_google_host = any(x in src for x in ['googleusercontent.com', 'gstatic.com', 'google.com', 'encrypted-tbn'])
+                    if src.startswith('http') and (is_google_host or len(src) > 100):
+                        fetch_url = src
+                        if 'googleusercontent.com' in src and '=' in src:
+                            fetch_url = src.split('=')[0] + '=s0'
+                        
+                        logger.info(f"Found image element ({img_sel}), fetching {fetch_url[:80]}...")
+                        response = page.request.get(fetch_url)
+                        if response.ok:
+                            body = response.body()
+                            if len(body) > 200000:
+                                with open(output_path, 'wb') as f: f.write(body)
+                                logger.info(f"Strategy 2 SUCCESS: {output_path} ({len(body):,} bytes)")
+                                return output_path
+                            else:
+                                logger.debug(f"Strategy 2 fetch result too small: {len(body):,} bytes")
+            except Exception as e: 
+                logger.debug(f"Strategy 2 check failed for {img_sel}: {e}")
+                continue
 
-            if file_size >= MIN_FULL_RES_SIZE:
-                logger.info(f"Full-res image downloaded ({file_size:,} bytes)")
-                return output_path
+        # ── Strategy 3: JS Canvas Extraction ──
+        logger.info("Strategy 3: Attempting JS Canvas extraction (Natural Resolution)...")
+        for img_sel in ['img.main-image', 'div.lightbox img', 'div[role="dialog"] img', 'button.image-button img']:
+            try:
+                imgs = page.query_selector_all(img_sel)
+                for img_el in reversed(imgs):
+                    src = img_el.get_attribute('src')
+                    if not src or src.startswith('data:image/svg'): continue
+                    
+                    nw = img_el.evaluate('el => el.naturalWidth || 0')
+                    nh = img_el.evaluate('el => el.naturalHeight || 0')
+                    logger.debug(f"Canvas source ({img_sel}): {nw}x{nh}")
+                    if nw < 300: continue # Skip tiny previews
+                    
+                    data_url = img_el.evaluate("""
+                        (img) => new Promise(resolve => {
+                            const extract = () => {
+                                const c = document.createElement('canvas');
+                                c.width = img.naturalWidth; c.height = img.naturalHeight;
+                                c.getContext('2d').drawImage(img, 0, 0);
+                                resolve(c.toDataURL('image/png'));
+                            };
+                            if (!img.complete) { img.onload = extract; } else { extract(); }
+                        })
+                    """)
+                    if data_url and ',' in data_url:
+                        _, data = data_url.split(',', 1)
+                        img_bytes = base64.b64decode(data)
+                        if len(img_bytes) > 200000:
+                            with open(output_path, 'wb') as f: f.write(img_bytes)
+                            logger.info(f"Strategy 3 SUCCESS: {len(img_bytes):,} bytes")
+                            return output_path
+            except Exception as e: 
+                logger.debug(f"Strategy 3 failed: {e}")
+                continue
 
-            # Keep track of the best (largest) file we got
-            if file_size > best_size:
-                best_size = file_size
-
-        # Return whatever we have even if it's smaller than expected
-        if best_size > 0:
-            logger.warning(f"Could not get full-res after 3 attempts, using best: {best_size:,} bytes")
-            return output_path
-
+        logger.warning("All native download strategies failed or yielded low resolution")
         return None
 
-    except Exception as e:
-        logger.debug(f"Native download preparation failed: {e}")
-
-    return None
-
+    finally:
+        # Cleanup: Close lightbox
+        try:
+            for close_sel in lightbox_close_selectors:
+                close_btn = page.locator(close_sel).first
+                if close_btn.is_visible(timeout=500):
+                    close_btn.click()
+                    time.sleep(1)
+                    break
+        except Exception: pass
 
 
 def _download_image_fallback(page, image_src: str, output_path: str) -> Optional[str]:
-    """
-    Fallback image extractor — used only when native download is not available.
-
-    Handles:
-    - data: URIs (base64 decode)
-    - blob: URLs (fetch inside browser context and read as data URL)
-    - Direct HTTP fetch for regular URLs (bypasses UI buttons and scales up to original size)
-    - Element screenshot (absolute last resort)
-
-    Args:
-        page: Playwright page object
-        image_src: src attribute of the <img> element
-        output_path: Where to save the image
-
-    Returns:
-        Path to the saved image, or None if all methods fail
-    """
+    """Fallback — prioritized byte fetching over scaling-sensitive screenshots."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    # ── data: URI ────────────────────────────────────────────────────────────
+    # 1. data: URI
     if image_src.startswith('data:image'):
         try:
             _, data = image_src.split(',', 1)
-            with open(output_path, 'wb') as f:
-                f.write(base64.b64decode(data))
-            logger.info(f"Saved image from data URI: {output_path}")
+            with open(output_path, 'wb') as f: f.write(base64.b64decode(data))
             return output_path
-        except Exception as e:
-            logger.error(f"data: URI decode failed: {e}")
-            return None
+        except Exception: return None
 
-    # ── blob: URL — fetch inside browser context ──────────────────────────────
+    # 2. Direct fetch with high-res param
+    if image_src.startswith('http'):
+        try:
+            fetch_url = image_src
+            if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
+                fetch_url = fetch_url.split('=')[0] + '=s0'
+            logger.info(f"Fallback fetch: {fetch_url[:80]}...")
+            resp = page.request.get(fetch_url)
+            if resp.ok and len(resp.body()) > 2000:
+                with open(output_path, 'wb') as f: f.write(resp.body())
+                return output_path
+        except Exception: pass
+
+    # 3. blob: URL
     if image_src.startswith('blob:'):
         try:
             data_url = page.evaluate("""
-                async (blobUrl) => {
-                    const resp = await fetch(blobUrl);
-                    const blob = await resp.blob();
-                    return new Promise(resolve => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => resolve(reader.result);
-                        reader.readAsDataURL(blob);
+                async (url) => {
+                    const r = await fetch(url);
+                    const b = await r.blob();
+                    return new Promise(res => {
+                        const fr = new FileReader();
+                        fr.onloadend = () => res(fr.result);
+                        fr.readAsDataURL(b);
                     });
                 }
             """, image_src)
             if data_url and ',' in data_url:
-                _, data = data_url.split(',', 1)
-                with open(output_path, 'wb') as f:
-                    f.write(base64.b64decode(data))
-                logger.info(f"Saved blob: image: {output_path}")
-                return output_path
-        except Exception as e:
-            logger.error(f"blob: URL extraction failed: {e}")
+                _, d = data_url.split(',', 1)
+                img_bytes = base64.b64decode(d)
+                if len(img_bytes) > 1000:
+                    with open(output_path, 'wb') as f: f.write(img_bytes)
+                    return output_path
+        except Exception: pass
 
-    # ── Direct HTTP fetch (for googleusercontent, etc.) ──────────────────────
-    if image_src.startswith('http'):
-        try:
-            # If it's a Gemini image, we remove the sizing parameters to get the uncompressed original
-            # e.g. https://lh3.googleusercontent.com/...=w1024-h1024 -> =s0
-            fetch_url = image_src
-            if 'googleusercontent.com' in fetch_url and '=' in fetch_url:
-                fetch_url = fetch_url.split('=')[0] + '=s0'
-            
-            logger.info(f"Attempting direct authenticated fetch: {fetch_url}")
-            # Use Playwright's native API context to inherit all Gemini auth cookies automatically
-            response = page.request.get(fetch_url)
-            if response.ok:
-                with open(output_path, 'wb') as f:
-                    f.write(response.body())
-                logger.info(f"Saved original image via fetch: {output_path}")
-                return output_path
-            else:
-                logger.error(f"Direct fetch failed: HTTP {response.status}")
-        except Exception as e:
-            logger.error(f"Direct authenticated fetch failed: {e}")
-
-    # ── Element screenshot (absolute last resort) ─────────────────────────────
+    # 4. Element screenshot (Absolute last resort)
     try:
-        # We restrict the screenshot to only elements inside the message to avoid 
-        # accidentally screenshotting the text input area or UI icons
-        for selector in ['div[data-message-id] img', 'button.image-button img']:
-            for img in reversed(page.query_selector_all(selector)):
+        page.evaluate("() => document.querySelectorAll('footer, .chat-input, .prompt-area').forEach(el => el.style.display='none')")
+        for sel in ['div[data-message-id] img', 'button.image-button img']:
+            for img in reversed(page.query_selector_all(sel)):
                 if img.get_attribute('src') == image_src:
                     img.scroll_into_view_if_needed()
+                    time.sleep(0.5)
                     img.screenshot(path=output_path)
-                    logger.info(f"Saved via element screenshot (thumbnail only): {output_path}")
                     return output_path
-    except Exception as e:
-        logger.error(f"Element screenshot failed: {e}")
-
-    return None
+    except Exception: pass
 
 
-
-
-def _remove_watermark(image_path: str):
+def _remove_watermark(image_path: str, media_type: str = "image"):
     """
-    High-precision watermark restoration using reverse alpha-blending.
-    Updated v0.2.5: Adjusted for JPG compression noise (Logo Color=252.0)
-    and enhanced dilation of the cleanup mask to eliminate edge residues.
+    Remove watermark using either the builtin CV2 logic or an external tool.
+    Configured via config.WATERMARK_REMOVAL_METHOD.
     """
+    # ── Strategy 1: External Tool ──────────────────────────────────────────
+    if getattr(config, 'WATERMARK_REMOVAL_METHOD', 'builtin') == 'external':
+        if media_type == "video":
+            tool_path = getattr(config, 'GEMINI_WATERMARK_TOOL_VIDEO', '')
+        else:
+            tool_path = getattr(config, 'GEMINI_WATERMARK_TOOL_IMAGE', '')
+
+        if tool_path and os.path.exists(tool_path):
+            logger.info(f"Using external watermark tool ({media_type}): {tool_path}")
+            import subprocess
+            try:
+                # The parameter for external tool is the full path to image/video
+                result = subprocess.run([tool_path, image_path], capture_output=True, text=True, check=True)
+                logger.info(f"External watermark tool output: {result.stdout.strip()}")
+                return
+            except Exception as e:
+                logger.error(f"External watermark tool failed: {e}. Falling back to builtin (if image).")
+        else:
+            logger.warning(f"External watermark tool ({media_type}) configured but path missing or invalid.")
+            if media_type == "video":
+                return # No fallback for video
+
+    if media_type == "video":
+        logger.warning("Builtin watermark removal is not supported for video.")
+        return
+
+    # ── Strategy 2: Builtin Precision Restoration (Images Only) ────────────
     try:
         import cv2
         import numpy as np
@@ -594,7 +778,6 @@ def _remove_watermark(image_path: str):
                 best_match = {'val': max_val, 'loc': max_loc, 'scale': 1.0, 'mask': mask}
 
         # Step 2: If native scale is not confident enough, do multi-scale search.
-        # This handles resized screenshots where the watermark was downscaled.
         if not best_match or best_match['val'] < 0.7:
             for mask in [m48, m96]:
                 for s in np.linspace(0.4, 1.6, 20):
@@ -628,12 +811,8 @@ def _remove_watermark(image_path: str):
         restored = np.clip(restored, 0, 255).astype(np.uint8)
 
         if is_native_scale:
-            # Full-res native download: mask fits perfectly.
-            # Pure reverse alpha-blending — no inpainting needed (avoids artifacts on sharp PNGs).
             img[gy:gy+mh, gx:gx+mw] = restored
         else:
-            # Screenshot / resized image: use inpainting to handle compression halos,
-            # then surgical corner fix for any bright pixels just outside the mask.
             cleanup_mask = (best_match['mask'] > 2).astype(np.uint8) * 255
             kernel = np.ones((3, 3), np.uint8)
             cleanup_mask = cv2.dilate(cleanup_mask, kernel, iterations=1)
@@ -655,13 +834,13 @@ def _remove_watermark(image_path: str):
                 band[to_fix] = smooth[to_fix]
                 img[ey1:ey2, ex1:ex2] = band
         cv2.imwrite(image_path, img)
-        logger.info(f"Precise restoration success: {image_path} @ ({gx},{gy}) scale={best_match['scale']:.2f} conf={best_match['val']:.3f} (JPG refined)")
+        logger.info(f"Builtin watermark restoration success: {image_path} @ ({gx},{gy}) scale={best_match['scale']:.2f} (JPG refined)")
 
     except Exception as e:
-        logger.error(f"Error in precise watermark restoration: {e}")
+        logger.error(f"Error in builtin watermark restoration: {e}")
 
 
-def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: str = None, reference_image_path: str = None, profile_dir: str = None) -> Optional[str]:
+def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: str = None, reference_image_path: str = None, profile_dir: str = None, gemini_mode: str = None) -> Optional[str]:
     """Main entry point — run Playwright and generate an image."""
     from playwright.sync_api import sync_playwright
 
@@ -681,6 +860,9 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
             # Increase navigation buffer to respect GEMINIWEB_TIMEOUT loaded above
             page.goto(gemini_url, wait_until='domcontentloaded', timeout=timeout * 1000)
             time.sleep(2)
+
+            # ── Set Gemini Mode (Fast/Thinking/Pro) ──────────────────────────
+            _set_gemini_mode(page, gemini_mode)
 
             # ── Ensure correct chat ──────────────────────────────────────────
             if project_title:
@@ -780,7 +962,7 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                                         file_chooser.set_files(ref_path)
                                         uploaded = True
                                         logger.info(f"Uploaded reference image via FileChooser trigger ({m_sel})")
-                                        time.sleep(5)  # Wait for upload and thumbnail preview to render
+                                        time.sleep(2)  # Reduced from 5s; subsequent wait_for_selector for thumbnails handles the heavy lifting
                                         break
                                 except Exception as e:
                                     logger.debug(f"Click menu item failed for {m_sel}: {e}")
@@ -790,10 +972,83 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                             logger.warning(f"Could not upload {ref_path} via FileChooser trigger. Trying direct set_input_files fallback...")
                             page.set_input_files('input[type="file"]', ref_path)
                             logger.info(f"Reference image {ref_path} uploaded via direct set_input_files fallback")
-                            time.sleep(5)
+                            time.sleep(2)  # Reduced from 5s
     
                     except Exception as e:
                         logger.error(f"Failed to upload reference image {ref_path}: {e}")
+                
+                if not uploaded and ref_path:
+                    logger.error(f"ABORTING: Mandatory reference image {ref_path} failed to upload. Cannot ensure consistency.")
+                    return None
+
+            # ── Wait for thumbnails to render in the input area ──────────────
+            if images_to_upload:
+                try:
+                    logger.info("Waiting for image thumbnails to appear in input...")
+                    # Gemini usually shows thumbnails in these elements
+                    thumbnail_selectors = [
+                        'mat-chip-row img',
+                        'div.thumbnail-wrapper img',
+                        '.image-thumbnail img',
+                        'div[contenteditable="true"] img',
+                    ]
+                    page.wait_for_selector(", ".join(thumbnail_selectors), timeout=15000)
+                    logger.info("Thumbnails detected")
+                    time.sleep(2) # Extra buffer for backend attachment
+                except Exception as thumb_err:
+                    logger.warning(f"Timeout waiting for thumbnail preview: {thumb_err}. Proceeding anyway.")
+
+            # ── Click "Create image" tool if available ───────────────────────
+            try:
+                logger.info("Looking for 'Create image' button...")
+                tools_btn = None
+                for sel in [
+                    'button:has(span.mdc-button__label:has-text("Tools"))',
+                    'button.toolbox-drawer-button:has-text("Tools")',
+                    'button:has-text("Tools")'
+                ]:
+                    try:
+                        btn = page.query_selector(sel)
+                        if btn and btn.is_visible():
+                            tools_btn = btn
+                            break
+                    except Exception:
+                        continue
+                
+                if tools_btn:
+                    tools_btn.click(force=True)
+                    time.sleep(2)  # Wait longer for the drawer to slide open
+                
+                create_img_selectors = [
+                    'button:has(.mat-icon[data-mat-icon-name="photo_prints"])',
+                    'button.toolbox-drawer-item-list-button:has-text("Create image")',
+                    'button:has-text("Create image")',
+                    '.mdc-list-item__content:has-text("Create image")',
+                    'div.label:has-text("Create image")'
+                ]
+                clicked_create_image = False
+                for sel in create_img_selectors:
+                    try:
+                        loc = page.locator(sel)
+                        if loc.count() > 0:
+                            # Bypass Playwright's strict visibility/interactability checks
+                            # by directly dispatching a click event in the browser DOM.
+                            loc.first.evaluate("el => el.click()")
+                            time.sleep(1.5)
+                            clicked_create_image = True
+                            logger.info(f"Clicked 'Create image' button using JS evaluate on {sel}")
+                            break
+                    except Exception as e:
+                        logger.debug(f"Failed to click Create image using {sel}: {e}")
+                        continue
+                
+                if tools_btn and not clicked_create_image:
+                    logger.warning("Could not find 'Create image' in Tools drawer, closing drawer...")
+                    tools_btn.click(force=True) # Click tools button again to toggle drawer closed
+                    time.sleep(1)
+
+            except Exception as e:
+                logger.warning(f"Error while trying to click 'Create image' button: {e}")
 
             # ── Inject the prompt (no clipboard / copy-paste) ────────────────
             injected = _inject_text_into_input(page, input_element, full_prompt)
@@ -801,7 +1056,7 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 logger.error("All prompt injection attempts failed")
                 return None
 
-            time.sleep(1.0)
+            time.sleep(0.4) # Reduced from 1.0s
 
             # ── Submit the prompt ────────────────────────────────────────────
             send_selectors = [
@@ -896,10 +1151,11 @@ if __name__ == "__main__":
     parser.add_argument("--project-title", default=None)
     parser.add_argument("--reference-image", action="append", default=[])
     parser.add_argument("--profile-dir", default=None)
+    parser.add_argument("--gemini-mode", default=None)
     args = parser.parse_args()
 
     # Pass the list directly
-    result = run(args.prompt, args.output_path, args.aspect_ratio, args.project_title, args.reference_image, args.profile_dir)
+    result = run(args.prompt, args.output_path, args.aspect_ratio, args.project_title, args.reference_image, args.profile_dir, args.gemini_mode)
     if result:
         print(f"SUCCESS:{result}")
         sys.exit(0)

@@ -13,6 +13,7 @@ interface ProjectGroupProps {
   items: QueueItemType[];
   selectedItems?: Set<string>;
   onSelectItem?: (itemId: string) => void;
+  onSelectGroup?: (itemIds: string[], select: boolean) => void;
   onCancelItem?: (itemId: string) => void;
   onRequeueItem?: (itemId: string) => void;
   onForceStartItem?: (itemId: string) => void;
@@ -26,19 +27,32 @@ export function ProjectGroup({
   items,
   selectedItems,
   onSelectItem,
+  onSelectGroup,
   onCancelItem,
   onRequeueItem,
   onForceStartItem,
   onReorder,
   onImageClick
 }: ProjectGroupProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(items.some(item => item.status === QueueItemStatus.ACTIVE));
 
-  // Calculate project statistics
+  // Project statistics
   const total = items.length;
   const completed = items.filter(item => item.status === QueueItemStatus.COMPLETED).length;
   const active = items.filter(item => item.status === QueueItemStatus.ACTIVE).length;
   const failed = items.filter(item => item.status === QueueItemStatus.FAILED).length;
+
+  // Calculation of selection state
+  const selectedInGroup = items.filter(item => selectedItems?.has(item.item_id));
+  const isAllSelected = total > 0 && selectedInGroup.length === total;
+  const isPartiallySelected = selectedInGroup.length > 0 && selectedInGroup.length < total;
+
+  const handleToggleGroup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (onSelectGroup) {
+      onSelectGroup(items.map(item => item.item_id), e.target.checked);
+    }
+  };
 
   // Count by type
   const images = items.filter(item =>
@@ -57,6 +71,26 @@ export function ProjectGroup({
         className="w-full px-4 py-3 bg-card hover:bg-accent/50 transition-colors flex items-center justify-between border-b border-border/50"
       >
         <div className="flex items-center gap-3">
+          {/* Group selection checkbox */}
+          <div 
+            className="flex items-center pr-1" 
+            onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
+              checked={isAllSelected}
+              ref={input => {
+                if (input) {
+                  input.indeterminate = isPartiallySelected;
+                }
+              }}
+              onChange={handleToggleGroup}
+              title={isAllSelected ? "Deselect project items" : "Select project items"}
+            />
+          </div>
+
           {/* Expand/collapse icon */}
           {isExpanded ? (
             <ChevronDown className="w-5 h-5 text-muted-foreground" />

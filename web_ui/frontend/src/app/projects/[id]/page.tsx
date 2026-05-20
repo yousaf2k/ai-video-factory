@@ -12,7 +12,7 @@ import { useState } from "react";
 import { api } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ImageIcon, X, Copy } from "lucide-react";
+import { RefreshCw, ImageIcon, X, Copy, Globe, Search, MessageSquare, Tag, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { GenerationDialog, GenerationConfig } from "@/components/shots/GenerationDialog";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,7 @@ export default function ProjectDetailPage() {
   >({});
   const [imageVersion, setImageVersion] = useState<number>(Date.now());
   const [isUpdatingAspectRatio, setIsUpdatingAspectRatio] = useState(false);
+  const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
 
   // Regeneration Modal State
   const [showRegenModal, setShowRegenModal] = useState<{
@@ -61,7 +62,7 @@ export default function ProjectDetailPage() {
     isPoster: boolean;
   } | null>(null);
 
-  const handleUpdateAspectRatio = async (newAspectRatio: "16:9" | "9:16") => {
+  const handleUpdateAspectRatio = async (newAspectRatio: "16:9" | "9:16" | "21:8") => {
     try {
       setIsUpdatingAspectRatio(true);
       await api.updateProject(projectId, {
@@ -101,6 +102,27 @@ export default function ProjectDetailPage() {
     } catch (error) {
       console.error(`Failed to generate ${aspectRatio} thumbnail:`, error);
       alert("Failed to generate thumbnail. Please check the logs.");
+    } finally {
+      setGeneratingThumbnails((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleUploadThumbnail = async (
+    aspectRatio: "16:9" | "9:16" | "21:8",
+    file: File,
+    isPoster: boolean = false
+  ) => {
+    const key = `${aspectRatio}${isPoster ? "-poster" : ""}`;
+    try {
+      setGeneratingThumbnails((prev) => ({ ...prev, [key]: true }));
+      await api.uploadThumbnail(projectId, file, aspectRatio, isPoster);
+      setImageVersion(Date.now());
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("Thumbnail uploaded successfully!");
+    } catch (error) {
+      console.error(`Failed to upload ${aspectRatio} thumbnail:`, error);
+      toast.error("Failed to upload thumbnail.");
     } finally {
       setGeneratingThumbnails((prev) => ({ ...prev, [key]: false }));
     }
@@ -185,6 +207,13 @@ export default function ProjectDetailPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Link
+              href={`/editor/${projectId}`}
+              className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition-all shadow-sm"
+            >
+              <Video className="w-4 h-4" />
+              Open in Editor
+            </Link>
             <Link
               href={`/projects/${projectId}/settings`}
               className="inline-flex items-center gap-1 px-4 py-2 text-sm font-medium border rounded-md hover:bg-muted hover:text-primary transition-all shadow-sm"
@@ -290,7 +319,7 @@ export default function ProjectDetailPage() {
               <div className="bg-background/50 rounded-lg p-4 border border-border/30">
                 <Select
                   value={project.aspect_ratio || "16:9"}
-                  onValueChange={(val) => handleUpdateAspectRatio(val as "16:9" | "9:16")}
+                  onValueChange={(val) => handleUpdateAspectRatio(val as "16:9" | "9:16" | "21:8")}
                   disabled={isUpdatingAspectRatio}
                 >
                   <SelectTrigger>
@@ -301,6 +330,12 @@ export default function ProjectDetailPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm">16:9 Landscape</span>
                         <span className="text-xs text-muted-foreground">(YouTube, Desktop)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="21:8">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">21:8 Ultrawide</span>
+                        <span className="text-xs text-muted-foreground">(Cinematic)</span>
                       </div>
                     </SelectItem>
                     <SelectItem value="9:16">
@@ -402,7 +437,11 @@ export default function ProjectDetailPage() {
                   <img
                     src={getMediaUrl(project.thumbnail_url_9_16, imageVersion)}
                     alt="9:16 Thumbnail"
-                    className="w-full h-full object-contain bg-black"
+                    className="w-full h-full object-contain bg-black cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => {
+                      const url = project.thumbnail_url_9_16 ? getMediaUrl(project.thumbnail_url_9_16, imageVersion) : null;
+                      if (url) setFullscreenImageUrl(url);
+                    }}
                   />
                 </div>
               )}
@@ -413,7 +452,11 @@ export default function ProjectDetailPage() {
                   <img
                     src={getMediaUrl(project.thumbnail_url, imageVersion)}
                     alt="16:9 Thumbnail"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => {
+                      const url = project.thumbnail_url ? getMediaUrl(project.thumbnail_url, imageVersion) : null;
+                      if (url) setFullscreenImageUrl(url);
+                    }}
                   />
                 </div>
               )}
@@ -471,7 +514,13 @@ export default function ProjectDetailPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {/* 16:9 Youtube-Style Card */}
                       <div className="flex flex-col gap-3 group">
-                        <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
+                        <div 
+                          className={`relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center ${project.thumbnail_url ? 'cursor-pointer' : ''}`}
+                          onClick={() => {
+                            const url = project.thumbnail_url ? getMediaUrl(project.thumbnail_url, imageVersion) : null;
+                            if (url) setFullscreenImageUrl(url);
+                          }}
+                        >
                           {project.thumbnail_url ? (
                             <img
                               src={getMediaUrl(
@@ -479,7 +528,7 @@ export default function ProjectDetailPage() {
                                 imageVersion,
                               )}
                               alt="16:9 Thumbnail"
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-cover transition-opacity group-hover:opacity-90"
                             />
                           ) : (
                             <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
@@ -490,12 +539,15 @@ export default function ProjectDetailPage() {
                             </div>
                           )}
 
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 gap-2">
                             <Button
                               variant="secondary"
                               size="sm"
                               className="gap-2 shadow-lg"
-                              onClick={() => setShowRegenModal({ aspect: "16:9", isPoster: false })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowRegenModal({ aspect: "16:9", isPoster: false });
+                              }}
                               disabled={generatingThumbnails["16:9"]}
                             >
                               {generatingThumbnails["16:9"] ? (
@@ -505,6 +557,28 @@ export default function ProjectDetailPage() {
                               )}
                               {project.thumbnail_url ? "Regenerate" : "Generate"}
                             </Button>
+                            
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadThumbnail("16:9", file, false);
+                                }}
+                                disabled={generatingThumbnails["16:9"]}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 bg-background/80 hover:bg-background shadow-lg pr-4 pl-4"
+                                disabled={generatingThumbnails["16:9"]}
+                              >
+                                <Upload className="w-4 h-4 text-primary" />
+                                {project.thumbnail_url ? "Upload New" : "Upload"}
+                              </Button>
+                            </div>
                           </div>
                         </div>
 
@@ -544,7 +618,13 @@ export default function ProjectDetailPage() {
 
                       {/* 9:16 Youtube-Style Card (forced into 16:9 container scale) */}
                       <div className="flex flex-col gap-3 group">
-                        <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted/80 border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex justify-center items-center">
+                        <div 
+                          className={`relative aspect-video w-full overflow-hidden rounded-xl bg-muted/80 border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex justify-center items-center ${project.thumbnail_url_9_16 ? 'cursor-pointer' : ''}`}
+                          onClick={() => {
+                            const url = project.thumbnail_url_9_16 ? getMediaUrl(project.thumbnail_url_9_16, imageVersion) : null;
+                            if (url) setFullscreenImageUrl(url);
+                          }}
+                        >
                           {project.thumbnail_url_9_16 ? (
                             <img
                               src={getMediaUrl(
@@ -552,7 +632,7 @@ export default function ProjectDetailPage() {
                                 imageVersion,
                               )}
                               alt="9:16 Thumbnail"
-                              className="w-full h-full object-contain max-w-[56.25%] mx-auto bg-black"
+                              className="w-full h-full object-contain max-w-[56.25%] mx-auto bg-black transition-opacity group-hover:opacity-90"
                             />
                           ) : (
                             <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
@@ -563,12 +643,15 @@ export default function ProjectDetailPage() {
                             </div>
                           )}
 
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 gap-2">
                             <Button
                               variant="secondary"
                               size="sm"
                               className="gap-2 shadow-lg"
-                              onClick={() => setShowRegenModal({ aspect: "9:16", isPoster: false })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowRegenModal({ aspect: "9:16", isPoster: false });
+                              }}
                               disabled={generatingThumbnails["9:16"]}
                             >
                               {generatingThumbnails["9:16"] ? (
@@ -580,6 +663,28 @@ export default function ProjectDetailPage() {
                                 ? "Regenerate"
                                 : "Generate"}
                             </Button>
+                            
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="absolute inset-0 opacity-0 cursor-pointer"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadThumbnail("9:16", file, false);
+                                }}
+                                disabled={generatingThumbnails["9:16"]}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2 bg-background/80 hover:bg-background shadow-lg pr-4 pl-4"
+                                disabled={generatingThumbnails["9:16"]}
+                              >
+                                <Upload className="w-4 h-4 text-primary" />
+                                {project.thumbnail_url_9_16 ? "Upload New" : "Upload"}
+                              </Button>
+                            </div>
                           </div>
                         </div>
 
@@ -617,82 +722,10 @@ export default function ProjectDetailPage() {
                         </div>
                       </div>
 
-                      {/* 21:8 Ultrawide Card */}
-                      <div className="flex flex-col gap-3 group">
-                        <div className="relative aspect-[21/8] w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
-                          {project.thumbnail_url_21_8 ? (
-                            <img
-                              src={getMediaUrl(
-                                project.thumbnail_url_21_8,
-                                imageVersion,
-                              )}
-                              alt="21:8 Thumbnail"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
-                              <ImageIcon className="w-8 h-8 opacity-40 mb-2" />
-                              <span className="text-sm font-medium">
-                                Coming Soon
-                              </span>
-                            </div>
-                          )}
-
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="gap-2 shadow-lg"
-                              onClick={() => setShowRegenModal({ aspect: "21:8", isPoster: false })}
-                              disabled={generatingThumbnails["21:8"]}
-                            >
-                              {generatingThumbnails["21:8"] ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <ImageIcon className="w-4 h-4" />
-                              )}
-                              {project.thumbnail_url_21_8 ? "Regenerate" : "Generate"}
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col px-1">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
-                              <h3 className="text-sm font-semibold text-foreground line-clamp-1">
-                                Ultrawide (21:8)
-                              </h3>
-                            </div>
-                            {project.story?.thumbnail_prompt_21_8 && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-muted-foreground hover:text-primary"
-                                onClick={() => {
-                                  if (project.story?.thumbnail_prompt_21_8) {
-                                    navigator.clipboard.writeText(project.story.thumbnail_prompt_21_8);
-                                    toast.success("Prompt copied!");
-                                  }
-                                }}
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                          <p
-                            className="text-xs text-muted-foreground line-clamp-3 leading-relaxed"
-                            title={project.story.thumbnail_prompt_21_8 || ""}
-                          >
-                            {project.story.thumbnail_prompt_21_8 ||
-                              "No prompt available"}
-                          </p>
-                        </div>
-                      </div>
                     </div>
 
                     {/* Movie Poster style Thumbnails */}
-                    {(project.story.poster_thumbnail_prompt_16_9 || project.story.poster_thumbnail_prompt_9_16 || project.story.poster_thumbnail_prompt_21_8) && (
+                    {(project.story.poster_thumbnail_prompt_16_9 || project.story.poster_thumbnail_prompt_9_16) && (
                       <div className="mt-6 pt-6 border-t border-border/50">
                         <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
                           Movie Poster Style Assets
@@ -700,12 +733,18 @@ export default function ProjectDetailPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {/* 16:9 Poster */}
                             <div className="flex flex-col gap-3 group">
-                              <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
+                              <div 
+                                className={`relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center ${project.poster_thumbnail_url ? 'cursor-pointer' : ''}`}
+                                onClick={() => {
+                                  const url = project.poster_thumbnail_url ? getMediaUrl(project.poster_thumbnail_url, imageVersion) : null;
+                                  if (url) setFullscreenImageUrl(url);
+                                }}
+                              >
                                 {project.poster_thumbnail_url ? (
                                   <img
                                     src={getMediaUrl(project.poster_thumbnail_url, imageVersion)}
                                     alt="16:9 Poster"
-                                    className="w-full h-full object-cover"
+                                    className="w-full h-full object-cover transition-opacity group-hover:opacity-90"
                                   />
                                 ) : (
                                   <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
@@ -713,16 +752,40 @@ export default function ProjectDetailPage() {
                                     <span className="text-sm font-medium">Coming Soon</span>
                                   </div>
                                 )}
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 gap-2">
                                   <Button
                                     variant="secondary"
                                     size="sm"
                                     className="gap-2 shadow-lg"
-                                    onClick={() => setShowRegenModal({ aspect: "16:9", isPoster: true })}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setShowRegenModal({ aspect: "16:9", isPoster: true });
+                                    }}
                                     disabled={generatingThumbnails["16:9-poster"]}
                                   >
                                     {generatingThumbnails["16:9-poster"] ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />} Generate
                                   </Button>
+                                  <div className="relative">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="absolute inset-0 opacity-0 cursor-pointer"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleUploadThumbnail("16:9", file, true);
+                                      }}
+                                      disabled={generatingThumbnails["16:9-poster"]}
+                                    />
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-2 bg-background/80 hover:bg-background shadow-lg pr-4 pl-4"
+                                      disabled={generatingThumbnails["16:9-poster"]}
+                                    >
+                                      <Upload className="w-4 h-4 text-primary" />
+                                      {project.poster_thumbnail_url ? "Upload New" : "Upload"}
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                               <div className="flex items-center justify-between mb-1.5 px-1 mt-2">
@@ -753,12 +816,18 @@ export default function ProjectDetailPage() {
 
                             {/* 9:16 Poster */}
                             <div className="flex flex-col gap-3 group">
-                              <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
+                              <div 
+                                className={`relative aspect-video w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center ${project.poster_thumbnail_url_9_16 ? 'cursor-pointer' : ''}`}
+                                onClick={() => {
+                                  const url = project.poster_thumbnail_url_9_16 ? getMediaUrl(project.poster_thumbnail_url_9_16, imageVersion) : null;
+                                  if (url) setFullscreenImageUrl(url);
+                                }}
+                              >
                                 {project.poster_thumbnail_url_9_16 ? (
                                   <img
                                     src={getMediaUrl(project.poster_thumbnail_url_9_16, imageVersion)}
                                     alt="9:16 Poster"
-                                    className="w-full h-full object-contain max-w-[56.25%] mx-auto bg-black"
+                                    className="w-full h-full object-contain max-w-[56.25%] mx-auto bg-black transition-opacity group-hover:opacity-90"
                                   />
                                 ) : (
                                   <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
@@ -766,16 +835,40 @@ export default function ProjectDetailPage() {
                                     <span className="text-sm font-medium">Coming Soon</span>
                                   </div>
                                 )}
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 gap-2">
                                   <Button
                                     variant="secondary"
                                     size="sm"
                                     className="gap-2 shadow-lg"
-                                    onClick={() => setShowRegenModal({ aspect: "9:16", isPoster: true })}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setShowRegenModal({ aspect: "9:16", isPoster: true });
+                                    }}
                                     disabled={generatingThumbnails["9:16-poster"]}
                                   >
                                     {generatingThumbnails["9:16-poster"] ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />} Generate
                                   </Button>
+                                  <div className="relative">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="absolute inset-0 opacity-0 cursor-pointer"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleUploadThumbnail("9:16", file, true);
+                                      }}
+                                      disabled={generatingThumbnails["9:16-poster"]}
+                                    />
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-2 bg-background/80 hover:bg-background shadow-lg pr-4 pl-4"
+                                      disabled={generatingThumbnails["9:16-poster"]}
+                                    >
+                                      <Upload className="w-4 h-4 text-primary" />
+                                      {project.poster_thumbnail_url_9_16 ? "Upload New" : "Upload"}
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                               <div className="flex items-center justify-between mb-1.5 px-1 mt-2">
@@ -804,58 +897,6 @@ export default function ProjectDetailPage() {
                               <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed px-1">{project.story.poster_thumbnail_prompt_9_16}</p>
                             </div>
 
-                            {/* 21:8 Poster */}
-                            <div className="flex flex-col gap-3 group">
-                              <div className="relative aspect-[21/8] w-full overflow-hidden rounded-xl bg-card border border-border/80 shadow-sm transition-all group-hover:border-primary/50 flex flex-col justify-center items-center">
-                                {project.poster_thumbnail_url_21_8 ? (
-                                  <img
-                                    src={getMediaUrl(project.poster_thumbnail_url_21_8, imageVersion)}
-                                    alt="21:8 Poster"
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex flex-col items-center justify-center p-6 text-muted-foreground">
-                                    <ImageIcon className="w-8 h-8 opacity-40 mb-2" />
-                                    <span className="text-sm font-medium">Coming Soon</span>
-                                  </div>
-                                )}
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    className="gap-2 shadow-lg"
-                                    onClick={() => setShowRegenModal({ aspect: "21:8", isPoster: true })}
-                                    disabled={generatingThumbnails["21:8-poster"]}
-                                  >
-                                    {generatingThumbnails["21:8-poster"] ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />} Generate
-                                  </Button>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between mb-1.5 px-1 mt-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
-                                  <h3 className="text-sm font-semibold text-foreground line-clamp-1">
-                                    Poster (21:8)
-                                  </h3>
-                                </div>
-                                {project.story?.poster_thumbnail_prompt_21_8 && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 text-muted-foreground hover:text-primary"
-                                    onClick={() => {
-                                      if (project.story?.poster_thumbnail_prompt_21_8) {
-                                        navigator.clipboard.writeText(project.story.poster_thumbnail_prompt_21_8);
-                                        toast.success("Prompt copied!");
-                                      }
-                                    }}
-                                  >
-                                    <Copy className="w-3.5 h-3.5" />
-                                  </Button>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed px-1">{project.story.poster_thumbnail_prompt_21_8}</p>
-                            </div>
                         </div>
                       </div>
                     )}
@@ -892,11 +933,17 @@ export default function ProjectDetailPage() {
                               {scene.location} • {scene.characters}
                             </p>
                             {scene.background_image_path && (
-                              <div className="w-full aspect-video max-h-[300px] relative rounded-xl overflow-hidden bg-muted border border-border flex-shrink-0 shadow-md my-3 transition-all hover:scale-[1.01]">
+                              <div 
+                                className="w-full aspect-video max-h-[300px] relative rounded-xl overflow-hidden bg-muted border border-border flex-shrink-0 shadow-md my-3 transition-all hover:scale-[1.01] cursor-pointer"
+                                onClick={() => {
+                                  const url = scene.background_image_path ? getMediaUrl(scene.background_image_path, imageVersion) : null;
+                                  if (url) setFullscreenImageUrl(url);
+                                }}
+                              >
                                 <img
-                                  src={getMediaUrl(scene.background_image_path, imageVersion)}
+                                  src={getMediaUrl(scene.background_image_path || null, imageVersion)}
                                   alt={`Scene ${idx + 1} Background`}
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover transition-opacity hover:opacity-90"
                                 />
                               </div>
                             )}
@@ -917,6 +964,174 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* SEO & metadata Section */}
+          {project.story && (
+            <div className="bg-card border border-border rounded-xl p-6 shadow-lg">
+              <div className="flex items-center justify-between mb-6 border-b border-border/50 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">SEO & Metadata</h3>
+                    <p className="text-xs text-muted-foreground">Optimized for YouTube & Social Media</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {/* Title and Description */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Video Title</label>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6" 
+                        onClick={() => {
+                          navigator.clipboard.writeText(project.story?.title || "");
+                          toast.success("Title copied!");
+                        }}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="p-3 bg-muted/30 rounded-lg border border-border/50 text-sm font-medium">
+                      {project.story?.title}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Tags / Keywords</label>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-6 w-6" 
+                        onClick={() => {
+                          navigator.clipboard.writeText(project.story?.tags?.join(", ") || "");
+                          toast.success("Tags copied!");
+                        }}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {project.story?.tags?.map((tag, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium border border-primary/20">
+                          <Tag className="w-2.5 h-2.5" />
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Video Description</label>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6" 
+                      onClick={() => {
+                        navigator.clipboard.writeText(project.story?.description || "");
+                        toast.success("Description copied!");
+                      }}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="p-3 bg-muted/30 rounded-lg border border-border/50 text-sm text-muted-foreground leading-relaxed italic">
+                    "{project.story?.description}"
+                  </div>
+                </div>
+
+                {/* YouTube Specific Metadata */}
+                {project.story?.youtube_metadata && (
+                  <div className="pt-6 border-t border-border/50 space-y-6">
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                      <Search className="w-3.5 h-3.5" />
+                      YouTube Optimization
+                    </h4>
+
+                    {project.story.youtube_metadata.title_options && project.story.youtube_metadata.title_options.length > 0 && (
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Catchy Title Options</label>
+                        <div className="space-y-2">
+                          {project.story.youtube_metadata.title_options.map((option, idx) => (
+                            <div key={idx} className="group flex items-center justify-between p-2.5 bg-background border border-border/50 rounded-lg hover:border-primary/50 transition-colors">
+                              <span className="text-sm font-medium">{option}</span>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity" 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(option);
+                                  toast.success("Title option copied!");
+                                }}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {project.story.youtube_metadata.chapters && project.story.youtube_metadata.chapters.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <Clock className="w-3 h-3" />
+                            Chapters
+                          </label>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-7 text-[10px] uppercase tracking-wider font-bold gap-1.5"
+                            onClick={() => {
+                              const chaptersText = project.story?.youtube_metadata?.chapters
+                                ?.map(c => `${c.timestamp} - ${c.title}`)
+                                .join("\n");
+                              if (chaptersText) {
+                                navigator.clipboard.writeText(chaptersText);
+                                toast.success("All chapters copied!");
+                              }
+                            }}
+                          >
+                            <Copy className="h-3 w-3" />
+                            Copy All
+                          </Button>
+                        </div>
+                        <div className="bg-background border border-border/50 rounded-lg divide-y divide-border/30 overflow-hidden">
+                          {project.story.youtube_metadata.chapters.map((chapter, idx) => (
+                            <div key={idx} className="flex items-center gap-3 p-2.5 hover:bg-muted/30 transition-colors group">
+                              <span className="text-[10px] font-mono font-bold bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{chapter.timestamp}</span>
+                              <span className="text-sm flex-1">{chapter.title}</span>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`${chapter.timestamp} - ${chapter.title}`);
+                                  toast.success("Chapter copied!");
+                                }}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -996,6 +1211,30 @@ export default function ProjectDetailPage() {
       )}
     </TabsContent>
   </Tabs>
+      {/* Fullscreen Image Modal */}
+      {fullscreenImageUrl && (
+        <div
+          className="fixed inset-0 bg-black/92 z-[70] flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setFullscreenImageUrl(null)}
+        >
+          <div className="relative max-w-7xl w-full h-full flex flex-col items-center justify-center">
+            <button
+              onClick={(e) => { e.stopPropagation(); setFullscreenImageUrl(null); }}
+              className="absolute top-0 right-0 text-white/70 hover:text-white p-2 transition-colors z-[80]"
+              title="Close (Esc)"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <img
+              src={fullscreenImageUrl}
+              alt="Fullscreen View"
+              className="max-w-full max-h-full object-contain select-none"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Regeneration Modal */}
       <GenerationDialog
         isOpen={showRegenModal !== null}

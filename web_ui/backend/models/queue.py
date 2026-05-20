@@ -18,6 +18,8 @@ class GenerationType(str, Enum):
     NARRATION = "narration"
     BACKGROUND = "background"
     SOUNDFX = "soundfx"
+    THUMBNAIL = "thumbnail"
+    CHARACTER_IMAGE = "character_image"
 
 
 class QueueItemStatus(str, Enum):
@@ -36,6 +38,7 @@ class QueueItem(BaseModel):
     project_id: str = Field(..., description="Project identifier")
     shot_index: Optional[int] = Field(None, description="Shot index (1-based)")
     scene_id: Optional[int] = Field(None, description="Scene ID for narrations/backgrounds")
+    character_index: Optional[int] = Field(None, description="Character index for character generations (0-based)")
     generation_type: GenerationType = Field(..., description="Type of generation")
     status: QueueItemStatus = Field(default=QueueItemStatus.QUEUED, description="Current status")
     progress: int = Field(default=0, ge=0, le=100, description="Progress percentage (0-100)")
@@ -61,6 +64,12 @@ class QueueItem(BaseModel):
     append_image_prompt: Optional[str] = Field(None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
+    aspect_ratio: Optional[str] = Field(None, description="Aspect ratio for thumbnails/standard shots")
+    resolution: Optional[str] = Field(None, description="Resolution string ('480p', '720p', etc.)")
+    gemini_mode: Optional[str] = Field(None, description="Gemini model mode (Fast/Thinking/Pro)")
+    soundfx_workflow: Optional[str] = Field(None, description="Override Sound FX Workflow template")
+    soundfx_prompt: Optional[str] = Field(None, description="Prompt override for sound FX generation")
+    is_poster: bool = Field(default=False, description="Is this a poster-style generation?")
 
     # Tracking for deep resume
     comfyui_prompt_id: Optional[str] = Field(None, description="ComfyUI prompt ID for resuming active tasks")

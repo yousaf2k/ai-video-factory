@@ -192,7 +192,7 @@
     "inputs": {
       "shift": 5,
       "model": [
-        "152",
+        "101",
         0
       ]
     },
@@ -203,7 +203,7 @@
   },
   "128": {
     "inputs": {
-      "image": "E:/output/sessions/session_20260313_020632/images/shot_001_now_001.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -272,25 +272,11 @@
   },
   "151": {
     "inputs": {
-      "image": "E:/output/sessions/session_20260313_020632/images/shot_002_006.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
       "title": "Load Image"
-    }
-  },
-  "152": {
-    "inputs": {
-      "lora_name": "Arc_shot.safetensors",
-      "strength_model": 1,
-      "model": [
-        "101",
-        0
-      ]
-    },
-    "class_type": "LoraLoaderModelOnly",
-    "_meta": {
-      "title": "Load LoRA"
     }
   },
   "153": {

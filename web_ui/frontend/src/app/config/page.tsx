@@ -5,10 +5,11 @@
 
 import { useState, useEffect } from "react";
 import { useConfig, useUpdateConfig } from "@/hooks/useAgents";
-import { Save, RefreshCw, ArrowLeft } from "lucide-react";
+import { Save, RefreshCw, ArrowLeft, Globe, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { api } from "@/services/api";
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ export default function ConfigPage() {
   const router = useRouter();
   const { data: config, isLoading, error } = useConfig();
   const updateConfigMutation = useUpdateConfig();
+  const [isLaunchingBrowser, setIsLaunchingBrowser] = useState(false);
 
   const [formData, setFormData] = useState({
     llm_provider: "",
@@ -34,6 +36,10 @@ export default function ConfigPage() {
     openai_api_key: "",
     elevenlabs_api_key: "",
     playwright_browser: "",
+    gemini_watermark_tool_image: "",
+    gemini_watermark_tool_video: "",
+    watermark_removal_method: "builtin",
+    geminiweb_default_mode: "Fast",
   });
 
   useEffect(() => {
@@ -50,6 +56,10 @@ export default function ConfigPage() {
         openai_api_key: "",
         elevenlabs_api_key: "",
         playwright_browser: config.playwright_browser || "chromium",
+        gemini_watermark_tool_image: config.gemini_watermark_tool_image || "",
+        gemini_watermark_tool_video: config.gemini_watermark_tool_video || "",
+        watermark_removal_method: config.watermark_removal_method || "builtin",
+        geminiweb_default_mode: config.geminiweb_default_mode || "Fast",
       });
     }
   }, [config]);
@@ -68,6 +78,20 @@ export default function ConfigPage() {
     } catch (error) {
       console.error("Failed to update config:", error);
       alert("Failed to update configuration.");
+    }
+  };
+
+  const handleLaunchBrowser = async () => {
+    setIsLaunchingBrowser(true);
+    try {
+      const data = await api.launchBrowser();
+      alert(data.message || "Browser launched successfully!");
+    } catch (error: any) {
+      console.error("Error launching browser:", error);
+      const detail = error.response?.data?.detail || error.message;
+      alert(`Error launching browser: ${detail}`);
+    } finally {
+      setIsLaunchingBrowser(false);
     }
   };
 
@@ -129,29 +153,6 @@ export default function ConfigPage() {
                   <SelectItem value="ollama">Ollama (Local)</SelectItem>
                   <SelectItem value="lmstudio">LM Studio (Local)</SelectItem>
                   <SelectItem value="zhipu">Zhipu AI</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Playwright Browser (GeminiWeb)
-              </label>
-              <Select
-                value={formData.playwright_browser}
-                onValueChange={(val) =>
-                  setFormData({ ...formData, playwright_browser: val })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Browser" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="chromium">Chromium (Default)</SelectItem>
-                  <SelectItem value="chrome">Google Chrome</SelectItem>
-                  <SelectItem value="msedge">Microsoft Edge</SelectItem>
-                  <SelectItem value="firefox">Firefox</SelectItem>
-                  <SelectItem value="webkit">WebKit (Safari)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -254,6 +255,32 @@ export default function ConfigPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/30 pt-4">
             <div>
               <label className="block text-sm font-medium mb-1">
+                Gemini Web Mode (Default)
+              </label>
+              <Select
+                value={formData.geminiweb_default_mode}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, geminiweb_default_mode: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Gemini Mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Fast">Fast</SelectItem>
+                  <SelectItem value="Thinking">Thinking</SelectItem>
+                  <SelectItem value="Pro">Pro</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Default model behavior for GeminiWeb image and video generation.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/30 pt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
                 ComfyUI URL
               </label>
               <Input
@@ -280,6 +307,129 @@ export default function ConfigPage() {
                   })
                 }
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/30 pt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Watermark Removal Method
+              </label>
+              <Select
+                value={formData.watermark_removal_method}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, watermark_removal_method: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="builtin">Built-in Restoration</SelectItem>
+                  <SelectItem value="external">External Tool</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-4 border-t border-border/30 pt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                External Watermark Tool (Images)
+              </label>
+              <Input
+                type="text"
+                value={formData.gemini_watermark_tool_image}
+                onChange={(e) =>
+                  setFormData({ ...formData, gemini_watermark_tool_image: e.target.value })
+                }
+                placeholder="Full path to image watermark removal tool"
+                disabled={formData.watermark_removal_method !== 'external'}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                External Watermark Tool (Videos)
+              </label>
+              <Input
+                type="text"
+                value={formData.gemini_watermark_tool_video}
+                onChange={(e) =>
+                  setFormData({ ...formData, gemini_watermark_tool_video: e.target.value })
+                }
+                placeholder="Full path to video watermark removal tool"
+                disabled={formData.watermark_removal_method !== 'external'}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Note: Built-in restoration only supports images. Video always requires an external tool.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Browser Management */}
+        <section className="bg-card border border-border/50 rounded-xl p-6 shadow-sm space-y-6 backdrop-blur-md">
+          <h2 className="text-xl font-bold flex items-center gap-2 border-b pb-3">
+            <span className="w-2 h-6 bg-blue-500 rounded-full" />
+            Browser Management
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-muted-foreground" />
+                Playwright Browser (GeminiWeb)
+              </label>
+              <Select
+                value={formData.playwright_browser}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, playwright_browser: val })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Browser" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="chromium">Chromium (Default)</SelectItem>
+                  <SelectItem value="chrome">Google Chrome</SelectItem>
+                  <SelectItem value="msedge">Microsoft Edge</SelectItem>
+                  <SelectItem value="firefox">Firefox</SelectItem>
+                  <SelectItem value="webkit">WebKit (Safari)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                Preferred browser engine for GeminiWeb and FlowWeb generations.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+                Session Login Setup
+              </label>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                If automated logins are being blocked, use this tool to launch a browser with persistent context and stealth settings. Once you log in there, automated runs will recognize your session.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleLaunchBrowser}
+                disabled={isLaunchingBrowser}
+                className="w-full flex items-center justify-center gap-2 h-10 border-blue-500/30 hover:bg-blue-500/10 hover:border-blue-500/50 transition-all"
+              >
+                {isLaunchingBrowser ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+                    Launching Browser...
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-4 h-4 text-blue-500" />
+                    Launch Browser for Session Login
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </section>

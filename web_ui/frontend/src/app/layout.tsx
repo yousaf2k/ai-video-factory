@@ -40,6 +40,9 @@ export default function RootLayout({
                   <Link href="/agents" className="text-sm font-medium hover:text-primary transition-colors">
                     Agents
                   </Link>
+                  <Link href="/editor" className="text-sm font-medium hover:text-primary transition-colors">
+                    Editor
+                  </Link>
                   <Link href="/workflows" className="text-sm font-medium hover:text-primary transition-colors">
                     Workflows
                   </Link>

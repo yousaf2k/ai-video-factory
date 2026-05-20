@@ -221,7 +221,8 @@ def regenerate_videos(project_id, new_shot_length=None, force_regenerate_all=Fal
                 video_res = generate_video_geminiweb(
                     image_path=image_path,
                     motion_prompt=motion_prompt,
-                    output_path=video_save_path
+                    output_path=video_save_path,
+                    gemini_mode=getattr(config, 'GEMINIWEB_DEFAULT_MODE', 'Fast')
                 )
                 
                 if video_res:

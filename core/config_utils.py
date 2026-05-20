@@ -95,7 +95,24 @@ def calculate_video_dimensions(aspect_ratio="16:9", resolution="1280", draft_low
     Returns:
         Tuple of (width, height) as integers
     """
-    res = int(resolution)
+    if resolution is None:
+        resolution = "1280"
+    
+    # Handle resolution labels
+    if isinstance(resolution, str):
+        low_res = resolution.lower()
+        if low_res == "480p":
+            res = 854
+        elif low_res == "720p":
+            res = 1280
+        elif low_res == "1080p":
+            res = 1920
+        elif resolution.isdigit():
+            res = int(resolution)
+        else:
+            res = 1280 # Fallback
+    else:
+        res = int(resolution)
 
     # Parse aspect ratio
     if ':' in aspect_ratio:

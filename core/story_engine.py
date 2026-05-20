@@ -219,7 +219,7 @@ Return JSON:
     return story_json_str
 
 
-def build_story_then_vs_now(movie_name: str, target_length: int = None, aspect_ratio: str = "16:9") -> str:
+def build_story_then_vs_now(movie_name: str, agent_name: str = "then_vs_now/then_vs_now", target_length: int = None, aspect_ratio: str = "16:9") -> str:
     """
     Build a ThenVsNow story from a movie name.
     Generates both story and shots directly (bypasses shot planner).
@@ -235,7 +235,12 @@ def build_story_then_vs_now(movie_name: str, target_length: int = None, aspect_r
     provider = get_provider()
 
     # Load the then_vs_now agent
-    prompt = load_agent_prompt("story", movie_name, "then_vs_now/then_vs_now")
+    # If agent_name doesn't already contain a slash, prepend 'then_vs_now/'
+    final_agent_path = agent_name
+    if "/" not in agent_name:
+        final_agent_path = f"then_vs_now/{agent_name}"
+        
+    prompt = load_agent_prompt("story", movie_name, final_agent_path)
     if target_length:
         prompt = prompt.replace("{VIDEO_LENGTH}", str(int(target_length)))
 
@@ -274,6 +279,130 @@ def build_story_then_vs_now(movie_name: str, target_length: int = None, aspect_r
 
     logger.info(f"Generated {len(shots)} shots for {len(story.get('characters', []))} characters")
     return story_json_str
+
+
+def build_story_asmr_glass_cutting(
+    idea: str,
+    agent_name: str = "asmr/asmr_glass_cutting",
+    shot_duration: int = 5,
+    aspect_ratio: str = "16:9"
+) -> str:
+    """
+    Build an ASMR glass cutting story from natural language input.
+
+    The story agent generates all shots directly in a single LLM call,
+    following the THEN_VS_NOW pattern.
+
+    Args:
+        idea: Natural language description (e.g., "create videos of strawberry, apple, and tomato")
+        agent_name: Story agent to use (default: "asmr/asmr_glass_cutting")
+        shot_duration: Fixed duration for each shot in seconds (default: 5)
+        aspect_ratio: Video aspect ratio (default: "16:9")
+
+    Returns:
+        JSON string with story structure including shots
+
+    Raises:
+        ValueError: If input is too short or LLM doesn't generate valid shots
+    """
+    from web_ui.backend.models.story import ProjectType
+
+    # Validate input
+    if not idea or len(idea.strip()) < 3:
+        raise ValueError("Please describe the fruits or vegetables to create videos for")
+
+    provider = get_provider()
+
+    # Load the ASMR agent prompt
+    # If agent_name doesn't contain a slash, assume it's in the asmr/ directory
+    final_agent_path = agent_name
+    if "/" not in agent_name:
+        final_agent_path = f"asmr/{agent_name}"
+
+    try:
+        prompt = load_agent_prompt("story", idea, final_agent_path)
+    except (FileNotFoundError, ValueError) as e:
+        logger.error(f"Failed to load ASMR agent: {e}")
+        raise ValueError(f"ASMR glass cutting agent not found: {final_agent_path}")
+
+    # Generate story with shots
+    logger.info(f"Generating ASMR glass cutting story for: {idea}")
+    print(f"[INFO] Generating ASMR glass cutting story for: {idea}")
+
+    try:
+        story_json_str = provider.ask(prompt, response_format="application/json")
+        story = json.loads(story_json_str)
+
+        # Handle case where LLM returns an array instead of object
+        if isinstance(story, list):
+            if len(story) > 0:
+                logger.warning(f"LLM returned array, extracting first element")
+                story = story[0]
+            else:
+                raise ValueError("LLM returned empty array. Please try a different description.")
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse LLM response as JSON: {e}")
+        raise ValueError("Failed to generate valid story. Please try a different description.")
+
+    # Ensure project_type is set
+    story['project_type'] = ProjectType.ASMR_GLASS_CUTTING
+
+    # Add aspect_ratio
+    story['aspect_ratio'] = aspect_ratio
+
+    # Validate expanded_objects
+    if not story.get("expanded_objects") or len(story.get("expanded_objects", [])) == 0:
+        logger.warning("No expanded_objects in response")
+        raise ValueError(
+            "Could not identify objects from input. "
+            "Please specify fruits or vegetables more clearly."
+        )
+
+    # Validate shots were generated
+    if "shots" not in story or len(story["shots"]) == 0:
+        logger.error("No shots in generated story")
+        raise ValueError("No shots generated. Try a different description.")
+
+    # Warn if too few shots
+    if len(story["shots"]) < 3:
+        logger.warning(f"Only {len(story['shots'])} shots generated. Expected at least 3.")
+
+    # Calculate and set total_duration
+    shot_count = len(story["shots"])
+    story['total_duration'] = shot_count * shot_duration
+
+    # Update shot durations
+    for shot in story["shots"]:
+        shot["duration"] = shot_duration
+
+    # Ensure each shot has required fields
+    for i, shot in enumerate(story["shots"]):
+        if "id" not in shot:
+            shot["id"] = f"shot_{i+1:03d}"
+        if "index" not in shot:
+            shot["index"] = i + 1
+        if "shot_type" not in shot:
+            shot["shot_type"] = "asmr_glass_cutting"
+
+        # Handle backward compatibility: map 'prompt' to 'image_prompt' if needed
+        if "prompt" in shot and "image_prompt" not in shot:
+            shot["image_prompt"] = shot["prompt"]
+
+        # Validate image_prompt exists and is detailed
+        if "image_prompt" not in shot or len(shot.get("image_prompt", "")) < 50:
+            logger.warning(f"Shot {i+1} has missing or short image_prompt")
+
+        # Validate motion_prompt exists and is detailed
+        if "motion_prompt" not in shot or len(shot.get("motion_prompt", "")) < 50:
+            logger.warning(f"Shot {i+1} has missing or short motion_prompt")
+            # Add fallback motion_prompt for video generation if missing
+            object_name = shot.get("object_name", "object")
+            shot["motion_prompt"] = f"Close-up shot of precision cutting through {object_name} glass sculpture. Camera maintains steady focus on the cutting action with slight push-in motion. Glass pieces separate and fall with realistic physics. Shallow depth of field, cinematic ASMR style."
+
+    logger.info(f"Generated {len(story['shots'])} shots for {len(story['expanded_objects'])} objects")
+    print(f"[INFO] Generated {len(story['shots'])} shots for {len(story['expanded_objects'])} objects")
+
+    return json.dumps(story, ensure_ascii=False, indent=2)
 
 
 def generate_shots_from_then_vs_now_story(story: dict) -> list:

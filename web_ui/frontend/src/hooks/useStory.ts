@@ -20,12 +20,12 @@ export function useUpdateStory(projectId: string) {
   });
 }
 
-// Hook to regenerate story
-export function useRegenerateStory(projectId: string) {
+// Hook to generate story
+export function useGenerateStory(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (agent: string = 'default') => api.regenerateStory(projectId, agent),
+    mutationFn: (agent: string = 'default') => api.generateStory(projectId, agent),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },

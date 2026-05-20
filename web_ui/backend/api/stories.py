@@ -19,6 +19,16 @@ from web_ui.backend.models.story import (
     GenerateSceneNarrationRequest, BatchGenerateNarrationRequest,
     SelectSceneNarrationRequest, BackgroundGenerationRequest
 )
+from pydantic import BaseModel, Field
+from typing import Optional
+
+class GenerateCharacterReferenceRequest(BaseModel):
+    variant: str = Field(..., description="'then', 'now', or 'character'")
+    prompt_override: Optional[str] = None
+    image_mode: Optional[str] = None
+    image_workflow: Optional[str] = None
+    seed: Optional[int] = None
+    gemini_mode: Optional[str] = None
 from web_ui.backend.services.project_service import ProjectService
 from web_ui.backend.services.generation_service import get_generation_service
 from core.story_engine import build_story
@@ -199,9 +209,9 @@ async def update_story(project_id: str, request: UpdateStoryRequest):
         )
 
 
-@router.post("/regenerate")
-async def regenerate_story(project_id: str, request: RegenerateStoryRequest):
-    """Regenerate story with new agent"""
+@router.post("/generate")
+async def generate_story(project_id: str, request: RegenerateStoryRequest):
+    """Generate story with new agent"""
     try:
         # Load project
         meta = project_manager.load_project(project_id)
@@ -219,14 +229,47 @@ async def regenerate_story(project_id: str, request: RegenerateStoryRequest):
 
         from web_ui.backend.models.story import ProjectType
 
-        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.agent == "then_vs_now" or request.agent.startswith("then_vs_now/")
+        # Import ASMR story builder
+        from core.story_engine import build_story_asmr_glass_cutting
 
-        if is_then_vs_now:
+        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.agent == "then_vs_now" or request.agent.startswith("then_vs_now/")
+        is_asmr = meta.get('project_type') == ProjectType.ASMR_GLASS_CUTTING or request.agent == "asmr_glass_cutting" or request.agent.startswith("asmr/")
+
+        if is_asmr:
+            logger.info(f"Generating ASMR glass cutting story with agent: {request.agent}")
+            story_json = build_story_asmr_glass_cutting(
+                idea=idea,
+                agent_name=request.agent,
+                shot_duration=meta.get("shot_duration", 5),
+                aspect_ratio=aspect_ratio
+            )
+            story = json.loads(story_json)
+            shots = story.pop('shots', [])
+
+            # Save story.json
+            project_manager.save_story(project_id, json.dumps(story, indent=2, ensure_ascii=False))
+
+            # Update shots.json
+            project_manager.save_shots(project_id, shots)
+
+            # Update project metadata
+            meta['steps']['story'] = True
+            meta['stats']['total_shots'] = len(shots)
+            project_manager._save_meta(project_id, meta)
+
+            return {
+                "story": story,
+                "shots": shots,
+                "meta": meta
+            }
+
+        elif is_then_vs_now:
             from core.story_engine import build_story_then_vs_now
-            
-            logger.info(f"Regenerating ThenVsNow story for movie: {idea}")
+
+            logger.info(f"Regenerating ThenVsNow story with agent: {request.agent}")
             story_json = build_story_then_vs_now(
                 movie_name=idea,
+                agent_name=request.agent,
                 target_length=target_length,
                 aspect_ratio=aspect_ratio
             )
@@ -285,15 +328,15 @@ async def upload_character_reference(
     Args:
         project_id: Project identifier
         character_index: 0-based index of the character in story.characters
-        variant: "then" or "now" - which variant to upload
+        variant: "then", "now", or "character" - which variant to upload
         file: Image file to upload
     """
     try:
         # Validate variant
-        if variant not in ["then", "now"]:
+        if variant not in ["then", "now", "character"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid variant '{variant}'. Must be 'then' or 'now'"
+                detail=f"Invalid variant '{variant}'. Must be 'then', 'now', or 'character'"
             )
 
         # Load story
@@ -374,6 +417,42 @@ async def upload_character_reference(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload reference image: {str(e)}"
+        )
+
+
+@router.post("/characters/{character_index}/generate-reference")
+async def generate_character_reference(
+    project_id: str,
+    character_index: int,
+    request: GenerateCharacterReferenceRequest
+):
+    """Generate reference image for a character using AI"""
+    try:
+        if request.variant not in ["then", "now", "character"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid variant '{request.variant}'. Must be 'then', 'now', or 'character'"
+            )
+
+        generation_service.queue_character_image(
+            project_id=project_id,
+            character_index=character_index,
+            request=request
+        )
+
+        return {
+            "status": "queued",
+            "character_index": character_index,
+            "variant": request.variant,
+            "message": f"{request.variant.upper()} reference image generation added to queue"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error queueing character reference generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to queue reference image generation: {str(e)}"
         )
 
 
@@ -528,21 +607,17 @@ async def generate_scene_background(project_id: str, scene_id: int, request: Bac
                 detail=f"Scene {scene_id} does not have a set_prompt for background generation"
             )
 
-        # Start background generation task
-        asyncio.create_task(generation_service.generate_scene_background(
-            project_id=project_id, 
+        # Add to background generation queue
+        generation_service.add_background_to_queue(
+            project_id=project_id,
             scene_id=scene_id,
-            set_prompt=set_prompt,
-            prompt=request.prompt,
-            negative_prompt=request.negative_prompt,
-            seed=request.seed,
-            workflow=request.workflow
-        ))
+            request=request
+        )
 
         return {
             "status": "queued",
             "scene_id": scene_id,
-            "message": f"Background generation for scene {scene_id} started"
+            "message": f"Background generation for scene {scene_id} added to queue"
         }
 
     except HTTPException:

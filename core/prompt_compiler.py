@@ -7,7 +7,7 @@ import config
 # Set up logging
 logger = logging.getLogger(__name__)
 
-def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_res_video=False):
+def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_res_video=False, workflow_config=None, resolution=None):
     """Load workflow and optionally set video length and dimensions"""
     if not os.path.isabs(path):
         # Resolve relative to the project root (one level up from core/)
@@ -20,11 +20,12 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
     # Get dimensions from config (use video dimensions for video workflow)
     if aspect_ratio is None:
         aspect_ratio = config.VIDEO_ASPECT_RATIO
-    width, height = config.calculate_video_dimensions(aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video)
+    width, height = config.calculate_video_dimensions(aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video, resolution=resolution)
 
     # Get workflow settings for node IDs
-    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
-    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+    if not workflow_config:
+        work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+        workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
 
     wan_video_node_id = None
     if workflow_config:
@@ -90,7 +91,7 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
                     if len(widgets) >= 5:
                         node_data["inputs"]["save_output"] = widgets[4]
                 # For WanImageToVideo or WanFirstLastFrameToVideo, widgets_values contains [width, height, frames, batch_size]
-                elif node_type in ["WanImageToVideo", "WanFirstLastFrameToVideo"] and len(widgets) >= 4:
+                elif node_type in ["WanImageToVideo", "WanFirstLastFrameToVideo", "WanVideoTextToVideo", "WanVideoFirstLastFrameToVideo", "WanVideoSampler", "WanSampler", "WanVideoGenerator"] and len(widgets) >= 4:
                     # Use config dimensions instead of hardcoded values
                     node_data["inputs"]["width"] = width
                     node_data["inputs"]["height"] = height
@@ -157,43 +158,61 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
         # Already in API format - set dimensions and video length
         wf = copy.deepcopy(workflow)
 
-        # Set dimensions in WanImageToVideo or WanFirstLastFrameToVideo node dynamically
-        wan_node_id = None
+        # Set dimensions in Wan nodes dynamically (supports multiple variants)
+        updated_nodes = []
+        wan_candidates = [
+            "WanImageToVideo", 
+            "WanFirstLastFrameToVideo",
+            "WanVideoTextToVideo", 
+            "WanVideoFirstLastFrameToVideo",
+            "WanVideoSampler", 
+            "WanSampler", 
+            "WanVideoGenerator",
+            "WanVideoGeneratorHigh",
+            "WanVideoGeneratorLow"
+        ]
+        
         for node_id, node in wf.items():
             # Check if node has class_type to avoid errors
             if isinstance(node, dict) and 'class_type' in node:
-                if node.get('class_type') in ['WanImageToVideo', 'WanFirstLastFrameToVideo']:
-                    wan_node_id = node_id
-                    break
+                class_type = node.get('class_type')
+                if class_type in wan_candidates or (isinstance(class_type, str) and "Wan" in class_type):
+                    old_w = node['inputs'].get('width', 'unknown')
+                    old_h = node['inputs'].get('height', 'unknown')
+                    node['inputs']['width'] = width
+                    node['inputs']['height'] = height
+                    updated_nodes.append(node_id)
+                    logger.info(f"[RESOLUTION] Updated Wan node {node_id} ({class_type}): {old_w}x{old_h} -> {width}x{height}")
 
-        if wan_node_id:
-            wan_node = wf[wan_node_id]
-            wan_node['inputs']['width'] = width
-            wan_node['inputs']['height'] = height
+                    # Set video length if specified
+                    if video_length_seconds:
+                        frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
+                        node['inputs']['length'] = frames
+                        logger.info(f"[RESOLUTION] Set video length for {node_id}: {video_length_seconds}s ({frames-1}+1 frames)")
 
-            # Set video length if specified
-            if video_length_seconds:
-                frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
-                wan_node['inputs']['length'] = frames
-                print(f"[INFO] Set video length: {video_length_seconds}s ({frames-1}+1 frames at {config.VIDEO_FPS}fps)")
-                print(f"[INFO] Set dimensions: {width}x{height} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
+        if not updated_nodes:
+            logger.warning(f"[RESOLUTION] No Wan nodes found in workflow for resolution injection! Candidates searched: {wan_candidates}")
+        else:
+            logger.info(f"[RESOLUTION] Successfully updated {len(updated_nodes)} nodes: {updated_nodes}")
+
 
         return wf
 
-def compile_workflow(template, shot, video_length_seconds=None):
+def compile_workflow(template, shot, video_length_seconds=None, workflow_config=None):
 
     wf = copy.deepcopy(template)
 
     # Get workflow settings for node IDs
-    work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
-    workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
+    if not workflow_config:
+        work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
+        workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
 
     load_image_node_id = None
     motion_prompt_node_id = None
     wan_video_node_id = None
 
     if workflow_config:
-        load_image_node_id = workflow_config.get('load_image_node_id', config.LOAD_IMAGE_NODE_ID)
+        load_image_node_id = workflow_config.get('load_image_node_id') or workflow_config.get('load_image_first_node_id') or config.LOAD_IMAGE_NODE_ID
         motion_prompt_node_id = workflow_config.get('motion_prompt_node_id', config.MOTION_PROMPT_NODE_ID)
         wan_video_node_id = workflow_config.get('wan_video_node_id', getattr(config, 'WAN_VIDEO_NODE_ID', None))
     else:

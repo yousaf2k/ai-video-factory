@@ -1,7 +1,5 @@
-import os
-import json
-
-base_dir = r"E:\output\projects"
+import config
+base_dir = config.resolve_path("projects")
 
 def update_json_content(filepath):
     try:

@@ -71,8 +71,14 @@ class ProjectService:
         project_dir = self.project_manager.get_project_dir(project_id)
         story_path = os.path.join(project_dir, "story.json")
         if os.path.exists(story_path):
-            with open(story_path, 'r', encoding='utf-8') as f:
-                story = json.load(f)
+            try:
+                with open(story_path, 'r', encoding='utf-8') as f:
+                    story = json.load(f)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Malformed story.json for project {project_id}: {e}")
+                story = None
 
         # Load shots if exist
         shots = self.project_manager.get_shots(project_id)
@@ -117,8 +123,9 @@ class ProjectService:
         # Store project_type in metadata
         meta['project_type'] = request.project_type
 
-        # Detect if this is a ThenVsNow project
+        # Detect if this is a ThenVsNow or ASMR project
         is_then_vs_now = request.project_type == ProjectType.THEN_VS_NOW
+        is_asmr = request.project_type == ProjectType.ASMR_GLASS_CUTTING
 
         if is_then_vs_now:
             # Use special story generation flow for ThenVsNow
@@ -133,6 +140,7 @@ class ProjectService:
                 # Generate story with shots directly
                 story_json = build_story_then_vs_now(
                     movie_name=request.idea,
+                    agent_name=request.story_agent or "then_vs_now/then_vs_now",
                     target_length=request.total_duration,
                     aspect_ratio=request.aspect_ratio
                 )
@@ -174,6 +182,65 @@ class ProjectService:
             except Exception as e:
                 logger.error(f"Failed to create ThenVsNow story: {e}")
                 print(f"[ERROR] Failed to create ThenVsNow story: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continue with empty project
+
+        elif is_asmr:
+            # Use special story generation flow for ASMR Glass Cutting
+            from core.story_engine import build_story_asmr_glass_cutting
+            import logging
+            logger = logging.getLogger(__name__)
+
+            try:
+                logger.info(f"Creating ASMR Glass Cutting project for: {request.idea}")
+                print(f"[INFO] Creating ASMR Glass Cutting project for: {request.idea}")
+
+                # Generate story with shots directly
+                story_json = build_story_asmr_glass_cutting(
+                    idea=request.idea,
+                    agent_name=request.story_agent or "asmr/asmr_glass_cutting",
+                    shot_duration=5,  # Default 5 seconds per shot
+                    aspect_ratio=request.aspect_ratio
+                )
+                story = json.loads(story_json)
+
+                # Extract shots from story (already generated)
+                shots = story.pop('shots', [])
+
+                # Save story.json
+                project_dir = self.project_manager.get_project_dir(project_id)
+                story_path = os.path.join(project_dir, "story.json")
+                with open(story_path, 'w', encoding='utf-8') as f:
+                    json.dump(story, f, indent=2, ensure_ascii=False)
+
+                # Save shots.json directly (bypass shot planner)
+                shots_path = os.path.join(project_dir, "shots.json")
+                with open(shots_path, 'w', encoding='utf-8') as f:
+                    json.dump(shots, f, indent=2, ensure_ascii=False)
+
+                # Update metadata with story info
+                meta['idea'] = story.get('title', request.idea)
+                if 'total_duration' in story:
+                    meta['total_duration'] = story['total_duration']
+
+                # Mark steps as complete
+                meta['steps']['story'] = True
+                meta['steps']['scene_graph'] = True
+                meta['steps']['shots'] = True
+
+                # Update stats
+                meta['stats']['total_shots'] = len(shots)
+
+                # Save updated metadata
+                self.project_manager._save_meta(project_id, meta)
+
+                logger.info(f"ASMR Glass Cutting project created with {len(shots)} shots")
+                print(f"[INFO] ASMR Glass Cutting project created with {len(shots)} shots")
+
+            except Exception as e:
+                logger.error(f"Failed to create ASMR Glass Cutting story: {e}")
+                print(f"[ERROR] Failed to create ASMR Glass Cutting story: {e}")
                 import traceback
                 traceback.print_exc()
                 # Continue with empty project
@@ -343,3 +410,47 @@ class ProjectService:
     def get_videos_dir(self, project_id: str) -> str:
         """Get videos directory for project"""
         return self.project_manager.get_videos_dir(project_id)
+
+    async def upload_thumbnail(self, project_id: str, file: Any, is_poster: bool = False, aspect_ratio: str = "16:9") -> str:
+        """Upload and register a project thumbnail"""
+        import time
+        import os
+        
+        # Determine filename and destination
+        ext = os.path.splitext(file.filename or "")[1] or ".png"
+        prefix = "uploaded_poster_thumbnail" if is_poster else "uploaded_thumbnail"
+        timestamp = int(time.time())
+        filename = f"{prefix}_{aspect_ratio.replace(':', '_')}_{timestamp}{ext}"
+        
+        images_dir = self.get_images_dir(project_id)
+        os.makedirs(images_dir, exist_ok=True)
+        dest_path = os.path.join(images_dir, filename)
+        
+        # Save file
+        contents = await file.read()
+        with open(dest_path, "wb") as f:
+            f.write(contents)
+            
+        # Get relative path for metadata
+        rel_path = self.project_manager.relativize_path(dest_path)
+        
+        # Update metadata safely
+        def modify_meta(meta):
+            if is_poster:
+                if aspect_ratio == "16:9":
+                    meta['poster_thumbnail_url'] = rel_path
+                elif aspect_ratio == "9:16":
+                    meta['poster_thumbnail_url_9_16'] = rel_path
+                elif aspect_ratio == "21:8":
+                    meta['poster_thumbnail_url_21_8'] = rel_path
+            else:
+                if aspect_ratio == "16:9":
+                    meta['thumbnail_url'] = rel_path
+                elif aspect_ratio == "9:16":
+                    meta['thumbnail_url_9_16'] = rel_path
+                elif aspect_ratio == "21:8":
+                    meta['thumbnail_url_21_8'] = rel_path
+                
+        self.project_manager.update_meta_safely(project_id, modify_meta)
+        
+        return rel_path

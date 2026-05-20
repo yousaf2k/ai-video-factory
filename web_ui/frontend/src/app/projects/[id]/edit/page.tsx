@@ -15,12 +15,12 @@ import {
 import { getMediaUrl, cn } from "@/lib/utils";
 import { Image as ImageIcon, Video as VideoIcon } from "lucide-react";
 import { useProject } from "@/hooks/useProjects";
-import { useUpdateStory, useRegenerateStory } from "@/hooks/useStory";
+import { useUpdateStory, useGenerateStory } from "@/hooks/useStory";
 import { useShots, useReplanShots } from "@/hooks/useShots";
 import { useAgents } from "@/hooks/useAgents";
 import { SceneList } from "@/components/scenes/SceneList";
 import { ShotGrid } from "@/components/shots/ShotGrid";
-import { Scene, Story, Shot } from "@/types";
+import { Scene, Story, Shot, ProjectType } from "@/types";
 import { api } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import CharacterReferenceUpload from "@/components/characters/CharacterReferenceUpload";
@@ -29,6 +29,7 @@ import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play, Ar
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MultiAgentSelector } from "@/components/agents/MultiAgentSelector";
 import {
   Select,
   SelectContent,
@@ -47,6 +48,20 @@ export default function ProjectEditPage() {
   const { data: shots } = useShots(projectId);
   const { data: agents } = useAgents();
   const queryClient = useQueryClient();
+  
+  // Filter story agents based on project type
+  const filteredStoryAgents = agents?.story?.filter((agent: any) => {
+    const projectType = project?.story?.project_type;
+    if (projectType === ProjectType.ThenVsNow) {
+      return agent.category === "then_vs_now";
+    } else if (projectType === ProjectType.AsmrGlassCutting) {
+      return agent.category === "asmr" || agent.id.startsWith("asmr/");
+    } else if (projectType === ProjectType.Movie) {
+      return agent.category === "movie";
+    } else {
+      return agent.category === "documentary" || !agent.category;
+    }
+  }) || [];
 
   // Keep WebSocket invalidation connected top-level for both tabs
   useProgress(
@@ -61,7 +76,7 @@ export default function ProjectEditPage() {
   );
 
   const updateStoryMutation = useUpdateStory(projectId);
-  const regenerateStoryMutation = useRegenerateStory(projectId);
+  const generateStoryMutation = useGenerateStory(projectId);
   const replanShotsMutation = useReplanShots(projectId);
   const confirmDialog = useConfirmDialog();
 
@@ -82,6 +97,11 @@ export default function ProjectEditPage() {
   // Selection states
   const [selectedStoryAgent, setSelectedStoryAgent] = useState("default");
   const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
+  const [shotsAgentMode, setShotsAgentMode] = useState<"predefined" | "custom">("predefined");
+  const [selectedCamera, setSelectedCamera] = useState<string>("none");
+  const [selectedStyle, setSelectedStyle] = useState<string>("none");
+  const [selectedContext, setSelectedContext] = useState<string>("none");
+  const [selectedSoundFX, setSelectedSoundFX] = useState<string>("none");
   const [maxShots, setMaxShots] = useState(0);
 
   // Initialize and sync story when project loads
@@ -102,7 +122,12 @@ export default function ProjectEditPage() {
   }, []);
 
   const handleUpdateScene = async (index: number, updatedScene: Scene) => {
-    if (!story) return;
+    if (!story || !story.scenes) {
+      toast.error("Cannot edit scenes", {
+        description: "This project type does not support scene editing.",
+      });
+      return;
+    }
 
     const confirmed = await confirmDialog.showDialog({
       title: "Save Scene Changes",
@@ -144,7 +169,12 @@ export default function ProjectEditPage() {
   };
 
   const handleDeleteScene = async (index: number) => {
-    if (!story) return;
+    if (!story || !story.scenes) {
+      toast.error("Cannot delete scenes", {
+        description: "This project type does not support scene editing.",
+      });
+      return;
+    }
 
     const sceneToDelete = story.scenes[index];
     const confirmed = await confirmDialog.showDialog({
@@ -186,7 +216,12 @@ export default function ProjectEditPage() {
   };
 
   const handleReorderScenes = async (newScenes: Scene[]) => {
-    if (!story) return;
+    if (!story || !story.scenes) {
+      toast.error("Cannot reorder scenes", {
+        description: "This project type does not support scene editing.",
+      });
+      return;
+    }
 
     const confirmed = await confirmDialog.showDialog({
       title: "Reorder Scenes",
@@ -225,7 +260,12 @@ export default function ProjectEditPage() {
   };
 
   const handleAddScene = async () => {
-    if (!story) return;
+    if (!story || !story.scenes) {
+      toast.error("Cannot add scenes", {
+        description: "This project type does not support scene editing.",
+      });
+      return;
+    }
 
     const confirmed = await confirmDialog.showDialog({
       title: "Add New Scene",
@@ -287,20 +327,32 @@ export default function ProjectEditPage() {
 
   const handleRegenStory = async () => {
     try {
-      await regenerateStoryMutation.mutateAsync(selectedStoryAgent);
+      await generateStoryMutation.mutateAsync(selectedStoryAgent);
       setShowRegenStoryModal(false);
       alert("Story regeneration started. The page will update when complete.");
     } catch (error) {
-      console.error("Failed to regenerate story:", error);
-      alert("Failed to regenerate story. Please try again.");
+      console.error("Failed to generate story:", error);
+      alert("Failed to generate story. Please try again.");
     }
   };
 
   const handleReplanShots = async () => {
     try {
+      let finalAgent = selectedShotsAgent;
+      if (shotsAgentMode === "custom") {
+        const parts = [
+          "base/base_shots_standard",
+          selectedCamera === "none" ? "" : selectedCamera,
+          selectedStyle === "none" ? "" : selectedStyle,
+          selectedContext === "none" ? "" : selectedContext,
+          selectedSoundFX === "none" ? "" : selectedSoundFX
+        ].filter(Boolean);
+        finalAgent = parts.join(", ");
+      }
+
       await replanShotsMutation.mutateAsync({
         max_shots: maxShots,
-        shots_agent: selectedShotsAgent,
+        shots_agent: finalAgent,
       });
       setShowReplanShotsModal(false);
       alert("Shot re-planning started.");
@@ -346,10 +398,10 @@ export default function ProjectEditPage() {
   }
 
   // Calculate total duration
-  const totalDuration = story.scenes.reduce(
-    (sum, scene) => sum + (scene.scene_duration || 0),
-    0,
-  );
+  // ASMR and ThenVsNow projects use total_duration from story, others calculate from scenes
+  const totalDuration = story.total_duration ||
+    (story.scenes?.reduce((sum, scene) => sum + (scene.scene_duration || 0), 0)) ||
+    0;
 
   // Flat media lists for Dialogs
   const allImages = shots?.flatMap(shot => {
@@ -422,7 +474,7 @@ export default function ProjectEditPage() {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Total Scenes</p>
-            <p className="text-xl font-bold">{story.scenes.length}</p>
+            <p className="text-xl font-bold">{story.scenes?.length || story.shots?.length || 0}</p>
           </div>
         </div>
         <div className="bg-card/50 border border-border/50 rounded-xl p-4 flex items-center gap-4 shadow-sm backdrop-blur-md">
@@ -499,6 +551,12 @@ export default function ProjectEditPage() {
                       onUpdate={() => {
                         queryClient.invalidateQueries({ queryKey: ["project", projectId] });
                       }}
+                      onPromptChange={(promptKey, newPrompt) => {
+                        const newCharacters = [...(story.characters || [])];
+                        newCharacters[idx] = { ...newCharacters[idx], [promptKey]: newPrompt };
+                        setStory({ ...story, characters: newCharacters });
+                        setHasChanges(true);
+                      }}
                     />
                   </div>
                 ))}
@@ -516,32 +574,42 @@ export default function ProjectEditPage() {
               <button
                 onClick={() => setShowRegenStoryModal(true)}
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-blue-500/20 rounded-md hover:bg-blue-500/10 transition-colors text-blue-500 shadow-sm"
-                title="Regenerate entire story using an AI agent"
+                title="Generate entire story using an AI agent"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Regenerate Story
+                Generate Story
               </button>
             </div>
-            <SceneList
-              scenes={story.scenes}
-              onUpdate={handleUpdateScene}
-              onDelete={handleDeleteScene}
-              onReorder={handleReorderScenes}
-              onAdd={handleAddScene}
-              projectType={story.project_type}
-            />
+            {story.scenes && story.scenes.length > 0 ? (
+              <SceneList
+                scenes={story.scenes}
+                onUpdate={handleUpdateScene}
+                onDelete={handleDeleteScene}
+                onReorder={handleReorderScenes}
+                onAdd={handleAddScene}
+                projectType={story.project_type}
+              />
+            ) : (
+              <div className="p-8 bg-muted/50 rounded-lg border border-dashed border-border text-center">
+                <p className="text-muted-foreground">
+                  This project type does not use scenes. Shots are managed directly.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Instructions */}
-          <div className="mt-8 p-4 bg-muted rounded-lg">
-            <h3 className="font-semibold mb-2">Tips for editing scenes:</h3>
-            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-              <li>Drag scenes to reorder them in the story</li>
-              <li>Click the edit icon to modify scene details</li>
-              <li>Adjust scene durations to control pacing</li>
-              <li>Click "Save Changes" to persist your edits</li>
-            </ul>
-          </div>
+          {story.scenes && story.scenes.length > 0 && (
+            <div className="mt-8 p-4 bg-muted rounded-lg">
+              <h3 className="font-semibold mb-2">Tips for editing scenes:</h3>
+              <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                <li>Drag scenes to reorder them in the story</li>
+                <li>Click the edit icon to modify scene details</li>
+                <li>Adjust scene durations to control pacing</li>
+                <li>Click "Save Changes" to persist your edits</li>
+              </ul>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="shots" className="mt-6">
@@ -579,6 +647,7 @@ export default function ProjectEditPage() {
               projectId={projectId}
               scenes={project?.story?.scenes}
               aspectRatio={project?.aspect_ratio || "16:9"}
+              projectAgent={project?.story_agent}
             />
           </div>
 
@@ -587,15 +656,15 @@ export default function ProjectEditPage() {
             <h3 className="font-semibold mb-2">Tips for editing shots:</h3>
             <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
               <li>Click the edit icon to modify image/motion prompts</li>
-              <li>Click the rotation icon to regenerate an image</li>
-              <li>Click the video icon to regenerate a video</li>
+              <li>Click the rotation icon to generate an image</li>
+              <li>Click the video icon to generate a video</li>
               <li>Changes are saved immediately</li>
             </ul>
           </div>
         </TabsContent>
       </Tabs>
 
-      {/* Regenerate Story Modal */}
+      {/* Generate Story Modal */}
       {showRegenStoryModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-background rounded-lg shadow-xl max-w-md w-full p-6 relative">
@@ -606,36 +675,19 @@ export default function ProjectEditPage() {
               <X className="w-5 h-5" />
             </button>
 
-            <h2 className="text-xl font-semibold mb-4">Regenerate Story</h2>
+            <h2 className="text-xl font-semibold mb-4">Generate Story</h2>
             <p className="text-sm text-muted-foreground mb-6">
               This will overwrite your current story structure. This action
               cannot be undone.
             </p>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Story Agent
-                </label>
-                <Select
-                  value={selectedStoryAgent}
-                  onValueChange={(val) => setSelectedStoryAgent(val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Agent" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {!agents?.story.length && (
-                      <SelectItem value="default">Default Agent</SelectItem>
-                    )}
-                    {agents?.story.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        {agent.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <MultiAgentSelector
+                availableAgents={filteredStoryAgents}
+                selectedValue={selectedStoryAgent}
+                onChange={setSelectedStoryAgent}
+                label="Select Story Building Blocks"
+              />
             </div>
 
             <div className="mt-8 flex justify-end gap-3">
@@ -647,10 +699,10 @@ export default function ProjectEditPage() {
               </Button>
               <Button
                 onClick={handleRegenStory}
-                disabled={regenerateStoryMutation.isPending}
+                disabled={generateStoryMutation.isPending}
                 className="flex items-center gap-2"
               >
-                {regenerateStoryMutation.isPending ? (
+                {generateStoryMutation.isPending ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
                     Regenerating...
@@ -684,28 +736,90 @@ export default function ProjectEditPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Shots Agent
-                  </label>
+                  <label className="block text-sm font-medium mb-1">Predefined Agent</label>
                   <Select
-                    value={selectedShotsAgent}
-                    onValueChange={(val) => setSelectedShotsAgent(val)}
+                    value={shotsAgentMode === "custom" ? "custom" : selectedShotsAgent}
+                    onValueChange={(val) => {
+                      if (val === "custom") {
+                        setShotsAgentMode("custom");
+                      } else {
+                        setShotsAgentMode("predefined");
+                        setSelectedShotsAgent(val);
+                      }
+                    }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select Agent" />
+                      <SelectValue placeholder="Select predefined agent" />
                     </SelectTrigger>
                     <SelectContent>
-                      {!agents?.shots?.length && (
-                        <SelectItem value="default">Default</SelectItem>
-                      )}
-                      {agents?.shots?.map((agent) => (
-                        <SelectItem key={agent.id} value={agent.id}>
-                          {agent.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="custom">Custom (Build your own)</SelectItem>
+                      {agents?.shots
+                        ?.filter((a: any) => !a.category && a.id === "default")
+                        .map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
+                      {agents?.shots
+                        ?.filter((a: any) => !a.category && a.id !== "default")
+                        .sort((a: any, b: any) => a.name.localeCompare(b.name))
+                        .map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
+
+                {shotsAgentMode === "custom" && (
+                  <div className="space-y-3 p-4 border rounded-md bg-muted/30">
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Camera Agent</label>
+                      <Select value={selectedCamera} onValueChange={setSelectedCamera}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select camera..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {agents?.shots?.filter((a: any) => a.category === 'cameras').map((a: any) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Style Agent</label>
+                      <Select value={selectedStyle} onValueChange={setSelectedStyle}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select style..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {agents?.shots?.filter((a: any) => a.category === 'styles').map((a: any) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Context Agent</label>
+                      <Select value={selectedContext} onValueChange={setSelectedContext}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select context..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {agents?.shots?.filter((a: any) => a.category === 'contexts').map((a: any) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Sound FX Agent</label>
+                      <Select value={selectedSoundFX} onValueChange={setSelectedSoundFX}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select soundfx..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {agents?.shots?.filter((a: any) => a.category === 'soundfx').map((a: any) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

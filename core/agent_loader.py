@@ -18,8 +18,9 @@ agents/
     └── cinematic.md
 """
 import os
+import re
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Set
 from core.logger_config import setup_agent_logger
 from core.log_decorators import log_agent_call
 import config
@@ -73,12 +74,24 @@ class AgentLoader:
         agents = []
         # Support both flat files and agents design nested in subdirectories
         for item in agent_dir.iterdir():
-            if item.is_file() and item.suffix == ".md":
-                agents.append(item.stem)
-            elif item.is_dir():
+            # Skip hidden folders and partial/internal folders
+            if item.is_dir():
+                if item.name.startswith(("_", ".")) or item.name in ["base", "common"]:
+                    continue
+                
                 for file in item.glob("*.md"):
+                    # Skip internal/partial files starting with underscore
+                    if file.name.startswith("_"):
+                        continue
                     # Format as category/filename (e.g., documentary/default)
                     agents.append(f"{item.name}/{file.name[:-3]}")
+            
+            elif item.is_file() and item.suffix == ".md":
+                # Skip internal/partial files starting with underscore
+                if item.name.startswith(("_", ".")):
+                    continue
+                agents.append(item.stem)
+
                     
         return sorted(agents)
 
@@ -100,6 +113,14 @@ class AgentLoader:
         if agent_type not in AGENT_TYPES:
             raise ValueError(f"Unknown agent type: {agent_type}. Must be one of: {list(AGENT_TYPES.keys())}")
 
+        # Support composite agent names (comma-separated)
+        if "," in agent_name:
+            names = [n.strip() for n in agent_name.split(",")]
+            contents = []
+            for name in names:
+                contents.append(self.load_prompt(agent_type, name))
+            return "\n\n".join(contents)
+
         agent_file = self.agents_dir / agent_type / f"{agent_name}.md"
 
         if not agent_file.exists():
@@ -110,7 +131,91 @@ class AgentLoader:
             )
 
         with open(agent_file, 'r', encoding='utf-8') as f:
-            return f.read()
+            content = f.read()
+        
+        # Process includes recursively
+        # Use parent folder of agent_file as initial base_dir
+        return self._process_includes(agent_type, content, {str(agent_file.resolve())}, base_dir=agent_file.parent)
+
+    def _process_includes(self, agent_type: str, content: str, seen_paths: Set[str] = None, base_dir: Path = None) -> str:
+        """
+        Process {{include:path}} directives in the content.
+        
+        Args:
+            agent_type: Type of agent
+            content: The prompt content to process
+            seen_paths: Set of already seen file paths (for circular dependency protection)
+            base_dir: Base directory for resolving includes (defaults to agents_dir/agent_type)
+            
+        Returns:
+            Content with inclusions resolved
+        """
+        if seen_paths is None:
+            seen_paths = set()
+        
+        if base_dir is None:
+            base_dir = self.agents_dir / agent_type
+
+        include_pattern = re.compile(r'\{\{include:(.+?)\}\}')
+        
+        def replace_include(match):
+            include_name = match.group(1).strip()
+            
+            # Resolve the include path
+            # Strategy:
+            # 1. If it contains a slash, try relative to agents_dir root (global include)
+            # 2. Try relative to the current file's directory (sibling include)
+            # 3. Try relative to search subdirectories (e.g. _base, _styles, _contexts)
+            # 4. Try relative to the agent_type root (standard include)
+            
+            paths_to_try = []
+            if "/" in include_name:
+                paths_to_try.append(self.agents_dir / f"{include_name}.md")
+            
+            # 1. Direct path in base_dir
+            paths_to_try.append(base_dir / f"{include_name}.md")
+            
+            # 2. Search in subdirectories of base_dir (e.g., _base, _contexts)
+            if base_dir.exists():
+                for item in base_dir.iterdir():
+                    if item.is_dir() and not item.name.startswith("."):
+                        paths_to_try.append(item / f"{include_name}.md")
+            
+            # 3. Direct path in agent_type root
+            agent_type_dir = self.agents_dir / agent_type
+            paths_to_try.append(agent_type_dir / f"{include_name}.md")
+            
+            # 4. Search in subdirectories of agent_type root
+            if agent_type_dir.exists() and agent_type_dir != base_dir:
+                for item in agent_type_dir.iterdir():
+                    if item.is_dir() and not item.name.startswith("."):
+                        paths_to_try.append(item / f"{include_name}.md")
+
+            include_file = None
+            for p in paths_to_try:
+                if p.exists():
+                    include_file = p
+                    break
+
+            if not include_file:
+                logger.error(f"Include file not found: {include_name} (Tried: {[str(p) for p in paths_to_try]})")
+                return f"<!-- Include not found: {include_name} -->"
+
+
+            abs_path = str(include_file.resolve())
+            
+            if abs_path in seen_paths:
+                logger.warning(f"Circular dependency detected for: {abs_path}")
+                return f"<!-- Circular dependency detected: {include_name} -->"
+            
+            with open(include_file, 'r', encoding='utf-8') as f:
+                include_content = f.read()
+            
+            # Recursive call with new base_dir (parent of current include)
+            new_seen_paths = seen_paths | {abs_path}
+            return self._process_includes(agent_type, include_content, new_seen_paths, base_dir=include_file.parent)
+
+        return include_pattern.sub(replace_include, content)
 
     def save_prompt(self, agent_type: str, agent_name: str, content: str):
         """

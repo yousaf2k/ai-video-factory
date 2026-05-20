@@ -62,9 +62,10 @@ interface ShotGridProps {
   projectId: string;
   scenes?: Scene[];
   aspectRatio?: string;
+  projectAgent?: string;
 }
 
-export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: ShotGridProps) {
+export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", projectAgent }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<
     "image" | "video" | "both" | "narration" | null
@@ -145,9 +146,28 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
   const [batchSkipImages, setBatchSkipImages] = useState<boolean>(true);
   const [queueSetting, setQueueSetting] = useState<string>("all_images_then_videos");
   const [appendImagePrompt, setAppendImagePrompt] = useState<string>("default");
+  const [geminiMode, setGeminiMode] = useState<string>(() => {
+    return localStorage.getItem(`gemini_mode_${projectId}`) || "Fast";
+  });
 
   const [ttsMethod, setTtsMethod] = useState("local");
   const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
+  const [resolution, setResolution] = useState<string>("720p");
+  const [generateSoundFX, setGenerateSoundFX] = useState<boolean>(true);
+  const [soundfxWorkflow, setSoundfxWorkflow] = useState<string>("default");
+  const [batchSoundfxPrompt, setBatchSoundfxPrompt] = useState<string>("");
+  
+  // Batch Departure Override states
+  const [batchUseDepartureOverride, setBatchUseDepartureOverride] = useState(true);
+  const DEFAULT_DEPARTURE_PROMPT = "(cinematic quality, consistent style), slowly departing the scene from the character's appearance, transitioning towards the next scene. focus on the departure motion and environment shift.";
+  const [batchDeparturePrompt, setBatchDeparturePrompt] = useState(DEFAULT_DEPARTURE_PROMPT);
+
+  // Batch Then Override states
+  const isAgentOverrideDefault = projectAgent === "then_vs_now_closeup" || projectAgent === "then_vs_now";
+  const [batchUseThenOverride, setBatchUseThenOverride] = useState(isAgentOverrideDefault);
+  const DEFAULT_THEN_PROMPT = "Remove only the person standing on the right side of this reference image. No change in background set or environment, no side angle, no profile view, no tilt. Make the left person looking directly into camera in center of the frame with happy, cheerful smiling expressions. Do NOT remove or change any background crew members, equipment, or props. ";
+  const [batchThenPrompt, setBatchThenPrompt] = useState(isAgentOverrideDefault ? DEFAULT_THEN_PROMPT : "");
+
 
   const { data: agents } = useAgents();
   const { data: globalConfig } = useConfig();
@@ -218,7 +238,18 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
     if (globalConfig?.video_workflow) {
       setVideoWorkflow(globalConfig.video_workflow);
     }
-  }, [globalConfig]);
+    
+    const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`);
+    if (savedGeminiMode) {
+      setGeminiMode(savedGeminiMode);
+    } else if (globalConfig?.geminiweb_default_mode) {
+      setGeminiMode(globalConfig.geminiweb_default_mode);
+    }
+    
+    if (globalConfig?.available_soundfx_workflows && globalConfig.available_soundfx_workflows.length > 0) {
+      setSoundfxWorkflow(globalConfig.available_soundfx_workflows[0]);
+    }
+  }, [globalConfig, projectId]);
 
   // Extract unique camera values for the dropdown
   const cameraOptions = useMemo(() => {
@@ -365,7 +396,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
 
     if (type === "both") {
       try {
-        await api.batchRegenerate(projectId, {
+        await api.batchGenerate(projectId, {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: true,
@@ -377,26 +408,35 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           video_workflow: videoWorkflow,
           queue_setting: queueSetting,
           append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
+          departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
+          then_prompt_override: batchUseThenOverride ? batchThenPrompt : undefined,
+          resolution: resolution,
+          gemini_mode: geminiMode,
+          generate_soundfx: generateSoundFX,
+          soundfx_workflow: generateSoundFX ? soundfxWorkflow : undefined,
+          soundfx_prompt: generateSoundFX && batchSoundfxPrompt ? batchSoundfxPrompt : undefined,
         });
       } catch (error) {
         console.error("Failed to start batch both generation:", error);
       }
     } else if (type === "image") {
       try {
-        await api.batchRegenerate(projectId, {
+        await api.batchGenerate(projectId, {
           shot_indices: indicesToProcess,
           regenerate_images: true,
           regenerate_videos: false,
           force_images: !batchSkipImages,
           image_mode: imageMode,
           image_workflow: imageWorkflow,
+          then_prompt_override: batchUseThenOverride ? batchThenPrompt : undefined,
+          gemini_mode: geminiMode,
         });
       } catch (error) {
         console.error("Failed to start batch image generation:", error);
       }
     } else if (type === "video") {
       try {
-        await api.batchRegenerate(projectId, {
+        await api.batchGenerate(projectId, {
           shot_indices: indicesToProcess,
           regenerate_images: false,
           regenerate_videos: true,
@@ -404,6 +444,12 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           video_mode: videoMode,
           video_workflow: videoWorkflow,
           append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
+          departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
+          resolution: resolution,
+          gemini_mode: geminiMode,
+          generate_soundfx: generateSoundFX,
+          soundfx_workflow: generateSoundFX ? soundfxWorkflow : undefined,
+          soundfx_prompt: generateSoundFX && batchSoundfxPrompt ? batchSoundfxPrompt : undefined,
         });
       } catch (error) {
         console.error("Failed to start batch video generation:", error);
@@ -834,14 +880,14 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           className="flex items-center gap-2 text-sm px-3 py-1.5 hover:bg-muted rounded-md transition-colors"
         >
           <ImageIcon className="w-4 h-4 text-blue-500" />
-          Regenerate Images
+          Generate Images
         </button>
         <button
           onClick={() => setShowBatchModal("video")}
           className="flex items-center gap-2 text-sm px-3 py-1.5 hover:bg-muted rounded-md transition-colors"
         >
           <Video className="w-4 h-4 text-purple-500" />
-          Regenerate Videos
+          Generate Videos
         </button>
         <button
           onClick={() => setShowBatchModal("both")}
@@ -862,7 +908,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
           className="flex items-center gap-2 text-sm px-3 py-1.5 hover:bg-muted rounded-md transition-colors"
         >
           <Mic className="w-4 h-4 text-pink-500" />
-          Regenerate Narration
+          Generate Narration
         </button>
         <button
           onClick={() => setSelectedIndices([])}
@@ -1325,7 +1371,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
               </button>
 
               <h2 className="text-xl font-semibold mb-6">
-                Batch Regenerate{" "}
+                Batch Generate{" "}
                 {showBatchModal === "image"
                   ? "Images"
                   : showBatchModal === "video"
@@ -1399,6 +1445,30 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
                     </Select>
                   </div>
 
+                  {imageMode === "geminiweb" && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Gemini Mode
+                      </label>
+                      <Select
+                        value={geminiMode}
+                        onValueChange={(val) => {
+                          setGeminiMode(val);
+                          localStorage.setItem(`gemini_mode_${projectId}`, val);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Gemini Mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Fast">Fast</SelectItem>
+                          <SelectItem value="Thinking">Thinking</SelectItem>
+                          <SelectItem value="Pro">Pro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   {imageMode === "comfyui" && (
                     <div>
                       <label className="block text-sm font-medium mb-1">
@@ -1428,6 +1498,49 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
                       </Select>
                     </div>
                   )}
+
+                  {/* Then Prompt Override Section — ONLY for FLFI2V projects */}
+                  {shots.some(s => s.is_flfi2v) && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="checkbox"
+                          id="batch-then-override"
+                          checked={batchUseThenOverride}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setBatchUseThenOverride(checked);
+                            if (checked && (!batchThenPrompt || batchThenPrompt === "")) {
+                              setBatchThenPrompt(DEFAULT_THEN_PROMPT);
+                            } else if (!checked) {
+                              setBatchThenPrompt("");
+                            }
+                          }}
+                          className="w-4 h-4 mr-2"
+                        />
+                        <label htmlFor="batch-then-override" className="text-sm font-semibold">
+                          Override Then Prompt for all shots
+                        </label>
+                      </div>
+
+                      {batchUseThenOverride && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-medium text-muted-foreground">
+                            Custom Then Prompt
+                          </label>
+                          <Textarea
+                            className="text-xs min-h-[80px]"
+                            value={batchThenPrompt}
+                            onChange={(e) => setBatchThenPrompt(e.target.value)}
+                            placeholder="Enter custom then prompt..."
+                          />
+                          <p className="text-[10px] text-muted-foreground italic">
+                            Used for all selected shots when rendering THEN images.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1454,6 +1567,30 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {videoMode === "geminiweb" && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Gemini Mode
+                      </label>
+                      <Select
+                        value={geminiMode}
+                        onValueChange={(val) => {
+                          setGeminiMode(val);
+                          localStorage.setItem(`gemini_mode_${projectId}`, val);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Gemini Mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Fast">Fast</SelectItem>
+                          <SelectItem value="Thinking">Thinking</SelectItem>
+                          <SelectItem value="Pro">Pro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium mb-1">
@@ -1500,6 +1637,118 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9" }: Sho
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Video Resolution
+                    </label>
+                    <Select
+                      value={resolution}
+                      onValueChange={(val) => setResolution(val)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Resolution" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="480p">480p (Fast)</SelectItem>
+                        <SelectItem value="720p">720p (HD)</SelectItem>
+                        <SelectItem value="1080p">1080p (Full HD)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="checkbox"
+                        id="batch-generate-soundfx"
+                        checked={generateSoundFX}
+                        onChange={(e) => setGenerateSoundFX(e.target.checked)}
+                        className="w-4 h-4 mr-2"
+                      />
+                      <label htmlFor="batch-generate-soundfx" className="text-sm font-semibold">
+                        🔊 Generate Sound FX after video
+                      </label>
+                    </div>
+
+                    {generateSoundFX && (
+                      <div className="ml-6 space-y-3 border-l-2 pl-3 py-1">
+                        {globalConfig?.available_soundfx_workflows && globalConfig.available_soundfx_workflows.length > 1 && (
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                              Sound FX Workflow
+                            </label>
+                            <Select
+                              value={soundfxWorkflow}
+                              onValueChange={(val) => setSoundfxWorkflow(val)}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select Sound FX Workflow" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {globalConfig.available_soundfx_workflows.map((wf) => (
+                                  <SelectItem key={wf} value={wf} className="text-xs">
+                                    {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                            Global Sound FX Prompt Override
+                          </label>
+                          <Textarea
+                            value={batchSoundfxPrompt}
+                            onChange={(e) => setBatchSoundfxPrompt(e.target.value)}
+                            rows={2}
+                            placeholder="Describe sounds for all selected shots: wind, explosion..."
+                            className="text-xs min-h-[60px] bg-muted/20"
+                          />
+                          <p className="text-[10px] text-muted-foreground italic">
+                            If left blank, each shot's specific SFX prompt (or motion prompt) will be used.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Departure Prompt Override Section — ONLY for FLFI2V projects */}
+                  {shots.some(s => s.is_flfi2v) && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="checkbox"
+                          id="batch-departure-override"
+                          checked={batchUseDepartureOverride}
+                          onChange={(e) => setBatchUseDepartureOverride(e.target.checked)}
+                          className="w-4 h-4 mr-2"
+                        />
+                        <label htmlFor="batch-departure-override" className="text-sm font-semibold">
+                          Override Departure Prompt for all shots
+                        </label>
+                      </div>
+
+                      {batchUseDepartureOverride && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-medium text-muted-foreground">
+                            Custom Departure Prompt
+                          </label>
+                          <Textarea
+                            className="text-xs min-h-[80px]"
+                            value={batchDeparturePrompt}
+                            onChange={(e) => setBatchDeparturePrompt(e.target.value)}
+                            placeholder="Enter custom departure/motion prompt..."
+                          />
+                          <p className="text-[10px] text-muted-foreground italic">
+                            Used for all selected shots when rendering departure videos.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

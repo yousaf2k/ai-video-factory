@@ -4,7 +4,9 @@
 
 export enum ProjectType {
   Documentary = 1,
-  ThenVsNow = 2
+  ThenVsNow = 2,
+  Movie = 3,
+  AsmrGlassCutting = 4
 }
 
 export interface MovieMetadata {
@@ -32,6 +34,12 @@ export interface Character {
   now_reference_image_path?: string;
   then_age?: number;
   now_age?: number;
+  // Non ThenVsNow fields
+  image_prompt?: string;
+  character_reference_image_path?: string;
+  voice_type?: string;
+  personality?: string;
+  attire?: string;
 }
 
 export interface ProjectStep {
@@ -104,7 +112,11 @@ export interface Story {
   style: string;
   master_script?: string;
   total_duration?: number;
-  scenes: Scene[];
+  scenes?: Scene[];  // Optional for ASMR and ThenVsNow projects
+  shots?: Shot[];     // Direct shots for ASMR and ThenVsNow projects
+  expanded_objects?: string[];  // For ASMR projects
+  user_input?: string;  // For ASMR projects
+  aspect_ratio?: string;  // For ASMR projects
   project_type: ProjectType;
   characters?: Character[];
   youtube_metadata?: YouTubeMetadata;
@@ -165,6 +177,7 @@ export interface Shot {
   // Sound FX fields
   soundfx_path?: string;
   soundfx_generated?: boolean;
+  soundfx_prompt?: string;
 }
 export interface CreateProjectRequest {
   idea: string;
@@ -198,7 +211,12 @@ export interface GlobalConfig {
   image_workflow?: string;
   available_video_workflows?: string[];
   available_image_workflows?: string[];
+  available_soundfx_workflows?: string[];
   playwright_browser?: string;
+  gemini_watermark_tool_image?: string;
+  gemini_watermark_tool_video?: string;
+  watermark_removal_method?: string;
+  geminiweb_default_mode?: string;
 }
 
 export interface UpdateGlobalConfigRequest {
@@ -207,12 +225,17 @@ export interface UpdateGlobalConfigRequest {
   video_generation_mode?: string;
   video_workflow?: string;
   image_workflow?: string;
+  soundfx_workflow?: string;
   comfy_url?: string;
   target_video_length?: number;
   gemini_api_key?: string;
   openai_api_key?: string;
   elevenlabs_api_key?: string;
   playwright_browser?: string;
+  gemini_watermark_tool_image?: string;
+  gemini_watermark_tool_video?: string;
+  watermark_removal_method?: string;
+  geminiweb_default_mode?: string;
 }
 
 export interface UpdateStoryRequest {
@@ -230,6 +253,7 @@ export interface UpdateShotRequest {
   now_image_prompt?: string;
   meeting_video_prompt?: string;
   departure_video_prompt?: string;
+  soundfx_prompt?: string;
 }
 
 export interface ProgressEvent {

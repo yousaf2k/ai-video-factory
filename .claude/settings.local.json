@@ -1,14 +1,18 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(python:*)",
-      "Bash(taskkill:*)",
-      "Bash(curl:*)",
-      "Bash(ls:*)",
-      "Bash(npm run dev)",
-      "Bash(start http://localhost:3000)",
-      "Bash(start http://localhost:3001/sessions)",
-      "Bash(npx tsc:*)"
-    ]
+    "allow": []
+  },
+  "plugins": {
+    "enabled": {
+      "glm-plan-usage@zai-coding-plugins": true,
+      "pyright-lsp@claude-plugins-official": true,
+      "typescript-lsp@claude-plugins-official": true,
+      "code-review@claude-plugins-official": true,
+      "code-simplifier@claude-plugins-official": true,
+      "superpowers@claude-plugins-official": true,
+      "frontend-design@claude-plugins-official": true,
+      "claude-md-management@claude-plugins-official": true,
+      "feature-dev@claude-plugins-official": true
+    }
   }
 }

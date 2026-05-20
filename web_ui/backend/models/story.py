@@ -10,6 +10,8 @@ class ProjectType(IntEnum):
     """Project type enumeration"""
     DOCUMENTARY = 1
     THEN_VS_NOW = 2
+    MOVIE = 3
+    ASMR_GLASS_CUTTING = 4
 
 
 class MovieMetadata(BaseModel):
@@ -40,6 +42,13 @@ class Character(BaseModel):
     now_reference_image_path: Optional[str] = Field(default=None, description="Path to NOW reference photo for facial consistency")
     then_age: Optional[int] = Field(default=None, description="Age of character/actor during the 'Then' period")
     now_age: Optional[int] = Field(default=None, description="Current age of character/actor")
+    
+    # Non ThenVsNow Fields
+    image_prompt: Optional[str] = Field(default=None, description="Combined character prompt (face and body)")
+    character_reference_image_path: Optional[str] = Field(default=None, description="Path to character reference image")
+    voice_type: Optional[str] = Field(default=None, description="Character voice type")
+    personality: Optional[str] = Field(default=None, description="Character personality")
+    attire: Optional[str] = Field(default=None, description="Character attire")
 
 
 class Scene(BaseModel):

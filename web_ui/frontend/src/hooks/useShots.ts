@@ -15,11 +15,11 @@ export function useShots(projectId: string) {
 }
 
 // Hook to update a shot
-export function useUpdateShot(projectId: string, shotIndex: number) {
+export function useUpdateShot(projectId: string, shotIdOrIndex: string | number) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (request: UpdateShotRequest) => api.updateShot(projectId, shotIndex, request),
+    mutationFn: (request: UpdateShotRequest) => api.updateShot(projectId, shotIdOrIndex, request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -40,13 +40,13 @@ export function useUpdateShots(projectId: string) {
   });
 }
 
-// Hook to regenerate shot image
-export function useRegenerateImage(projectId: string) {
+// Hook to generate shot image
+export function useGenerateImage(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant }: { shotIndex: number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number; promptOverride?: string; imageVariant?: string }) =>
-      api.regenerateShotImage(projectId, shotIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant),
+    mutationFn: ({ shotIdOrIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant, geminiMode }: { shotIdOrIndex: string | number; force?: boolean; imageMode?: string; imageWorkflow?: string; seed?: number; promptOverride?: string; imageVariant?: string; geminiMode?: string }) =>
+      api.generateShotImage(projectId, shotIdOrIndex, force, imageMode, imageWorkflow, seed, promptOverride, imageVariant, geminiMode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -54,13 +54,13 @@ export function useRegenerateImage(projectId: string) {
   });
 }
 
-// Hook to regenerate shot video
-export function useRegenerateVideo(projectId: string) {
+// Hook to generate shot video
+export function useGenerateVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo }: { shotIndex: number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean }) =>
-      api.regenerateShotVideo(projectId, shotIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo),
+    mutationFn: ({ shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode, soundfxWorkflow, soundfxPrompt }: { shotIdOrIndex: string | number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean; promptOverride?: string; resolution?: string; geminiMode?: string; soundfxWorkflow?: string; soundfxPrompt?: string }) =>
+      api.generateShotVideo(projectId, shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode, soundfxWorkflow, soundfxPrompt),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -73,8 +73,8 @@ export function useGenerateSoundFX(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, force }: { shotIndex: number; force?: boolean }) =>
-      api.generateSoundFX(projectId, shotIndex, force),
+    mutationFn: ({ shotIdOrIndex, force, workflow, promptOverride }: { shotIdOrIndex: string | number; force?: boolean; workflow?: string; promptOverride?: string }) =>
+      api.generateSoundFX(projectId, shotIdOrIndex, force, workflow, promptOverride),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -82,8 +82,8 @@ export function useGenerateSoundFX(projectId: string) {
   });
 }
 
-// Hook for batch regeneration
-export function useBatchRegenerate(projectId: string) {
+// Hook for batch generation
+export function useBatchGenerate(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -96,7 +96,15 @@ export function useBatchRegenerate(projectId: string) {
       image_workflow?: string;
       video_workflow?: string;
       draft_low_res_video?: boolean;
-    }) => api.batchRegenerate(projectId, data),
+      append_image_prompt?: string;
+      generate_soundfx?: boolean;
+      departure_prompt_override?: string;
+      then_prompt_override?: string;
+      resolution?: string;
+      gemini_mode?: string;
+      soundfx_workflow?: string;
+      soundfx_prompt?: string;
+    }) => api.batchGenerate(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -109,8 +117,8 @@ export function useSelectImage(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, imagePath }: { shotIndex: number; imagePath: string }) =>
-      api.selectShotImage(projectId, shotIndex, imagePath),
+    mutationFn: ({ shotIdOrIndex, imagePath, variant }: { shotIdOrIndex: string | number; imagePath: string; variant?: string }) =>
+      api.selectShotImage(projectId, shotIdOrIndex, imagePath, variant),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -137,8 +145,8 @@ export function useRemoveWatermark(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, variant }: { shotIndex: number; variant?: string }) =>
-      api.removeWatermark(projectId, shotIndex, variant),
+    mutationFn: ({ shotIdOrIndex, variant, type }: { shotIdOrIndex: string | number; variant?: string; type?: string }) =>
+      api.removeWatermark(projectId, shotIdOrIndex, variant, type),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -151,8 +159,8 @@ export function useUploadShotImage(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, file, variant }: { shotIndex: number; file: File; variant?: string }) =>
-      api.uploadShotImage(projectId, shotIndex, file, variant),
+    mutationFn: ({ shotIdOrIndex, file, variant }: { shotIdOrIndex: string | number; file: File; variant?: string }) =>
+      api.uploadShotImage(projectId, shotIdOrIndex, file, variant),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -165,8 +173,8 @@ export function useUploadShotVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, file, variant }: { shotIndex: number; file: File; variant?: string }) =>
-      api.uploadShotVideo(projectId, shotIndex, file, variant),
+    mutationFn: ({ shotIdOrIndex, file, variant }: { shotIdOrIndex: string | number; file: File; variant?: string }) =>
+      api.uploadShotVideo(projectId, shotIdOrIndex, file, variant),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -179,8 +187,8 @@ export function useDeleteVariationImage(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, imagePath }: { shotIndex: number; imagePath: string }) =>
-      api.deleteVariationImage(projectId, shotIndex, imagePath),
+    mutationFn: ({ shotIdOrIndex, imagePath }: { shotIdOrIndex: string | number; imagePath: string }) =>
+      api.deleteVariationImage(projectId, shotIdOrIndex, imagePath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -193,8 +201,8 @@ export function useSelectVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, videoPath }: { shotIndex: number; videoPath: string }) =>
-      api.selectShotVideo(projectId, shotIndex, videoPath),
+    mutationFn: ({ shotIdOrIndex, videoPath, variant }: { shotIdOrIndex: string | number; videoPath: string; variant?: string }) =>
+      api.selectShotVideo(projectId, shotIdOrIndex, videoPath, variant),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -207,8 +215,8 @@ export function useDeleteVariationVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIndex, videoPath }: { shotIndex: number; videoPath: string }) =>
-      api.deleteVariationVideo(projectId, shotIndex, videoPath),
+    mutationFn: ({ shotIdOrIndex, videoPath }: { shotIdOrIndex: string | number; videoPath: string }) =>
+      api.deleteVariationVideo(projectId, shotIdOrIndex, videoPath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });

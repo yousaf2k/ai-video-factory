@@ -321,7 +321,12 @@ class QueueService:
         """
         with self._queue_lock:
             for item in self._queue:
-                if item.item_id == item_id and item.status == QueueItemStatus.QUEUED:
+                if item.item_id == item_id:
+                    # Only transition from QUEUED to ACTIVE
+                    if item.status != QueueItemStatus.QUEUED:
+                        logger.warning(f"Cannot mark item {item_id} as ACTIVE because its current status is {item.status}")
+                        return False
+                        
                     item.status = QueueItemStatus.ACTIVE
                     item.started_at = datetime.utcnow()
                     self._save_queue()
@@ -349,6 +354,11 @@ class QueueService:
         with self._queue_lock:
             for item in self._queue:
                 if item.item_id == item_id:
+                    # Don't overwrite terminal statuses
+                    if item.status in [QueueItemStatus.CANCELLED, QueueItemStatus.PAUSED]:
+                        logger.info(f"Skipping mark_completed for item {item_id} because its current status is {item.status}")
+                        return False
+                        
                     item.status = QueueItemStatus.COMPLETED
                     item.completed_at = datetime.utcnow()
                     item.progress = progress
@@ -432,6 +442,11 @@ class QueueService:
         with self._queue_lock:
             for item in self._queue:
                 if item.item_id == item_id:
+                    # Don't overwrite terminal statuses
+                    if item.status in [QueueItemStatus.CANCELLED, QueueItemStatus.PAUSED]:
+                        logger.info(f"Skipping mark_failed for item {item_id} because its current status is {item.status}")
+                        return False
+
                     item.status = QueueItemStatus.FAILED
                     item.completed_at = datetime.utcnow()
                     item.error_message = error_message
@@ -459,7 +474,13 @@ class QueueService:
         """
         with self._queue_lock:
             for item in self._queue:
-                if item.item_id == item_id and item.status == QueueItemStatus.ACTIVE:
+                if item.item_id == item_id:
+                    if item.status != QueueItemStatus.ACTIVE:
+                        # Don't log if it's already terminal
+                        if item.status not in [QueueItemStatus.CANCELLED, QueueItemStatus.PAUSED, QueueItemStatus.COMPLETED, QueueItemStatus.FAILED]:
+                            logger.debug(f"Cannot update progress for item {item_id} because it is in status {item.status}")
+                        return False
+                        
                     item.progress = progress
 
                     manager.broadcast_sync('global', {
@@ -471,6 +492,31 @@ class QueueService:
                     })
                     return True
             return False
+
+    def update_item(self, item: QueueItem) -> bool:
+        """
+        Update an existing queue item with new data and persist.
+        
+        Args:
+            item: The updated QueueItem object
+            
+        Returns:
+            True if item was found and updated
+        """
+        with self._queue_lock:
+            for i, existing_item in enumerate(self._queue):
+                if existing_item.item_id == item.item_id:
+                    self._queue[i] = item
+                    self._save_queue()
+                    
+                    # Broadcast update to UI
+                    manager.broadcast_sync('global', {
+                        'type': 'queue.item_updated',
+                        'data': item.model_dump(mode='json')
+                    })
+                    return True
+            return False
+
 
     def requeue_item(self, item_id: str) -> bool:
         """

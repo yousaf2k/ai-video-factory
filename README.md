@@ -7,15 +7,15 @@
 ## Features
 
 - 🎬 **End-to-End Pipeline**: From idea to final video in 7 automated steps
-- 🎨 **Dual Image Generation**: Gemini API or ComfyUI (Flux/SDXL) support
-- 🎥 **Advanced Video Generation**: Wan 2.2 model with ComfyUI integration
+- 🎨 **Dual Image Generation**: Gemini API or ComfyUI (Flux/SDXL/Flux 2) support with up to 2K resolution
+- 🎥 **Advanced Video Generation**: Wan 2.2 model with ComfyUI integration and HD resolution options (720p/1080p)
 - 🚁 **Multi-Camera LoRA System**: Combine multiple camera movements (drone, orbit, dolly, zoom, etc.)
-- 🎤 **Narration Support**: Optional TTS with multiple voice options
-- 💾 **Project Management**: Crash recovery and selective regeneration
-- 🔧 **Highly Configurable**: Customize every aspect of generation
-- 🌐 **Web UI**: Modern Next.js frontend and FastAPI backend for visual story editing
+- 🔄 **Flexible Motion Control**: Override departure prompts for custom shot-to-shot transitions
+- 🎤 **Narration Support**: Optional TTS with ElevenLabs, Edge-TTS, or ComfyUI voices
+- 💾 **Project Management**: Crash recovery, thumbnail management (upload/regenerate), and selective regeneration
+- 🌐 **Modern Web UI**: FastAPI backend with a responsive React frontend for visual story editing and generation queue management
 - 📚 **Comprehensive Documentation**: Extensive guides and API references in `docs/`
-- 🔄 **Batch Processing**: Automatically generate multiple videos from a list of prompts
+- ⏳ **Batch Queue**: Efficiently manage multiple generations with group selection and status tracking
 
 ## Quick Start
 
@@ -25,14 +25,18 @@
 pip install -r requirements.txt
 ```
 
-### Set your Gemini API key
+### Configuration
+
+Create a `.env` file in the project root with your API keys:
 
 ```bash
-export GEMINI_API_KEY="your_api_key_here"
+GEMINI_API_KEY="your_api_key_here"
+# Optional:
+OPENAI_API_KEY="your_openai_key"
+ELEVENLABS_API_KEY="your_elevenlabs_key"
 ```
 
-**Start ComfyUI with Wan 2.2 workflow**
-**(ComfyUI must be running on http://127.0.0.1:8188)**
+**Start ComfyUI** (must be running on `http://127.0.0.1:8188`)
 
 ### Generate a Video (CLI)
 
@@ -52,97 +56,78 @@ Open your browser to `http://localhost:3000` to access the visual story editor a
 
 ```bash
 ai_video_factory/
-├── core/              # Core pipeline orchestration and generators
-├── web_ui/            # Visual interface
-│   ├── backend/       # FastAPI backend for project and story APIs
-│   └── frontend/      # Next.js frontend for visual story editing
-├── agents/            # Prompts for LLM agents (story, narration, image, etc.)
-├── workflow/          # ComfyUI JSON workflows (images, videos, TTS)
-├── docs/              # Comprehensive documentation and guides
+├── core/              # Core pipeline logic (story engine, shot planner, comfy client)
+├── web_ui/            # Web application
+│   ├── backend/       # FastAPI backend and project services
+│   └── frontend/      # React/Next.js frontend
+├── agents/            # Multi-category LLM agents (Documentary, Movie, Then Vs Now)
+├── workflow/          # ComfyUI JSON templates for images, videos, and TTS
+├── docs/              # Comprehensive guides (LoRA, ComfyUI setup, API ref)
 ├── tests/             # Automated test suite
-├── output/            # Generated projects, images, videos, and metadata
-├── config.py          # Centralized configuration settings
-├── core/main.py       # Main CLI entry point
-├── projects.py        # CLI for project management
-├── regenerate.py      # CLI for regenerating specific shots
-└── batch_videos.py    # Batch video generation utility
+├── output/            # Generated projects, media, and metadata
+├── config.py          # Centralized configuration and path management
+└── core/main.py       # Main CLI entry point
 ```
 
 ### AI Agents Folder
 
-This folder contains system prompts for LLM agents used in different stages of video generation.
+This folder contains system prompts for LLM agents used in different stages of video generation. The system uses a modular approach, combining base rules, context-specific data, and stylistic guidelines.
 
-#### Agent Types
+#### Agent Categories
 
 ```bash
-
 agents/
-├── story/         - Story generation agents
-├── narration/     - Narration script agents
-├── image/         - Image prompt engineering agents
-└── video/         - Video motion/camera agents
+├── story/             # Narrative generation
+│   ├── documentary/   # Realistic, historical, and educational
+│   ├── movie/         # Cinematic fiction and genres
+│   └── then_vs_now/   # Comparative storytelling
+└── shots/             # Visual prompt engineering
+    ├── cameras/       # Specialized camera configurations
+    ├── contexts/      # Subject-specific visual data
+    └── styles/        # Artistic and atmospheric styles
 ```
+
+#### Available Story Agents
+
+- **Documentary**: `default`, `netflix_documentary`, `youtube_documentary`, `time_traveler`.
+- **Historical**: `greek_classical`, `roman_kingdom`, `indus_valley`, `plague_of_athens`.
+- **Movie**: `action`, `horror`.
+- **Specialized**: `then_vs_now` ⭐, `selfie_vlogger`.
 
 #### How to Create a Custom Agent
 
-1. **Navigate to the appropriate folder** (e.g., `agents/story/`)
-
-2. **Create a new `.md` file** with your agent name (e.g., `my_custom_agent.md`)
-
-3. **Write the system prompt** following this template:
-
-   ```bash
-   You are a [role description]. Your task is to [task description].
-
-   ## Guidelines
-
-   1. [Guideline 1]
-   2. [Guideline 2]
-   ...
-
-   ## Output Format
-
-   [Specify the expected output format]
-
-   {USER_INPUT}
-   ```
-
-4. **Use the agent** by specifying its name:
-   ```bash
-   python core/main.py --story-agent my_custom_agent
-   ```
-
-## Available Agents
-
-### Story Agents (`agents/story/`)
-
-- `default.md` - Cinematic documentary style
-- `dramatic.md` - Emotional, character-driven narratives
-- `documentary.md` - Factual, educational content
-- `time_traveler.md` ⭐ - First-person narratives from a time traveler's perspective using historical facts
-
-### Shots Agents (`agents/shots/`)
-
-- `default.md` - Standard shot prompt engineering
-- `artistic.md` - Artistic, aesthetic-focused prompts
-- `time_traveler.md` ⭐ - Photorealistic historical images from first-person time traveler perspective with DSLR photography
-
-## Agent Prompt Guidelines
-
-1. **Be Specific**: Clearly define the agent's role and task
-2. **Include Examples**: Show examples of good inputs/outputs
-3. **Define Format**: Specify the exact output format expected
-4. **Use Placeholders**: Include `{USER_INPUT}` where user input should be inserted
-5. **Keep it Focused**: Each agent should have a clear, single purpose
-
-## Testing Your Agent
-
-To test a new agent:
+1. **Select a category** (e.g., `agents/story/documentary/`)
+2. **Create a new `.md` file** (e.g., `my_special_agent.md`)
+3. **Write the system prompt** using the `{USER_INPUT}` placeholder for the dynamic prompt.
+4. **Leverage Modularity**: You can include base files and contexts using the `#include` directive (handled by `AgentLoader`).
 
 ```bash
-# List all agents
-python core/main.py --list-agents
-
-# Test with a simple idea
-python core/main.py --idea "Test idea" --story-agent my_custom_agent --step 2
+python core/main.py --story-agent my_special_agent
 ```
+
+## Advanced Usage
+
+### Resolution Selection
+Customize output quality via `config.py` or the Web UI:
+- **Images**: Up to 2048x2048 (Flux/Gemini)
+- **Videos**: 720p or 1080p (Wan 2.2)
+
+### Departure Overrides
+For shots requiring specific motion transitions, use the **Departure Prompt** field in the Web UI to manually guide the AI's motion prediction.
+
+### Batch Processing
+Run multiple ideas from a text file:
+```bash
+python batch_videos.py --file ideas.txt
+```
+
+---
+
+## Documentation & Support
+
+For deep dives into specific subsystems, refer to the following guides:
+
+- 🎮 **[ComfyUI Setup](docs/setup/COMFYUI_SETUP_CHECKLIST.md)**: Hardware requirements and workflow installation.
+- 📸 **[Camera & LoRA Guide](docs/guides/CAMERA_LORA_GUIDE.md)**: Master the multi-camera motion system.
+- 🛠️ **[API Reference](docs/API_REFERENCE.md)**: Complete backend documentation.
+- 📚 **[Full Index](docs/DOCS_INDEX.md)**: Browse all available documentation.

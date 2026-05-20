@@ -13,7 +13,7 @@
   "85": {
     "inputs": {
       "add_noise": "disable",
-      "noise_seed": 0,
+      "noise_seed": 216095566492976,
       "steps": 14,
       "cfg": 1,
       "sampler_name": "euler",
@@ -119,7 +119,7 @@
   },
   "93": {
     "inputs": {
-      "text": "",
+      "text": "Thick fog rolls slowly between the stone buildings while the first light of dawn subtly shifts across the thatched roofs. A slow pan across the village horizon.",
       "clip": [
         "84",
         0
@@ -208,7 +208,7 @@
   },
   "103": {
     "inputs": {
-      "shift": 8.5,
+      "shift": 5,
       "model": [
         "102",
         0
@@ -221,7 +221,7 @@
   },
   "104": {
     "inputs": {
-      "shift": 8.5,
+      "shift": 5,
       "model": [
         "101",
         0
@@ -234,7 +234,7 @@
   },
   "128": {
     "inputs": {
-      "image": "1 (1) (1).jpg"
+      "image": "shot_001_001.png"
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -243,7 +243,7 @@
   },
   "142": {
     "inputs": {
-      "value": 1
+      "value": 245390078828044
     },
     "class_type": "PrimitiveInt",
     "_meta": {
@@ -288,7 +288,7 @@
   },
   "146": {
     "inputs": {
-      "shift": 8.5,
+      "shift": 5,
       "model": [
         "95",
         0

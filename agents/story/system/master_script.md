@@ -27,8 +27,7 @@ You must output a single JSON object containing the title, an overall style/them
   "characters": [
     {
       "name": "Character Name",
-      "image_prompt_face": "Detailed face prompt on white background",
-      "image_prompt_full": "Full standing view prompt in appropriate attire",
+      "image_prompt": "Detailed cinematic prompt defining both face and full body appearance on white background",
       "voice_type": "Voice requirements",
       "personality": "Key personality traits",
       "attire": "Description of clothing as per story requirements"
