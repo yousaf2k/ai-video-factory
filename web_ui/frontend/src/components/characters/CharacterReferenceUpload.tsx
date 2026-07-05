@@ -13,6 +13,7 @@ interface CharacterReferenceUploadProps {
   projectId: string;
   onUpdate?: () => void;
   onPromptChange?: (promptKey: string, newPrompt: string) => void;
+  onBeforeUpload?: () => Promise<void>;
 }
 
 export default function CharacterReferenceUpload({
@@ -20,7 +21,8 @@ export default function CharacterReferenceUpload({
   characterIndex,
   projectId,
   onUpdate,
-  onPromptChange
+  onPromptChange,
+  onBeforeUpload
 }: CharacterReferenceUploadProps) {
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   
@@ -56,6 +58,15 @@ export default function CharacterReferenceUpload({
     variant: string,
     file: File
   ) => {
+    if (onBeforeUpload) {
+      try {
+        await onBeforeUpload();
+      } catch (err) {
+        console.error("Error in onBeforeUpload before uploading:", err);
+        return;
+      }
+    }
+
     setUploading(prev => ({ ...prev, [variant]: true }));
 
     const formData = new FormData();
@@ -120,6 +131,14 @@ export default function CharacterReferenceUpload({
 
   const handleGenerate = async (options: any) => {
     if (!selectedVariant) return;
+    if (onBeforeUpload) {
+      try {
+        await onBeforeUpload();
+      } catch (err) {
+        console.error("Error in onBeforeUpload before generating:", err);
+        return;
+      }
+    }
     try {
       await api.generateCharacterReferenceImage(projectId, characterIndex, {
         variant: selectedVariant,

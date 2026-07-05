@@ -1384,12 +1384,12 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                 <div className="space-y-4">
                   {(showBatchModal === "both" || showBatchModal === "image") && (
                     <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-md border text-sm mb-3">
-                      <Input
+                      <input
                         type="checkbox"
                         id="skip-existing"
                         checked={batchSkipImages}
                         onChange={(e) => setBatchSkipImages(e.target.checked)}
-                        className="w-4 h-4 mr-2"
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
                       />
                       <label
                         htmlFor="skip-existing"
@@ -1503,7 +1503,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                   {shots.some(s => s.is_flfi2v) && (
                     <div className="space-y-4 pt-4 border-t">
                       <div className="flex items-center gap-2">
-                        <Input
+                        <input
                           type="checkbox"
                           id="batch-then-override"
                           checked={batchUseThenOverride}
@@ -1516,7 +1516,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                               setBatchThenPrompt("");
                             }
                           }}
-                          className="w-4 h-4 mr-2"
+                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
                         />
                         <label htmlFor="batch-then-override" className="text-sm font-semibold">
                           Override Then Prompt for all shots
@@ -1659,12 +1659,12 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
 
                   <div className="space-y-4 pt-4 border-t">
                     <div className="flex items-center gap-2">
-                      <Input
+                      <input
                         type="checkbox"
                         id="batch-generate-soundfx"
                         checked={generateSoundFX}
                         onChange={(e) => setGenerateSoundFX(e.target.checked)}
-                        className="w-4 h-4 mr-2"
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
                       />
                       <label htmlFor="batch-generate-soundfx" className="text-sm font-semibold">
                         🔊 Generate Sound FX after video
@@ -1719,12 +1719,12 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                   {shots.some(s => s.is_flfi2v) && (
                     <div className="space-y-4 pt-4 border-t">
                       <div className="flex items-center gap-2">
-                        <Input
+                        <input
                           type="checkbox"
                           id="batch-departure-override"
                           checked={batchUseDepartureOverride}
                           onChange={(e) => setBatchUseDepartureOverride(e.target.checked)}
-                          className="w-4 h-4 mr-2"
+                          className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
                         />
                         <label htmlFor="batch-departure-override" className="text-sm font-semibold">
                           Override Departure Prompt for all shots

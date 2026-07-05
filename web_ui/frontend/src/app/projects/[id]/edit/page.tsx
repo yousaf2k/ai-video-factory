@@ -20,12 +20,12 @@ import { useShots, useReplanShots } from "@/hooks/useShots";
 import { useAgents } from "@/hooks/useAgents";
 import { SceneList } from "@/components/scenes/SceneList";
 import { ShotGrid } from "@/components/shots/ShotGrid";
-import { Scene, Story, Shot, ProjectType } from "@/types";
+import { Scene, Story, Shot, ProjectType, Character } from "@/types";
 import { api } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import CharacterReferenceUpload from "@/components/characters/CharacterReferenceUpload";
 import { useProgress } from "@/hooks/useProgress";
-import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play, ArrowLeft, Clock, Video, ListMusic, Settings, CheckCircle2, UserCircle } from "lucide-react";
+import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play, ArrowLeft, Clock, Video, ListMusic, Settings, CheckCircle2, UserCircle, Plus, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -312,16 +312,91 @@ export default function ProjectEditPage() {
     }
   };
 
+  const handleAddCharacter = async () => {
+    if (!story) return;
+    const isThenVsNow = story.project_type === ProjectType.ThenVsNow;
+    const newCharacters = [...(story.characters || [])];
+    const newChar: Character = {
+      name: `New Character ${newCharacters.length + 1}`,
+      then_prompt: isThenVsNow ? "" : undefined,
+      now_prompt: isThenVsNow ? "" : undefined,
+      image_prompt: !isThenVsNow ? "" : undefined,
+    };
+    newCharacters.push(newChar);
+    const updatedStory = { ...story, characters: newCharacters };
+
+    // Update local state optimistically
+    setStory(updatedStory);
+    setHasChanges(false);
+
+    try {
+      await updateStoryMutation.mutateAsync(updatedStory);
+      toast.success("Character added successfully", {
+        description: `"${newChar.name}" has been added to the story.`,
+      });
+    } catch (error) {
+      console.error("Failed to add character:", error);
+      toast.error("Failed to add character. Please try again.");
+      setStory(story);
+    }
+  };
+
+  const handleRemoveCharacter = async (idx: number) => {
+    if (!story || !story.characters) return;
+    const charToDelete = story.characters[idx];
+    const confirmed = await confirmDialog.showDialog({
+      title: "Remove Character",
+      description: `Are you sure you want to remove "${charToDelete.name || 'this character'}"? This action cannot be undone.`,
+      type: "delete",
+      confirmText: "Remove Character",
+    });
+
+    if (!confirmed) return;
+
+    const newCharacters = story.characters.filter((_, i) => i !== idx);
+    const updatedStory = { ...story, characters: newCharacters };
+
+    // Update local state optimistically
+    setStory(updatedStory);
+    setHasChanges(false);
+
+    try {
+      await updateStoryMutation.mutateAsync(updatedStory);
+      toast.success("Character removed successfully", {
+        description: `"${charToDelete.name || 'Character'}" has been removed.`,
+      });
+    } catch (error) {
+      console.error("Failed to remove character:", error);
+      toast.error("Failed to remove character. Please try again.");
+      setStory(story);
+    }
+  };
+
   const handleSaveStory = async () => {
     if (!story) return;
 
     try {
       await updateStoryMutation.mutateAsync(story);
       setHasChanges(false);
-      alert("Story updated successfully!");
+      toast.success("Story updated successfully!");
     } catch (error) {
       console.error("Failed to update story:", error);
-      alert("Failed to update story. Please try again.");
+      toast.error("Failed to update story. Please try again.");
+    }
+  };
+
+  const handleSaveStoryBeforeUpload = async () => {
+    if (!story) return;
+    if (!hasChanges) return;
+
+    try {
+      await updateStoryMutation.mutateAsync(story);
+      setHasChanges(false);
+      toast.success("Story changes saved");
+    } catch (error) {
+      console.error("Failed to auto-save story before upload:", error);
+      toast.error("Failed to save changes before uploading. Please try again.");
+      throw error; // Reject upload
     }
   };
 
@@ -442,7 +517,7 @@ export default function ProjectEditPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {activeTab === "story" && hasChanges && (
+            {activeTab === "story" && (
               <>
                 <Link
                   href={`/projects/${projectId}/settings`}
@@ -451,15 +526,17 @@ export default function ProjectEditPage() {
                   <Settings className="w-4 h-4" />
                   Settings
                 </Link>
-                <Button
-                  onClick={handleSaveStory}
-                  size="sm"
-                  disabled={!hasChanges || updateStoryMutation.isPending}
-                  className="flex items-center gap-1.5 shadow-sm font-medium"
-                >
-                  <Save className="w-4 h-4" />
-                  {updateStoryMutation.isPending ? "Saving..." : "Save Changes"}
-                </Button>
+                {hasChanges && (
+                  <Button
+                    onClick={handleSaveStory}
+                    size="sm"
+                    disabled={updateStoryMutation.isPending}
+                    className="flex items-center gap-1.5 shadow-sm font-medium"
+                  >
+                    <Save className="w-4 h-4" />
+                    {updateStoryMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -531,19 +608,64 @@ export default function ProjectEditPage() {
 
         <TabsContent value="story" className="mt-6">
           {/* Characters Section */}
-          {story.characters && story.characters.length > 0 && (
-            <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6">
-              <h2 className="text-xl font-bold flex items-center gap-2 mb-6 pb-4 border-b border-border/50">
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/50">
+              <h2 className="text-xl font-bold flex items-center gap-2">
                 <UserCircle className="w-5 h-5 text-primary" />
                 Character References
               </h2>
+              <div className="flex items-center gap-2">
+                {hasChanges && (
+                  <Button
+                    onClick={handleSaveStory}
+                    size="sm"
+                    disabled={updateStoryMutation.isPending}
+                    className="flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Save className="w-4 h-4" />
+                    {updateStoryMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                )}
+                <Button
+                  onClick={handleAddCharacter}
+                  size="sm"
+                  variant="outline"
+                  className="flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Character
+                </Button>
+              </div>
+            </div>
+            {story.characters && story.characters.length > 0 ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {story.characters.map((character, idx) => (
-                  <div key={idx} className="border border-border/50 rounded-xl p-5 bg-background shadow-sm hover:border-primary/30 transition-colors">
-                    <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs">{idx + 1}</span>
-                      {character.name}
-                    </h3>
+                  <div key={idx} className="border border-border/50 rounded-xl p-5 bg-background shadow-sm hover:border-primary/30 transition-colors relative group">
+                    <div className="flex justify-between items-center mb-4 gap-2">
+                      <div className="flex items-center gap-2 flex-grow">
+                        <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs shrink-0">{idx + 1}</span>
+                        <Input
+                          value={character.name}
+                          onChange={(e) => {
+                            const newCharacters = [...(story.characters || [])];
+                            newCharacters[idx] = { ...newCharacters[idx], name: e.target.value };
+                            setStory({ ...story, characters: newCharacters });
+                            setHasChanges(true);
+                          }}
+                          className="h-8 text-sm font-semibold py-1 bg-transparent border-transparent hover:border-border focus:border-input focus:bg-background"
+                          placeholder="Character name"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 shrink-0"
+                        onClick={() => handleRemoveCharacter(idx)}
+                        title="Remove character"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                     <CharacterReferenceUpload
                       character={character}
                       characterIndex={idx}
@@ -557,12 +679,28 @@ export default function ProjectEditPage() {
                         setStory({ ...story, characters: newCharacters });
                         setHasChanges(true);
                       }}
+                      onBeforeUpload={handleSaveStoryBeforeUpload}
                     />
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="p-8 bg-muted/50 rounded-lg border border-dashed border-border text-center">
+                <p className="text-muted-foreground mb-4">
+                  No characters defined for this project yet.
+                </p>
+                <Button
+                  onClick={handleAddCharacter}
+                  size="sm"
+                  variant="outline"
+                  className="mx-auto flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Your First Character
+                </Button>
+              </div>
+            )}
+          </div>
 
           {/* Scenes Editor */}
           <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
