@@ -380,19 +380,18 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
     # Inject image path to LoadImage node if available
     if "image_path" in shot and shot["image_path"]:
         image_path = shot["image_path"]
-        # Convert to absolute path if relative (ComfyUI requires absolute paths)
-        image_path = config.resolve_path(image_path)
-        # Normalize to use forward slashes (ComfyUI handles this better)
-        image_path = image_path.replace('\\', '/')
+        # Copy to ComfyUI input folder if needed and resolve relative path for LoadImage node
+        from core.comfy_client import prepare_comfyui_input_image
+        image_path_for_comfy = prepare_comfyui_input_image(image_path)
 
         if load_image_node_id and load_image_node_id in wf:
-            wf[load_image_node_id]["inputs"]["image"] = image_path
+            wf[load_image_node_id]["inputs"]["image"] = image_path_for_comfy
         else:
             # Fallback: find node by class_type
             found = False
             for node_id, node in wf.items():
                 if node.get("class_type") == "LoadImage":
-                    node["inputs"]["image"] = image_path
+                    node["inputs"]["image"] = image_path_for_comfy
                     logger.info(f"Auto-discovered LoadImage node at ID: {node_id}")
                     found = True
                     break

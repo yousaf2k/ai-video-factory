@@ -13,7 +13,7 @@
   "85": {
     "inputs": {
       "add_noise": "disable",
-      "noise_seed": 0,
+      "noise_seed": 827349042547195,
       "steps": 4,
       "cfg": 1,
       "sampler_name": "euler",
@@ -46,7 +46,7 @@
   "86": {
     "inputs": {
       "add_noise": "enable",
-      "noise_seed": 863632849114974,
+      "noise_seed": 82759537226501,
       "steps": 4,
       "cfg": 1,
       "sampler_name": "euler",
@@ -182,7 +182,7 @@
       "lora_name": "wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
       "strength_model": 1,
       "model": [
-        "116",
+        "122",
         0
       ]
     },
@@ -196,7 +196,7 @@
       "lora_name": "wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1030.safetensors",
       "strength_model": 1,
       "model": [
-        "117",
+        "123",
         0
       ]
     },
@@ -246,24 +246,6 @@
       "title": "Save Video"
     }
   },
-  "116": {
-    "inputs": {
-      "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q8_0.gguf"
-    },
-    "class_type": "UnetLoaderGGUF",
-    "_meta": {
-      "title": "Unet Loader (GGUF)"
-    }
-  },
-  "117": {
-    "inputs": {
-      "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q8_0.gguf"
-    },
-    "class_type": "UnetLoaderGGUF",
-    "_meta": {
-      "title": "Unet Loader (GGUF)"
-    }
-  },
   "118": {
     "inputs": {
       "resize_type": "scale by multiplier",
@@ -277,6 +259,26 @@
     "class_type": "RTXVideoSuperResolution",
     "_meta": {
       "title": "RTX Video Super Resolution"
+    }
+  },
+  "122": {
+    "inputs": {
+      "unet_name": "Wan2_2-I2V-A14B-HIGH_fp8_e4m3fn_scaled_KJ.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "123": {
+    "inputs": {
+      "unet_name": "Wan2_2-I2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
     }
   }
 }

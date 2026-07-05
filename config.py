@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 # Load environment variables from .env file in the same directory as config.py
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
 
+# Import secrets management for decryption
+from core.secrets import decrypt_env_var
+
 # ==========================================
 # LLM PROVIDER CONFIGURATION
 # ==========================================
@@ -42,7 +45,7 @@ CONCURRENT_GENERATION_LIMIT = int(os.getenv("CONCURRENT_GENERATION_LIMIT", "1"))
 # GEMINI API CONFIGURATION
 # ==========================================
 # Get your API key from: https://ai.google.dev/
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = decrypt_env_var("GEMINI_API_KEY", "")
 
 # Text generation model (for story, shots, etc. "gemini-2.0-flash" and "gemini-3-flash-preview" is faster and cheaper, "gemini-3-pro-preview" is higher quality but more expensive)
 GEMINI_TEXT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
@@ -51,7 +54,7 @@ GEMINI_TEXT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
 # OPENAI (CHATGPT) CONFIGURATION
 # ==========================================
 # Get your API key from: https://platform.openai.com/api-keys
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY = decrypt_env_var("OPENAI_API_KEY", "")
 
 # ChatGPT model (gpt-4o is latest, gpt-4o-mini is faster/cheaper)
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
@@ -60,14 +63,14 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 # ZHIPU CONFIGURATION
 # ==========================================
 # Get your API key from Z.AI platform
-ZHIPU_API_KEY = os.getenv("ZHIPU_API_KEY", "")
+ZHIPU_API_KEY = decrypt_env_var("ZHIPU_API_KEY", "")
 
 
 # ==========================================
 # QWEN (ALIBABA CLOUD) CONFIGURATION
 # ==========================================
 # Get your API key from Alibaba Cloud
-QWEN_API_KEY = os.getenv("QWEN_API_KEY", "")
+QWEN_API_KEY = decrypt_env_var("QWEN_API_KEY", "")
 
 # Qwen model (qwen-max is latest)
 QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen-max")
@@ -76,7 +79,7 @@ QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen-max")
 # KIMI (MOONSHOT) CONFIGURATION
 # ==========================================
 # Get your API key from Moonshot AI
-KIMI_API_KEY = os.getenv("KIMI_API_KEY", "")
+KIMI_API_KEY = decrypt_env_var("KIMI_API_KEY", "")
 
 # Kimi K2 2.5 model (kimi-labs is recommended)
 KIMI_MODEL = os.getenv("KIMI_MODEL", "kimi-labs")
@@ -261,6 +264,15 @@ COMFY_URL = "http://127.0.0.1:8188"
 #   COMFY_OUTPUT_DIR = "C:/ComfyUI/output"  # Manual path for Windows
 #   COMFY_OUTPUT_DIR = "/home/user/ComfyUI/output"  # Manual path for Linux/Mac
 COMFY_OUTPUT_DIR = os.getenv("COMFY_OUTPUT_DIR", r"E:\ComfyUI\Output")
+
+# ComfyUI input directory (where ComfyUI loads input images)
+# Set this if ComfyUI is installed in a different location
+# Leave as empty string "" to auto-detect from ComfyUI API
+# Examples:
+#   COMFY_INPUT_DIR = ""  # Auto-detect (recommended)
+#   COMFY_INPUT_DIR = "C:/ComfyUI/input"  # Manual path for Windows
+COMFY_INPUT_DIR = os.getenv("COMFY_INPUT_DIR", "")
+
 
 # ==========================================
 # VIDEO WORKFLOW CONFIGURATION
@@ -1080,7 +1092,7 @@ TTS_WORKFLOW_PATH = resolve_path("workflow/voice/tts_workflow.json")
 # ELEVENLABS API CONFIGURATION
 # ==========================================
 # Get your API key from: https://elevenlabs.io/app/settings/api-keys
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_API_KEY = decrypt_env_var("ELEVENLABS_API_KEY", "")
 
 # Default voice for TTS
 # For edge-tts: voice names like "en-US-AriaNeural", "en-GB-SoniaNeural"
