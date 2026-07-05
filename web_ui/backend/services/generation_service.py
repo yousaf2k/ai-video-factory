@@ -3586,44 +3586,45 @@ class GenerationService:
             logger.info(f"FLFI2V video generation using seed: {seed}")
 
         # Inject images based on variant
+        from core.comfy_client import prepare_comfyui_input_image
         if variant == "meeting":
             # Meeting: THEN image (first frame) + NOW image (last frame)
             then_image = shot.get('then_image_path') or shot.get('image_path')
             if then_image:
-                then_path = config.resolve_path(then_image).replace('\\', '/')
+                then_path = prepare_comfyui_input_image(then_image)
                 if load_first_node_id in wf:
                     wf[load_first_node_id]["inputs"]["image"] = then_path
-                    logger.info(f"Meeting video first frame: {then_image}")
+                    logger.info(f"Meeting video first frame: {then_path} (was: {then_image})")
 
             now_image = shot.get('now_image_path') or shot.get('image_path')
             if now_image:
-                now_path = config.resolve_path(now_image).replace('\\', '/')
+                now_path = prepare_comfyui_input_image(now_image)
                 if load_last_node_id in wf:
                     wf[load_last_node_id]["inputs"]["image"] = now_path
-                    logger.info(f"Meeting video last frame: {now_image}")
+                    logger.info(f"Meeting video last frame: {now_path} (was: {now_image})")
 
         elif variant == "departure":
             # Departure: NOW image (first frame) + next character's NOW image or scene image (last frame)
             now_image = shot.get('now_image_path') or shot.get('image_path')
             if now_image:
-                now_path = config.resolve_path(now_image).replace('\\', '/')
+                now_path = prepare_comfyui_input_image(now_image)
                 if load_first_node_id in wf:
                     wf[load_first_node_id]["inputs"]["image"] = now_path
-                    logger.info(f"Departure video first frame: {now_image}")
+                    logger.info(f"Departure video first frame: {now_path} (was: {now_image})")
 
             if last_frame_image_path:
                 # Use next character's NOW image or scene image
-                last_frame_path = config.resolve_path(last_frame_image_path).replace('\\', '/')
+                last_frame_path = prepare_comfyui_input_image(last_frame_image_path)
                 if load_last_node_id in wf:
                     wf[load_last_node_id]["inputs"]["image"] = last_frame_path
-                    logger.info(f"Departure video last frame: {last_frame_image_path}")
+                    logger.info(f"Departure video last frame: {last_frame_path} (was: {last_frame_image_path})")
             else:
                 # Fallback to NOW image if no last frame provided
                 if shot.get('now_image_path'):
-                    now_path = config.resolve_path(shot['now_image_path']).replace('\\', '/')
+                    now_path = prepare_comfyui_input_image(shot['now_image_path'])
                     if load_last_node_id in wf:
                         wf[load_last_node_id]["inputs"]["image"] = now_path
-                        logger.warning(f"Departure video last frame: Using current character's NOW image (fallback)")
+                        logger.warning(f"Departure video last frame: Using current character's NOW image fallback: {now_path}")
 
         # Inject motion prompt based on variant
         if prompt_override and prompt_override.strip():

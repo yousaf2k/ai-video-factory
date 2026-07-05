@@ -1,6 +1,8 @@
 {
   "permissions": {
-    "allow": []
+    "allow": [
+      "Bash(python core/secrets.py encrypt)"
+    ]
   },
   "plugins": {
     "enabled": {
