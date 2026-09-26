@@ -101,6 +101,7 @@ class CreateProjectRequest(BaseModel):
     project_type: ProjectType = Field(default=ProjectType.DOCUMENTARY, description="Project Type (1=Documentary, 2=ThenVsNow)")
     story_agent: str = Field(default="default", description="Story generation agent")
     shots_agent: str = Field(default="default", description="Shots prompt agent")
+    prompt_mode: str = Field(default="video", description="Default prompt style for video generation: 'video' (timestamped H3 video_prompt) or 'motion' (motion_prompt)")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
     prompts_file: Optional[str] = Field(default=None, description="Path to a custom prompts file")
     aspect_ratio: str = Field(default="16:9", description="Video aspect ratio (16:9, 9:16, or 21:8)")
@@ -119,6 +120,14 @@ class UpdateProjectRequest(BaseModel):
     completed: Optional[bool] = None
     story_agent: Optional[str] = None
     shots_agent: Optional[str] = None
+    prompt_mode: Optional[str] = Field(default=None, description="Default prompt style: 'video' or 'motion'")
+
+    @field_validator('prompt_mode')
+    @classmethod
+    def validate_prompt_mode(cls, v):
+        if v is not None and v not in ["video", "motion"]:
+            raise ValueError("prompt_mode must be 'video' or 'motion'")
+        return v
     aspect_ratio: Optional[str] = Field(default=None, description="Video aspect ratio (16:9, 9:16, or 21:8)")
 
     @field_validator('aspect_ratio')

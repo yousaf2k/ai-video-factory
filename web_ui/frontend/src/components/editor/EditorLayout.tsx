@@ -1142,7 +1142,7 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
 
   const handleExport = async () => {
     if (!projectId) {
-      alert('No project ID available');
+      toast.error('No project ID available');
       return;
     }
 

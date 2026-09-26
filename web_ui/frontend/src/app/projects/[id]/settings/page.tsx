@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useProject, useUpdateProject } from "@/hooks/useProjects";
@@ -34,6 +35,7 @@ export default function ProjectSettingsPage() {
     idea: "",
     story_agent: "default",
     shots_agent: "default",
+    prompt_mode: "video" as "video" | "motion",
   });
 
   useEffect(() => {
@@ -42,6 +44,7 @@ export default function ProjectSettingsPage() {
         idea: project.idea || "",
         story_agent: project.story_agent || "default",
         shots_agent: project.shots_agent || "default",
+        prompt_mode: project.prompt_mode || "video",
       });
     }
   }, [project]);
@@ -50,11 +53,11 @@ export default function ProjectSettingsPage() {
     e.preventDefault();
     try {
       await updateProjectMutation.mutateAsync(formData);
-      alert("Project settings updated successfully!");
+      toast.success("Project settings updated successfully!");
       router.push(`/projects/${projectId}`);
     } catch (error) {
       console.error("Failed to update project settings:", error);
-      alert("Failed to update project settings.");
+      toast.error("Failed to update project settings.");
     }
   };
 
@@ -139,6 +142,34 @@ export default function ProjectSettingsPage() {
                 label="Default Shots Building Blocks"
               />
             </div>
+          </div>
+        </section>
+
+        {/* Video Prompt Style */}
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold border-b pb-2">
+            Video Prompt Style
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Which prompt to use when generating videos. Shots can override this
+            individually.
+          </p>
+
+          <div className="max-w-xs">
+            <Select
+              value={formData.prompt_mode}
+              onValueChange={(val) =>
+                setFormData({ ...formData, prompt_mode: val as "video" | "motion" })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select prompt style" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="video">Video Prompt (detailed, timestamped - MiniMax H3)</SelectItem>
+                <SelectItem value="motion">Motion Prompt (short - Wan 2.2)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </section>
 

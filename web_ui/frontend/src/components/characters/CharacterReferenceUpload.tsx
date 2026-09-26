@@ -6,6 +6,7 @@ import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GenerationDialog } from '../shots/GenerationDialog';
 import { api } from '@/services/api';
+import { toast } from 'sonner';
 
 interface CharacterReferenceUploadProps {
   character: Character;
@@ -102,7 +103,7 @@ export default function CharacterReferenceUpload({
       console.log(`${variant.toUpperCase()} reference uploaded:`, result.image_path);
     } catch (error) {
       console.error(`Error uploading ${variant} reference:`, error);
-      alert(`Failed to upload ${variant.toUpperCase()} reference: ${error}`);
+      toast.error(`Failed to upload ${variant.toUpperCase()} reference: ${error}`);
     } finally {
       setUploading(prev => ({ ...prev, [variant]: false }));
     }
@@ -153,7 +154,7 @@ export default function CharacterReferenceUpload({
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error("Failed to generate character image:", error);
-      alert(`Failed to generate character image: ${error}`);
+      toast.error(`Failed to generate character image: ${error}`);
     }
   };
 

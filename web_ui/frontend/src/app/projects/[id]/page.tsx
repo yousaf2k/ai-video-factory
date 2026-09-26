@@ -72,7 +72,7 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     } catch (error) {
       console.error("Failed to update aspect ratio:", error);
-      alert("Failed to update aspect ratio. Please try again.");
+      toast.error("Failed to update aspect ratio. Please try again.");
     } finally {
       setIsUpdatingAspectRatio(false);
     }
@@ -101,7 +101,7 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     } catch (error) {
       console.error(`Failed to generate ${aspectRatio} thumbnail:`, error);
-      alert("Failed to generate thumbnail. Please check the logs.");
+      toast.error("Failed to generate thumbnail. Please check the logs.");
     } finally {
       setGeneratingThumbnails((prev) => ({ ...prev, [key]: false }));
     }

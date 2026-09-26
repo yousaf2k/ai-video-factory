@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Scene } from '@/types';
 import { GenerationDialog, GenerationConfig } from '../shots/GenerationDialog';
+import { toast } from 'sonner';
 
 interface SceneBackgroundManagerProps {
   scene: Scene;
@@ -61,7 +62,7 @@ export default function SceneBackgroundManager({
       console.log('Background uploaded:', result.image_path);
     } catch (error) {
       console.error('Error uploading background:', error);
-      alert(`Failed to upload background: ${error}`);
+      toast.error(`Failed to upload background: ${error}`);
     } finally {
       setUploading(false);
     }
@@ -71,7 +72,7 @@ export default function SceneBackgroundManager({
     setShowGenModal(false);
     
     if (!scene.set_prompt) {
-      alert('Scene must have a set_prompt to generate background');
+      toast.warning('Scene must have a set_prompt to generate background');
       return;
     }
 
@@ -108,7 +109,7 @@ export default function SceneBackgroundManager({
       // The story will be updated via WebSocket when complete
     } catch (error) {
       console.error('Error generating background:', error);
-      alert(`Failed to generate background: ${error}`);
+      toast.error(`Failed to generate background: ${error}`);
     } finally {
       setGenerating(false);
     }

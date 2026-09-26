@@ -593,7 +593,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
       setTargetMoveScene(null);
     } catch (error) {
       console.error("Failed to batch move shots to scene:", error);
-      alert("Failed to move shots. Please try again.");
+      toast.error("Failed to move shots. Please try again.");
     }
   };
 

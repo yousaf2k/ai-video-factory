@@ -4,6 +4,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import Link from "next/link";
 import { 
   Trash2, 
@@ -97,7 +98,7 @@ export default function ProjectsPage() {
     
     if (usePromptsFile) {
       if (!promptsFile.trim()) {
-        alert("Please enter a prompts file path.");
+        toast.error("Please enter a prompts file path.");
         return;
       }
     } else {
@@ -105,7 +106,7 @@ export default function ProjectsPage() {
     }
 
     if (selectedStoryAgent === "choose" && !usePromptsFile) {
-      alert("Please select a story agent before creating the project.");
+      toast.error("Please select a story agent before creating the project.");
       return;
     }
 
@@ -140,7 +141,7 @@ export default function ProjectsPage() {
       window.location.href = `/projects/${project.project_id}`;
     } catch (error) {
       console.error("Failed to create project:", error);
-      alert("Failed to create project. Please try again.");
+      toast.error("Failed to create project. Please try again.");
     } finally {
       setIsGeneratingStory(false);
     }
@@ -159,7 +160,7 @@ export default function ProjectsPage() {
       await deleteProjectMutation.mutateAsync(projectId);
     } catch (error) {
       console.error("Failed to delete project:", error);
-      alert("Failed to delete project. Please try again.");
+      toast.error("Failed to delete project. Please try again.");
     }
   };
 
@@ -170,7 +171,7 @@ export default function ProjectsPage() {
       window.location.href = `/projects/${project.project_id}`;
     } catch (error) {
       console.error("Failed to duplicate project:", error);
-      alert("Failed to duplicate project. Please try again.");
+      toast.error("Failed to duplicate project. Please try again.");
     }
   };
 

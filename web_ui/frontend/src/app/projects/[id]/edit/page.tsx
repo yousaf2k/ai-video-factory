@@ -404,10 +404,10 @@ export default function ProjectEditPage() {
     try {
       await generateStoryMutation.mutateAsync(selectedStoryAgent);
       setShowRegenStoryModal(false);
-      alert("Story regeneration started. The page will update when complete.");
+      toast.success("Story regenerated successfully.");
     } catch (error) {
       console.error("Failed to generate story:", error);
-      alert("Failed to generate story. Please try again.");
+      toast.error("Failed to generate story. Please try again.");
     }
   };
 
@@ -430,10 +430,10 @@ export default function ProjectEditPage() {
         shots_agent: finalAgent,
       });
       setShowReplanShotsModal(false);
-      alert("Shot re-planning started.");
+      toast.success("Shots re-planned successfully.");
     } catch (error) {
       console.error("Failed to re-plan shots:", error);
-      alert("Failed to re-plan shots. Please try again.");
+      toast.error("Failed to re-plan shots. Please try again.");
     }
   };
 

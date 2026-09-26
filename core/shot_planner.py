@@ -18,6 +18,14 @@ import uuid
 # Get logger for agent operations
 logger = setup_agent_logger(__name__)
 
+# Timing instruction appended to shot planning prompts so that timestamped
+# cuts in video_prompt stay within the rendered clip duration
+VIDEO_PROMPT_TIMING_INSTRUCTION = (
+    f"VIDEO PROMPT TIMING: Each shot is rendered as a video clip of approximately "
+    f"{DEFAULT_SHOT_LENGTH} seconds. All timestamped cuts in video_prompt must be "
+    f"strictly increasing and fall within this duration (format MM:SS.mmm)."
+)
+
 
 def is_local_provider():
     """Check if current LLM provider is local (Ollama or LMStudio)"""
@@ -36,6 +44,7 @@ BATCH PROCESSING: This is batch {batch_num} of {total_batches}
 {max_shots_instruction}
 
 IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batch.
+{VIDEO_PROMPT_TIMING_INSTRUCTION}
 """
 
     # Try to use agent prompts
@@ -62,10 +71,13 @@ Return JSON list (each shot):
    "scene_id": 0,
    "image_prompt":"",
    "motion_prompt":"",
+   "video_prompt":"",
    "soundfx_prompt":"",
    "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]
+
+The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp, later sub-shots cut at strictly increasing times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
 
 SCENES:
 {batch_graph}
@@ -600,7 +612,7 @@ CRITICAL SHOT REQUIREMENTS:
         return all_shots
 
     # Single batch processing (original logic)
-    user_input = f"{scene_graph_with_indices}{max_shots_instruction}"
+    user_input = f"{scene_graph_with_indices}{max_shots_instruction}{VIDEO_PROMPT_TIMING_INSTRUCTION}"
 
     # Try to use agent prompts
     try:
@@ -659,10 +671,13 @@ Return JSON list (each shot):
    "scene_index": 0,
    "image_prompt":"",
    "motion_prompt":"",
+   "video_prompt":"",
    "soundfx_prompt":"",
    "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]
+
+The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp, later sub-shots cut at strictly increasing times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
 
 SCENES:
 {scene_graph_with_indices}

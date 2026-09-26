@@ -178,6 +178,24 @@ def print_configuration_summary():
     print("\n" + "="*70)
 
 
+def resolve_video_prompt(shot):
+    """
+    Resolve the effective video generation prompt for a shot.
+
+    Uses the detailed timestamped video_prompt (MiniMax H3 format) when the shot
+    has one and neither the shot nor config selects the motion prompt; otherwise
+    falls back to motion_prompt.
+    """
+    shot_video_prompt = (shot.get('video_prompt') or '').strip()
+    if shot_video_prompt:
+        prompt_type = shot.get('prompt_type')
+        if prompt_type == 'video':
+            return shot_video_prompt
+        if prompt_type is None and getattr(config, 'DEFAULT_PROMPT_MODE', 'video') == 'video':
+            return shot_video_prompt
+    return shot.get('motion_prompt', "Animate this image realistically")
+
+
 def enhance_motion_prompts_with_triggers(shots):
     """
     Append trigger keywords to motion prompts for each shot based on camera type.
@@ -190,6 +208,13 @@ def enhance_motion_prompts_with_triggers(shots):
         Updated shots list with enhanced motion prompts
     """
     for shot in shots:
+        # Skip shots that use the detailed video_prompt - keep the H3 format clean
+        if shot.get('prompt_type') == 'video':
+            continue
+        if (shot.get('prompt_type') is None and (shot.get('video_prompt') or '').strip()
+                and getattr(config, 'DEFAULT_PROMPT_MODE', 'video') == 'video'):
+            continue
+
         camera_type = shot.get('camera', 'default')
         motion_prompt = shot.get('motion_prompt', '')
 
@@ -607,7 +632,7 @@ def submit_and_verify_video(template, shot, shot_length, project_id, shot_idx, p
         if video_mode == 'geminiweb':
             print(f"[PROCESS] Shot {shot_idx}{variation_label}: Generating via GeminiWeb...")
             from core.geminiweb_video_generator import generate_video_geminiweb
-            motion_prompt = shot.get('motion_prompt', "Animate this image realistically")
+            motion_prompt = resolve_video_prompt(shot)
             video_res = generate_video_geminiweb(
                 image_path=shot['image_path'],
                 motion_prompt=motion_prompt,
@@ -630,7 +655,7 @@ def submit_and_verify_video(template, shot, shot_length, project_id, shot_idx, p
         elif video_mode == 'flowweb':
             print(f"[PROCESS] Shot {shot_idx}{variation_label}: Generating via FlowWeb...")
             from core.flowweb_video_generator import generate_video_flowweb
-            motion_prompt = shot.get('motion_prompt', "Animate this image realistically")
+            motion_prompt = resolve_video_prompt(shot)
             aspect_ratio = getattr(config, 'VIDEO_ASPECT_RATIO', '16:9')
             
             video_res = generate_video_flowweb(
@@ -2091,7 +2116,7 @@ def _render_videos(project_id, project_mgr, valid_shots, shot_length, shots):
                 else:
                     video_filename, video_save_path = generate_unique_video_filename(videos_dir, shot_idx)
 
-                motion_prompt = shot.get('motion_prompt', "Animate this image realistically")
+                motion_prompt = resolve_video_prompt(shot)
                 video_res = generate_video_geminiweb(
                     image_path=img_path,
                     motion_prompt=motion_prompt,

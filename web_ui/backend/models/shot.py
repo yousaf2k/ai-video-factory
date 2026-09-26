@@ -12,6 +12,8 @@ class Shot(BaseModel):
     index: int = Field(..., description="Shot index (1-based)")
     image_prompt: str = Field(..., description="Image generation prompt")
     motion_prompt: str = Field(..., description="Motion/video generation prompt")
+    video_prompt: Optional[str] = Field(default=None, description="Detailed timestamped MiniMax H3 video prompt (I2VA format)")
+    prompt_type: Optional[str] = Field(default=None, description="Prompt override for this shot: 'motion' or 'video' (None = use project prompt_mode)")
     camera: str = Field(..., description="Camera movement type")
     narration: str = Field(default="", description="Shot narration")
     batch_number: int = Field(default=1, description="Batch number for multi-batch generation")
@@ -75,6 +77,8 @@ class UpdateShotRequest(BaseModel):
     """Request to update a single shot"""
     image_prompt: Optional[str] = None
     motion_prompt: Optional[str] = None
+    video_prompt: Optional[str] = None
+    prompt_type: Optional[str] = None
     camera: Optional[str] = None
     narration: Optional[str] = None
     scene_id: Optional[int] = None
@@ -109,6 +113,7 @@ class RegenerateVideoRequest(BaseModel):
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
     prompt_override: Optional[str] = Field(default=None, description="Override the motion prompt for this generation only")
+    prompt_type: Optional[str] = Field(default=None, description="Prompt to use for this generation: 'motion' or 'video' (None = shot/project default)")
     resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
     gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
     soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")

@@ -91,6 +91,7 @@ Extract objects from natural language input. For specific objects (e.g., "create
       "object_name": "strawberry",
       "image_prompt": "Ultra 8K photorealistic image, close-up macro shot of a complete intact strawberry glass sculpture...",
       "motion_prompt": "Highly realistic ultra 8K ASMR video, close-up macro shot of precision cutting through a strawberry glass sculpture...",
+      "video_prompt": "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description: [Shot 1] Live-action, macro food ASMR, the strawberry glass sculpture shown in <Picture 1> rests intact on the wooden board with the steel blade hovering above it. The camera holds a static shot as the blade descends and makes the first clean cut...\n\noverall_soundscape: Crisp glass-cutting tones ring out with each pass of the blade while fragments tink across the wooden board.\n\nnon_diegetic_music: N/A",
       "duration": 5,
       "camera": "closeup_macro",
       "motion_strength": "medium",
@@ -125,6 +126,7 @@ Each shot MUST include:
 - `object_name`: Simple object name string
 - `image_prompt`: Static shot description - complete object with HORIZONTAL knife above, blade parallel to cutting board (100+ words)
 - `motion_prompt`: Video action description - cutting through the object (100+ words)
+- `video_prompt`: Detailed timestamped MiniMax H3 I2VA video prompt for the cutting action - first-frame anchor of the intact object + `integrated_multimodal_description` + `overall_soundscape` + `non_diegetic_music`, any cut times within the shot duration
 - `duration`: Fixed duration per shot (default 5 seconds)
 - `camera`: "closeup_macro" for all shots
 - `motion_strength`: "medium" for all shots

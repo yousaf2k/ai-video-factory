@@ -148,6 +148,35 @@ def calculate_video_dimensions(aspect_ratio="16:9", resolution="1280", draft_low
     return width, height
 
 
+def calculate_minimax_h3_dimensions(aspect_ratio="16:9", resolution="1280",
+                                    draft_low_res_video=False):
+    """
+    Calculate dimensions for MiniMax H3 workflows.
+
+    MiniMax H3 requires dimensions that are multiples of 32. The standard
+    video dimension calculation is used first, then each dimension is rounded
+    to the nearest multiple of 32 (halves round up).
+
+    Args:
+        aspect_ratio: String like "16:9", "9:16", "1:1", "4:3", "3:4"
+        resolution: String like "512", "720", "1024", "1080", "1280", "2048"
+        draft_low_res_video: Generate at half resolution rounded up to multiple of 32
+
+    Returns:
+        Tuple of (width, height)
+    """
+    width, height = calculate_video_dimensions(
+        aspect_ratio=aspect_ratio,
+        resolution=resolution,
+        draft_low_res_video=draft_low_res_video
+    )
+
+    def round32(value):
+        return max(32, int(value / 32 + 0.5) * 32)
+
+    return round32(width), round32(height)
+
+
 def update_env_config(updates: dict, env_path: str = ".env"):
     """
     Update .env file with new values.

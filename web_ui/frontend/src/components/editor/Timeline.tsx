@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useEditorStore } from '@/store/useEditorStore';
 import { TrackView } from './Track';
 
@@ -59,7 +60,7 @@ export function Timeline() {
 
   const handleSplitSelectedClip = () => {
     if (!selectedClipId || !canSplitSelectedClip()) {
-      alert('Please select a clip and position the playhead within it to split');
+      toast.warning('Please select a clip and position the playhead within it to split');
       return;
     }
     splitClip(selectedClipId, currentTime);
@@ -67,7 +68,7 @@ export function Timeline() {
 
   const handleDeleteSelectedClip = () => {
     if (!selectedClipId) {
-      alert('Please select a clip to delete');
+      toast.warning('Please select a clip to delete');
       return;
     }
     if (confirm('Delete this clip?')) {
@@ -146,7 +147,7 @@ export function Timeline() {
 
   const handleSaveTimeline = async () => {
     if (!projectId) {
-      alert('No project ID available - cannot save timeline');
+      toast.error('No project ID available - cannot save timeline');
       return;
     }
 
@@ -173,10 +174,10 @@ export function Timeline() {
       console.log('Save result:', result);
 
       setShowSaveDialog(false);
-      alert('Timeline saved successfully!');
+      toast.success('Timeline saved successfully!');
     } catch (error) {
       console.error('Save error:', error);
-      alert(`Save failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Save failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -184,7 +185,7 @@ export function Timeline() {
 
   const handleLoadTimeline = async (filename: string) => {
     if (!projectId) {
-      alert('No project ID available - cannot load timeline');
+      toast.error('No project ID available - cannot load timeline');
       return;
     }
 
@@ -204,10 +205,10 @@ export function Timeline() {
       importTimeline(timelineData);
 
       setShowLoadDialog(false);
-      alert('Timeline loaded successfully!');
+      toast.success('Timeline loaded successfully!');
     } catch (error) {
       console.error('Load error:', error);
-      alert(`Load failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Load failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -215,7 +216,7 @@ export function Timeline() {
 
   const handleListTimelines = async () => {
     if (!projectId) {
-      alert('No project ID available - cannot list timelines');
+      toast.error('No project ID available - cannot list timelines');
       return;
     }
 
@@ -234,7 +235,7 @@ export function Timeline() {
       setShowLoadDialog(true);
     } catch (error) {
       console.error('List timelines error:', error);
-      alert(`Failed to list timelines: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to list timelines: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

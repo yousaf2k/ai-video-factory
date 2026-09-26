@@ -54,6 +54,7 @@ class QueueItem(BaseModel):
 
     # Override parameters for Single-Shot Queue support
     prompt_override: Optional[str] = Field(None, description="Custom prompt overlay")
+    prompt_type: Optional[str] = Field(None, description="Prompt style override for video generation: 'motion' or 'video'")
     seed: Optional[int] = Field(None, description="Execution seed")
     image_mode: Optional[str] = Field(None, description="Image generation mode speed parameter")
     image_workflow: Optional[str] = Field(None, description="Override Image Workflow template")

@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import {
   useAgents,
   useAgentContent,
@@ -57,10 +58,10 @@ export default function AgentsPage() {
     if (!selectedAgent) return;
     try {
       await updateAgentMutation.mutateAsync(editContent);
-      alert("Agent prompt updated successfully!");
+      toast.success("Agent prompt updated successfully!");
     } catch (error) {
       console.error("Failed to update agent:", error);
-      alert("Failed to update agent.");
+      toast.error("Failed to update agent.");
     }
   };
 

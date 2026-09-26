@@ -54,8 +54,9 @@ def test_config():
     # Check ComfyUI settings
     print(f"[INFO] ComfyUI URL: {config.COMFY_URL}")
     print(f"[INFO] Workflow path: {config.WORKFLOW_PATH}")
-    print(f"[INFO] LoadImage node ID: {config.LOAD_IMAGE_NODE_ID}")
-    print(f"[INFO] Motion prompt node ID: {config.MOTION_PROMPT_NODE_ID}")
+    _active_wf = config.VIDEO_WORKFLOWS.get(config.VIDEO_WORKFLOW, {})
+    print(f"[INFO] LoadImage node ID: {_active_wf.get('load_image_node_id', 'not detected')}")
+    print(f"[INFO] Motion prompt node ID: {_active_wf.get('motion_prompt_node_id', 'not detected')}")
 
     # Check output directory
     print(f"[INFO] Images output dir: {config.IMAGES_OUTPUT_DIR}")
