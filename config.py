@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 # Load environment variables from .env file in the same directory as config.py
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=True)
 
+# Import secrets management for decryption
+from core.secrets import decrypt_env_var
+
 # ==========================================
 # LLM PROVIDER CONFIGURATION
 # ==========================================
@@ -42,16 +45,16 @@ CONCURRENT_GENERATION_LIMIT = int(os.getenv("CONCURRENT_GENERATION_LIMIT", "1"))
 # GEMINI API CONFIGURATION
 # ==========================================
 # Get your API key from: https://ai.google.dev/
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = decrypt_env_var("GEMINI_API_KEY", "")
 
-# Text generation model (for story, shots, etc. "gemini-2.0-flash" and "gemini-3-flash-preview" is faster and cheaper, "gemini-3-pro-preview" is higher quality but more expensive)
-GEMINI_TEXT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+# Text generation model (for story, shots, etc. "gemini-3.5-flash-lite" is faster and cheaper, "gemini-3-pro-preview" is higher quality but more expensive)
+GEMINI_TEXT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 # ==========================================
 # OPENAI (CHATGPT) CONFIGURATION
 # ==========================================
 # Get your API key from: https://platform.openai.com/api-keys
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY = decrypt_env_var("OPENAI_API_KEY", "")
 
 # ChatGPT model (gpt-4o is latest, gpt-4o-mini is faster/cheaper)
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
@@ -60,14 +63,14 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 # ZHIPU CONFIGURATION
 # ==========================================
 # Get your API key from Z.AI platform
-ZHIPU_API_KEY = os.getenv("ZHIPU_API_KEY", "")
+ZHIPU_API_KEY = decrypt_env_var("ZHIPU_API_KEY", "")
 
 
 # ==========================================
 # QWEN (ALIBABA CLOUD) CONFIGURATION
 # ==========================================
 # Get your API key from Alibaba Cloud
-QWEN_API_KEY = os.getenv("QWEN_API_KEY", "")
+QWEN_API_KEY = decrypt_env_var("QWEN_API_KEY", "")
 
 # Qwen model (qwen-max is latest)
 QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen-max")
@@ -76,7 +79,7 @@ QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen-max")
 # KIMI (MOONSHOT) CONFIGURATION
 # ==========================================
 # Get your API key from Moonshot AI
-KIMI_API_KEY = os.getenv("KIMI_API_KEY", "")
+KIMI_API_KEY = decrypt_env_var("KIMI_API_KEY", "")
 
 # Kimi K2 2.5 model (kimi-labs is recommended)
 KIMI_MODEL = os.getenv("KIMI_MODEL", "kimi-labs")
@@ -248,6 +251,67 @@ def calculate_video_dimensions(aspect_ratio=None, resolution=None, draft_low_res
     return _calculate_video_dims(aspect_ratio, resolution, draft_low_res_video=draft_low_res_video)
 
 # ==========================================
+# AI MODELS REGISTRY
+# ==========================================
+# Supported AI models per category. These names are the canonical identifiers
+# used across the pipeline (e.g. for workflow selection, detection markers and
+# model-specific behavior like resolution calculations).
+# Detection is done case-insensitively against workflow filenames/model names
+# (e.g. "minimax_h3_i2v.json" -> MiniMaxH3).
+AI_MODELS = {
+    # Text generation (LLM providers, see core/llm_engine.py)
+    "text": [
+        "Gemini",
+        "OpenAI",
+        "Zhipu",
+        "Qwen",
+        "Kimi",
+        "Ollama",
+        "LMStudio",
+    ],
+    # Audio generation (narration TTS + sound FX, see core/narration_generator.py)
+    "audio": [
+        "EdgeTTS",      # local TTS (TTS_METHOD = "local")
+        "ElevenLabs",   # TTS_METHOD = "elevenlabs"
+        "MMAudio",      # sound FX generation (SOUNDFX_WORKFLOW = "mmaudio")
+    ],
+    # Image generation (workflows in workflow/image/)
+    "image": [
+        "Flux",
+        "Flux2",
+        "HiDream",
+        "ZImage",
+        "SDXL",
+        "Gemini",       # Gemini API / GeminiWeb image modes
+    ],
+    # Video generation (workflows in workflow/video/)
+    "video": [
+        "Wan2.1",
+        "Wan2.2",
+        "MiniMaxH3",
+        "LTX2",
+        "GeminiWeb",    # browser-automation video mode
+    ],
+}
+
+
+def get_ai_models(category=None):
+    """
+    Get available AI model names, optionally filtered by category.
+
+    Args:
+        category: One of "text", "audio", "image", "video" (case-insensitive).
+                  Returns all categories if None.
+
+    Returns:
+        List of model names for the category, or the full AI_MODELS dict.
+    """
+    if category is None:
+        return AI_MODELS
+    return AI_MODELS.get(category.lower(), [])
+
+
+# ==========================================
 # COMFYUI CONFIGURATION
 # ==========================================
 # ComfyUI server URL
@@ -261,6 +325,15 @@ COMFY_URL = "http://127.0.0.1:8188"
 #   COMFY_OUTPUT_DIR = "C:/ComfyUI/output"  # Manual path for Windows
 #   COMFY_OUTPUT_DIR = "/home/user/ComfyUI/output"  # Manual path for Linux/Mac
 COMFY_OUTPUT_DIR = os.getenv("COMFY_OUTPUT_DIR", r"E:\ComfyUI\Output")
+
+# ComfyUI input directory (where ComfyUI loads input images)
+# Set this if ComfyUI is installed in a different location
+# Leave as empty string "" to auto-detect from ComfyUI API
+# Examples:
+#   COMFY_INPUT_DIR = ""  # Auto-detect (recommended)
+#   COMFY_INPUT_DIR = "C:/ComfyUI/input"  # Manual path for Windows
+COMFY_INPUT_DIR = os.getenv("COMFY_INPUT_DIR", "")
+
 
 # ==========================================
 # VIDEO WORKFLOW CONFIGURATION
@@ -359,8 +432,8 @@ if os.path.exists(_video_workflow_dir):
                             _load_image_candidates.append(_n_id)
                         if "CLIPTextEncode" == _class_type:
                             _text_encode_candidates.append((_n_id, _title))
-                        if any(x in _class_type for x in ["WanImageToVideo", "WanVideoTextToVideo", "WanVideoSampler", "WanSampler", "WanVideoGenerator", "WanFirstLastFrameToVideo", "WanVideoFirstLastFrameToVideo"]):
-                            # Prioritize specialized Wan nodes
+                        if any(x in _class_type for x in ["WanImageToVideo", "WanVideoTextToVideo", "WanVideoSampler", "WanSampler", "WanVideoGenerator", "WanFirstLastFrameToVideo", "WanVideoFirstLastFrameToVideo", "MiniMaxH3ImageToVideo"]):
+                            # Prioritize specialized Wan/MiniMax video nodes
                             _video_gen_candidates.insert(0, _n_id)
                         elif "Sampler" in _class_type or "KSampler" in _class_type:
                             _video_gen_candidates.append(_n_id)
@@ -377,8 +450,14 @@ if os.path.exists(_video_workflow_dir):
                         _inputs = _sampler_node.get("inputs", {})
                         
                         # Trace Positive Prompt (Motion Prompt)
-                        if not _motion_prompt_node_id and "positive" in _inputs:
-                            _p_val = _inputs["positive"]
+                        # MiniMax H3 nodes use a "prompt" input instead of "positive"
+                        _prompt_input = None
+                        if "positive" in _inputs:
+                            _prompt_input = "positive"
+                        elif "prompt" in _inputs:
+                            _prompt_input = "prompt"
+                        if not _motion_prompt_node_id and _prompt_input:
+                            _p_val = _inputs[_prompt_input]
                             if isinstance(_p_val, list) and len(_p_val) > 0:
                                 _motion_prompt_node_id = str(_p_val[0])
                         
@@ -457,11 +536,9 @@ if "default" not in VIDEO_WORKFLOWS:
 THEN_VS_NOW_AGENTS = ["then_vs_now"]
 
 # Legacy single workflow settings (deprecated, use VIDEO_WORKFLOWS instead)
-# Kept for backward compatibility
+# Node IDs are resolved per workflow via VIDEO_WORKFLOWS discovery (title tags
+# and class-type heuristics) - no hardcoded global fallback IDs.
 WORKFLOW_PATH = resolve_path("workflow/video/wan22_workflow.json")
-LOAD_IMAGE_NODE_ID = "97"
-MOTION_PROMPT_NODE_ID = "93"
-WAN_VIDEO_NODE_ID = "98"
 
 # ==========================================
 # IMAGE GENERATION CONFIGURATION
@@ -736,6 +813,11 @@ VIDEO_ASPECT_RATIO = "16:9"
 # For portrait: height = resolution, width calculated from aspect ratio
 VIDEO_RESOLUTION = os.getenv("VIDEO_RESOLUTION", "1280")  # 720p HD (1280x720 for 16:9)
 
+# Case-insensitive substring matched against the video workflow filename to
+# detect MiniMax H3 workflows (e.g. "minimax_h3_i2v.json"). These workflows
+# require dimensions that are multiples of 32 instead of the usual 8.
+MINIMAX_H3_WORKFLOW_MARKER = "minimax_h3"
+
 # Append image prompt to motion prompt for video generation
 # When enabled, the image_prompt will be concatenated with motion_prompt
 # This can help video AI models better understand the scene context and generate more accurate videos
@@ -934,6 +1016,12 @@ STORY_AGENT = "default"
 # Shots agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
 SHOTS_AGENT = "default"
 
+# Default prompt style for video generation when a shot/project doesn't specify one:
+#   "video"  - detailed timestamped MiniMax H3 video_prompt (falls back to motion_prompt
+#              when the shot has no video_prompt)
+#   "motion" - classic short motion_prompt (Wan 2.2 style)
+DEFAULT_PROMPT_MODE = os.getenv("PROMPT_MODE", "video")
+
 
 # ==========================================
 # WATERMARK REMOVAL CONFIGURATION
@@ -1080,7 +1168,7 @@ TTS_WORKFLOW_PATH = resolve_path("workflow/voice/tts_workflow.json")
 # ELEVENLABS API CONFIGURATION
 # ==========================================
 # Get your API key from: https://elevenlabs.io/app/settings/api-keys
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_API_KEY = decrypt_env_var("ELEVENLABS_API_KEY", "")
 
 # Default voice for TTS
 # For edge-tts: voice names like "en-US-AriaNeural", "en-GB-SoniaNeural"

@@ -31,6 +31,44 @@ from core.logger_config import get_logger
 
 logger = get_logger(__name__)
 
+# 2026-09: Gemini's image "download" builds the file as a Blob inside a
+# sandboxed (opaque-origin) frame and then navigates the tab to a blob: URL.
+# Under Playwright's CDP session that navigation crashes the whole browser,
+# so the native download can never complete. This script records every large
+# image Blob at creation time — converted to a data URL inside its own frame
+# (strings cross realms safely; Blob URLs do not) and relayed to the top
+# document — and blocks the tab-crashing anchor navigation. The largest
+# captured blob IS the full-resolution original the button would have saved.
+BLOB_SNIFFER_JS = """(function(){
+  if (window.__blobSniffer) return; window.__blobSniffer = true;
+  window.__capturedImages = window.__capturedImages || [];
+  window.addEventListener('message', function(ev){
+    if (ev.data && ev.data.__blobImage) { try { window.__capturedImages.push(ev.data.__blobImage); } catch(e){} }
+  });
+  var orig = URL.createObjectURL.bind(URL);
+  URL.createObjectURL = function(blob){
+    try {
+      if (blob && blob.size > 50000 && /^image\\//.test(blob.type || '')) {
+        var fr = new FileReader();
+        fr.onload = function(){
+          try {
+            var payload = {size: blob.size, type: blob.type, data: fr.result};
+            if (window === window.top) { window.__capturedImages.push(payload); }
+            else { try { window.top.postMessage({__blobImage: payload}, '*'); } catch(e) { try { window.parent.postMessage({__blobImage: payload}, '*'); } catch(e2) {} } }
+          } catch(e){}
+        };
+        fr.readAsDataURL(blob);
+      }
+    } catch(e){}
+    return orig(blob);
+  };
+  var origClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function(){
+    try { var h = this.getAttribute('href') || ''; if (h.indexOf('blob:') === 0) { return; } } catch(e){}
+    return origClick.apply(this, arguments);
+  };
+})();"""
+
 # Calibrated Gemini alpha masks (48x48 and 96x96 PNGs base64 encoded)
 # Used for high-precision reverse alpha-blending restoration.
 _MASK_48_B64 = "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"
@@ -89,6 +127,7 @@ def _create_browser_context(playwright_instance, profile_dir=None):
             args=launch_args,
             viewport={'width': 1280, 'height': 900},
             ignore_default_args=['--enable-automation'],
+            accept_downloads=True,
         )
         return context
     except Exception as e:
@@ -251,14 +290,17 @@ def _wait_for_response_complete(page, timeout: int = 180):
 
 def _find_generated_image(page):
     """Search the page for a generated image and return its src URL."""
+    # 2026-09 resync: messages are now scoped by <message-content> (the old
+    # div[data-message-id] wrapper is gone from the DOM).
     image_selectors = [
-        'div[data-message-id] img[src*="blob:"]',
-        'div[data-message-id] img[src*="data:image"]',
-        'div[data-message-id] img[src*="lh3.googleusercontent"]',
-        'div[data-message-id] img[src*="encrypted"]',
+        'message-content img[src*="blob:"]',
+        'message-content img[src*="data:image"]',
+        'message-content img[src*="lh3.googleusercontent"]',
+        'message-content img[src*="encrypted"]',
         'img.generated-image[src]',
         'button.image-button img[src]',
         'button.generated-image-button img[src]',
+        'message-content img[src]',
         'div[data-message-id] img[src]',
     ]
     for selector in image_selectors:
@@ -292,6 +334,7 @@ def _wait_for_image_response(page, timeout: int = None):
             'button.image-button img[src], '
             'button.generated-image-button img[src], '
             'img.generated-image[src], '
+            'message-content img[src], '
             'div[data-message-id] img[src]'
         )
         page.wait_for_selector(selector, timeout=30000, state='visible')
@@ -379,13 +422,21 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
     Optimized for high-resolution capture by persisting the lightbox view.
     """
     image_container_selectors = [
+        'message-content generated-image',
+        'response-element img',
+        'message-content img',
         'button.image-button',
         'button.generated-image-button',
+        'message-content div[jsname] img',
         '[data-message-id] div[jsname] img',
     ]
 
-    # Standard and high-res button selectors
+    # Standard and high-res button selectors.
+    # 2026-09 resync: data-test-id now sits on the gem-icon-button wrapper,
+    # not on the inner <button>.
     download_button_selectors = [
+        'gem-icon-button[data-test-id="download-generated-image-button"] button',
+        '[data-test-id="download-generated-image-button"] button',
         'button[data-test-id="download-generated-image-button"]',
         'button[aria-label="Download full size image"]',
         'button[aria-label="Download full-sized image"]',
@@ -404,6 +455,153 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
     ]
 
     try:
+        # ── Strategy 0: blob-capture download (FULL resolution) ─────────────
+        # 2026-09: the download button builds the original image as a Blob in
+        # a sandboxed frame and navigating to it crashes the whole browser
+        # under Playwright. With the sniffer installed the crash is blocked
+        # and the full-resolution bytes are captured at Blob creation.
+        # Guaranteed fallback (canvas extraction of the downscaled preview
+        # blob) runs right after if this yields nothing.
+        logger.info("Strategy 0: blob-capture download (full resolution)...")
+        try:
+            # init script covers future frames (the sandboxed download frame);
+            # this covers the already-loaded main document. Idempotent.
+            page.evaluate(BLOB_SNIFFER_JS)
+            # Drop everything captured earlier in the session (uploaded
+            # reference images, inline preview blobs) — otherwise the largest
+            # captured blob can be the user's uploaded reference instead of
+            # the generated image. Only post-click blobs are candidates.
+            page.evaluate("window.__capturedImages = [];")
+        except Exception:
+            pass
+        try:
+            btn = None
+            for sel in (
+                'gem-icon-button[data-test-id="download-generated-image-button"] button',
+                'button[aria-label="Download full size image"]',
+                'mat-dialog-container button[aria-label="Download full size image"]',
+                'div[role="dialog"] button[aria-label*="ownload" i]',
+                'button[aria-label="Download image"]',
+                'button[aria-label="Download"]',
+            ):
+                # Last visible match = most recent generation (chats can hold
+                # several generated images; uploads live in user-query and
+                # carry no download-generated-image-button).
+                btns = page.query_selector_all(sel)
+                visible = [b_ for b_ in btns if b_.is_visible()]
+                if visible:
+                    btn = visible[-1]
+                    logger.info(f"Strategy 0: clicking download control '{sel}' (last of {len(visible)})")
+                    break
+            if btn is None:
+                img_el = page.query_selector('message-content img')
+                if img_el:
+                    img_el.scroll_into_view_if_needed()
+                    img_el.click()
+                    time.sleep(3)
+                    btn = page.query_selector('mat-dialog-container button[aria-label="Download full size image"], div[role="dialog"] button[aria-label*="ownload" i]')
+
+            if btn is not None:
+                try:
+                    btn.scroll_into_view_if_needed()
+                    try:
+                        btn.hover(timeout=3000)
+                    except Exception:
+                        pass
+                    time.sleep(0.5)
+                    btn.click()
+                except Exception as click_err:
+                    logger.debug(f"Strategy 0 click failed: {click_err}")
+
+                # Poll captured blobs. Gemini prepares the full-size file
+                # server-side (observed 5s-100s) and may re-create blobs as it
+                # retries; wait for the largest to settle.
+                deadline = time.time() + 120
+                last_count = -1
+                last_new = time.time()
+                while time.time() < deadline:
+                    time.sleep(2)
+                    if page.is_closed():
+                        logger.debug("Strategy 0: page closed while polling")
+                        break
+                    try:
+                        summary = page.evaluate(
+                            "(window.__capturedImages || []).map(x => x.size)")
+                    except Exception:
+                        break
+                    if len(summary) != last_count:
+                        last_count = len(summary)
+                        last_new = time.time()
+                        logger.debug(f"Strategy 0: {last_count} blob(s) captured so far")
+                    if last_count > 0 and time.time() - last_new > 12:
+                        break
+                if last_count and not page.is_closed():
+                    try:
+                        data_url = page.evaluate("""() => {
+                            const arr = window.__capturedImages || [];
+                            if (!arr.length) return null;
+                            let best = arr[0];
+                            for (const x of arr) if (x.size > best.size) best = x;
+                            return best.data;
+                        }""")
+                        if data_url and ',' in data_url:
+                            _, data = data_url.split(',', 1)
+                            img_bytes = base64.b64decode(data)
+                            if len(img_bytes) > 200000:
+                                with open(output_path, 'wb') as f:
+                                    f.write(img_bytes)
+                                logger.info(f"Strategy 0 SUCCESS: {output_path} ({len(img_bytes):,} bytes, full resolution)")
+                                return output_path
+                    except Exception as eval_err:
+                        logger.debug(f"Strategy 0 blob read failed: {eval_err}")
+                logger.debug("Strategy 0: no full-resolution blob captured")
+            else:
+                logger.debug("Strategy 0: no download control found")
+        except Exception as e:
+            logger.debug(f"Strategy 0 failed: {e}")
+
+        # ── Fallback: canvas extraction of the displayed (preview) blob ──────
+        # Lower resolution than the original, but it never triggers the tab
+        # crash, so it is the safe last resort.
+        logger.info("Canvas fallback: extracting displayed image (may be preview resolution)...")
+        for img_sel in ['message-content img', 'img.main-image', 'div.lightbox img', 'div[role="dialog"] img', 'button.image-button img']:
+            try:
+                imgs = page.query_selector_all(img_sel)
+                for img_el in reversed(imgs):
+                    src = img_el.get_attribute('src')
+                    if not src or src.startswith('data:image/svg') or 'avatar' in src.lower():
+                        continue
+                    nw = img_el.evaluate('el => el.naturalWidth || 0')
+                    if nw < 300:
+                        continue
+                    data_url = img_el.evaluate("""
+                        (img) => new Promise(resolve => {
+                            const extract = () => {
+                                try {
+                                    const c = document.createElement('canvas');
+                                    c.width = img.naturalWidth; c.height = img.naturalHeight;
+                                    c.getContext('2d').drawImage(img, 0, 0);
+                                    resolve(c.toDataURL('image/png'));
+                                } catch (e) { resolve('EXTRACT_ERROR:' + e.message); }
+                            };
+                            if (!img.complete) { img.onload = extract; } else { extract(); }
+                        })
+                    """)
+                    if data_url and data_url.startswith('EXTRACT_ERROR:'):
+                        logger.debug(f"Canvas extract failed for {img_sel}: {data_url[:80]}")
+                        continue
+                    if data_url and ',' in data_url:
+                        _, data = data_url.split(',', 1)
+                        img_bytes = base64.b64decode(data)
+                        if len(img_bytes) > 200000:
+                            with open(output_path, 'wb') as f:
+                                f.write(img_bytes)
+                            logger.info(f"Canvas fallback SUCCESS: {output_path} ({len(img_bytes):,} bytes, {nw}px)")
+                            return output_path
+            except Exception as e:
+                logger.debug(f"Canvas fallback check failed for {img_sel}: {e}")
+                continue
+
         # Find the last rendered image container
         image_container = None
         for sel in image_container_selectors:
@@ -432,20 +630,35 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
                     main_img.hover()
                     time.sleep(1.0)
 
-                primary_trigger = page.query_selector('button[data-test-id="download-generated-image-button"]') or \
+                primary_trigger = page.query_selector('gem-icon-button[data-test-id="download-generated-image-button"] button') or \
+                                  page.query_selector('button[data-test-id="download-generated-image-button"]') or \
                                   page.query_selector('button[aria-label="Download full size image"]') or \
                                   page.query_selector('a[aria-label="Download image"], a[jsname="A47GAd"]') or \
                                   page.query_selector('button[aria-label="Download image"]')
-                
+
                 if primary_trigger:
                     logger.debug(f"Initial trigger click on '{primary_trigger.tag_name}' to start High-Res preparation...")
-                    primary_trigger.click()
-                    time.sleep(3.0) # Wait brief moment for potential swap/menu
+                    # 2026-09 resync: in the new UI this click IS the download —
+                    # a blind click used to consume the download event and left
+                    # Strategy 1's second click as a no-op. Capture it.
+                    try:
+                        with page.expect_download(timeout=8000) as dl_info:
+                            primary_trigger.click()
+                        dl = dl_info.value
+                        dl.save_as(output_path)
+                        fsize = os.path.getsize(output_path)
+                        logger.info(f"Step 0 SUCCESS: {output_path} ({fsize:,} bytes)")
+                        return output_path
+                    except Exception:
+                        # No download event yet (old-UI high-res prep) — fall through
+                        time.sleep(3.0) # Wait brief moment for potential swap/menu
             except Exception: pass
 
             # Polling wait for the "full size" version (Gemini can be slow to generate/swap)
             logger.info("Waiting for 'Download full size image' button to appear (~45s max)...")
-            full_res_btn_sel = 'button[data-test-id="download-generated-image-button"], button[aria-label="Download full size image"]'
+            full_res_btn_sel = ('gem-icon-button[data-test-id="download-generated-image-button"] button, '
+                                'button[data-test-id="download-generated-image-button"], '
+                                'button[aria-label="Download full size image"]')
             found_full = False
             for i in range(45): 
                 try:
@@ -526,10 +739,12 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
                                 logger.info(f"Strategy 1 IDEAL SUCCESS: {output_path} ({fsize:,} bytes)")
                                 return output_path
                             elif fsize > 1000000: # GOOD SUCCESS: > 1MB (likely high-res preview)
-                                logger.info(f"Strategy 1 GOOD SUCCESS: {output_path} ({fsize:,} bytes). Continuing to check for better copies...")
-                                # We'll keep this but continue the loop if "full-sized" wasn't hit yet
-                                if "full-sized" in btn_sel: return output_path
-                                # If we hit a non-full-sized but it's okay, maybe try one more button
+                                # 2026-09 resync: the new UI has no higher-res
+                                # lightbox variant, so returning immediately
+                                # avoids redundant clicks and later strategies
+                                # overwriting the native file.
+                                logger.info(f"Strategy 1 GOOD SUCCESS: {output_path} ({fsize:,} bytes)")
+                                return output_path
                             else:
                                 logger.warning(f"Strategy 1 file small ({fsize:,} bytes). Retrying alternatives...")
                                 # os.remove(output_path) # Don't remove yet, keep as backup if ALL else fails
@@ -573,11 +788,12 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
         # ── Strategy 2: Direct High-Res URL Fetch ──
         logger.info("Strategy 2: Attempting direct authenticated URL fetch (=s0)...")
         img_selectors = [
-            'img.main-image', 
-            'div.lightbox img', 
-            'div[role="dialog"] img', 
+            'img.main-image',
+            'div.lightbox img',
+            'div[role="dialog"] img',
             '.picker-dialog img',
-            'button.image-button img', 
+            'button.image-button img',
+            'message-content img[src*="googleusercontent"]',
             'div[data-message-id] img[src*="googleusercontent"]'
         ]
         for img_sel in img_selectors:
@@ -607,9 +823,11 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
                 logger.debug(f"Strategy 2 check failed for {img_sel}: {e}")
                 continue
 
-        # ── Strategy 3: JS Canvas Extraction ──
+        # ── Strategy 3: JS Canvas Extraction (Natural Resolution) ──
+        # 2026-09 resync: the generated image is now a blob: URL on
+        # message-content img — canvas extraction of it is proven to work.
         logger.info("Strategy 3: Attempting JS Canvas extraction (Natural Resolution)...")
-        for img_sel in ['img.main-image', 'div.lightbox img', 'div[role="dialog"] img', 'button.image-button img']:
+        for img_sel in ['message-content img', 'img.main-image', 'div.lightbox img', 'div[role="dialog"] img', 'button.image-button img']:
             try:
                 imgs = page.query_selector_all(img_sel)
                 for img_el in reversed(imgs):
@@ -708,7 +926,7 @@ def _download_image_fallback(page, image_src: str, output_path: str) -> Optional
     # 4. Element screenshot (Absolute last resort)
     try:
         page.evaluate("() => document.querySelectorAll('footer, .chat-input, .prompt-area').forEach(el => el.style.display='none')")
-        for sel in ['div[data-message-id] img', 'button.image-button img']:
+        for sel in ['message-content img', 'div[data-message-id] img', 'button.image-button img']:
             for img in reversed(page.query_selector_all(sel)):
                 if img.get_attribute('src') == image_src:
                     img.scroll_into_view_if_needed()
@@ -854,6 +1072,12 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
     with sync_playwright() as playwright_instance:
         context = _create_browser_context(playwright_instance, profile_dir)
         page = context.pages[0] if context.pages else context.new_page()
+        # Gemini calls window.close() after its download interactions, which
+        # kills the whole automation browser mid-flow — neuter it.
+        page.add_init_script("window.close = () => {};")
+        # Capture image blobs at creation (see BLOB_SNIFFER_JS) in every frame,
+        # including the sandboxed frame Gemini assembles downloads in.
+        page.add_init_script(BLOB_SNIFFER_JS)
 
         try:
             logger.info(f"Navigating to {gemini_url}")

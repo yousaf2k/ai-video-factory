@@ -192,12 +192,12 @@ export function GenerationDialog({
 
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <Input
+            <input
               type="checkbox"
               id="regen-force"
               checked={force}
               onChange={(e) => setForce(e.target.checked)}
-              className="w-4 h-4 mr-2"
+              className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
             />
             <label htmlFor="regen-force" className="text-sm">
               Force generation (ignore cache)
@@ -312,7 +312,7 @@ export function GenerationDialog({
                   {/* Then Prompt Override — ONLY for THEN image of FLFI2V projects */}
                   {isFLFI2V && isThenImage && (
                     <div className="flex items-center gap-2">
-                      <Input
+                      <input
                         type="checkbox"
                         id="regen-override-then"
                         checked={useOverride}
@@ -325,7 +325,7 @@ export function GenerationDialog({
                             setPromptOverride(defaultPromptOverride || "");
                           }
                         }}
-                        className="w-4 h-4 mr-2"
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
                       />
                       <label htmlFor="regen-override-then" className="text-sm font-semibold">
                         Then Prompt Override
@@ -459,7 +459,7 @@ export function GenerationDialog({
               </div>
 
               <div className="flex items-center gap-2">
-                <Input
+                <input
                   type="checkbox"
                   id="regen-soundfx"
                   checked={generateSoundFX}
@@ -467,7 +467,7 @@ export function GenerationDialog({
                     setGenerateSoundFX(e.target.checked);
                     localStorage.setItem(`video_soundfx_${projectId}`, e.target.checked.toString());
                   }}
-                  className="w-4 h-4 mr-2"
+                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
                 />
                 <label htmlFor="regen-soundfx" className="text-sm">
                   🔊 Generate Sound FX after video
@@ -546,7 +546,7 @@ export function GenerationDialog({
               {isFLFI2V && (
                 <div className="space-y-4 pt-4 border-t">
                   <div className="flex items-center gap-2">
-                    <Input
+                    <input
                       type="checkbox"
                       id="regen-override"
                       checked={useOverride}
@@ -557,7 +557,7 @@ export function GenerationDialog({
                           setPromptOverride(DEFAULT_VIDEO_PROMPT);
                         }
                       }}
-                      className="w-4 h-4 mr-2"
+                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
                     />
                     <label htmlFor="regen-override" className="text-sm font-semibold">
                       Override the prompt

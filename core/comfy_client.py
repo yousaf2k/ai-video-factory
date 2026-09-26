@@ -14,6 +14,10 @@ logger = get_logger(__name__)
 # Cache for ComfyUI output directory
 _comfy_output_dir = None
 
+# Cache for ComfyUI input directory
+_comfy_input_dir = None
+
+
 
 def is_comfyui_running():
     """Check if ComfyUI is currently running and accessible."""
@@ -127,6 +131,164 @@ def get_comfyui_output_directory():
     logger.error(f"   Using default relative path: {_comfy_output_dir}")
     logger.error(f"   If ComfyUI is installed elsewhere, set COMFY_OUTPUT_DIR in config.py")
     return _comfy_output_dir
+
+
+def get_comfyui_input_directory():
+    """
+    Get ComfyUI's actual input directory from the config or API.
+
+    Returns:
+        str: Path to ComfyUI's input directory
+    """
+    global _comfy_input_dir
+
+    if _comfy_input_dir:
+        return _comfy_input_dir
+
+    # First, check if it's manually set in config
+    if getattr(config, 'COMFY_INPUT_DIR', None):
+        _comfy_input_dir = os.path.normpath(config.COMFY_INPUT_DIR)
+        logger.info(f"ComfyUI input directory from config: {_comfy_input_dir}")
+        return _comfy_input_dir
+
+    logger.info("Attempting to detect ComfyUI input directory...")
+
+    # 1. Try to detect from API system_stats argv
+    try:
+        r = http_session.get(f"{config.COMFY_URL}/system_stats", timeout=5)
+        if r.status_code == 200:
+            stats = r.json()
+            system_info = stats.get('system', {})
+            argv = system_info.get('argv', [])
+            for i, arg in enumerate(argv):
+                if arg == '--input-directory' and i + 1 < len(argv):
+                    _comfy_input_dir = os.path.normpath(argv[i+1])
+                    logger.info(f"ComfyUI input directory from API argv: {_comfy_input_dir}")
+                    return _comfy_input_dir
+            
+            if 'paths' in stats and 'input' in stats['paths']:
+                _comfy_input_dir = os.path.normpath(stats['paths']['input'])
+                logger.info(f"ComfyUI input directory from system_stats API: {_comfy_input_dir}")
+                return _comfy_input_dir
+    except Exception as e:
+        logger.warning(f"Could not get ComfyUI settings or paths from API: {e}")
+
+    # 2. Check common standard locations first (since output directory can be redirected)
+    possible_paths = [
+        "C:/ComfyUI_Portable/ComfyUI/input",
+        "C:/ComfyUI/input",
+        "D:/ComfyUI/input",
+        os.path.expanduser("~/ComfyUI/input"),
+    ]
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            _comfy_input_dir = os.path.normpath(path)
+            logger.info(f"ComfyUI input directory detected by file existence: {_comfy_input_dir}")
+            return _comfy_input_dir
+
+    # 3. Guess based on ComfyUI's output directory only as a last resort fallback
+    output_dir = get_comfyui_output_directory()
+    if output_dir:
+        parent_dir = os.path.dirname(output_dir)
+        guess_input_dir = os.path.join(parent_dir, "input")
+        if os.path.exists(guess_input_dir):
+            _comfy_input_dir = os.path.normpath(guess_input_dir)
+            logger.info(f"Guessed ComfyUI input directory from output dir parent: {_comfy_input_dir}")
+            return _comfy_input_dir
+
+    # Last resort: use default relative path
+    _comfy_input_dir = "ComfyUI/input"
+    logger.error(f"Could not detect ComfyUI input directory! Using default: {_comfy_input_dir}")
+    return _comfy_input_dir
+
+
+def prepare_comfyui_input_image(image_path):
+    """
+    Prepare an image path for ComfyUI.
+    If the image is outside ComfyUI's input directory, copies it to the
+    ComfyUI input directory under a subfolder matching the project structure
+    and returns the relative path for LoadImage node.
+
+    Args:
+        image_path (str): Absolute or relative path to the image
+
+    Returns:
+        str: Relative path formatted for ComfyUI
+    """
+    if not image_path:
+        return image_path
+
+    # Resolve to absolute path
+    abs_image_path = config.resolve_path(image_path)
+    if not os.path.exists(abs_image_path):
+        logger.warning(f"Input image path does not exist: {abs_image_path}")
+        return image_path
+
+    # Detect input folder
+    comfy_input_dir = get_comfyui_input_directory()
+    if not comfy_input_dir:
+        return abs_image_path.replace('\\', '/')
+
+    # Normalize paths
+    norm_abs_image_path = abs_image_path.replace('\\', '/')
+    norm_comfy_input_dir = comfy_input_dir.replace('\\', '/').rstrip('/')
+
+    # If the image is already inside the ComfyUI input directory, return relative path
+    if norm_abs_image_path.startswith(norm_comfy_input_dir + '/'):
+        relative_path = norm_abs_image_path[len(norm_comfy_input_dir) + 1:]
+        return relative_path
+
+    # Determine target relative path based on project folder structure
+    if '/projects/' in norm_abs_image_path:
+        relative_target = norm_abs_image_path.split('/projects/', 1)[1]
+        relative_target = f"projects/{relative_target}"
+    elif '/generated_images/' in norm_abs_image_path:
+        relative_target = norm_abs_image_path.split('/generated_images/', 1)[1]
+        relative_target = f"generated_images/{relative_target}"
+    else:
+        relative_target = os.path.basename(norm_abs_image_path)
+
+    # Destination inside ComfyUI input folder
+    dest_path = os.path.normpath(os.path.join(comfy_input_dir, relative_target))
+
+    # Copy the file to ComfyUI's input directory
+    try:
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        import shutil
+        shutil.copy2(abs_image_path, dest_path)
+        logger.info(f"Copied input image to ComfyUI input directory: {dest_path}")
+        return relative_target.replace('\\', '/')
+    except Exception as e:
+        logger.error(f"Failed to copy image to ComfyUI input directory: {e}")
+        
+        # As fallback, try uploading via HTTP
+        try:
+            filename = os.path.basename(abs_image_path)
+            # determine subfolder relative to input directory
+            subfolder_target = os.path.dirname(relative_target).replace('\\', '/')
+            
+            upload_url = f"{config.COMFY_URL}/upload/image"
+            logger.info(f"Attempting to upload file via API to {upload_url} (subfolder: {subfolder_target})...")
+            with open(abs_image_path, 'rb') as f:
+                r = http_session.post(
+                    upload_url,
+                    files={"image": (filename, f, "image/png")},
+                    data={"subfolder": subfolder_target, "type": "input"},
+                    timeout=15
+                )
+            if r.status_code == 200:
+                resp = r.json()
+                uploaded_name = resp.get('name', filename)
+                uploaded_subfolder = resp.get('subfolder', subfolder_target)
+                if uploaded_subfolder:
+                    return f"{uploaded_subfolder}/{uploaded_name}".replace('\\', '/')
+                return uploaded_name
+        except Exception as upload_err:
+            logger.error(f"Failed to upload image via ComfyUI API fallback: {upload_err}")
+
+        return abs_image_path.replace('\\', '/')
+
 
 def submit(workflow):
     """

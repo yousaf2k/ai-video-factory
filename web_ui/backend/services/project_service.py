@@ -115,7 +115,8 @@ class ProjectService:
             story_agent=request.story_agent,
             shots_agent=request.shots_agent,
             total_duration=request.total_duration,
-            aspect_ratio=request.aspect_ratio
+            aspect_ratio=request.aspect_ratio,
+            prompt_mode=request.prompt_mode
         )
 
         from web_ui.backend.models.story import ProjectType
@@ -324,6 +325,9 @@ class ProjectService:
 
         if request.shots_agent is not None:
             meta['shots_agent'] = request.shots_agent
+
+        if request.prompt_mode is not None:
+            meta['prompt_mode'] = request.prompt_mode
 
         if request.aspect_ratio is not None:
             meta['aspect_ratio'] = request.aspect_ratio

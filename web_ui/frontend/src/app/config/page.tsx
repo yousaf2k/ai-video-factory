@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { useConfig, useUpdateConfig } from "@/hooks/useAgents";
 import { Save, RefreshCw, ArrowLeft, Globe, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -74,10 +75,10 @@ export default function ConfigPage() {
       if (!updates.elevenlabs_api_key) delete updates.elevenlabs_api_key;
 
       await updateConfigMutation.mutateAsync(updates);
-      alert("Configuration updated successfully!");
+      toast.success("Configuration updated successfully!");
     } catch (error) {
       console.error("Failed to update config:", error);
-      alert("Failed to update configuration.");
+      toast.error("Failed to update configuration.");
     }
   };
 
@@ -85,11 +86,11 @@ export default function ConfigPage() {
     setIsLaunchingBrowser(true);
     try {
       const data = await api.launchBrowser();
-      alert(data.message || "Browser launched successfully!");
+      toast.success(data.message || "Browser launched successfully!");
     } catch (error: any) {
       console.error("Error launching browser:", error);
       const detail = error.response?.data?.detail || error.message;
-      alert(`Error launching browser: ${detail}`);
+      toast.error(`Error launching browser: ${detail}`);
     } finally {
       setIsLaunchingBrowser(false);
     }

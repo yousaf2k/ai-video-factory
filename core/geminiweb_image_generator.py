@@ -331,6 +331,7 @@ def _screenshot_image(page, output_path: str) -> Optional[str]:
         image_selectors = [
             'button.image-button img',
             'button.generated-image-button img',
+            'message-content img',
             'div[data-message-id] img',
         ]
 

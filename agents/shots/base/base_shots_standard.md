@@ -7,8 +7,11 @@ Return a JSON list where each item contains:
 - `scene_id`: The 0-based index of the scene (from input).
 - `image_prompt`: High-fidelity prompt for Flux2.Dev.
 - `motion_prompt`: Immersive motion prompt for Wan 2.2.
+- `video_prompt`: Detailed timestamped video prompt in MiniMax H3 I2VA format (rules below).
 - `soundfx_prompt`: Descriptive sound tags for audio generation (e.g., "wind howling, gravel crunching, low hum").
 - `camera`: One of [static, pan, dolly, drone, orbit, tracking, arc, whip pan, handheld].
+
+{{include:videoprompt/videoprompt_minimax_h3}}
 
 ## Prompt Engineering Rules (Flux2.Dev)
 - Start with the core subject and action.

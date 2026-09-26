@@ -6,6 +6,7 @@ import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GenerationDialog } from '../shots/GenerationDialog';
 import { api } from '@/services/api';
+import { toast } from 'sonner';
 
 interface CharacterReferenceUploadProps {
   character: Character;
@@ -13,6 +14,7 @@ interface CharacterReferenceUploadProps {
   projectId: string;
   onUpdate?: () => void;
   onPromptChange?: (promptKey: string, newPrompt: string) => void;
+  onBeforeUpload?: () => Promise<void>;
 }
 
 export default function CharacterReferenceUpload({
@@ -20,7 +22,8 @@ export default function CharacterReferenceUpload({
   characterIndex,
   projectId,
   onUpdate,
-  onPromptChange
+  onPromptChange,
+  onBeforeUpload
 }: CharacterReferenceUploadProps) {
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   
@@ -56,6 +59,15 @@ export default function CharacterReferenceUpload({
     variant: string,
     file: File
   ) => {
+    if (onBeforeUpload) {
+      try {
+        await onBeforeUpload();
+      } catch (err) {
+        console.error("Error in onBeforeUpload before uploading:", err);
+        return;
+      }
+    }
+
     setUploading(prev => ({ ...prev, [variant]: true }));
 
     const formData = new FormData();
@@ -91,7 +103,7 @@ export default function CharacterReferenceUpload({
       console.log(`${variant.toUpperCase()} reference uploaded:`, result.image_path);
     } catch (error) {
       console.error(`Error uploading ${variant} reference:`, error);
-      alert(`Failed to upload ${variant.toUpperCase()} reference: ${error}`);
+      toast.error(`Failed to upload ${variant.toUpperCase()} reference: ${error}`);
     } finally {
       setUploading(prev => ({ ...prev, [variant]: false }));
     }
@@ -120,6 +132,14 @@ export default function CharacterReferenceUpload({
 
   const handleGenerate = async (options: any) => {
     if (!selectedVariant) return;
+    if (onBeforeUpload) {
+      try {
+        await onBeforeUpload();
+      } catch (err) {
+        console.error("Error in onBeforeUpload before generating:", err);
+        return;
+      }
+    }
     try {
       await api.generateCharacterReferenceImage(projectId, characterIndex, {
         variant: selectedVariant,
@@ -134,7 +154,7 @@ export default function CharacterReferenceUpload({
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error("Failed to generate character image:", error);
-      alert(`Failed to generate character image: ${error}`);
+      toast.error(`Failed to generate character image: ${error}`);
     }
   };
 

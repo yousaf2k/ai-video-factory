@@ -292,7 +292,7 @@ async def update_shot(project_id: str, shot_id_or_index: str, request: UpdateSho
         
         def modify_shot(shots):
             shot = shots[shot_index - 1]
-            for field in ['image_prompt', 'motion_prompt', 'camera', 'narration', 'scene_id', 
+            for field in ['image_prompt', 'motion_prompt', 'video_prompt', 'prompt_type', 'camera', 'narration', 'scene_id', 
                          'then_image_prompt', 'now_image_prompt', 'meeting_video_prompt', 'departure_video_prompt']:
                 val = getattr(request, field, None)
                 if val is not None:

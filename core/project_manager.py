@@ -209,7 +209,7 @@ class ProjectManager:
             return latest['meta']
         return None
 
-    def create_project(self, idea, project_id=None, story_agent="default", shots_agent="default", total_duration=None, aspect_ratio="16:9"):
+    def create_project(self, idea, project_id=None, story_agent="default", shots_agent="default", total_duration=None, aspect_ratio="16:9", prompt_mode="video"):
         """Create a new project
 
         Args:
@@ -219,6 +219,7 @@ class ProjectManager:
             shots_agent: Shots prompt agent
             total_duration: Target video length in seconds
             aspect_ratio: Video aspect ratio ("16:9" or "9:16")
+            prompt_mode: Default prompt style for video generation ("video" or "motion")
         """
         if project_id is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -239,6 +240,7 @@ class ProjectManager:
             'idea': idea,
             'story_agent': story_agent,
             'shots_agent': shots_agent,
+            'prompt_mode': prompt_mode,
             'total_duration': total_duration,
             'aspect_ratio': aspect_ratio,
             'started_at': datetime.now().isoformat(),
@@ -313,6 +315,8 @@ class ProjectManager:
                 'index': idx,
                 'image_prompt': shot.get('image_prompt', ''),
                 'motion_prompt': shot.get('motion_prompt', ''),
+                'video_prompt': shot.get('video_prompt'),
+                'prompt_type': shot.get('prompt_type'),
                 'camera': shot.get('camera', ''),
                 'scene_id': shot.get('scene_id', 0),
                 'batch_number': shot.get('batch_number', idx),

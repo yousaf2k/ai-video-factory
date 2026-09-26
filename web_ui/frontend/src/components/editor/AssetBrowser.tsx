@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { MediaType } from '@/store/useEditorStore';
 import { api } from '@/services/api';
 import { Shot } from '@/types';
+import { toast } from 'sonner';
 
 interface AssetData {
   id: string;
@@ -142,7 +143,7 @@ export function AssetBrowser({ projectId }: { projectId?: string }) {
 
   const handleFileUpload = async (files: FileList, assetType: 'video' | 'audio' | 'image') => {
     if (!projectId) {
-      alert('No project ID available');
+      toast.error('No project ID available');
       return;
     }
 
@@ -181,10 +182,10 @@ export function AssetBrowser({ projectId }: { projectId?: string }) {
       // Switch back to project tab to see uploaded assets
       setActiveTab('project');
 
-      alert('Assets uploaded successfully!');
+      toast.success('Assets uploaded successfully!');
     } catch (error) {
       console.error('Upload error:', error);
-      alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsUploading(false);
       setUploadProgress(0);

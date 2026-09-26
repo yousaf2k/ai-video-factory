@@ -67,6 +67,7 @@ def _create_browser_context(playwright_instance, profile_dir=None):
             args=launch_args,
             viewport={'width': 1280, 'height': 900},
             ignore_default_args=['--enable-automation'],
+            accept_downloads=True,
         )
         return context
     except Exception as e:
@@ -224,18 +225,30 @@ def _wait_for_verification_complete(page):
     waited = 0
     poll_interval = 5
     
+    # 2026-09 resync: Gemini rebuilt its UI (Angular "luminous" rewrite).
+    # The video renders inside message-content > response-element > generated-video
+    # > video-player > video. div[data-message-id] and button.generated-video-button
+    # no longer exist.
     video_selectors = [
+        'message-content generated-video video-player video',
+        'message-content generated-video video',
+        'generated-video video-player video',
+        'generated-video video',
+        'video-player video',
+        'message-content video[src]',
         'div[data-message-id] video',
         'div[data-message-id] .playable-media',
-        'button.generated-video-button'
+        'button.generated-video-button',
+        'video[src]',
     ]
-    
+
     while waited < timeout:
-        # Check if the video element has appeared
+        # Check if the video element has appeared (last match = newest message)
         found_video = False
         for sel in video_selectors:
             try:
-                el = page.query_selector(sel)
+                videos = page.query_selector_all(sel)
+                el = videos[-1] if videos else None
                 if el and el.is_visible():
                     found_video = True
                     logger.info(f"Video container found via {sel}!")
@@ -259,72 +272,100 @@ def _wait_for_verification_complete(page):
 
 
 def _try_download_native(page, output_path: str) -> Optional[str]:
-    """Download the latest generated video using native Playwright download."""
-    
+    """Download the latest generated video using native Playwright download.
+
+    2026-09 resync: the download button lives in the video player's controls
+    overlay (video-player > .controls > .action-buttons) as
+    button[aria-label="Download video"] inside gem-icon-button[fonticonname="download"],
+    and is present in the DOM without hovering. Hovering <video> times out
+    because the .controls overlay intercepts pointer events, so hover is
+    best-effort only.
+    """
+
     video_container_selectors = [
+        'message-content generated-video video-player',
         'generated-video video-player',
         'generated-video',
+        'video-player',
+        'message-content video',
         'div[data-message-id] video',
         'div[data-message-id] .playable-media',
         'button.generated-video-button',
     ]
 
     download_button_selectors = [
-        'button.download-button',
+        'video-player button[aria-label="Download video"]',
+        'generated-video button[aria-label="Download video"]',
+        'gem-icon-button[fonticonname="download"] button',
         'button[aria-label="Download video"]',
         'button[aria-label="Download"]',
+        'button.download-button',
         'button[jsname][aria-label*="ownload"]',
         'a[download]',
     ]
 
+    def _click_visible_download_button() -> Optional[str]:
+        for btn_sel in download_button_selectors:
+            try:
+                btns = page.query_selector_all(btn_sel)
+                if btns:
+                    # Test if any of these buttons are visible and click the last one
+                    for btn in reversed(btns):
+                        if btn.is_visible():
+                            logger.info(f"Clicking download button: {btn_sel}")
+                            with page.expect_download(timeout=300000) as dl_info:
+                                btn.click()
+                            dl = dl_info.value
+                            dl.save_as(output_path)
+                            logger.info(f"Native download saved: {output_path}")
+                            return output_path
+            except Exception:
+                continue
+        return None
+
     def _do_hover_and_download(container, depth=0) -> Optional[str]:
         if not container or depth > 4:
             return None
-            
+
         try:
-            # Scroll into view and hover to trigger the toolbar
+            # Scroll into view and hover to trigger the toolbar (best-effort:
+            # the player's .controls overlay can intercept pointer events).
             container.scroll_into_view_if_needed()
             time.sleep(1)
-            container.hover()
-            time.sleep(2.0)  # Wait for animation
-            
-            # Check if any download button is now visible
-            for btn_sel in download_button_selectors:
-                try:
-                    btns = page.query_selector_all(btn_sel)
-                    if btns:
-                        # Test if any of these buttons are visible and click the last one
-                        for btn in reversed(btns):
-                            if btn.is_visible():
-                                logger.info(f"Clicking download button: {btn_sel} (at DOM depth {depth})")
-                                with page.expect_download(timeout=300000) as dl_info:
-                                    btn.click()
-                                dl = dl_info.value
-                                dl.save_as(output_path)
-                                logger.info(f"Native download saved: {output_path}")
-                                return output_path
-                except Exception as repr_e:
-                    continue
-                    
+            try:
+                container.hover(timeout=3000)
+                time.sleep(2.0)  # Wait for animation
+            except Exception as hover_err:
+                logger.debug(f"Hover skipped at depth {depth}: {hover_err}")
+
+            downloaded = _click_visible_download_button()
+            if downloaded:
+                return downloaded
+
             logger.debug(f"No download button visible on hover at depth {depth}. Trying parent...")
             parent = container.evaluate_handle('el => el.parentElement')
             return _do_hover_and_download(parent, depth + 1)
-            
+
         except Exception as e:
             logger.debug(f"Hover/download failed at depth {depth}: {e}")
             return None
 
     try:
+        # Fast path: the button is now permanently in the DOM, no hover needed.
+        downloaded = _click_visible_download_button()
+        if downloaded:
+            return downloaded
+
         video_element = None
         for sel in video_container_selectors:
             containers = page.query_selector_all(sel)
             if containers:
                 video_element = containers[-1]
                 logger.debug(f"Found video base element: {sel}")
-                
+
                 # Start recursive hover and check from the video element upwards
                 path = _do_hover_and_download(video_element, 0)
-                if path: 
+                if path:
                     return path
 
         if not video_element:
@@ -339,7 +380,11 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
 def _download_video_fallback(page, output_path: str) -> Optional[str]:
     """Fallback method: Extract video source and fetch directly or via JS."""
     try:
-        video_selector = 'generated-video video, video-player video, div[data-message-id] video'
+        video_selector = (
+            'message-content generated-video video-player video, '
+            'generated-video video, video-player video, '
+            'div[data-message-id] video'
+        )
         videos = page.query_selector_all(video_selector)
         
         if not videos:
@@ -417,6 +462,9 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
     with sync_playwright() as playwright_instance:
         context = _create_browser_context(playwright_instance, profile_dir)
         page = context.new_page()
+        # Gemini calls window.close() after its download interactions, which
+        # kills the whole automation browser mid-flow — neuter it.
+        page.add_init_script("window.close = () => {};")
 
         try:
             logger.info(f"Navigating to {gemini_url}")

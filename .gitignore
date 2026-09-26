@@ -38,3 +38,4 @@ web_ui/backend/api/__pycache__/
 web_ui/backend/models/__pycache__/
 node_modules/
 startup_debug.txt
+.secrets_master_key

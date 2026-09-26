@@ -64,6 +64,7 @@ export interface Project {
   idea: string;
   story_agent?: string;
   shots_agent?: string;
+  prompt_mode?: "video" | "motion";
   started_at: string;
   completed: boolean;
   completed_at?: string;
@@ -146,6 +147,8 @@ export interface Shot {
   index: number;
   image_prompt: string;
   motion_prompt: string;
+  video_prompt?: string | null;
+  prompt_type?: "motion" | "video" | null;
   camera: string;
   narration: string;
   batch_number: number;
@@ -185,6 +188,7 @@ export interface CreateProjectRequest {
   project_type: ProjectType;
   story_agent?: string;
   shots_agent?: string;
+  prompt_mode?: "video" | "motion";
   total_duration?: number;
   prompts_file?: string;
   aspect_ratio?: "16:9" | "9:16" | "21:8";
@@ -195,6 +199,7 @@ export interface UpdateProjectRequest {
   completed?: boolean;
   story_agent?: string;
   shots_agent?: string;
+  prompt_mode?: "video" | "motion";
   aspect_ratio?: "16:9" | "9:16" | "21:8";
 }
 
@@ -245,6 +250,8 @@ export interface UpdateStoryRequest {
 export interface UpdateShotRequest {
   image_prompt?: string;
   motion_prompt?: string;
+  video_prompt?: string;
+  prompt_type?: "motion" | "video" | null;
   camera?: string;
   narration?: string;
   scene_id?: number | null;

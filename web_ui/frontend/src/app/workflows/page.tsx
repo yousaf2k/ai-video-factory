@@ -4,6 +4,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import {
   useWorkflows,
   useWorkflowContent,
@@ -65,10 +66,10 @@ export default function WorkflowsPage() {
 
     try {
       await updateWorkflowMutation.mutateAsync(editContent);
-      alert("Workflow JSON updated successfully!");
+      toast.success("Workflow JSON updated successfully!");
     } catch (error: any) {
       console.error("Failed to update workflow:", error);
-      alert(
+      toast.error(
         `Failed to update workflow: ${error.response?.data?.detail || error.message}`,
       );
     }

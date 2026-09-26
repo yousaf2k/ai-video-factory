@@ -5,6 +5,7 @@ python-dotenv>=1.0.0
 playwright>=1.40.0
 playwright-stealth>=1.0.6
 opencv-python-headless>=4.10.0
+cryptography>=41.0.0
 
 # Web UI dependencies
 fastapi>=0.104.0

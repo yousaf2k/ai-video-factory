@@ -20,7 +20,24 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
     # Get dimensions from config (use video dimensions for video workflow)
     if aspect_ratio is None:
         aspect_ratio = config.VIDEO_ASPECT_RATIO
-    width, height = config.calculate_video_dimensions(aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video, resolution=resolution)
+
+    # MiniMax H3 workflows (detected via filename marker) use a fixed
+    # megapixel-based resolution table (all outputs multiples of 32) instead
+    # of the standard resolution calculation
+    workflow_filename = os.path.basename(path).lower()
+    minimax_h3_marker = getattr(config, 'MINIMAX_H3_WORKFLOW_MARKER', 'minimax_h3')
+    is_minimax_h3 = minimax_h3_marker in workflow_filename
+
+    if is_minimax_h3:
+        from core.config_utils import calculate_minimax_h3_dimensions
+        width, height = calculate_minimax_h3_dimensions(
+            aspect_ratio=aspect_ratio,
+            resolution=resolution,
+            draft_low_res_video=draft_low_res_video
+        )
+        logger.info(f"[RESOLUTION] MiniMax H3 workflow detected: using {width}x{height} (multiple of 32)")
+    else:
+        width, height = config.calculate_video_dimensions(aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video, resolution=resolution)
 
     # Get workflow settings for node IDs
     if not workflow_config:
@@ -29,9 +46,7 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
 
     wan_video_node_id = None
     if workflow_config:
-        wan_video_node_id = workflow_config.get('wan_video_node_id', getattr(config, 'WAN_VIDEO_NODE_ID', None))
-    else:
-        wan_video_node_id = getattr(config, 'WAN_VIDEO_NODE_ID', None)
+        wan_video_node_id = workflow_config.get('wan_video_node_id')
 
     # Check if workflow is in UI format (has "nodes" array) or API format (node IDs as keys)
     if "nodes" in workflow:
@@ -105,6 +120,11 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
                         print(f"[INFO] Set dimensions: {width}x{height} ({config.VIDEO_ASPECT_RATIO} aspect ratio)")
                     else:
                         node_data["inputs"]["length"] = frames
+                # For MiniMaxH3ImageToVideo - use table dimensions from config
+                elif node_type == "MiniMaxH3ImageToVideo" and len(widgets) >= 2:
+                    node_data["inputs"]["width"] = width
+                    node_data["inputs"]["height"] = height
+                    node_data["inputs"]["batch_size"] = widgets[3] if len(widgets) >= 4 else 1
                 # For CLIPLoader
                 elif node_type == "CLIPLoader" and len(widgets) >= 3:
                     node_data["inputs"]["clip_name1"] = widgets[0]
@@ -176,19 +196,22 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
             # Check if node has class_type to avoid errors
             if isinstance(node, dict) and 'class_type' in node:
                 class_type = node.get('class_type')
-                if class_type in wan_candidates or (isinstance(class_type, str) and "Wan" in class_type):
+                is_minimax_node = isinstance(class_type, str) and "MiniMaxH3" in class_type
+                if class_type in wan_candidates or (isinstance(class_type, str) and ("Wan" in class_type or is_minimax_node)):
                     old_w = node['inputs'].get('width', 'unknown')
                     old_h = node['inputs'].get('height', 'unknown')
                     node['inputs']['width'] = width
                     node['inputs']['height'] = height
                     updated_nodes.append(node_id)
-                    logger.info(f"[RESOLUTION] Updated Wan node {node_id} ({class_type}): {old_w}x{old_h} -> {width}x{height}")
+                    logger.info(f"[RESOLUTION] Updated node {node_id} ({class_type}): {old_w}x{old_h} -> {width}x{height}")
 
                     # Set video length if specified
-                    if video_length_seconds:
+                    # MiniMax H3 workflows compute frame count via their own math node
+                    if video_length_seconds and not is_minimax_node:
                         frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
                         node['inputs']['length'] = frames
                         logger.info(f"[RESOLUTION] Set video length for {node_id}: {video_length_seconds}s ({frames-1}+1 frames)")
+
 
         if not updated_nodes:
             logger.warning(f"[RESOLUTION] No Wan nodes found in workflow for resolution injection! Candidates searched: {wan_candidates}")
@@ -212,25 +235,64 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
     wan_video_node_id = None
 
     if workflow_config:
-        load_image_node_id = workflow_config.get('load_image_node_id') or workflow_config.get('load_image_first_node_id') or config.LOAD_IMAGE_NODE_ID
-        motion_prompt_node_id = workflow_config.get('motion_prompt_node_id', config.MOTION_PROMPT_NODE_ID)
-        wan_video_node_id = workflow_config.get('wan_video_node_id', getattr(config, 'WAN_VIDEO_NODE_ID', None))
-    else:
-        load_image_node_id = config.LOAD_IMAGE_NODE_ID
-        motion_prompt_node_id = config.MOTION_PROMPT_NODE_ID
-        wan_video_node_id = getattr(config, 'WAN_VIDEO_NODE_ID', None)
+        load_image_node_id = workflow_config.get('load_image_node_id') or workflow_config.get('load_image_first_node_id')
+        motion_prompt_node_id = workflow_config.get('motion_prompt_node_id')
+        wan_video_node_id = workflow_config.get('wan_video_node_id')
+
+    # Resolve missing nodes by class type instead of hardcoded global IDs
+    if motion_prompt_node_id and motion_prompt_node_id not in wf:
+        logger.warning(f"[WORKFLOW] Configured motion prompt node '{motion_prompt_node_id}' not found in workflow - resolving by class type")
+        motion_prompt_node_id = None
+    if not motion_prompt_node_id:
+        for node_id, node in wf.items():
+            if isinstance(node, dict) and node.get("class_type") == "CLIPTextEncode":
+                motion_prompt_node_id = node_id
+                logger.warning(f"[WORKFLOW] Using class-type fallback for motion prompt node: {node_id}")
+                break
+        if not motion_prompt_node_id:
+            logger.warning("[WORKFLOW] No motion prompt node found (CLIPTextEncode or tagged [prompt]) - shot motion prompt will NOT be injected")
+
+    if load_image_node_id and load_image_node_id not in wf:
+        logger.warning(f"[WORKFLOW] Configured image node '{load_image_node_id}' not found in workflow - will resolve by class type")
+        load_image_node_id = None
+
+    if video_length_seconds and not wan_video_node_id:
+        logger.warning("[WORKFLOW] No video node detected for this workflow - video length will not be set")
+
+    # Determine the prompt input name of the motion prompt node
+    # (MiniMax H3 nodes use "prompt" instead of the usual "text")
+    prompt_input_name = "text"
+    if motion_prompt_node_id and motion_prompt_node_id in wf:
+        target_inputs = wf[motion_prompt_node_id].get("inputs", {})
+        if "prompt" in target_inputs and "text" not in target_inputs:
+            prompt_input_name = "prompt"
 
     # Inject motion prompt (will be enhanced with trigger keywords below)
+    # Resolve the effective prompt: per-shot override > DEFAULT_PROMPT_MODE,
+    # with fallback to motion_prompt when no video_prompt exists
     base_motion_prompt = shot.get("motion_prompt", "")
+    use_video_prompt = False
+    shot_prompt_type = shot.get('prompt_type')
+    shot_video_prompt = (shot.get('video_prompt') or '').strip()
+    if shot_video_prompt:
+        if shot_prompt_type == 'video':
+            base_motion_prompt = shot_video_prompt
+            use_video_prompt = True
+        elif shot_prompt_type is None and getattr(config, 'DEFAULT_PROMPT_MODE', 'video') == 'video':
+            base_motion_prompt = shot_video_prompt
+            use_video_prompt = True
+    if use_video_prompt:
+        logger.info(f"[VIDEO PROMPT] Using detailed video_prompt for shot {shot.get('index', '?')} ({len(base_motion_prompt)} chars)")
 
     # ==========================================
     # APPEND IMAGE PROMPT TO MOTION PROMPT
     # ==========================================
     # If enabled, append image_prompt to motion_prompt to give video AI more context
     # Skip this for shots from prompt files (user already provided their prompts)
+    # and for video_prompt (the H3 format already anchors the first-frame image)
     from_prompt_file = shot.get("from_prompt_file", False)
 
-    if getattr(config, 'APPEND_IMAGE_TO_MOTION_PROMPT', False) and not from_prompt_file:
+    if getattr(config, 'APPEND_IMAGE_TO_MOTION_PROMPT', False) and not from_prompt_file and not use_video_prompt:
         image_prompt = shot.get("image_prompt", "")
         if image_prompt:
             append_position = getattr(config, 'IMAGE_PROMPT_APPEND_POSITION', 'end')
@@ -361,7 +423,9 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
             print(f"  High Node {high_noise_node_id}: SKIPPED (empty filename)")
 
     # Append all trigger keywords to motion prompt
-    if all_trigger_keywords:
+    # (skipped for video_prompt - the H3 format stays structured and the
+    # MiniMax workflow does not use the Wan camera LoRA system)
+    if all_trigger_keywords and not use_video_prompt:
         enhanced_prompt = base_motion_prompt
         for keyword in all_trigger_keywords:
             if keyword and keyword not in enhanced_prompt:
@@ -369,30 +433,29 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
 
         # Inject enhanced motion prompt
         if motion_prompt_node_id and motion_prompt_node_id in wf:
-            wf[motion_prompt_node_id]["inputs"]["text"] = enhanced_prompt
+            wf[motion_prompt_node_id]["inputs"][prompt_input_name] = enhanced_prompt
 
         print(f"\n[TRIGGERS] Added: {', '.join(all_trigger_keywords)}")
 
     # Inject base motion prompt if no triggers
     elif motion_prompt_node_id and motion_prompt_node_id in wf and base_motion_prompt:
-        wf[motion_prompt_node_id]["inputs"]["text"] = base_motion_prompt
+        wf[motion_prompt_node_id]["inputs"][prompt_input_name] = base_motion_prompt
 
     # Inject image path to LoadImage node if available
     if "image_path" in shot and shot["image_path"]:
         image_path = shot["image_path"]
-        # Convert to absolute path if relative (ComfyUI requires absolute paths)
-        image_path = config.resolve_path(image_path)
-        # Normalize to use forward slashes (ComfyUI handles this better)
-        image_path = image_path.replace('\\', '/')
+        # Copy to ComfyUI input folder if needed and resolve relative path for LoadImage node
+        from core.comfy_client import prepare_comfyui_input_image
+        image_path_for_comfy = prepare_comfyui_input_image(image_path)
 
         if load_image_node_id and load_image_node_id in wf:
-            wf[load_image_node_id]["inputs"]["image"] = image_path
+            wf[load_image_node_id]["inputs"]["image"] = image_path_for_comfy
         else:
             # Fallback: find node by class_type
             found = False
             for node_id, node in wf.items():
                 if node.get("class_type") == "LoadImage":
-                    node["inputs"]["image"] = image_path
+                    node["inputs"]["image"] = image_path_for_comfy
                     logger.info(f"Auto-discovered LoadImage node at ID: {node_id}")
                     found = True
                     break
@@ -403,7 +466,8 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
     if video_length_seconds and wan_video_node_id and wan_video_node_id in wf:
         wan_node = wf[wan_video_node_id]
         # Check if it's API format (inputs has direct values) or UI format (has widgets_values)
-        if "length" in wan_node.get("inputs", {}):
+        # Skip if "length" is a link to another node (e.g. MiniMax H3 computes it via a math node)
+        if isinstance(wan_node.get("inputs", {}).get("length"), int):
             # API format - set length directly
             frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
             wan_node["inputs"]["length"] = frames

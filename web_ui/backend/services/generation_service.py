@@ -676,6 +676,7 @@ class GenerationService:
                 append_image_prompt=item.append_image_prompt,
                 shot_id=item.shot_id,
                 prompt_override=item.prompt_override,
+                prompt_type=getattr(item, 'prompt_type', None),
                 draft_low_res_video=getattr(item, 'draft_low_res_video', False),
                 resolution=res,
                 prompt_id_callback=save_prompt_id,
@@ -911,6 +912,7 @@ class GenerationService:
             scene_name=scene_name,
             shot_id=shot_id,
             prompt_override=prompt_override,
+            prompt_type=getattr(request, 'prompt_type', None) if request else None,
             seed=getattr(request, 'seed', None) if request else None,
             image_mode=getattr(request, 'image_mode', None) if request else None,
             image_workflow=getattr(request, 'image_workflow', None) if request else None,
@@ -1860,7 +1862,8 @@ class GenerationService:
         append_image_prompt: Optional[str] = None, draft_low_res_video: bool = False,
         prompt_id_callback=None, existing_prompt_id=None,
         shot_id: str = None, prompt_override: Optional[str] = None,
-        resolution: Optional[str] = None, gemini_mode: Optional[str] = None
+        resolution: Optional[str] = None, gemini_mode: Optional[str] = None,
+        prompt_type: Optional[str] = None
     ) -> str:
         """
         Regenerate video for a single shot
@@ -1964,7 +1967,8 @@ class GenerationService:
                 existing_prompt_id=existing_prompt_id,
                 prompt_override=prompt_override,
                 resolution=resolution,
-                gemini_mode=gemini_mode
+                gemini_mode=gemini_mode,
+                prompt_type=prompt_type
             )
 
             # Mark as rendered safely
@@ -3312,7 +3316,8 @@ class GenerationService:
                                existing_prompt_id=None,
                                prompt_override: Optional[str] = None,
                                resolution: Optional[str] = None,
-                               gemini_mode: Optional[str] = None) -> str:
+                               gemini_mode: Optional[str] = None,
+                               prompt_type: Optional[str] = None) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
@@ -3327,6 +3332,22 @@ class GenerationService:
         # Avoid modifying the original reference
         shot = shot.copy()
 
+        # Load project metadata once (prompt mode + aspect ratio)
+        project_meta = self.project_manager.load_project(project_id)
+
+        # Resolve which prompt to use:
+        # per-request prompt_type > per-shot prompt_type > project prompt_mode > 'video'
+        effective_prompt_type = (prompt_type or shot.get('prompt_type')
+                                 or project_meta.get('prompt_mode')
+                                 or getattr(config, 'DEFAULT_PROMPT_MODE', 'video'))
+        shot_video_prompt = (shot.get('video_prompt') or '').strip()
+        use_video_prompt = False
+        if effective_prompt_type == 'video' and shot_video_prompt and not (prompt_override and prompt_override.strip()):
+            shot['motion_prompt'] = shot_video_prompt
+            use_video_prompt = True
+            logger.info(f"[VIDEO PROMPT] Shot {shot_index}: using detailed video_prompt")
+        shot['prompt_type'] = 'video' if use_video_prompt else 'motion'
+
         # Resolve prompt append choice
         append_image_choice = append_image_prompt
         if append_image_choice is None:
@@ -3334,6 +3355,10 @@ class GenerationService:
                 append_image_choice = getattr(config, 'IMAGE_PROMPT_APPEND_POSITION', 'end')
             else:
                 append_image_choice = 'none'
+
+        # video_prompt already anchors the first-frame image - never append image_prompt
+        if use_video_prompt:
+            append_image_choice = 'none'
 
         motion_prompt = prompt_override.strip() if prompt_override and prompt_override.strip() else shot.get('motion_prompt', '')
         image_prompt = shot.get('image_prompt', '')
@@ -3383,8 +3408,7 @@ class GenerationService:
             from core.prompt_compiler import load_workflow, compile_workflow
             from core.comfy_client import submit, async_wait_for_prompt_completion_with_progress, get_output_file_path
 
-            # Load project to get aspect_ratio
-            project_meta = self.project_manager.load_project(project_id)
+            # Reuse project metadata loaded above for aspect_ratio
             aspect_ratio = project_meta.get('aspect_ratio', '16:9')
 
             # Determine workflow path and resolve alias if needed
@@ -3586,44 +3610,45 @@ class GenerationService:
             logger.info(f"FLFI2V video generation using seed: {seed}")
 
         # Inject images based on variant
+        from core.comfy_client import prepare_comfyui_input_image
         if variant == "meeting":
             # Meeting: THEN image (first frame) + NOW image (last frame)
             then_image = shot.get('then_image_path') or shot.get('image_path')
             if then_image:
-                then_path = config.resolve_path(then_image).replace('\\', '/')
+                then_path = prepare_comfyui_input_image(then_image)
                 if load_first_node_id in wf:
                     wf[load_first_node_id]["inputs"]["image"] = then_path
-                    logger.info(f"Meeting video first frame: {then_image}")
+                    logger.info(f"Meeting video first frame: {then_path} (was: {then_image})")
 
             now_image = shot.get('now_image_path') or shot.get('image_path')
             if now_image:
-                now_path = config.resolve_path(now_image).replace('\\', '/')
+                now_path = prepare_comfyui_input_image(now_image)
                 if load_last_node_id in wf:
                     wf[load_last_node_id]["inputs"]["image"] = now_path
-                    logger.info(f"Meeting video last frame: {now_image}")
+                    logger.info(f"Meeting video last frame: {now_path} (was: {now_image})")
 
         elif variant == "departure":
             # Departure: NOW image (first frame) + next character's NOW image or scene image (last frame)
             now_image = shot.get('now_image_path') or shot.get('image_path')
             if now_image:
-                now_path = config.resolve_path(now_image).replace('\\', '/')
+                now_path = prepare_comfyui_input_image(now_image)
                 if load_first_node_id in wf:
                     wf[load_first_node_id]["inputs"]["image"] = now_path
-                    logger.info(f"Departure video first frame: {now_image}")
+                    logger.info(f"Departure video first frame: {now_path} (was: {now_image})")
 
             if last_frame_image_path:
                 # Use next character's NOW image or scene image
-                last_frame_path = config.resolve_path(last_frame_image_path).replace('\\', '/')
+                last_frame_path = prepare_comfyui_input_image(last_frame_image_path)
                 if load_last_node_id in wf:
                     wf[load_last_node_id]["inputs"]["image"] = last_frame_path
-                    logger.info(f"Departure video last frame: {last_frame_image_path}")
+                    logger.info(f"Departure video last frame: {last_frame_path} (was: {last_frame_image_path})")
             else:
                 # Fallback to NOW image if no last frame provided
                 if shot.get('now_image_path'):
-                    now_path = config.resolve_path(shot['now_image_path']).replace('\\', '/')
+                    now_path = prepare_comfyui_input_image(shot['now_image_path'])
                     if load_last_node_id in wf:
                         wf[load_last_node_id]["inputs"]["image"] = now_path
-                        logger.warning(f"Departure video last frame: Using current character's NOW image (fallback)")
+                        logger.warning(f"Departure video last frame: Using current character's NOW image fallback: {now_path}")
 
         # Inject motion prompt based on variant
         if prompt_override and prompt_override.strip():
