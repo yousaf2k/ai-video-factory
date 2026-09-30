@@ -679,6 +679,20 @@ export default function ProjectEditPage() {
                         setStory({ ...story, characters: newCharacters });
                         setHasChanges(true);
                       }}
+                      onSavePrompt={async (promptKey, newPrompt) => {
+                        const newCharacters = [...(story.characters || [])];
+                        newCharacters[idx] = { ...newCharacters[idx], [promptKey]: newPrompt };
+                        const updatedStory = { ...story, characters: newCharacters };
+                        setStory(updatedStory);
+                        try {
+                          await updateStoryMutation.mutateAsync(updatedStory);
+                          setHasChanges(false);
+                        } catch (error) {
+                          console.error("Failed to save character prompt:", error);
+                          toast.error("Failed to save prompt. Please try again.");
+                          throw error;
+                        }
+                      }}
                       onBeforeUpload={handleSaveStoryBeforeUpload}
                     />
                   </div>

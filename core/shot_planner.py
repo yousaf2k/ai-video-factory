@@ -9,7 +9,8 @@ import json
 import re
 from config import (DEFAULT_SHOTS_PER_SCENE, MIN_SHOTS_PER_SCENE, MAX_SHOTS_PER_SCENE,
                     SHOT_GENERATION_BATCH_SIZE, LLM_PROVIDER, MAX_PARALLEL_BATCH_THREADS,
-                    DEFAULT_SHOT_LENGTH)
+                    DEFAULT_SHOT_LENGTH, MIN_SHOT_DURATION, MAX_SHOT_DURATION,
+                    VIDEO_PROMPT_CUT_MARGIN_SECONDS)
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import uuid
@@ -19,11 +20,32 @@ import uuid
 logger = setup_agent_logger(__name__)
 
 # Timing instruction appended to shot planning prompts so that timestamped
-# cuts in video_prompt stay within the rendered clip duration
+# cuts in video_prompt stay within each shot's rendered clip duration
 VIDEO_PROMPT_TIMING_INSTRUCTION = (
-    f"VIDEO PROMPT TIMING: Each shot is rendered as a video clip of approximately "
-    f"{DEFAULT_SHOT_LENGTH} seconds. All timestamped cuts in video_prompt must be "
-    f"strictly increasing and fall within this duration (format MM:SS.mmm)."
+    "VIDEO PROMPT TIMING: Each shot is rendered as a single video clip whose length is the "
+    "shot's \"duration\" field in seconds. All timestamped cuts in video_prompt must be "
+    "strictly increasing and fit inside that duration, leaving at least "
+    f"{VIDEO_PROMPT_CUT_MARGIN_SECONDS} seconds before the end (format MM:SS.mmm)."
+)
+
+# Per-shot clip duration instruction: the LLM chooses each clip length so
+# pacing matches the action instead of a fixed default
+SHOT_DURATION_INSTRUCTION = (
+    f"PER-SHOT CLIP DURATION: Give every shot a \"duration\" field - the rendered clip length "
+    f"in seconds, between {MIN_SHOT_DURATION} and {MAX_SHOT_DURATION}. Choose it from the "
+    f"action's natural length: quick reactions or inserts 1-3s, standard beats 4-6s, complex "
+    f"multi-beat sequences 8-{MAX_SHOT_DURATION}s. The durations of the shots in each scene "
+    f"should sum to approximately that scene's duration."
+)
+
+# Multi-shot clips: longer clips should be split into timestamped sub-shots
+SUB_SHOT_INSTRUCTION = (
+    "MULTI-SHOT CLIPS: A video_prompt may split its clip into timestamped sub-shots "
+    "([Shot 2] At 00:04.500, the camera cuts to...). Clips of 6 seconds or more SHOULD contain "
+    "2-3 sub-shots whenever the action has multiple distinct beats, viewpoints or moments; "
+    "clips under 6 seconds stay a single sub-shot ([Shot 1] only). Every cut must introduce "
+    "new information (subject, space, viewpoint or time); use camera motion for small "
+    "framing changes."
 )
 
 
@@ -44,6 +66,8 @@ BATCH PROCESSING: This is batch {batch_num} of {total_batches}
 {max_shots_instruction}
 
 IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batch.
+{SHOT_DURATION_INSTRUCTION}
+{SUB_SHOT_INSTRUCTION}
 {VIDEO_PROMPT_TIMING_INSTRUCTION}
 """
 
@@ -55,8 +79,10 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
         provider = get_provider()
         response = provider.ask(image_prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
+        repair_batch_scene_ids(shots, scenes_batch, batch_num, total_batches)
 
         logger.info(f"Batch {batch_num}/{total_batches}: Generated {len(shots)} shots")
+        validate_and_repair_shots(shots, shots_agent)
         return shots
 
     except (FileNotFoundError, ValueError):
@@ -69,6 +95,7 @@ Return JSON list (each shot):
 [
   {{
    "scene_id": 0,
+   "duration": 5,
    "image_prompt":"",
    "motion_prompt":"",
    "video_prompt":"",
@@ -77,7 +104,8 @@ Return JSON list (each shot):
   }}
 ]
 
-The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp, later sub-shots cut at strictly increasing times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
+The "duration" of each shot is its rendered clip length in seconds ({MIN_SHOT_DURATION}-{MAX_SHOT_DURATION}).
+The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp; clips of 6 seconds or more should continue with [Shot 2], [Shot 3] sub-shots at strictly increasing cut times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
 
 SCENES:
 {batch_graph}
@@ -85,8 +113,264 @@ SCENES:
         provider = get_provider()
         response = provider.ask(prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
+        repair_batch_scene_ids(shots, scenes_batch, batch_num, total_batches)
+        validate_and_repair_shots(shots, shots_agent)
         logger.info(f"Batch {batch_num}/{total_batches}: Generated {len(shots)} shots (legacy mode)")
         return shots
+
+
+# Matches a sub-shot header followed by a cut time, e.g.
+# "[Shot 2] At 00:03.500, the camera cuts to..."  (also accepts 3.500 / 0:03.500)
+_CUT_TIME_RE = re.compile(
+    r"\[Shot\s*(\d+)\][^\[]{0,400}?[Aa]t\s*(?:\d{1,2}:)?(\d{1,2}):(\d{2})\.(\d{1,3})"
+)
+
+# Fields every MiniMax H3 video_prompt must contain
+_REQUIRED_VIDEO_PROMPT_FIELDS = (
+    ("For the target video", "first-frame instruction line"),
+    ("<Picture 1>", "<Picture 1> anchor"),
+    ("integrated_multimodal_description:", "integrated_multimodal_description"),
+    ("overall_soundscape:", "overall_soundscape"),
+    ("non_diegetic_music:", "non_diegetic_music"),
+)
+
+
+def parse_video_prompt_cut_times(video_prompt):
+    """Extract (shot_number, cut_time_seconds) pairs from a video_prompt.
+
+    Only later sub-shots carry a timestamp; [Shot 1] starts at 0.00 by
+    definition and is not returned unless it repeats one.
+    """
+    cuts = []
+    for match in _CUT_TIME_RE.finditer(video_prompt or ""):
+        shot_num = int(match.group(1))
+        minutes = int(match.group(2))
+        seconds = int(match.group(3))
+        millis = int(match.group(4).ljust(3, "0"))
+        cuts.append((shot_num, minutes * 60 + seconds + millis / 1000.0))
+    return cuts
+
+
+def validate_video_prompt(video_prompt, clip_duration=None):
+    """Validate a MiniMax H3 video_prompt against the required structure.
+
+    Args:
+        video_prompt: The prompt text to check.
+        clip_duration: The shot's rendered clip length in seconds. When given,
+            cut times must fit inside the clip with a safety margin (the H3
+            frame snap can extend a clip slightly, and the final sub-shot
+            needs room to play out).
+
+    Returns:
+        List of human-readable problems; empty list means the prompt is valid.
+    """
+    problems = []
+    if not video_prompt or not str(video_prompt).strip():
+        return ["video_prompt is empty"]
+
+    text = str(video_prompt)
+
+    for needle, label in _REQUIRED_VIDEO_PROMPT_FIELDS:
+        if needle not in text:
+            problems.append(f"missing {label}")
+
+    # Sub-shot numbering must start at 1 and be sequential
+    shot_numbers = [int(n) for n in re.findall(r"\[Shot\s*(\d+)\]", text)]
+    if shot_numbers:
+        expected = list(range(1, max(shot_numbers) + 1))
+        if sorted(set(shot_numbers)) != expected:
+            problems.append(
+                f"sub-shot numbers must be sequential starting at [Shot 1], got {sorted(set(shot_numbers))}"
+            )
+
+    # Cut times: strictly increasing and inside the clip duration
+    cuts = parse_video_prompt_cut_times(text)
+    previous_time = None
+    for shot_num, cut_time in cuts:
+        if previous_time is not None and cut_time <= previous_time:
+            problems.append(
+                f"[Shot {shot_num}] cut time {cut_time:.3f}s is not after the previous cut ({previous_time:.3f}s)"
+            )
+        previous_time = cut_time
+
+    if clip_duration:
+        margin = VIDEO_PROMPT_CUT_MARGIN_SECONDS
+        for shot_num, cut_time in cuts:
+            if cut_time > clip_duration:
+                problems.append(
+                    f"[Shot {shot_num}] cut time {cut_time:.3f}s is outside the {clip_duration:g}s clip"
+                )
+            elif cut_time > clip_duration - margin:
+                problems.append(
+                    f"[Shot {shot_num}] cut time {cut_time:.3f}s must be at or before "
+                    f"{clip_duration - margin:.3f}s to leave the final sub-shot room (clip is {clip_duration:g}s)"
+                )
+
+    return problems
+
+
+def ensure_shot_durations(shots):
+    """Normalize each shot's duration: default missing values and clamp to the
+    configured range. Returns the number of shots whose duration was adjusted."""
+    adjusted = 0
+    for shot in shots or []:
+        if not isinstance(shot, dict):
+            continue
+        raw = shot.get('duration')
+        try:
+            duration = float(raw)
+        except (TypeError, ValueError):
+            duration = None
+        if duration is None:
+            duration = float(DEFAULT_SHOT_LENGTH)
+            adjusted += 1
+        clamped = max(float(MIN_SHOT_DURATION), min(float(MAX_SHOT_DURATION), duration))
+        if clamped != duration:
+            adjusted += 1
+        shot['duration'] = clamped
+    return adjusted
+
+
+def validate_and_repair_shots(shots, shots_agent):
+    """Validate video_prompts and re-ask the LLM once to fix broken ones.
+
+    Structural problems (missing fields, non-sequential sub-shot numbers, cut
+    times outside the clip) are repaired with one follow-up LLM call per
+    batch. Clips that stay single-sub-shot are only logged as warnings - the
+    planner instructions already push long clips toward 2-3 sub-shots.
+    """
+    if not isinstance(shots, list):
+        return shots
+
+    ensure_shot_durations(shots)
+
+    invalid = []
+    for pos, shot in enumerate(shots):
+        if not isinstance(shot, dict):
+            continue
+        problems = validate_video_prompt(shot.get('video_prompt'), shot.get('duration'))
+        if problems:
+            invalid.append((pos, shot, problems))
+
+    if not invalid:
+        return shots
+
+    for pos, shot, problems in invalid:
+        logger.warning(
+            f"Shot {shot.get('index', pos + 1)}: video_prompt validation failed: {'; '.join(problems)}"
+        )
+        print(f"[WARN] Shot {shot.get('index', pos + 1)}: invalid video_prompt ({'; '.join(problems)})")
+
+    # One repair attempt for the invalid shots. Shots are matched back by their
+    # list position because 'index' may not be assigned yet during planning.
+    try:
+        repair_payload = [
+            {
+                "position": pos,
+                "duration": shot.get('duration'),
+                "current_video_prompt": shot.get('video_prompt'),
+                "problems": problems,
+            }
+            for pos, shot, problems in invalid
+        ]
+        repair_instruction = f"""
+{SHOT_DURATION_INSTRUCTION}
+{SUB_SHOT_INSTRUCTION}
+{VIDEO_PROMPT_TIMING_INSTRUCTION}
+
+The following video_prompts failed validation. Fix each one and return a JSON array where
+each item is {{"position": <original position>, "video_prompt": "<corrected prompt>"}}.
+Fix ONLY the listed problems; keep everything else about each prompt unchanged.
+
+INVALID VIDEO PROMPTS:
+{json.dumps(repair_payload, ensure_ascii=False, indent=2)}
+"""
+        provider = get_provider()
+        response = provider.ask(repair_instruction, response_format="application/json")
+        repairs = extract_and_repair_json(response)
+        if isinstance(repairs, dict):
+            repairs = [repairs]
+
+        repaired_count = 0
+        for repair in repairs or []:
+            if not isinstance(repair, dict):
+                continue
+            pos = repair.get('position')
+            if not isinstance(pos, int) or not (0 <= pos < len(shots)) or not isinstance(shots[pos], dict):
+                logger.warning("Repair response referenced an unknown position; skipping that entry")
+                continue
+            target = shots[pos]
+            fixed_prompt = (repair.get('video_prompt') or '').strip()
+            if not fixed_prompt:
+                continue
+            remaining = validate_video_prompt(fixed_prompt, target.get('duration'))
+            if remaining:
+                logger.warning(f"Shot {target.get('index', '?')}: repair attempt still invalid: {'; '.join(remaining)}")
+                continue
+            target['video_prompt'] = fixed_prompt
+            repaired_count += 1
+
+        logger.info(f"Repaired {repaired_count}/{len(invalid)} invalid video_prompts")
+    except Exception as e:
+        logger.warning(f"video_prompt repair pass failed (keeping original prompts): {e}")
+
+    return shots
+
+
+def repair_batch_scene_ids(shots, scenes_batch, batch_num=1, total_batches=1):
+    """Pin each shot's scene_id to the scenes this batch actually received.
+
+    The LLM sometimes echoes scene_id 0 (or drops the field) even when the
+    input scene carries another index, which silently merges a scene's shots
+    into another scene and breaks per-scene grouping downstream (image
+    generation is driven per scene). A batch only ever contains its own
+    scenes, so scene_id can be repaired deterministically from scenes_batch.
+
+    Single-scene batches (the default: SHOT_GENERATION_BATCH_SIZE=1) are
+    pinned exactly. Multi-scene batches keep valid scene_ids and reassign
+    only shots whose scene_id is missing or belongs to another batch.
+    """
+    if not isinstance(shots, list) or not scenes_batch:
+        return shots
+
+    scene_ids = [s.get('scene_id') for s in scenes_batch if isinstance(s, dict)]
+    if not scene_ids:
+        return shots
+
+    if len(scene_ids) == 1:
+        expected = scene_ids[0]
+        for pos, shot in enumerate(shots):
+            if not isinstance(shot, dict) or shot.get('scene_id') == expected:
+                continue
+            logger.warning(
+                f"Batch {batch_num}/{total_batches}: shot {shot.get('index', pos + 1)} had scene_id "
+                f"{shot.get('scene_id')!r} but this batch only contains scene {expected!r}; repairing"
+            )
+            shot['scene_id'] = expected
+        return shots
+
+    valid_ids = list(dict.fromkeys(scene_ids))
+    invalid_shots = [
+        shot for shot in shots
+        if isinstance(shot, dict) and shot.get('scene_id') not in valid_ids
+    ]
+    if not invalid_shots:
+        return shots
+
+    logger.warning(
+        f"Batch {batch_num}/{total_batches}: {len(invalid_shots)} shots had scene_id outside this "
+        f"batch's scenes {valid_ids}; reassigning to the scenes with the fewest shots"
+    )
+    counts = {sid: 0 for sid in valid_ids}
+    for shot in shots:
+        if isinstance(shot, dict) and shot.get('scene_id') in counts:
+            counts[shot['scene_id']] += 1
+    for shot in invalid_shots:
+        target = min(valid_ids, key=lambda sid: (counts[sid], valid_ids.index(sid)))
+        shot['scene_id'] = target
+        counts[target] += 1
+
+    return shots
 
 
 def extract_and_repair_json(response):
@@ -612,7 +896,7 @@ CRITICAL SHOT REQUIREMENTS:
         return all_shots
 
     # Single batch processing (original logic)
-    user_input = f"{scene_graph_with_indices}{max_shots_instruction}{VIDEO_PROMPT_TIMING_INSTRUCTION}"
+    user_input = f"{scene_graph_with_indices}{max_shots_instruction}{SHOT_DURATION_INSTRUCTION}{SUB_SHOT_INSTRUCTION}{VIDEO_PROMPT_TIMING_INSTRUCTION}"
 
     # Try to use agent prompts
     try:
@@ -623,6 +907,8 @@ CRITICAL SHOT REQUIREMENTS:
         provider = get_provider()
         response = provider.ask(image_prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
+
+        validate_and_repair_shots(shots, shots_agent)
 
         # Ensure shots is a list
         if isinstance(shots, dict):
@@ -635,6 +921,10 @@ CRITICAL SHOT REQUIREMENTS:
                 shots = [shots]  # Wrap single object in list
         elif not isinstance(shots, list):
             shots = []
+
+        # The LLM may echo a wrong scene_id (often 0); repair against the
+        # scenes this plan actually received
+        repair_batch_scene_ids(shots, scenes, 1, 1)
 
         # Enforce max_shots limit if specified
         if max_shots and len(shots) > max_shots:
@@ -654,8 +944,7 @@ CRITICAL SHOT REQUIREMENTS:
         for i, shot in enumerate(shots):
             shot['id'] = uuid.uuid4().hex[:8]
             shot['index'] = i + 1
-            # scene_id should already be there from LLM, but we can't trust it fully for all cases
-            # If missing, we'll leave it as None or try to guess? Better to leave for now as model allows Optional
+            # scene_id is repaired against the input scenes by repair_batch_scene_ids
 
         return shots
 
@@ -669,6 +958,7 @@ Return JSON list (each shot):
 [
   {{
    "scene_index": 0,
+   "duration": 5,
    "image_prompt":"",
    "motion_prompt":"",
    "video_prompt":"",
@@ -677,7 +967,8 @@ Return JSON list (each shot):
   }}
 ]
 
-The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp, later sub-shots cut at strictly increasing times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
+{SHOT_DURATION_INSTRUCTION}
+The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp; clips of 6 seconds or more should continue with [Shot 2], [Shot 3] sub-shots at strictly increasing cut times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
 
 SCENES:
 {scene_graph_with_indices}
@@ -685,6 +976,7 @@ SCENES:
         provider = get_provider()
         response = provider.ask(prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
+        validate_and_repair_shots(shots, shots_agent)
 
         # Ensure shots is a list
         if isinstance(shots, dict):
@@ -696,6 +988,10 @@ SCENES:
                 shots = [shots]
         elif not isinstance(shots, list):
             shots = []
+
+        # The LLM may echo a wrong scene_id (often 0); repair against the
+        # scenes this plan actually received
+        repair_batch_scene_ids(shots, scenes, 1, 1)
 
         # Enforce max_shots limit if specified
         if max_shots and len(shots) > max_shots:

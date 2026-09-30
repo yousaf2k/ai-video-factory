@@ -28,6 +28,7 @@ function MediaElement({
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasLoggedLoad, setHasLoggedLoad] = useState(false);
   const lastPlayCall = useRef<number>(0);
+  const lastResyncCall = useRef<number>(0);
 
   // Create native audio elements for audio clips
   useEffect(() => {
@@ -126,7 +127,7 @@ function MediaElement({
       // Check if clip is currently active in timeline
       const clipStart = clip.startAt;
       const clipEnd = clip.startAt + clip.duration;
-      const isClipActive = globalTime >= clipStart && globalTime <= clipEnd;
+      const isClipActive = globalTime >= clipStart && globalTime < clipEnd;
 
       // Only play if master is playing AND this clip is active
       const shouldPlay = isPlaying && isClipActive;
@@ -164,7 +165,7 @@ function MediaElement({
     // Check if clip is currently active in timeline
     const clipStart = clip.startAt;
     const clipEnd = clip.startAt + clip.duration;
-    const isClipActive = globalTime >= clipStart && globalTime <= clipEnd;
+    const isClipActive = globalTime >= clipStart && globalTime < clipEnd;
 
     // Only play if master is playing AND this clip is active
     const shouldPlay = isPlaying && isClipActive;
@@ -234,33 +235,52 @@ function MediaElement({
     const el = mediaRef.current;
     if (!el || !isLoaded) return;
 
-    // For both audio and video, sync position to match sourceStart
+    // For both audio and video, sync position to match sourceStart.
+    // While playing, the media element owns the clock: forcing currentTime on
+    // every frame (rAF wall clock vs media clock) seeks dozens of times per
+    // second and breaks audio. Only re-sync on large persistent drift, never
+    // while a seek is already in flight, and rate-limit corrections.
+    if (isPlaying) {
+      if (el.seeking) return;
+      const drift = Math.abs(el.currentTime - localTime);
+      if (drift > 0.35) {
+        const now = performance.now();
+        if (now - lastResyncCall.current < 1000) return;
+        lastResyncCall.current = now;
+        el.currentTime = localTime;
+      }
+      return;
+    }
+
+    // Paused (scrubbing): follow the playhead exactly.
     const drift = Math.abs(el.currentTime - localTime);
     if (drift > 0.2) {
       el.currentTime = localTime;
     }
-  }, [globalTime, isLoaded, localTime, clip.type]);
+  }, [globalTime, isLoaded, localTime, clip.type, isPlaying]);
 
   const handleLoaded = (e: any) => {
+    const firstLoad = !isLoaded;
     setIsLoaded(true);
-    if (mediaRef.current) {
+    // Only position the element once, when metadata first arrives. Re-seeking
+    // on every canplay (e.g. after each buffering stall) interrupts audio.
+    if (firstLoad && mediaRef.current) {
         mediaRef.current.currentTime = localTime;
         // Ensure volume is at max
         mediaRef.current.volume = 1.0;
-
-        // Only log once per clip
-        if (!hasLoggedLoad) {
-          const duration = e.target.duration;
-          console.log(`[MediaElement] Loaded ${clip.type}: ${clip.name}`, {
-            duration: duration ? `${duration.toFixed(1)}s` : 'unknown',
-            url: clip.url,
-            isMuted: isMuted,
-            volume: mediaRef.current.volume
-          });
-          setHasLoggedLoad(true);
-        }
     }
-    onReady();
+
+    if (firstLoad && !hasLoggedLoad) {
+      const duration = e.target.duration;
+      console.log(`[MediaElement] Loaded ${clip.type}: ${clip.name}`, {
+        duration: duration ? `${duration.toFixed(1)}s` : 'unknown',
+        url: clip.url,
+        isMuted: isMuted,
+        volume: mediaRef.current?.volume
+      });
+      setHasLoggedLoad(true);
+    }
+    if (firstLoad) onReady();
   };
 
   const handleError = (e: any) => {

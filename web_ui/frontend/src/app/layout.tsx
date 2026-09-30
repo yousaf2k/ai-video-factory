@@ -7,8 +7,8 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import { Toaster } from 'sonner';
 import Link from 'next/link';
-import { List } from 'lucide-react';
 import QueueMenuLink from '@/components/navigation/QueueMenuLink';
+import EditorMenuLink from '@/components/navigation/EditorMenuLink';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -40,9 +40,7 @@ export default function RootLayout({
                   <Link href="/agents" className="text-sm font-medium hover:text-primary transition-colors">
                     Agents
                   </Link>
-                  <Link href="/editor" className="text-sm font-medium hover:text-primary transition-colors">
-                    Editor
-                  </Link>
+                  <EditorMenuLink />
                   <Link href="/workflows" className="text-sm font-medium hover:text-primary transition-colors">
                     Workflows
                   </Link>

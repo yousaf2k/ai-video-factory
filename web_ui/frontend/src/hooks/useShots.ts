@@ -250,6 +250,18 @@ export function useCancelSceneNarration(projectId: string) {
   });
 }
 
+export function useDeleteSceneNarration(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sceneIndex: number) => api.deleteSceneNarration(projectId, sceneIndex),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+  });
+}
+
 export function useBatchGenerateNarration(projectId: string) {
   const queryClient = useQueryClient();
 

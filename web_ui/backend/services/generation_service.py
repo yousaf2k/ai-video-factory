@@ -84,6 +84,17 @@ class GenerationService:
         return item_id in getattr(self, 'running_item_ids', set())
 
     @staticmethod
+    def _gemini_chat_title(story: Optional[Dict[str, Any]], project_id: str) -> str:
+        """Chat title used for GeminiWeb chat persistence: '<story title> - <project_id>'.
+
+        The project id suffix disambiguates projects that share the same story
+        title so each project keeps its own Gemini chat."""
+        title = str((story or {}).get('title') or '').strip() or project_id
+        if project_id and project_id not in title:
+            return f"{title} - {project_id}"
+        return title
+
+    @staticmethod
     def get_item_engine(item: QueueItem) -> str:
         """Resolve which engine will process this item"""
         import config
@@ -406,7 +417,7 @@ class GenerationService:
 
             # Get project title
             story = self.project_manager.get_story(item.project_id)
-            project_title = story.get('title', item.project_id) if story else item.project_id
+            project_title = self._gemini_chat_title(story, item.project_id)
 
             logger.info(f"ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}")
             print(f"[DEBUG] ABOUT TO AWAIT regenerate_shot_image for item {item.item_id}", flush=True)
@@ -487,7 +498,7 @@ class GenerationService:
                 f'do not add any text.'
             )
                 
-            project_title = story.get('title', item.project_id)
+            project_title = self._gemini_chat_title(story, item.project_id)
             
             # Fake a shot dict for _generate_single_image
             fake_shot = {
@@ -652,7 +663,7 @@ class GenerationService:
 
             # Get project title
             story = self.project_manager.get_story(item.project_id)
-            project_title = story.get('title', item.project_id) if story else item.project_id
+            project_title = self._gemini_chat_title(story, item.project_id)
 
             def save_prompt_id(pid):
                 item.comfyui_prompt_id = pid
@@ -751,7 +762,7 @@ class GenerationService:
         """Process sound FX generation for a queue item"""
         try:
             story = self.project_manager.get_story(item.project_id)
-            project_title = story.get('title', item.project_id) if story else item.project_id
+            project_title = self._gemini_chat_title(story, item.project_id)
 
             await self.generate_soundfx(
                 item.project_id,
@@ -860,7 +871,7 @@ class GenerationService:
         """
         # Get project title
         story = self.project_manager.get_story(project_id)
-        project_title = story.get('title', project_id) if story else project_id
+        project_title = self._gemini_chat_title(story, project_id)
 
         # Extract shot details if available
         shot_id = shot.get('id') if shot else None
@@ -1120,7 +1131,7 @@ class GenerationService:
         self._ensure_queue_processor_started()
 
         story = self.project_manager.get_story(project_id)
-        project_title = story.get('title', project_id) if story else project_id
+        project_title = self._gemini_chat_title(story, project_id)
         
         # Find the scene
         scenes = story.get('scenes', [])
@@ -1161,7 +1172,7 @@ class GenerationService:
         
         # Get story to get title
         story = self.project_manager.get_story(project_id)
-        project_title = story.get('title', project_id) if story else project_id
+        project_title = self._gemini_chat_title(story, project_id)
         
         characters = story.get('characters', [])
         character_name = characters[character_index].get('name') if 0 <= character_index < len(characters) else None
@@ -3429,6 +3440,14 @@ class GenerationService:
 
             # Load and compile workflow for this shot
             shot_length = getattr(config, 'DEFAULT_SHOT_LENGTH', 5)
+            # Per-shot clip duration from the shot planner (applied by
+            # compile_workflow for workflows that support per-shot lengths)
+            shot_duration = shot.get('duration')
+            if shot_duration:
+                try:
+                    logger.info(f"[DURATION] Shot {shot_index}: per-shot clip duration {float(shot_duration):g}s (default {shot_length}s)")
+                except (TypeError, ValueError):
+                    pass
 
             # DEEP RESUME CHECK
             skip_submit = False

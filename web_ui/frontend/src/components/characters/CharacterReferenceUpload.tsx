@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Character } from '@/types';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GenerationDialog } from '../shots/GenerationDialog';
 import { api } from '@/services/api';
@@ -14,6 +14,7 @@ interface CharacterReferenceUploadProps {
   projectId: string;
   onUpdate?: () => void;
   onPromptChange?: (promptKey: string, newPrompt: string) => void;
+  onSavePrompt?: (promptKey: string, newPrompt: string) => Promise<void>;
   onBeforeUpload?: () => Promise<void>;
 }
 
@@ -23,10 +24,47 @@ export default function CharacterReferenceUpload({
   projectId,
   onUpdate,
   onPromptChange,
+  onSavePrompt,
   onBeforeUpload
 }: CharacterReferenceUploadProps) {
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
-  
+  const [savingPrompt, setSavingPrompt] = useState<Record<string, boolean>>({});
+
+  // Baseline prompts as of last persist — lets us show a Save button only
+  // when the textarea actually differs from what's in story.json.
+  const promptBaseline = useRef<Record<string, string>>({});
+  const [promptDirty, setPromptDirty] = useState<Record<string, boolean>>({});
+  const promptKeys = ['image_prompt', 'then_prompt', 'now_prompt'];
+  useEffect(() => {
+    // Capture baseline for keys the user hasn't touched yet in this session
+    promptKeys.forEach(k => {
+      if (!(k in promptBaseline.current)) {
+        promptBaseline.current[k] = (character as any)[k] || '';
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [character]);
+
+  const markPromptDirty = (promptKey: string, value: string) => {
+    setPromptDirty(prev => ({ ...prev, [promptKey]: value !== (promptBaseline.current[promptKey] ?? '') }));
+  };
+
+  const handleSavePrompt = async (promptKey: string, value: string) => {
+    if (!onSavePrompt) return;
+    setSavingPrompt(prev => ({ ...prev, [promptKey]: true }));
+    try {
+      await onSavePrompt(promptKey, value);
+      promptBaseline.current[promptKey] = value;
+      setPromptDirty(prev => ({ ...prev, [promptKey]: false }));
+      toast.success('Prompt saved');
+    } catch (error) {
+      console.error('Failed to save character prompt:', error);
+      toast.error(`Failed to save prompt: ${error}`);
+    } finally {
+      setSavingPrompt(prev => ({ ...prev, [promptKey]: false }));
+    }
+  };
+
   // Use local state for optimistic updates during upload, but sync with props
   const [previews, setPreviews] = useState<Record<string, string | null>>({
     then: character.then_reference_image_path || null,
@@ -208,27 +246,47 @@ export default function CharacterReferenceUpload({
               <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 truncate pr-2" title={v.label}>
                 {v.label}
               </label>
-              {v.prompt && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap shrink-0"
+              <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
                   onClick={() => { setSelectedVariant(v.key); setShowGenerationDialog(true); }}
+                  title={v.ref ? 'Generate a new version of this reference image' : 'Generate reference image'}
                 >
-                  <Sparkles className="w-3 h-3 mr-1" /> Generate
+                  {v.ref ? (
+                    <><RefreshCw className="w-3 h-3 mr-1" /> Regenerate</>
+                  ) : (
+                    <><Sparkles className="w-3 h-3 mr-1" /> Generate</>
+                  )}
                 </Button>
-              )}
+              </div>
             </div>
-            
+
             {v.prompt !== undefined && (
               <div className="mb-2">
                 <textarea
                   className="w-full text-[10px] text-muted-foreground leading-tight p-2 border border-border rounded-md bg-transparent focus:bg-background focus:ring-1 focus:ring-primary focus:outline-none min-h-[48px] resize-y"
                   value={v.prompt}
-                  onChange={(e) => onPromptChange && onPromptChange(v.promptKey, e.target.value)}
+                  onChange={(e) => {
+                    onPromptChange && onPromptChange(v.promptKey, e.target.value);
+                    markPromptDirty(v.promptKey, e.target.value);
+                  }}
                   placeholder="Enter prompt for this character reference..."
                   disabled={!onPromptChange}
                 />
+                <div className="flex justify-end mt-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-muted-foreground hover:text-primary disabled:opacity-40 disabled:pointer-events-none"
+                    disabled={!onSavePrompt || !promptDirty[v.promptKey] || !!savingPrompt[v.promptKey]}
+                    onClick={() => v.prompt !== undefined && handleSavePrompt(v.promptKey, v.prompt)}
+                    title="Persist this prompt to the project story"
+                  >
+                    <Save className="w-3 h-3 mr-1" /> {savingPrompt[v.promptKey] ? 'Saving…' : 'Save prompt'}
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -252,15 +310,28 @@ export default function CharacterReferenceUpload({
                     alt={`${v.key} reference`}
                     className="w-full h-32 object-cover rounded"
                   />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      document.getElementById(`${v.key}-input-${characterIndex}`)?.click();
-                    }}
-                    className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                  >
-                    Replace Photo
-                  </button>
+                  <div className="flex justify-center gap-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        document.getElementById(`${v.key}-input-${characterIndex}`)?.click();
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                    >
+                      Replace Photo
+                    </button>
+                    <span className="text-xs text-border">|</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedVariant(v.key);
+                        setShowGenerationDialog(true);
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" /> Regenerate
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2">

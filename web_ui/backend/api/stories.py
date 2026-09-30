@@ -94,6 +94,65 @@ async def cancel_scene_narration(project_id: str, scene_id: int):
         )
 
 
+@router.delete("/scenes/{scene_id}/narration")
+async def delete_scene_narration(project_id: str, scene_id: int):
+    """Delete the generated narration audio for a scene (active + all variations)"""
+    try:
+        project_dir = project_manager.get_project_dir(project_id)
+        story_path = os.path.join(project_dir, "story.json")
+        with open(story_path, 'r', encoding='utf-8') as f:
+            story_data = json.load(f)
+
+        scenes = story_data.get('scenes', [])
+        if scene_id < 0 or scene_id >= len(scenes):
+            raise ValueError(f"Scene index {scene_id} out of range")
+
+        scene = scenes[scene_id]
+
+        # Collect every narration file referenced by the scene
+        rel_paths = list(scene.get('narration_paths', []))
+        if scene.get('narration_path') and scene['narration_path'] not in rel_paths:
+            rel_paths.append(scene['narration_path'])
+
+        narration_dir = os.path.realpath(os.path.join(project_dir, "narration"))
+        deleted = []
+        for rel_path in rel_paths:
+            # rel paths look like "narration/scene_001_....wav"
+            file_path = os.path.realpath(os.path.join(project_dir, rel_path))
+            if not file_path.startswith(narration_dir + os.sep):
+                logger.warning(f"Skipping narration path outside project narration dir: {rel_path}")
+                continue
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                deleted.append(rel_path)
+
+        scene.pop('narration_path', None)
+        scene.pop('narration_paths', None)
+
+        with open(story_path, 'w', encoding='utf-8') as f:
+            json.dump(story_data, f, indent=4)
+
+        from web_ui.backend.websocket.manager import manager
+        manager.broadcast_sync(project_id, {
+            "type": "narration_deleted",
+            "project_id": project_id,
+            "scene_id": scene_id,
+            "deleted": deleted
+        })
+
+        return {"status": "success", "deleted": deleted}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project {project_id} not found")
+    except Exception as e:
+        logger.error(f"Error deleting narration: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete narration: {str(e)}"
+        )
+
+
 @router.post("/scenes/{scene_id}/select-narration")
 async def select_scene_narration(project_id: str, scene_id: int, request: SelectSceneNarrationRequest):
     """Select the active narration variation for a scene"""

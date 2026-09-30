@@ -328,6 +328,11 @@ class ApiClient {
     await this.client.post(`/api/projects/${projectId}/story/scenes/${sceneIndex}/cancel-narration`);
   }
 
+  async deleteSceneNarration(projectId: string, sceneIndex: number): Promise<{ deleted: string[] }> {
+    const response = await this.client.delete(`/api/projects/${projectId}/story/scenes/${sceneIndex}/narration`);
+    return response.data;
+  }
+
   async batchGenerateNarration(
     projectId: string,
     sceneIndices: number[],

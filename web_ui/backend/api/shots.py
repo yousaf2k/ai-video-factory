@@ -289,17 +289,28 @@ async def update_shot(project_id: str, shot_id_or_index: str, request: UpdateSho
     """Update a single shot's prompts"""
     try:
         shot_data, shot_index = await _resolve_shot(project_id, shot_id_or_index)
-        
+
         def modify_shot(shots):
             shot = shots[shot_index - 1]
-            for field in ['image_prompt', 'motion_prompt', 'video_prompt', 'prompt_type', 'camera', 'narration', 'scene_id', 
+            for field in ['duration', 'image_prompt', 'motion_prompt', 'video_prompt', 'prompt_type', 'camera', 'narration', 'scene_id',
                          'then_image_prompt', 'now_image_prompt', 'meeting_video_prompt', 'departure_video_prompt']:
                 val = getattr(request, field, None)
                 if val is not None:
                     shot[field] = val
-                    
+
         project_service.project_manager.update_shots_safely(project_id, modify_shot)
-        return {"status": "success"}
+
+        # Surface video_prompt problems to the editor without blocking the save
+        warnings = []
+        try:
+            from core.shot_planner import validate_video_prompt
+            updated_shot, _ = await _resolve_shot(project_id, shot_id_or_index)
+            clip_duration = updated_shot.get('duration') or getattr(config, 'DEFAULT_SHOT_LENGTH', 5)
+            warnings = validate_video_prompt(updated_shot.get('video_prompt'), clip_duration)
+        except Exception as ve:
+            logger.warning(f"video_prompt validation skipped: {ve}")
+
+        return {"status": "success", "video_prompt_warnings": warnings}
     except Exception as e:
         logger.error(f"Error updating shot: {e}")
         raise HTTPException(status_code=500, detail=str(e))

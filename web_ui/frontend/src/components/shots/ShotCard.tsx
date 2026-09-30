@@ -258,6 +258,7 @@ export function ShotCard({
   const handleSave = async () => {
     try {
       await updateShot.mutateAsync({
+        duration: editedShot.duration ?? undefined,
         image_prompt: editedShot.image_prompt,
         motion_prompt: editedShot.motion_prompt,
         video_prompt: editedShot.video_prompt ?? undefined,
@@ -446,6 +447,31 @@ export function ShotCard({
               </div>
 
               <div>
+                <div className="flex items-center gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground">
+                      Clip Duration (1-15s)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={15}
+                      step={0.5}
+                      value={editedShot.duration ?? ""}
+                      onChange={(e) =>
+                        setEditedShot({
+                          ...editedShot,
+                          duration: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                      placeholder="default"
+                      className="mt-1 w-24 text-sm border rounded-md px-2 py-1.5 bg-background"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
                 <label className="text-xs text-muted-foreground">
                   Video Prompt (MiniMax H3 - timestamped)
                 </label>
@@ -579,6 +605,14 @@ export function ShotCard({
           {showIndex && (
             <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
               {shot.index}
+            </span>
+          )}
+          {shot.duration != null && (
+            <span
+              className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-slate-500 text-white whitespace-nowrap"
+              title="Clip duration (seconds)"
+            >
+              {shot.duration}s
             </span>
           )}
 

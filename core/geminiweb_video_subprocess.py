@@ -53,6 +53,7 @@ def _create_browser_context(playwright_instance, profile_dir=None):
         if browser_type_name == "chromium":
             launch_args = [
                 '--disable-blink-features=AutomationControlled',
+                '--disable-session-crashed-bubble',
                 '--no-first-run',
                 '--no-default-browser-check',
                 '--disable-features=OptimizationGuideModelExecution,OptimizationGuideOnDeviceModel',
@@ -75,85 +76,382 @@ def _create_browser_context(playwright_instance, profile_dir=None):
         raise
 
 
-def _ensure_project_chat(page, project_title: str):
-    """Ensure we are in a chat named after the project_title."""
-    if not project_title:
+def _get_chat_registry_path() -> str:
+    """Path of the project-title -> chat-URL registry (survives runs)."""
+    return os.path.join(getattr(config, 'OUTPUT_DIR', 'output'), 'gemini_chat_registry.json')
+
+
+# ── Per-project chat-creation lock ──────────────────────────────────────────
+# On the FIRST run for a project the chat URL is only registered after
+# generation finishes, so two parallel workers would each create their own
+# chat (duplicates). The lock serializes chat creation per project: the first
+# worker creates + registers, the others wait (polling the registry) and then
+# join the same chat. Different projects use different lock files and never
+# block each other. The lock is held from acquisition until registration (the
+# whole generation), and is stolen if stale (crashed worker).
+_HELD_CHAT_LOCK: Optional[str] = None
+_CHAT_LOCK_STALE_SECONDS = 900  # steal after 15 min (covers video generation)
+
+
+def _chat_lock_path(project_title: str) -> str:
+    safe = ''.join(c if c.isalnum() or c in '._-' else '_' for c in project_title)[:80]
+    return os.path.join(getattr(config, 'OUTPUT_DIR', 'output'), f'chat_lock_{safe}.lock')
+
+
+def _acquire_chat_lock(project_title: str) -> str:
+    """Wait for exclusive right to create the project chat.
+
+    Returns one of:
+      'registered' — another worker registered the chat while we waited;
+                     caller should re-check the registry and join it.
+      'acquired'   — lock is held; caller may create the chat (must release).
+      'timeout'    — gave up waiting; caller proceeds best-effort (a duplicate
+                     chat may result, same as before the lock existed).
+    """
+    global _HELD_CHAT_LOCK
+    timeout = int(getattr(config, 'GEMINIWEB_CHAT_LOCK_TIMEOUT', 600))
+    deadline = time.time() + timeout
+    lock_path = _chat_lock_path(project_title)
+
+    while True:
+        # Another worker may have registered the chat while we wait.
+        if _registry_get_chat_url(project_title):
+            return 'registered'
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, f"{os.getpid()} {time.time()}".encode())
+            os.close(fd)
+            _HELD_CHAT_LOCK = project_title
+            logger.info(f"Acquired chat-creation lock for '{project_title}'")
+            return 'acquired'
+        except FileExistsError:
+            # Steal a stale lock left behind by a crashed worker.
+            try:
+                if time.time() - os.path.getmtime(lock_path) > _CHAT_LOCK_STALE_SECONDS:
+                    logger.warning(f"Stealing stale chat lock: {lock_path}")
+                    os.remove(lock_path)
+                    continue
+            except OSError:
+                pass
+        except OSError as e:
+            logger.debug(f"Chat lock open failed: {e}")
+            return 'timeout'
+        if time.time() >= deadline:
+            logger.warning(f"Chat-creation lock wait timed out for '{project_title}' after {timeout}s")
+            return 'timeout'
+        time.sleep(3)
+
+
+def _release_chat_lock(project_title: str) -> None:
+    """Release the per-project chat-creation lock (best-effort)."""
+    global _HELD_CHAT_LOCK
+    if _HELD_CHAT_LOCK != project_title:
         return
+    try:
+        os.remove(_chat_lock_path(project_title))
+    except OSError:
+        pass
+    _HELD_CHAT_LOCK = None
+    logger.info(f"Released chat-creation lock for '{project_title}'")
+
+def _registry_get_chat_url(project_title: str):
+    """Return the stored chat URL for project_title, if any."""
+    try:
+        import json
+        path = _get_chat_registry_path()
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            url = data.get(project_title)
+            if url and '/app/' in url:
+                return url
+    except Exception as e:
+        logger.debug(f"Chat registry read failed: {e}")
+    return None
+
+
+def _registry_set_chat_url(project_title: str, chat_url: str) -> None:
+    """Store chat_url under project_title (best-effort)."""
+    try:
+        import json
+        path = _get_chat_registry_path()
+        data = {}
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        if chat_url and '/app/' in chat_url:
+            data[project_title] = chat_url.split('?')[0]
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            logger.info(f"Registered project chat: '{project_title}' -> {chat_url}")
+    except Exception as e:
+        logger.debug(f"Chat registry write failed: {e}")
+
+
+def _open_project_chat_by_url(page, chat_url: str) -> bool:
+    """Navigate to a known chat URL and verify the conversation actually loaded."""
+    try:
+        page.goto(chat_url, wait_until='domcontentloaded', timeout=30000)
+        time.sleep(5)
+        # The conversation-actions menu only exists inside a real conversation
+        # (a deleted chat redirects to /app without it).
+        if page.query_selector('button[aria-label="Open menu for conversation actions."], message-content'):
+            return True
+        logger.debug(f"Chat URL did not load a conversation: {chat_url}")
+    except Exception as e:
+        logger.debug(f"Failed to open chat URL {chat_url}: {e}")
+    return False
+
+
+def _ensure_project_chat(page, project_title: str) -> bool:
+    """
+    Ensure we are in a chat named after the project_title.
+    1. Open the chat URL saved in the registry (exact, no UI searching).
+    2. Fall back to searching the sidebar Recents.
+    3. Otherwise stay in the new chat and return False — run() renames the
+       chat to project_title after generation and registers its URL.
+    """
+    if not project_title:
+        return False
 
     logger.info(f"Ensuring Gemini chat for project: '{project_title}'")
     try:
+        # 1. Registry: direct navigation, immune to sidebar render timing.
+        saved_url = _registry_get_chat_url(project_title)
+        if saved_url and _open_project_chat_by_url(page, saved_url):
+            logger.info(f"Opened registered project chat for '{project_title}'")
+            return True
+        if saved_url:
+            logger.info(f"Registered chat for '{project_title}' is gone; falling back to sidebar search")
+
+        # 2. Sidebar Recents.
         sidebar_selectors = [
             f'a[aria-label*="{project_title}"]',
             f'div[role="button"]:has-text("{project_title}")',
             f'a:has-text("{project_title}")',
         ]
-        
+        try:
+            page.wait_for_selector('a[aria-label][href*="/app/"]', timeout=8000, state='visible')
+        except Exception:
+            pass
+
         for sel in sidebar_selectors:
             try:
-                chat_link = page.query_selector(sel)
-                if chat_link:
-                    logger.info(f"Found existing chat: '{project_title}'. Clicking...")
-                    chat_link.click()
-                    time.sleep(3)
-                    return
+                chat_links = page.query_selector_all(sel)
+                for chat_link in reversed(chat_links):
+                    try:
+                        if not chat_link.is_visible():
+                            continue
+                        logger.info(f"Found existing chat: '{project_title}'. Clicking...")
+                        chat_link.click()
+                        time.sleep(5)
+                        _registry_set_chat_url(project_title, page.url)
+                        return True
+                    except Exception:
+                        continue
             except Exception:
                 continue
-                
-        logger.info(f"No existing chat found for '{project_title}'. Using current/new chat.")
+
+        logger.info(f"No existing chat found for '{project_title}'. Serializing chat creation...")
+        # 3. First run for this project: serialize so parallel workers don't
+        # each create their own chat. While waiting we poll the registry; once
+        # the first worker registers, we join its chat instead.
+        lock_status = _acquire_chat_lock(project_title)
+        if lock_status == 'registered':
+            saved_url = _registry_get_chat_url(project_title)
+            if saved_url and _open_project_chat_by_url(page, saved_url):
+                logger.info(f"Joined project chat registered by a parallel worker for '{project_title}'")
+                return True
+        if project_title and _registry_get_chat_url(project_title) and lock_status == 'acquired':
+            # Double-check: a worker may have registered between lock
+            # acquisition and this check.
+            saved_url = _registry_get_chat_url(project_title)
+            if saved_url and _open_project_chat_by_url(page, saved_url):
+                _release_chat_lock(project_title)
+                return True
+
+        logger.info(f"Using current/new chat; it will be renamed after generation.")
         new_chat_btn = page.query_selector('a[href="/app"], button:has-text("New chat")')
         if new_chat_btn and not page.url.endswith('/app'):
             new_chat_btn.click()
             time.sleep(2)
+        return False
     except Exception as e:
         logger.warning(f"Error while managing project chat: {e}")
+        return False
+
+
+def _rename_current_chat(page, project_title: str) -> bool:
+    """
+    Rename the current chat to project_title so future runs can find it in the
+    sidebar. New-UI flow: conversation actions menu -> 'Rename' -> dialog input
+    -> 'Rename' button.
+    """
+    if not project_title:
+        return False
+
+    try:
+        menu_btn = page.query_selector('button[aria-label="Open menu for conversation actions."]')
+        if not menu_btn or not menu_btn.is_visible():
+            logger.debug("Conversation actions menu not found; cannot rename chat")
+            return False
+        menu_btn.click()
+        time.sleep(1.5)
+
+        rename_item = None
+        for it in page.query_selector_all('gem-menu-item'):
+            try:
+                if (it.text_content() or '').strip().lower() == 'rename' and it.is_visible():
+                    rename_item = it
+                    break
+            except Exception:
+                continue
+        if not rename_item:
+            logger.debug("'Rename' menu item not found")
+            page.keyboard.press('Escape')
+            return False
+        rename_item.click()
+        time.sleep(2)
+
+        field = page.wait_for_selector(
+            'mat-dialog-container input, mat-dialog-container textarea, '
+            'div[role="dialog"] input, div[role="dialog"] textarea',
+            timeout=8000)
+        field.click()
+        page.keyboard.press('Control+A')
+        page.keyboard.press('Delete')
+        field.type(project_title, delay=5)
+        time.sleep(0.5)
+
+        save_btn = None
+        for bt in page.query_selector_all('mat-dialog-container button, div[role="dialog"] button'):
+            text = (bt.text_content() or '').strip().lower()
+            if text in ('save', 'rename', 'ok', 'done') and bt.is_visible():
+                save_btn = bt
+                break
+        if not save_btn:
+            logger.debug("Rename save button not found")
+            page.keyboard.press('Escape')
+            return False
+        save_btn.click()
+        time.sleep(3)
+        logger.info(f"Chat renamed to '{project_title}' for future reuse")
+        return True
+
+    except Exception as e:
+        logger.debug(f"Rename chat failed: {e}")
+        try:
+            page.keyboard.press('Escape')
+        except Exception:
+            pass
+        return False
 
 
 def _set_gemini_mode(page, mode: str):
     """
-    Select the Gemini model mode (Fast, Thinking, Pro) via the UI.
-    Uses the data-test-id selectors provided by the user.
+    Select the Gemini model mode via the UI.
+
+    2026-09: Gemini's picker now offers three models (3.5 Flash-Lite, 3.8 Flash,
+    3.1 Pro) plus an "Extended thinking" toggle. We expose six modes:
+        Fast            -> 3.5 Flash-Lite, Extended thinking OFF
+        Medium          -> 3.8 Flash,      Extended thinking OFF
+        Pro             -> 3.1 Pro,        Extended thinking OFF
+        Fast Thinking   -> 3.5 Flash-Lite, Extended thinking ON
+        Medium Thinking -> 3.8 Flash,      Extended thinking ON
+        Pro Thinking    -> 3.1 Pro,        Extended thinking ON
+    Legacy names map as: fast -> Fast, thinking -> Medium Thinking, pro -> Pro.
+
+    Current state is parsed from the picker button's aria-label
+    ("Open mode picker, currently <model>[ Extended]"). Model items are matched
+    by text because their data-test-id values are unstable hashes.
     """
     if not mode:
         mode = getattr(config, 'GEMINIWEB_DEFAULT_MODE', 'Fast')
-    
-    # Standardize mode name to lowercase for selector mapping
+
     mode_key = mode.lower().strip()
-    selectors = {
-        "fast": "bard-mode-option-fast",
-        "thinking": "bard-mode-option-thinking",
-        "pro": "bard-mode-option-pro"
+    mode_map = {
+        'fast': ('flash-lite', False),
+        'medium': ('flash', False),
+        'pro': ('pro', False),
+        'fast thinking': ('flash-lite', True),
+        'medium thinking': ('flash', True),
+        'pro thinking': ('pro', True),
+        # legacy names
+        'thinking': ('flash', True),
     }
-    
-    target_id = selectors.get(mode_key)
-    if not target_id:
+    desired = mode_map.get(mode_key)
+    if not desired:
         logger.warning(f"Unknown Gemini mode '{mode}', skipping selection.")
         return
+    desired_model, desired_extended = desired
+    # Menu item texts start with these labels (e.g. "3.5 Flash-Lite Fastest answers")
+    model_menu_labels = {
+        'flash-lite': '3.5 flash-lite',
+        'flash': '3.8 flash',
+        'pro': '3.1 pro',
+    }
+
+    picker_sel = 'button[data-test-id="bard-mode-menu-button"]'
+
+    def _read_state():
+        try:
+            btn = page.query_selector(picker_sel)
+            if not btn:
+                return None
+            aria = (btn.get_attribute('aria-label') or '').lower()
+            if 'currently' not in aria:
+                return None
+            current = aria.split('currently', 1)[1].strip()
+            extended = current.endswith('extended')
+            model = current[:-len('extended')].strip() if extended else current
+            return {'model': model, 'extended': extended}
+        except Exception:
+            return None
+
+    def _open_menu():
+        page.wait_for_selector(picker_sel, timeout=10000).click()
+        time.sleep(1.5)
+
+    def _click_menu_item(prefix):
+        for it in page.query_selector_all('gem-menu-item'):
+            try:
+                text = (it.text_content() or '').strip().lower()
+                if text.startswith(prefix) and it.is_visible():
+                    it.click()
+                    time.sleep(2)  # menu closes on selection
+                    return True
+            except Exception:
+                continue
+        return False
 
     logger.info(f"Setting Gemini mode to: {mode}")
     try:
-        # 1. Click the model picker button
-        picker_btn = page.wait_for_selector('button[data-test-id="bard-mode-menu-button"]', timeout=10000)
-        if picker_btn:
-            # Check current mode to avoid redundant clicks
-            current_mode = picker_btn.inner_text().strip().lower()
-            if mode_key in current_mode:
-                logger.info(f"Gemini is already in {mode} mode.")
-                return
+        state = _read_state()
+        if state and state['model'] == desired_model and state['extended'] == desired_extended:
+            logger.info(f"Gemini is already in {mode} mode (model={state['model']}, extended={state['extended']}).")
+            return
 
-            picker_btn.click()
-            time.sleep(1.5) # Wait for menu
-            
-            # 2. Click the specific mode option
-            option_sel = f'button[data-test-id="{target_id}"], [data-test-id="{target_id}"]'
-            option_btn = page.wait_for_selector(option_sel, timeout=5000)
-            if option_btn:
-                option_btn.click()
-                logger.info(f"Successfully selected {mode} mode.")
-                time.sleep(2) # Wait for mode switch to settle
-            else:
-                logger.warning(f"Could not find menu option for mode: {mode}")
+        if state is None or state['model'] != desired_model:
+            _open_menu()
+            if not _click_menu_item(model_menu_labels[desired_model]):
+                logger.warning(f"Could not find model menu item for '{desired_model}'")
+                page.keyboard.press('Escape')
+                return
+            state = _read_state()
+
+        if state is not None and state['extended'] != desired_extended:
+            _open_menu()
+            if not _click_menu_item('extended thinking'):
+                logger.warning("Could not find 'Extended thinking' menu item")
+                page.keyboard.press('Escape')
+                return
+            state = _read_state()
+
+        if state and state['model'] == desired_model and state['extended'] == desired_extended:
+            logger.info(f"Successfully set Gemini mode to {mode} (model={desired_model}, extended={desired_extended}).")
         else:
-            logger.warning("Could not find Gemini model picker button.")
+            logger.warning(f"Gemini mode selection did not verify: wanted {desired}, got {state}")
     except Exception as e:
         logger.error(f"Error setting Gemini mode: {e}")
 
@@ -271,7 +569,73 @@ def _wait_for_verification_complete(page):
     return False
 
 
-def _try_download_native(page, output_path: str) -> Optional[str]:
+# Locate the video response belonging to a specific prompt in the conversation.
+# With parallel workers sharing the project chat, responses interleave — scope
+# the download to the response following OUR prompt, not "last one on page".
+_LOCATE_READY_JS = """(prompt) => {
+  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+  const needle = norm(prompt).slice(0, 1000);
+  if (!needle) return false;
+  const all = Array.from(document.querySelectorAll('user-query, message-content, model-response'));
+  let qi = -1;
+  for (let i = 0; i < all.length; i++) {
+    if (all[i].tagName.toLowerCase() === 'user-query' && norm(all[i].textContent).includes(needle)) qi = i;
+  }
+  if (qi === -1) return false;
+  for (let i = qi + 1; i < all.length; i++) {
+    const el = all[i];
+    if (el.tagName.toLowerCase() === 'user-query') return false;
+    const vid = el.querySelector('video');
+    if (vid && vid.readyState >= 2) return true;
+  }
+  return false;
+}"""
+
+_LOCATE_CONTAINER_JS = """(prompt) => {
+  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+  const needle = norm(prompt).slice(0, 1000);
+  if (!needle) return null;
+  const all = Array.from(document.querySelectorAll('user-query, message-content, model-response'));
+  let qi = -1;
+  for (let i = 0; i < all.length; i++) {
+    if (all[i].tagName.toLowerCase() === 'user-query' && norm(all[i].textContent).includes(needle)) qi = i;
+  }
+  if (qi === -1) return null;
+  for (let i = qi + 1; i < all.length; i++) {
+    const el = all[i];
+    if (el.tagName.toLowerCase() === 'user-query') return null;
+    if (el.querySelector('video')) return el;
+  }
+  return null;
+}"""
+
+
+def _wait_for_own_video_response(page, prompt_text: str, timeout_s: float = 300) -> bool:
+    """Wait until the video response following OUR prompt has a playable video."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if page.is_closed():
+            return False
+        try:
+            if page.evaluate(_LOCATE_READY_JS, prompt_text):
+                return True
+        except Exception:
+            return False
+        time.sleep(5)
+    return False
+
+
+def _locate_own_video_container(page, prompt_text: str):
+    """Return an ElementHandle for the response content following our prompt."""
+    try:
+        handle = page.evaluate_handle(_LOCATE_CONTAINER_JS, prompt_text)
+        return handle.as_element()
+    except Exception as e:
+        logger.debug(f"Prompt-based video locate failed: {e}")
+        return None
+
+
+def _try_download_native(page, output_path: str, prompt_text: str = None) -> Optional[str]:
     """Download the latest generated video using native Playwright download.
 
     2026-09 resync: the download button lives in the video player's controls
@@ -279,7 +643,8 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
     button[aria-label="Download video"] inside gem-icon-button[fonticonname="download"],
     and is present in the DOM without hovering. Hovering <video> times out
     because the .controls overlay intercepts pointer events, so hover is
-    best-effort only.
+    best-effort only. When prompt_text is given, the download is scoped to the
+    response following OUR prompt (parallel workers share the chat).
     """
 
     video_container_selectors = [
@@ -304,10 +669,14 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
         'a[download]',
     ]
 
-    def _click_visible_download_button() -> Optional[str]:
+    def _click_visible_download_button(scope=None) -> Optional[str]:
+        # scope: optional ElementHandle to search inside (own prompt response)
         for btn_sel in download_button_selectors:
             try:
-                btns = page.query_selector_all(btn_sel)
+                if scope is not None:
+                    btns = scope.query_selector_all(btn_sel)
+                else:
+                    btns = page.query_selector_all(btn_sel)
                 if btns:
                     # Test if any of these buttons are visible and click the last one
                     for btn in reversed(btns):
@@ -351,6 +720,22 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
             return None
 
     try:
+        # 2026-09: parallel workers share the project chat — scope to the
+        # response following OUR prompt when we know it.
+        own_container = None
+        if prompt_text:
+            if _wait_for_own_video_response(page, prompt_text):
+                own_container = _locate_own_video_container(page, prompt_text)
+                if own_container is not None:
+                    logger.info("Located own video response by prompt text")
+
+        if own_container is not None:
+            # Own response first: click the download button inside it.
+            downloaded = _click_visible_download_button(scope=own_container)
+            if downloaded:
+                return downloaded
+            logger.info("Own response has no visible download control; falling back to page-wide search")
+
         # Fast path: the button is now permanently in the DOM, no hover needed.
         downloaded = _click_visible_download_button()
         if downloaded:
@@ -467,16 +852,26 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
         page.add_init_script("window.close = () => {};")
 
         try:
-            logger.info(f"Navigating to {gemini_url}")
-            page.goto(gemini_url, wait_until='domcontentloaded', timeout=timeout * 1000)
-            time.sleep(5)
+            # ── Fast path: chat URL known from the registry — go straight to
+            # the chat (skips the app home entirely). The chat page has the
+            # same mode picker as the app home.
+            used_existing_chat = False
+            saved_url = _registry_get_chat_url(project_title) if project_title else None
+            if saved_url and _open_project_chat_by_url(page, saved_url):
+                logger.info(f"Opened registered project chat directly (skipped app home)")
+                used_existing_chat = True
+                _set_gemini_mode(page, gemini_mode)
+            else:
+                logger.info(f"Navigating to {gemini_url}")
+                page.goto(gemini_url, wait_until='domcontentloaded', timeout=timeout * 1000)
+                time.sleep(5)
 
-            # ── Set Gemini Mode (Fast/Thinking/Pro) ──────────────────────────
-            _set_gemini_mode(page, gemini_mode)
+                # ── Set Gemini Mode (Fast/Thinking/Pro) ──────────────────────
+                _set_gemini_mode(page, gemini_mode)
 
-            # ── Ensure correct chat ──────────────────────────────────────────
-            if project_title:
-                _ensure_project_chat(page, project_title)
+                # ── Ensure correct chat ──────────────────────────────────────
+                if project_title:
+                    used_existing_chat = _ensure_project_chat(page, project_title)
 
             # Dismiss any dialogs
             try:
@@ -638,9 +1033,16 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
             # Wait for generation to finish
             _wait_for_verification_complete(page)
 
+            # ── Name the chat after the project so future runs reuse it ─────
+            if project_title and not used_existing_chat:
+                if _rename_current_chat(page, project_title):
+                    _registry_set_chat_url(project_title, page.url)
+                _release_chat_lock(project_title)
+
             # ── Download the video ───────────────────────────────────────────
-            # Try native download first
-            result = _try_download_native(page, output_path)
+            # Scoped to the response following OUR prompt so parallel workers
+            # sharing the project chat never download each other's videos.
+            result = _try_download_native(page, output_path, prompt_text=full_prompt)
             
             if not result:
                 # Try fallback (blob / direct fetch)
@@ -673,6 +1075,10 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
                 return None
 
         finally:
+            # Never leave the per-project chat lock held on failure — a stale
+            # lock would block parallel runs until the staleness timeout.
+            if project_title:
+                _release_chat_lock(project_title)
             try:
                 page.close()
             except Exception:
