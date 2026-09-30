@@ -30,6 +30,7 @@ class UpdateConfigRequest(BaseModel):
     target_video_length: Optional[int] = None
     gemini_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
+    deepseek_api_key: Optional[str] = None
     elevenlabs_api_key: Optional[str] = None
     video_workflow: Optional[str] = None
     image_workflow: Optional[str] = None
@@ -167,6 +168,8 @@ async def update_config(request: UpdateConfigRequest):
             updates["GEMINI_API_KEY"] = request.gemini_api_key
         if request.openai_api_key is not None:
             updates["OPENAI_API_KEY"] = request.openai_api_key
+        if request.deepseek_api_key is not None:
+            updates["DEEPSEEK_API_KEY"] = request.deepseek_api_key
         if hasattr(request, 'video_workflow') and request.video_workflow is not None:
             updates["VIDEO_WORKFLOW"] = request.video_workflow
         if hasattr(request, 'image_workflow') and request.image_workflow is not None:

@@ -8,6 +8,7 @@ import { useAgents, useConfig } from "@/hooks/useAgents";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import { useUpdateShots } from "@/hooks/useShots";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import {
   CheckSquare,
   Square,
@@ -138,35 +139,35 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [filterCamera, setFilterCamera] = useState<string>("");
   const [filterText, setFilterText] = useState<string>("");
 
-  // Overrides state
-  const [imageMode, setImageMode] = useState<string>("comfyui");
-  const [imageWorkflow, setImageWorkflow] = useState<string>("flux2");
-  const [videoWorkflow, setVideoWorkflow] = useState<string>("wan22");
-  const [videoMode, setVideoMode] = useState<string>("comfyui");
-  const [batchSkipImages, setBatchSkipImages] = useState<boolean>(true);
-  const [queueSetting, setQueueSetting] = useState<string>("all_images_then_videos");
-  const [appendImagePrompt, setAppendImagePrompt] = useState<string>("default");
+  // Overrides state — persisted per project so bulk-generation settings survive a relaunch
+  const [imageMode, setImageMode] = usePersistedState<string>(`batch_image_mode_${projectId}`, "comfyui");
+  const [imageWorkflow, setImageWorkflow] = usePersistedState<string>(`batch_image_workflow_${projectId}`, "flux2");
+  const [videoWorkflow, setVideoWorkflow] = usePersistedState<string>(`batch_video_workflow_${projectId}`, "wan22");
+  const [videoMode, setVideoMode] = usePersistedState<string>(`batch_video_mode_${projectId}`, "comfyui");
+  const [batchSkipImages, setBatchSkipImages] = usePersistedState<boolean>(`batch_skip_images_${projectId}`, true);
+  const [queueSetting, setQueueSetting] = usePersistedState<string>(`batch_queue_setting_${projectId}`, "all_images_then_videos");
+  const [appendImagePrompt, setAppendImagePrompt] = usePersistedState<string>(`batch_append_image_prompt_${projectId}`, "default");
   const [geminiMode, setGeminiMode] = useState<string>(() => {
     return localStorage.getItem(`gemini_mode_${projectId}`) || "Fast";
   });
 
-  const [ttsMethod, setTtsMethod] = useState("local");
-  const [ttsVoice, setTtsVoice] = useState("en-US-AriaNeural");
-  const [resolution, setResolution] = useState<string>("720p");
-  const [generateSoundFX, setGenerateSoundFX] = useState<boolean>(true);
-  const [soundfxWorkflow, setSoundfxWorkflow] = useState<string>("default");
-  const [batchSoundfxPrompt, setBatchSoundfxPrompt] = useState<string>("");
-  
+  const [ttsMethod, setTtsMethod] = usePersistedState<string>(`batch_tts_method_${projectId}`, "local");
+  const [ttsVoice, setTtsVoice] = usePersistedState<string>(`batch_tts_voice_${projectId}`, "en-US-AriaNeural");
+  const [resolution, setResolution] = usePersistedState<string>(`batch_resolution_${projectId}`, "720p");
+  const [generateSoundFX, setGenerateSoundFX] = usePersistedState<boolean>(`batch_generate_soundfx_${projectId}`, true);
+  const [soundfxWorkflow, setSoundfxWorkflow] = usePersistedState<string>(`batch_soundfx_workflow_${projectId}`, "default");
+  const [batchSoundfxPrompt, setBatchSoundfxPrompt] = usePersistedState<string>(`batch_soundfx_prompt_${projectId}`, "");
+
   // Batch Departure Override states
-  const [batchUseDepartureOverride, setBatchUseDepartureOverride] = useState(true);
+  const [batchUseDepartureOverride, setBatchUseDepartureOverride] = usePersistedState<boolean>(`batch_use_departure_override_${projectId}`, true);
   const DEFAULT_DEPARTURE_PROMPT = "(cinematic quality, consistent style), slowly departing the scene from the character's appearance, transitioning towards the next scene. focus on the departure motion and environment shift.";
-  const [batchDeparturePrompt, setBatchDeparturePrompt] = useState(DEFAULT_DEPARTURE_PROMPT);
+  const [batchDeparturePrompt, setBatchDeparturePrompt] = usePersistedState<string>(`batch_departure_prompt_${projectId}`, DEFAULT_DEPARTURE_PROMPT);
 
   // Batch Then Override states
   const isAgentOverrideDefault = projectAgent === "then_vs_now_closeup" || projectAgent === "then_vs_now";
-  const [batchUseThenOverride, setBatchUseThenOverride] = useState(isAgentOverrideDefault);
+  const [batchUseThenOverride, setBatchUseThenOverride] = usePersistedState<boolean>(`batch_use_then_override_${projectId}`, isAgentOverrideDefault);
   const DEFAULT_THEN_PROMPT = "Remove only the person standing on the right side of this reference image. No change in background set or environment, no side angle, no profile view, no tilt. Make the left person looking directly into camera in center of the frame with happy, cheerful smiling expressions. Do NOT remove or change any background crew members, equipment, or props. ";
-  const [batchThenPrompt, setBatchThenPrompt] = useState(isAgentOverrideDefault ? DEFAULT_THEN_PROMPT : "");
+  const [batchThenPrompt, setBatchThenPrompt] = usePersistedState<string>(`batch_then_prompt_${projectId}`, isAgentOverrideDefault ? DEFAULT_THEN_PROMPT : "");
 
 
   const { data: agents } = useAgents();
@@ -233,20 +234,32 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
     }
   };
 
-  // Update default workflow when config loads
+  // Apply config defaults only for settings the user hasn't saved themselves
   useEffect(() => {
-    if (globalConfig?.video_workflow) {
+    const savedVideoWf = localStorage.getItem(`batch_video_workflow_${projectId}`);
+    if (savedVideoWf) {
+      if (!globalConfig?.available_video_workflows || globalConfig.available_video_workflows.includes(savedVideoWf)) {
+        setVideoWorkflow(savedVideoWf);
+      } else if (globalConfig?.video_workflow) {
+        setVideoWorkflow(globalConfig.video_workflow);
+      }
+    } else if (globalConfig?.video_workflow) {
       setVideoWorkflow(globalConfig.video_workflow);
     }
-    
+
     const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`);
     if (savedGeminiMode) {
       setGeminiMode(savedGeminiMode);
     } else if (globalConfig?.geminiweb_default_mode) {
       setGeminiMode(globalConfig.geminiweb_default_mode);
     }
-    
-    if (globalConfig?.available_soundfx_workflows && globalConfig.available_soundfx_workflows.length > 0) {
+
+    const savedSoundfxWf = localStorage.getItem(`batch_soundfx_workflow_${projectId}`);
+    if (savedSoundfxWf) {
+      if (!globalConfig?.available_soundfx_workflows || globalConfig.available_soundfx_workflows.includes(savedSoundfxWf)) {
+        setSoundfxWorkflow(savedSoundfxWf);
+      }
+    } else if (globalConfig?.available_soundfx_workflows && globalConfig.available_soundfx_workflows.length > 0) {
       setSoundfxWorkflow(globalConfig.available_soundfx_workflows[0]);
     }
   }, [globalConfig, projectId]);
@@ -1461,9 +1474,12 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                           <SelectValue placeholder="Select Gemini Mode" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Fast">Fast</SelectItem>
-                          <SelectItem value="Thinking">Thinking</SelectItem>
-                          <SelectItem value="Pro">Pro</SelectItem>
+                          <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
+                          <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
+                          <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
+                          <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
+                          <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
+                          <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1512,9 +1528,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                             setBatchUseThenOverride(checked);
                             if (checked && (!batchThenPrompt || batchThenPrompt === "")) {
                               setBatchThenPrompt(DEFAULT_THEN_PROMPT);
-                            } else if (!checked) {
-                              setBatchThenPrompt("");
                             }
+                            // Keep any previously typed prompt when unchecking,
+                            // so the persisted text isn't lost.
                           }}
                           className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
                         />
@@ -1584,9 +1600,12 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                           <SelectValue placeholder="Select Gemini Mode" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Fast">Fast</SelectItem>
-                          <SelectItem value="Thinking">Thinking</SelectItem>
-                          <SelectItem value="Pro">Pro</SelectItem>
+                          <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
+                          <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
+                          <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
+                          <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
+                          <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
+                          <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

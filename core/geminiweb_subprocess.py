@@ -53,7 +53,8 @@ BLOB_SNIFFER_JS = """(function(){
         fr.onload = function(){
           try {
             var payload = {size: blob.size, type: blob.type, data: fr.result};
-            if (window === window.top) { window.__capturedImages.push(payload); }
+            if (window === window.top) { window.__capturedImages.push(payload);
+            if (window.__capturedImages.length > 24) window.__capturedImages.splice(0, window.__capturedImages.length - 24); }
             else { try { window.top.postMessage({__blobImage: payload}, '*'); } catch(e) { try { window.parent.postMessage({__blobImage: payload}, '*'); } catch(e2) {} } }
           } catch(e){}
         };
@@ -113,6 +114,7 @@ def _create_browser_context(playwright_instance, profile_dir=None):
         if browser_type_name == "chromium":
             launch_args = [
                 '--disable-blink-features=AutomationControlled',
+                '--disable-session-crashed-bubble',
                 '--no-first-run',
                 '--no-default-browser-check',
                 '--disable-features=OptimizationGuideModelExecution,OptimizationGuideOnDeviceModel',
@@ -142,95 +144,391 @@ def _compose_prompt(image_prompt: str, aspect_ratio: str = None) -> str:
     return f"Generate an image: {image_prompt}.{ar_instruction}"
 
 
-def _ensure_project_chat(page, project_title: str):
+def _get_chat_registry_path() -> str:
+    """Path of the project-title -> chat-URL registry (survives runs)."""
+    return os.path.join(getattr(config, 'OUTPUT_DIR', 'output'), 'gemini_chat_registry.json')
+
+
+# ── Per-project chat-creation lock ──────────────────────────────────────────
+# On the FIRST run for a project the chat URL is only registered after
+# generation finishes, so two parallel workers would each create their own
+# chat (duplicates). The lock serializes chat creation per project: the first
+# worker creates + registers, the others wait (polling the registry) and then
+# join the same chat. Different projects use different lock files and never
+# block each other. The lock is held from acquisition until registration (the
+# whole generation), and is stolen if stale (crashed worker).
+_HELD_CHAT_LOCK: Optional[str] = None
+_CHAT_LOCK_STALE_SECONDS = 900  # steal after 15 min (covers video generation)
+
+
+def _chat_lock_path(project_title: str) -> str:
+    safe = ''.join(c if c.isalnum() or c in '._-' else '_' for c in project_title)[:80]
+    return os.path.join(getattr(config, 'OUTPUT_DIR', 'output'), f'chat_lock_{safe}.lock')
+
+
+def _acquire_chat_lock(project_title: str) -> str:
+    """Wait for exclusive right to create the project chat.
+
+    Returns one of:
+      'registered' — another worker registered the chat while we waited;
+                     caller should re-check the registry and join it.
+      'acquired'   — lock is held; caller may create the chat (must release).
+      'timeout'    — gave up waiting; caller proceeds best-effort (a duplicate
+                     chat may result, same as before the lock existed).
+    """
+    global _HELD_CHAT_LOCK
+    timeout = int(getattr(config, 'GEMINIWEB_CHAT_LOCK_TIMEOUT', 600))
+    deadline = time.time() + timeout
+    lock_path = _chat_lock_path(project_title)
+
+    while True:
+        # Another worker may have registered the chat while we wait.
+        if _registry_get_chat_url(project_title):
+            return 'registered'
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, f"{os.getpid()} {time.time()}".encode())
+            os.close(fd)
+            _HELD_CHAT_LOCK = project_title
+            logger.info(f"Acquired chat-creation lock for '{project_title}'")
+            return 'acquired'
+        except FileExistsError:
+            # Steal a stale lock left behind by a crashed worker.
+            try:
+                if time.time() - os.path.getmtime(lock_path) > _CHAT_LOCK_STALE_SECONDS:
+                    logger.warning(f"Stealing stale chat lock: {lock_path}")
+                    os.remove(lock_path)
+                    continue
+            except OSError:
+                pass
+        except OSError as e:
+            logger.debug(f"Chat lock open failed: {e}")
+            return 'timeout'
+        if time.time() >= deadline:
+            logger.warning(f"Chat-creation lock wait timed out for '{project_title}' after {timeout}s")
+            return 'timeout'
+        time.sleep(3)
+
+
+def _release_chat_lock(project_title: str) -> None:
+    """Release the per-project chat-creation lock (best-effort)."""
+    global _HELD_CHAT_LOCK
+    if _HELD_CHAT_LOCK != project_title:
+        return
+    try:
+        os.remove(_chat_lock_path(project_title))
+    except OSError:
+        pass
+    _HELD_CHAT_LOCK = None
+    logger.info(f"Released chat-creation lock for '{project_title}'")
+
+
+def _registry_get_chat_url(project_title: str) -> Optional[str]:
+    """Return the stored chat URL for project_title, if any."""
+    try:
+        import json
+        path = _get_chat_registry_path()
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            url = data.get(project_title)
+            if url and '/app/' in url:
+                return url
+    except Exception as e:
+        logger.debug(f"Chat registry read failed: {e}")
+    return None
+
+
+def _registry_set_chat_url(project_title: str, chat_url: str) -> None:
+    """Store chat_url under project_title (best-effort)."""
+    try:
+        import json
+        path = _get_chat_registry_path()
+        data = {}
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        if chat_url and '/app/' in chat_url:
+            data[project_title] = chat_url.split('?')[0]
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            logger.info(f"Registered project chat: '{project_title}' -> {chat_url}")
+    except Exception as e:
+        logger.debug(f"Chat registry write failed: {e}")
+
+
+def _open_project_chat_by_url(page, chat_url: str) -> bool:
+    """Navigate to a known chat URL and verify the conversation actually loaded."""
+    try:
+        page.goto(chat_url, wait_until='domcontentloaded', timeout=30000)
+        time.sleep(5)
+        # The conversation-actions menu only exists inside a real conversation
+        # (a deleted chat redirects to /app without it).
+        if page.query_selector('button[aria-label="Open menu for conversation actions."], message-content'):
+            return True
+        logger.debug(f"Chat URL did not load a conversation: {chat_url}")
+    except Exception as e:
+        logger.debug(f"Failed to open chat URL {chat_url}: {e}")
+    return False
+
+
+def _ensure_project_chat(page, project_title: str) -> bool:
     """
     Ensure we are in a chat named after the project_title.
-    1. Look for existing chat in sidebar.
-    2. If found, click it.
-    3. If not, stay in new chat (or click 'New chat') and we'll rename it later.
+    1. Open the chat URL saved in the registry (exact, no UI searching).
+    2. Fall back to searching the sidebar Recents.
+    3. Otherwise stay in the new chat and return False — run() renames the
+       chat to project_title after generation and registers its URL.
     """
     if not project_title:
-        return
+        return False
 
     logger.info(f"Ensuring Gemini chat for project: '{project_title}'")
-    
+
     try:
-        # 1. Look for existing chat in sidebar
-        # Sidebar items are usually <a> tags with 'aria-label' or title containing the chat name
+        # 1. Registry: direct navigation, immune to sidebar render timing.
+        saved_url = _registry_get_chat_url(project_title)
+        if saved_url and _open_project_chat_by_url(page, saved_url):
+            logger.info(f"Opened registered project chat for '{project_title}'")
+            return True
+        if saved_url:
+            logger.info(f"Registered chat for '{project_title}' is gone; falling back to sidebar search")
+
+        # 2. Sidebar Recents. New-UI Recents items are
+        # <a aria-label="<chat title>" href="/app/<id>"> links; give Angular a
+        # moment to render them.
         sidebar_selectors = [
             f'a[aria-label*="{project_title}"]',
             f'div[role="button"]:has-text("{project_title}")',
             f'a:has-text("{project_title}")',
         ]
-        
+        try:
+            page.wait_for_selector('a[aria-label][href*="/app/"]', timeout=8000, state='visible')
+        except Exception:
+            pass
+
         for sel in sidebar_selectors:
             try:
-                chat_link = page.query_selector(sel)
-                if chat_link:
-                    logger.info(f"Found existing chat: '{project_title}'. Clicking...")
-                    chat_link.click()
-                    time.sleep(3)
-                    return
+                chat_links = page.query_selector_all(sel)
+                # Prefer a visible link that points at a conversation.
+                for chat_link in reversed(chat_links):
+                    try:
+                        if not chat_link.is_visible():
+                            continue
+                        logger.info(f"Found existing chat: '{project_title}'. Clicking...")
+                        chat_link.click()
+                        time.sleep(5)
+                        _registry_set_chat_url(project_title, page.url)
+                        return True
+                    except Exception:
+                        continue
             except Exception:
                 continue
-                
-        logger.info(f"No existing chat found for '{project_title}'. Using current/new chat.")
+
+        logger.info(f"No existing chat found for '{project_title}'. Serializing chat creation...")
+        # 3. First run for this project: serialize so parallel workers don't
+        # each create their own chat. While waiting we poll the registry; once
+        # the first worker registers, we join its chat instead.
+        lock_status = _acquire_chat_lock(project_title)
+        if lock_status == 'registered':
+            saved_url = _registry_get_chat_url(project_title)
+            if saved_url and _open_project_chat_by_url(page, saved_url):
+                logger.info(f"Joined project chat registered by a parallel worker for '{project_title}'")
+                return True
+        # 'acquired' (we create the chat, lock held until registration) or
+        # 'timeout' (best-effort duplicate risk, as before the lock existed).
+        if project_title and _registry_get_chat_url(project_title) and lock_status == 'acquired':
+            # Double-check: a worker may have registered between lock acquisition
+            # and this check.
+            saved_url = _registry_get_chat_url(project_title)
+            if saved_url and _open_project_chat_by_url(page, saved_url):
+                _release_chat_lock(project_title)
+                return True
+
+        logger.info(f"Using current/new chat; it will be renamed after generation.")
         # If we are not in a new chat, click 'New chat'
         new_chat_btn = page.query_selector('a[href="/app"], button:has-text("New chat")')
         if new_chat_btn and not page.url.endswith('/app'):
             new_chat_btn.click()
             time.sleep(2)
+        return False
 
     except Exception as e:
         logger.warning(f"Error while managing project chat: {e}")
+        return False
+
+
+def _rename_current_chat(page, project_title: str) -> bool:
+    """
+    Rename the current chat to project_title so future runs can find it in the
+    sidebar. New-UI flow: conversation actions menu -> 'Rename' -> dialog input
+    -> 'Rename' button.
+    """
+    if not project_title:
+        return False
+
+    try:
+        menu_btn = page.query_selector('button[aria-label="Open menu for conversation actions."]')
+        if not menu_btn or not menu_btn.is_visible():
+            logger.debug("Conversation actions menu not found; cannot rename chat")
+            return False
+        menu_btn.click()
+        time.sleep(1.5)
+
+        rename_item = None
+        for it in page.query_selector_all('gem-menu-item'):
+            try:
+                if (it.text_content() or '').strip().lower() == 'rename' and it.is_visible():
+                    rename_item = it
+                    break
+            except Exception:
+                continue
+        if not rename_item:
+            logger.debug("'Rename' menu item not found")
+            page.keyboard.press('Escape')
+            return False
+        rename_item.click()
+        time.sleep(2)
+
+        field = page.wait_for_selector(
+            'mat-dialog-container input, mat-dialog-container textarea, '
+            'div[role="dialog"] input, div[role="dialog"] textarea',
+            timeout=8000)
+        field.click()
+        page.keyboard.press('Control+A')
+        page.keyboard.press('Delete')
+        field.type(project_title, delay=5)
+        time.sleep(0.5)
+
+        save_btn = None
+        for bt in page.query_selector_all('mat-dialog-container button, div[role="dialog"] button'):
+            text = (bt.text_content() or '').strip().lower()
+            if text in ('save', 'rename', 'ok', 'done') and bt.is_visible():
+                save_btn = bt
+                break
+        if not save_btn:
+            logger.debug("Rename save button not found")
+            page.keyboard.press('Escape')
+            return False
+        save_btn.click()
+        time.sleep(3)
+        logger.info(f"Chat renamed to '{project_title}' for future reuse")
+        return True
+
+    except Exception as e:
+        logger.debug(f"Rename chat failed: {e}")
+        try:
+            page.keyboard.press('Escape')
+        except Exception:
+            pass
+        return False
 
 
 def _set_gemini_mode(page, mode: str):
     """
-    Select the Gemini model mode (Fast, Thinking, Pro) via the UI.
-    Uses the data-test-id selectors provided by the user.
+    Select the Gemini model mode via the UI.
+
+    2026-09: Gemini's picker now offers three models (3.5 Flash-Lite, 3.8 Flash,
+    3.1 Pro) plus an "Extended thinking" toggle. We expose six modes:
+        Fast            -> 3.5 Flash-Lite, Extended thinking OFF
+        Medium          -> 3.8 Flash,      Extended thinking OFF
+        Pro             -> 3.1 Pro,        Extended thinking OFF
+        Fast Thinking   -> 3.5 Flash-Lite, Extended thinking ON
+        Medium Thinking -> 3.8 Flash,      Extended thinking ON
+        Pro Thinking    -> 3.1 Pro,        Extended thinking ON
+    Legacy names map as: fast -> Fast, thinking -> Medium Thinking, pro -> Pro.
+
+    Current state is parsed from the picker button's aria-label
+    ("Open mode picker, currently <model>[ Extended]"). Model items are matched
+    by text because their data-test-id values are unstable hashes.
     """
     if not mode:
         mode = getattr(config, 'GEMINIWEB_DEFAULT_MODE', 'Fast')
-    
-    # Standardize mode name to lowercase for selector mapping
+
     mode_key = mode.lower().strip()
-    selectors = {
-        "fast": "bard-mode-option-fast",
-        "thinking": "bard-mode-option-thinking",
-        "pro": "bard-mode-option-pro"
+    mode_map = {
+        'fast': ('flash-lite', False),
+        'medium': ('flash', False),
+        'pro': ('pro', False),
+        'fast thinking': ('flash-lite', True),
+        'medium thinking': ('flash', True),
+        'pro thinking': ('pro', True),
+        # legacy names
+        'thinking': ('flash', True),
     }
-    
-    target_id = selectors.get(mode_key)
-    if not target_id:
+    desired = mode_map.get(mode_key)
+    if not desired:
         logger.warning(f"Unknown Gemini mode '{mode}', skipping selection.")
         return
+    desired_model, desired_extended = desired
+    # Menu item texts start with these labels (e.g. "3.5 Flash-Lite Fastest answers")
+    model_menu_labels = {
+        'flash-lite': '3.5 flash-lite',
+        'flash': '3.8 flash',
+        'pro': '3.1 pro',
+    }
+
+    picker_sel = 'button[data-test-id="bard-mode-menu-button"]'
+
+    def _read_state():
+        try:
+            btn = page.query_selector(picker_sel)
+            if not btn:
+                return None
+            aria = (btn.get_attribute('aria-label') or '').lower()
+            if 'currently' not in aria:
+                return None
+            current = aria.split('currently', 1)[1].strip()
+            extended = current.endswith('extended')
+            model = current[:-len('extended')].strip() if extended else current
+            return {'model': model, 'extended': extended}
+        except Exception:
+            return None
+
+    def _open_menu():
+        page.wait_for_selector(picker_sel, timeout=10000).click()
+        time.sleep(1.5)
+
+    def _click_menu_item(prefix):
+        for it in page.query_selector_all('gem-menu-item'):
+            try:
+                text = (it.text_content() or '').strip().lower()
+                if text.startswith(prefix) and it.is_visible():
+                    it.click()
+                    time.sleep(2)  # menu closes on selection
+                    return True
+            except Exception:
+                continue
+        return False
 
     logger.info(f"Setting Gemini mode to: {mode}")
     try:
-        # 1. Click the model picker button
-        picker_btn = page.wait_for_selector('button[data-test-id="bard-mode-menu-button"]', timeout=10000)
-        if picker_btn:
-            # Check current mode to avoid redundant clicks
-            current_mode = picker_btn.inner_text().strip().lower()
-            if mode_key in current_mode:
-                logger.info(f"Gemini is already in {mode} mode.")
-                return
+        state = _read_state()
+        if state and state['model'] == desired_model and state['extended'] == desired_extended:
+            logger.info(f"Gemini is already in {mode} mode (model={state['model']}, extended={state['extended']}).")
+            return
 
-            picker_btn.click()
-            time.sleep(1.5) # Wait for menu
-            
-            # 2. Click the specific mode option
-            option_sel = f'button[data-test-id="{target_id}"], [data-test-id="{target_id}"]'
-            option_btn = page.wait_for_selector(option_sel, timeout=5000)
-            if option_btn:
-                option_btn.click()
-                logger.info(f"Successfully selected {mode} mode.")
-                time.sleep(2) # Wait for mode switch to settle
-            else:
-                logger.warning(f"Could not find menu option for mode: {mode}")
+        if state is None or state['model'] != desired_model:
+            _open_menu()
+            if not _click_menu_item(model_menu_labels[desired_model]):
+                logger.warning(f"Could not find model menu item for '{desired_model}'")
+                page.keyboard.press('Escape')
+                return
+            state = _read_state()
+
+        if state is not None and state['extended'] != desired_extended:
+            _open_menu()
+            if not _click_menu_item('extended thinking'):
+                logger.warning("Could not find 'Extended thinking' menu item")
+                page.keyboard.press('Escape')
+                return
+            state = _read_state()
+
+        if state and state['model'] == desired_model and state['extended'] == desired_extended:
+            logger.info(f"Successfully set Gemini mode to {mode} (model={desired_model}, extended={desired_extended}).")
         else:
-            logger.warning("Could not find Gemini model picker button.")
+            logger.warning(f"Gemini mode selection did not verify: wanted {desired}, got {state}")
     except Exception as e:
         logger.error(f"Error setting Gemini mode: {e}")
 
@@ -416,7 +714,75 @@ def _inject_text_into_input(page, input_element, text: str) -> bool:
     return False
 
 
-def _try_download_native(page, output_path: str) -> Optional[str]:
+# Locate the response that belongs to a specific prompt in the conversation.
+# With parallel workers sharing the project chat, several prompts/responses
+# interleave — "the last download button on the page" can belong to another
+# worker's image. Instead: find the LAST user-query containing our prompt
+# text, then the response content that immediately follows it.
+_LOCATE_READY_JS = """(prompt) => {
+  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+  const needle = norm(prompt).slice(0, 1000);
+  if (!needle) return false;
+  const all = Array.from(document.querySelectorAll('user-query, message-content, model-response'));
+  let qi = -1;
+  for (let i = 0; i < all.length; i++) {
+    if (all[i].tagName.toLowerCase() === 'user-query' && norm(all[i].textContent).includes(needle)) qi = i;
+  }
+  if (qi === -1) return false;
+  for (let i = qi + 1; i < all.length; i++) {
+    const el = all[i];
+    if (el.tagName.toLowerCase() === 'user-query') return false; // our turn ended with no image response
+    const img = el.querySelector('img');
+    if (img && img.naturalWidth > 300) return true; // response rendered its image
+  }
+  return false;
+}"""
+
+_LOCATE_CONTAINER_JS = """(prompt) => {
+  const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+  const needle = norm(prompt).slice(0, 1000);
+  if (!needle) return null;
+  const all = Array.from(document.querySelectorAll('user-query, message-content, model-response'));
+  let qi = -1;
+  for (let i = 0; i < all.length; i++) {
+    if (all[i].tagName.toLowerCase() === 'user-query' && norm(all[i].textContent).includes(needle)) qi = i;
+  }
+  if (qi === -1) return null;
+  for (let i = qi + 1; i < all.length; i++) {
+    const el = all[i];
+    if (el.tagName.toLowerCase() === 'user-query') return null;
+    if (el.querySelector('img')) return el;
+  }
+  return null;
+}"""
+
+
+def _wait_for_own_response(page, prompt_text: str, timeout_s: float = 90) -> bool:
+    """Wait until the response following OUR prompt has rendered an image."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if page.is_closed():
+            return False
+        try:
+            if page.evaluate(_LOCATE_READY_JS, prompt_text):
+                return True
+        except Exception:
+            return False
+        time.sleep(3)
+    return False
+
+
+def _locate_own_response_container(page, prompt_text: str):
+    """Return an ElementHandle for the response content following our prompt."""
+    try:
+        handle = page.evaluate_handle(_LOCATE_CONTAINER_JS, prompt_text)
+        return handle.as_element()
+    except Exception as e:
+        logger.debug(f"Prompt-based response locate failed: {e}")
+        return None
+
+
+def _try_download_native(page, output_path: str, prompt_text: str = None) -> Optional[str]:
     """
     Download the latest generated image using multiple strategies.
     Optimized for high-resolution capture by persisting the lightbox view.
@@ -463,37 +829,63 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
         # Guaranteed fallback (canvas extraction of the downscaled preview
         # blob) runs right after if this yields nothing.
         logger.info("Strategy 0: blob-capture download (full resolution)...")
+        # 2026-09: parallel workers share the project chat, so responses
+        # interleave. Scope everything (button, fingerprint, fallback) to the
+        # response following OUR prompt instead of "last one on the page".
+        own_container = None
+        if prompt_text:
+            if _wait_for_own_response(page, prompt_text, timeout_s=60):
+                own_container = _locate_own_response_container(page, prompt_text)
+                if own_container is not None:
+                    logger.info("Strategy 0: located own response by prompt text")
+                else:
+                    logger.info("Strategy 0: prompt response ready but container locate failed")
+            else:
+                logger.info("Strategy 0: could not locate own prompt response; falling back to last visible")
         try:
             # init script covers future frames (the sandboxed download frame);
             # this covers the already-loaded main document. Idempotent.
             page.evaluate(BLOB_SNIFFER_JS)
-            # Drop everything captured earlier in the session (uploaded
-            # reference images, inline preview blobs) — otherwise the largest
-            # captured blob can be the user's uploaded reference instead of
-            # the generated image. Only post-click blobs are candidates.
-            page.evaluate("window.__capturedImages = [];")
+            # NOTE: the buffer is deliberately NOT cleared here. For an
+            # already-rendered message Gemini creates the full-size blob at
+            # render time — clearing before the click would throw it away.
+            # Selection is done by fingerprint-matching the target image
+            # instead of by recency/size.
         except Exception:
             pass
         try:
             btn = None
-            for sel in (
-                'gem-icon-button[data-test-id="download-generated-image-button"] button',
-                'button[aria-label="Download full size image"]',
-                'mat-dialog-container button[aria-label="Download full size image"]',
-                'div[role="dialog"] button[aria-label*="ownload" i]',
-                'button[aria-label="Download image"]',
-                'button[aria-label="Download"]',
-            ):
-                # Last visible match = most recent generation (chats can hold
-                # several generated images; uploads live in user-query and
-                # carry no download-generated-image-button).
-                btns = page.query_selector_all(sel)
-                visible = [b_ for b_ in btns if b_.is_visible()]
-                if visible:
-                    btn = visible[-1]
-                    logger.info(f"Strategy 0: clicking download control '{sel}' (last of {len(visible)})")
-                    break
+            if own_container is not None:
+                for sel in (
+                    'gem-icon-button[data-test-id="download-generated-image-button"] button',
+                    'button[aria-label="Download full size image"]',
+                    'button[aria-label*="ownload" i]',
+                ):
+                    btns = own_container.query_selector_all(sel)
+                    visible = [b_ for b_ in btns if b_.is_visible()]
+                    if visible:
+                        btn = visible[-1]
+                        logger.info(f"Strategy 0: clicking download control '{sel}' in own prompt response")
+                        break
             if btn is None:
+                for sel in (
+                    'gem-icon-button[data-test-id="download-generated-image-button"] button',
+                    'button[aria-label="Download full size image"]',
+                    'mat-dialog-container button[aria-label="Download full size image"]',
+                    'div[role="dialog"] button[aria-label*="ownload" i]',
+                    'button[aria-label="Download image"]',
+                    'button[aria-label="Download"]',
+                ):
+                    # Last visible match = most recent generation (chats can hold
+                    # several generated images; uploads live in user-query and
+                    # carry no download-generated-image-button).
+                    btns = page.query_selector_all(sel)
+                    visible = [b_ for b_ in btns if b_.is_visible()]
+                    if visible:
+                        btn = visible[-1]
+                        logger.info(f"Strategy 0: clicking download control '{sel}' (last of {len(visible)})")
+                        break
+            if btn is None and own_container is None:
                 img_el = page.query_selector('message-content img')
                 if img_el:
                     img_el.scroll_into_view_if_needed()
@@ -502,58 +894,184 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
                     btn = page.query_selector('mat-dialog-container button[aria-label="Download full size image"], div[role="dialog"] button[aria-label*="ownload" i]')
 
             if btn is not None:
+                # Fingerprint the image we are downloading: hash the preview
+                # <img> in the same response container. Later, captured blobs
+                # are matched against this hash — with many images in the chat,
+                # message virtualization re-creates blob URLs for OLDER images
+                # while the new response renders, and "largest blob wins" could
+                # otherwise download a previous (bigger) image.
+                target = None
                 try:
-                    btn.scroll_into_view_if_needed()
-                    try:
-                        btn.hover(timeout=3000)
-                    except Exception:
-                        pass
-                    time.sleep(0.5)
-                    btn.click()
-                except Exception as click_err:
-                    logger.debug(f"Strategy 0 click failed: {click_err}")
+                    target = btn.evaluate("""(btn) => {
+                        const container = btn.closest('response-element') || btn.closest('message-content');
+                        const img = container ? container.querySelector('img') : null;
+                        if (!img || !img.naturalWidth) return null;
+                        const c = document.createElement('canvas');
+                        c.width = 16; c.height = 16;
+                        const g = c.getContext('2d');
+                        g.drawImage(img, 0, 0, 16, 16);
+                        const d = g.getImageData(0, 0, 16, 16).data;
+                        const lum = [];
+                        for (let i = 0; i < d.length; i += 4)
+                            lum.push(Math.round(0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]));
+                        return {nw: img.naturalWidth, nh: img.naturalHeight, hash: lum};
+                    }""")
+                except Exception as hash_err:
+                    logger.debug(f"Target fingerprint failed: {hash_err}")
 
-                # Poll captured blobs. Gemini prepares the full-size file
-                # server-side (observed 5s-100s) and may re-create blobs as it
-                # retries; wait for the largest to settle.
-                deadline = time.time() + 120
-                last_count = -1
-                last_new = time.time()
-                while time.time() < deadline:
-                    time.sleep(2)
-                    if page.is_closed():
-                        logger.debug("Strategy 0: page closed while polling")
-                        break
+                click_attempts = 0
+                n_at_click = 0
+                FULL_RES_MIN = 500000   # below this it's a preview re-encode
+                # Up to 3 click attempts. After each click: wait for blob
+                # activity to settle, match fingerprints, and only accept a
+                # preview-sized match once all click attempts are used up.
+                while click_attempts < 3 and not page.is_closed():
+                    click_attempts += 1
                     try:
-                        summary = page.evaluate(
-                            "(window.__capturedImages || []).map(x => x.size)")
+                        btn.scroll_into_view_if_needed()
+                        try:
+                            btn.hover(timeout=3000)
+                        except Exception:
+                            pass
+                        time.sleep(0.5)
+                        btn.click()
+                    except Exception as click_err:
+                        logger.debug(f"Strategy 0 click failed (attempt {click_attempts}): {click_err}")
+                        # Re-resolve the button: virtualization may detach it.
+                        try:
+                            retry_visible = [b_ for b_ in page.query_selector_all(
+                                'gem-icon-button[data-test-id="download-generated-image-button"] button')
+                                if b_.is_visible()]
+                            if retry_visible:
+                                btn = retry_visible[-1]
+                        except Exception:
+                            pass
+                        continue
+
+                    try:
+                        n_at_click = page.evaluate("(window.__capturedImages || []).length")
                     except Exception:
+                        n_at_click = 0
+
+                    # Poll until blob activity settles (Gemini prepares the
+                    # full-size file server-side, observed 5s-100s).
+                    deadline = time.time() + 90
+                    last_count = -1
+                    last_new = time.time()
+                    while time.time() < deadline:
+                        time.sleep(2)
+                        if page.is_closed():
+                            break
+                        try:
+                            summary = page.evaluate(
+                                "(window.__capturedImages || []).map(x => x.size)")
+                        except Exception:
+                            summary = None
+                            break
+                        if len(summary) != last_count:
+                            last_count = len(summary)
+                            last_new = time.time()
+                            logger.debug(f"Strategy 0: {last_count} blob(s) captured so far")
+                        if last_count > 0 and time.time() - last_new > 10:
+                            break
+
+                    if page.is_closed():
                         break
-                    if len(summary) != last_count:
-                        last_count = len(summary)
-                        last_new = time.time()
-                        logger.debug(f"Strategy 0: {last_count} blob(s) captured so far")
-                    if last_count > 0 and time.time() - last_new > 12:
-                        break
-                if last_count and not page.is_closed():
+
+                    # Match fingerprints and decide.
+                    best = None
                     try:
-                        data_url = page.evaluate("""() => {
-                            const arr = window.__capturedImages || [];
-                            if (!arr.length) return null;
-                            let best = arr[0];
-                            for (const x of arr) if (x.size > best.size) best = x;
-                            return best.data;
-                        }""")
-                        if data_url and ',' in data_url:
-                            _, data = data_url.split(',', 1)
-                            img_bytes = base64.b64decode(data)
-                            if len(img_bytes) > 200000:
-                                with open(output_path, 'wb') as f:
-                                    f.write(img_bytes)
-                                logger.info(f"Strategy 0 SUCCESS: {output_path} ({len(img_bytes):,} bytes, full resolution)")
-                                return output_path
-                    except Exception as eval_err:
-                        logger.debug(f"Strategy 0 blob read failed: {eval_err}")
+                        if target:
+                            candidates = page.evaluate("""() => new Promise(resolve => {
+                                const arr = window.__capturedImages || [];
+                                const items = arr.slice(-24);
+                                const base = arr.length - items.length;
+                                if (!items.length) return resolve([]);
+                                const out = [];
+                                let done = 0;
+                                const hashOf = (im) => {
+                                    const c = document.createElement('canvas');
+                                    c.width = 16; c.height = 16;
+                                    const g = c.getContext('2d');
+                                    g.drawImage(im, 0, 0, 16, 16);
+                                    const d = g.getImageData(0, 0, 16, 16).data;
+                                    const lum = [];
+                                    for (let i = 0; i < d.length; i += 4)
+                                        lum.push(Math.round(0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]));
+                                    return lum;
+                                };
+                                items.forEach((x, idx) => {
+                                    const im = new Image();
+                                    im.onload = () => {
+                                        try {
+                                            out.push({idx: base + idx, size: x.size, hash: hashOf(im)});
+                                        } catch (e) {}
+                                        if (++done === items.length) resolve(out);
+                                    };
+                                    im.onerror = () => { if (++done === items.length) resolve(out); };
+                                    im.src = x.data;
+                                });
+                            })""")
+
+                            def dist(a, b):
+                                return sum(abs(x - y) for x, y in zip(a, b)) / len(a)
+
+                            matches = [
+                                (dist(target['hash'], c_['hash']), c_['size'], c_['idx'])
+                                for c_ in candidates
+                            ]
+                            # Threshold: measured correct pairs (preview vs its
+                            # own full-res re-render) land at d16 ~12-23;
+                            # different images sit at 43+. 30 separates them.
+                            good = [m for m in matches if m[0] <= 30.0]
+                            if good:
+                                best = max(good, key=lambda m: (m[1], -m[0]))
+                                logger.info(f"Strategy 0: {len(matches)} candidate(s), "
+                                            f"{len(good)} match the target image "
+                                            f"(best distance {best[0]:.1f}, "
+                                            f"best size {best[1]:,})")
+                            else:
+                                logger.info(f"Strategy 0: {len(matches)} candidate(s), none match the target image")
+                    except Exception as match_err:
+                        logger.debug(f"Strategy 0 matching failed: {match_err}")
+
+                    if best is not None and best[1] >= FULL_RES_MIN:
+                        # Full-resolution match — accept immediately.
+                        try:
+                            data_url = page.evaluate(
+                                "(idx) => (window.__capturedImages || [])[idx] ? (window.__capturedImages || [])[idx].data : null",
+                                best[2])
+                            if data_url and ',' in data_url:
+                                _, data = data_url.split(',', 1)
+                                img_bytes = base64.b64decode(data)
+                                if len(img_bytes) > 200000:
+                                    with open(output_path, 'wb') as f:
+                                        f.write(img_bytes)
+                                    logger.info(f"Strategy 0 SUCCESS: {output_path} ({len(img_bytes):,} bytes, full resolution)")
+                                    return output_path
+                        except Exception as read_err:
+                            logger.debug(f"Strategy 0 blob read failed: {read_err}")
+                    elif best is not None and click_attempts >= 3:
+                        # Only preview-sized matches after all retries — accept
+                        # the best we have (better than the canvas fallback).
+                        logger.warning(f"Strategy 0: accepting preview-sized match ({best[1]:,} bytes) after {click_attempts} click attempts")
+                        try:
+                            data_url = page.evaluate(
+                                "(idx) => (window.__capturedImages || [])[idx] ? (window.__capturedImages || [])[idx].data : null",
+                                best[2])
+                            if data_url and ',' in data_url:
+                                _, data = data_url.split(',', 1)
+                                img_bytes = base64.b64decode(data)
+                                if len(img_bytes) > 200000:
+                                    with open(output_path, 'wb') as f:
+                                        f.write(img_bytes)
+                                    logger.info(f"Strategy 0 SUCCESS (preview quality): {output_path} ({len(img_bytes):,} bytes)")
+                                    return output_path
+                        except Exception as read_err:
+                            logger.debug(f"Strategy 0 blob read failed: {read_err}")
+                    else:
+                        # No full-res blob yet (or nothing matched) — re-click.
+                        logger.info(f"Strategy 0: no full-res blob after attempt {click_attempts}; re-clicking")
                 logger.debug("Strategy 0: no full-resolution blob captured")
             else:
                 logger.debug("Strategy 0: no download control found")
@@ -564,42 +1082,57 @@ def _try_download_native(page, output_path: str) -> Optional[str]:
         # Lower resolution than the original, but it never triggers the tab
         # crash, so it is the safe last resort.
         logger.info("Canvas fallback: extracting displayed image (may be preview resolution)...")
-        for img_sel in ['message-content img', 'img.main-image', 'div.lightbox img', 'div[role="dialog"] img', 'button.image-button img']:
+        # Own prompt response FIRST — parallel workers must not grab another
+        # worker's image here. Globals follow in reverse (newest first).
+        canvas_candidates = []
+        try:
+            if own_container is not None:
+                own_img = own_container.query_selector('img')
+                if own_img is not None:
+                    canvas_candidates.append(own_img)
+        except Exception as ce:
+            logger.debug(f"Own container canvas candidate failed: {ce}")
+        try:
+            for img_sel in ['message-content img', 'img.main-image', 'div.lightbox img', 'div[role="dialog"] img', 'button.image-button img']:
+                canvas_candidates.extend(page.query_selector_all(img_sel))
+        except Exception as ce:
+            logger.debug(f"Canvas candidate collection failed: {ce}")
+        # own image first, then the newest global images
+        canvas_candidates = canvas_candidates[:1] + list(reversed(canvas_candidates[1:]))
+        for img_el in canvas_candidates:
             try:
-                imgs = page.query_selector_all(img_sel)
-                for img_el in reversed(imgs):
-                    src = img_el.get_attribute('src')
-                    if not src or src.startswith('data:image/svg') or 'avatar' in src.lower():
-                        continue
-                    nw = img_el.evaluate('el => el.naturalWidth || 0')
-                    if nw < 300:
-                        continue
-                    data_url = img_el.evaluate("""
-                        (img) => new Promise(resolve => {
-                            const extract = () => {
-                                try {
-                                    const c = document.createElement('canvas');
-                                    c.width = img.naturalWidth; c.height = img.naturalHeight;
-                                    c.getContext('2d').drawImage(img, 0, 0);
-                                    resolve(c.toDataURL('image/png'));
-                                } catch (e) { resolve('EXTRACT_ERROR:' + e.message); }
-                            };
-                            if (!img.complete) { img.onload = extract; } else { extract(); }
-                        })
-                    """)
-                    if data_url and data_url.startswith('EXTRACT_ERROR:'):
-                        logger.debug(f"Canvas extract failed for {img_sel}: {data_url[:80]}")
-                        continue
-                    if data_url and ',' in data_url:
-                        _, data = data_url.split(',', 1)
-                        img_bytes = base64.b64decode(data)
-                        if len(img_bytes) > 200000:
-                            with open(output_path, 'wb') as f:
-                                f.write(img_bytes)
-                            logger.info(f"Canvas fallback SUCCESS: {output_path} ({len(img_bytes):,} bytes, {nw}px)")
-                            return output_path
+                src = img_el.get_attribute('src')
+                if not src or src.startswith('data:image/svg') or 'avatar' in src.lower():
+                    continue
+                nw = img_el.evaluate('el => el.naturalWidth || 0')
+                if nw < 300:
+                    continue
+                data_url = img_el.evaluate("""
+                    (img) => new Promise(resolve => {
+                        const extract = () => {
+                            try {
+                                const c = document.createElement('canvas');
+                                c.width = img.naturalWidth; c.height = img.naturalHeight;
+                                c.getContext('2d').drawImage(img, 0, 0);
+                                resolve(c.toDataURL('image/png'));
+                            } catch (e) { resolve('EXTRACT_ERROR:' + e.message); }
+                        };
+                        if (!img.complete) { img.onload = extract; } else { extract(); }
+                    })
+                """)
+                if data_url and data_url.startswith('EXTRACT_ERROR:'):
+                    logger.debug(f"Canvas extract failed: {data_url[:80]}")
+                    continue
+                if data_url and ',' in data_url:
+                    _, data = data_url.split(',', 1)
+                    img_bytes = base64.b64decode(data)
+                    if len(img_bytes) > 200000:
+                        with open(output_path, 'wb') as f:
+                            f.write(img_bytes)
+                        logger.info(f"Canvas fallback SUCCESS: {output_path} ({len(img_bytes):,} bytes, {nw}px)")
+                        return output_path
             except Exception as e:
-                logger.debug(f"Canvas fallback check failed for {img_sel}: {e}")
+                logger.debug(f"Canvas fallback check failed: {e}")
                 continue
 
         # Find the last rendered image container
@@ -1080,17 +1613,27 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
         page.add_init_script(BLOB_SNIFFER_JS)
 
         try:
-            logger.info(f"Navigating to {gemini_url}")
-            # Increase navigation buffer to respect GEMINIWEB_TIMEOUT loaded above
-            page.goto(gemini_url, wait_until='domcontentloaded', timeout=timeout * 1000)
-            time.sleep(2)
+            # ── Fast path: chat URL known from the registry — go straight to
+            # the chat (skips the app home entirely). The chat page has the
+            # same mode picker as the app home.
+            used_existing_chat = False
+            saved_url = _registry_get_chat_url(project_title) if project_title else None
+            if saved_url and _open_project_chat_by_url(page, saved_url):
+                logger.info(f"Opened registered project chat directly (skipped app home)")
+                used_existing_chat = True
+                _set_gemini_mode(page, gemini_mode)
+            else:
+                logger.info(f"Navigating to {gemini_url}")
+                # Increase navigation buffer to respect GEMINIWEB_TIMEOUT loaded above
+                page.goto(gemini_url, wait_until='domcontentloaded', timeout=timeout * 1000)
+                time.sleep(2)
 
-            # ── Set Gemini Mode (Fast/Thinking/Pro) ──────────────────────────
-            _set_gemini_mode(page, gemini_mode)
+                # ── Set Gemini Mode (Fast/Thinking/Pro) ──────────────────────
+                _set_gemini_mode(page, gemini_mode)
 
-            # ── Ensure correct chat ──────────────────────────────────────────
-            if project_title:
-                _ensure_project_chat(page, project_title)
+                # ── Ensure correct chat ──────────────────────────────────────
+                if project_title:
+                    used_existing_chat = _ensure_project_chat(page, project_title)
 
             # Dismiss any dialogs
             try:
@@ -1326,6 +1869,14 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 except Exception:
                     pass
 
+            # ── Name the chat after the project so future runs reuse it ─────
+            # The chat only exists once a prompt has been sent; rename new
+            # chats here (existing project chats already carry the name).
+            if project_title and not used_existing_chat:
+                if _rename_current_chat(page, project_title):
+                    _registry_set_chat_url(project_title, page.url)
+                _release_chat_lock(project_title)
+
             if not image_src:
                 logger.error("No image was generated by Gemini")
                 diag_path = output_path.replace('.png', '_diagnostic.png')
@@ -1338,7 +1889,9 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
             time.sleep(5)  # Wait for full res image to fully render (User requested)
             
             # Preferred: Playwright native download (highest quality, exact file)
-            result = _try_download_native(page, output_path)
+            # Scoped to the response following OUR prompt so parallel workers
+            # sharing the project chat never download each other's images.
+            result = _try_download_native(page, output_path, prompt_text=full_prompt)
             if not result:
                 # Fallback: extract from src attribute (data URI / blob URL)
                 result = _download_image_fallback(page, image_src, output_path)
@@ -1356,6 +1909,10 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 return None
 
         finally:
+            # Never leave the per-project chat lock held on failure — a stale
+            # lock would block parallel runs until the staleness timeout.
+            if project_title:
+                _release_chat_lock(project_title)
             try:
                 page.close()
             except Exception:

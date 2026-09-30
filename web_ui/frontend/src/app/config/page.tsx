@@ -35,6 +35,7 @@ export default function ConfigPage() {
     target_video_length: 0,
     gemini_api_key: "",
     openai_api_key: "",
+    deepseek_api_key: "",
     elevenlabs_api_key: "",
     playwright_browser: "",
     gemini_watermark_tool_image: "",
@@ -55,6 +56,7 @@ export default function ConfigPage() {
         target_video_length: config.target_video_length || 600,
         gemini_api_key: "", // Don't populate sensitive keys from GET
         openai_api_key: "",
+        deepseek_api_key: "",
         elevenlabs_api_key: "",
         playwright_browser: config.playwright_browser || "chromium",
         gemini_watermark_tool_image: config.gemini_watermark_tool_image || "",
@@ -72,6 +74,7 @@ export default function ConfigPage() {
       const updates: any = { ...formData };
       if (!updates.gemini_api_key) delete updates.gemini_api_key;
       if (!updates.openai_api_key) delete updates.openai_api_key;
+      if (!updates.deepseek_api_key) delete updates.deepseek_api_key;
       if (!updates.elevenlabs_api_key) delete updates.elevenlabs_api_key;
 
       await updateConfigMutation.mutateAsync(updates);
@@ -154,6 +157,7 @@ export default function ConfigPage() {
                   <SelectItem value="ollama">Ollama (Local)</SelectItem>
                   <SelectItem value="lmstudio">LM Studio (Local)</SelectItem>
                   <SelectItem value="zhipu">Zhipu AI</SelectItem>
+                  <SelectItem value="deepseek">DeepSeek</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -268,9 +272,12 @@ export default function ConfigPage() {
                   <SelectValue placeholder="Select Gemini Mode" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Fast">Fast</SelectItem>
-                  <SelectItem value="Thinking">Thinking</SelectItem>
-                  <SelectItem value="Pro">Pro</SelectItem>
+                  <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
+                  <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
+                  <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
+                  <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
+                  <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
+                  <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-muted-foreground mt-1">
@@ -470,6 +477,20 @@ export default function ConfigPage() {
                 value={formData.openai_api_key}
                 onChange={(e) =>
                   setFormData({ ...formData, openai_api_key: e.target.value })
+                }
+                placeholder="Paste new key to update..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                DeepSeek API Key
+              </label>
+              <Input
+                type="password"
+                value={formData.deepseek_api_key}
+                onChange={(e) =>
+                  setFormData({ ...formData, deepseek_api_key: e.target.value })
                 }
                 placeholder="Paste new key to update..."
               />

@@ -259,6 +259,44 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
     if video_length_seconds and not wan_video_node_id:
         logger.warning("[WORKFLOW] No video node detected for this workflow - video length will not be set")
 
+    # ==========================================
+    # PER-SHOT CLIP DURATION
+    # ==========================================
+    # Prefer the shot's own duration (chosen by the shot planner) over the
+    # global default. Workflows opt in via a discovered [duration] node
+    # (MiniMax H3 seconds input) or explicit min/max_duration limits; other
+    # workflows keep the fixed video_length_seconds default.
+    default_duration = video_length_seconds or getattr(config, 'DEFAULT_SHOT_LENGTH', 5)
+    try:
+        shot_duration = float(shot.get('duration') or default_duration)
+    except (TypeError, ValueError):
+        shot_duration = float(default_duration)
+
+    duration_node_id = workflow_config.get('duration_node_id') if workflow_config else None
+    workflow_supports_per_shot = bool(duration_node_id) or bool(
+        workflow_config and (workflow_config.get('min_duration') or workflow_config.get('max_duration'))
+    )
+
+    if workflow_supports_per_shot:
+        wf_min = workflow_config.get('min_duration') if workflow_config else None
+        wf_max = workflow_config.get('max_duration') if workflow_config else None
+        if wf_min:
+            shot_duration = max(float(wf_min), shot_duration)
+        if wf_max:
+            shot_duration = min(float(wf_max), shot_duration)
+        logger.info(f"[DURATION] Shot {shot.get('index', '?')}: clip duration {shot_duration:g}s")
+    else:
+        shot_duration = float(default_duration)
+
+    # Inject the seconds value into the workflow's [duration] node
+    # (e.g. the MiniMax H3 PrimitiveFloat feeding its frame-count math node)
+    if duration_node_id and duration_node_id in wf:
+        try:
+            wf[duration_node_id]["inputs"]["value"] = float(shot_duration)
+            logger.info(f"[DURATION] Set duration node '{duration_node_id}' to {shot_duration:g}s")
+        except (KeyError, TypeError) as e:
+            logger.warning(f"[DURATION] Could not set duration node '{duration_node_id}': {e}")
+
     # Determine the prompt input name of the motion prompt node
     # (MiniMax H3 nodes use "prompt" instead of the usual "text")
     prompt_input_name = "text"
@@ -464,17 +502,20 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
 
     # Set video length in WanImageToVideo node if specified
     if video_length_seconds and wan_video_node_id and wan_video_node_id in wf:
+        # Per-shot durations only apply to workflows that opted in above;
+        # fixed-length Wan workflows keep the caller's video_length_seconds
+        length_seconds = shot_duration if workflow_supports_per_shot else video_length_seconds
         wan_node = wf[wan_video_node_id]
         # Check if it's API format (inputs has direct values) or UI format (has widgets_values)
         # Skip if "length" is a link to another node (e.g. MiniMax H3 computes it via a math node)
         if isinstance(wan_node.get("inputs", {}).get("length"), int):
             # API format - set length directly
-            frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
+            frames = int(length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
             wan_node["inputs"]["length"] = frames
         elif "widgets_values" in wan_node["inputs"]:
             # UI format - update widgets_values array
             widgets = wan_node["inputs"]["widgets_values"]
-            frames = int(video_length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
+            frames = int(length_seconds * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
             wan_node["inputs"]["widgets_values"] = [widgets[0], widgets[1], frames, widgets[3]]
 
     # Set video filename prefix to avoid collisions

@@ -246,9 +246,12 @@ export function GenerationDialog({
                       <SelectValue placeholder="Select Gemini Mode" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Fast">Fast</SelectItem>
-                      <SelectItem value="Thinking">Thinking</SelectItem>
-                      <SelectItem value="Pro">Pro</SelectItem>
+                      <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
+                      <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
+                      <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
+                      <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
+                      <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
+                      <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -399,9 +402,12 @@ export function GenerationDialog({
                       <SelectValue placeholder="Select Gemini Mode" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Fast">Fast</SelectItem>
-                      <SelectItem value="Thinking">Thinking</SelectItem>
-                      <SelectItem value="Pro">Pro</SelectItem>
+                      <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
+                      <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
+                      <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
+                      <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
+                      <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
+                      <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

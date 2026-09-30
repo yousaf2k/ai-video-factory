@@ -145,6 +145,7 @@ export interface Scene {
 export interface Shot {
   id?: string;
   index: number;
+  duration?: number | null;
   image_prompt: string;
   motion_prompt: string;
   video_prompt?: string | null;
@@ -235,6 +236,7 @@ export interface UpdateGlobalConfigRequest {
   target_video_length?: number;
   gemini_api_key?: string;
   openai_api_key?: string;
+  deepseek_api_key?: string;
   elevenlabs_api_key?: string;
   playwright_browser?: string;
   gemini_watermark_tool_image?: string;
@@ -248,6 +250,7 @@ export interface UpdateStoryRequest {
 }
 
 export interface UpdateShotRequest {
+  duration?: number | null;
   image_prompt?: string;
   motion_prompt?: string;
   video_prompt?: string;

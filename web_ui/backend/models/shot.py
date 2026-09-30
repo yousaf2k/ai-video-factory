@@ -10,6 +10,7 @@ class Shot(BaseModel):
     """Shot model"""
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:8], description="Unique stable ID for this shot")
     index: int = Field(..., description="Shot index (1-based)")
+    duration: Optional[float] = Field(default=None, description="Rendered clip length in seconds (1-15 for MiniMax H3; None = use DEFAULT_SHOT_LENGTH)")
     image_prompt: str = Field(..., description="Image generation prompt")
     motion_prompt: str = Field(..., description="Motion/video generation prompt")
     video_prompt: Optional[str] = Field(default=None, description="Detailed timestamped MiniMax H3 video prompt (I2VA format)")
@@ -75,6 +76,7 @@ class UpdateShotsRequest(BaseModel):
 
 class UpdateShotRequest(BaseModel):
     """Request to update a single shot"""
+    duration: Optional[float] = Field(default=None, ge=1, le=60, description="Rendered clip length in seconds")
     image_prompt: Optional[str] = None
     motion_prompt: Optional[str] = None
     video_prompt: Optional[str] = None

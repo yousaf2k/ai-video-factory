@@ -14,7 +14,7 @@ from core.secrets import decrypt_env_var
 # ==========================================
 # LLM PROVIDER CONFIGURATION
 # ==========================================
-# Primary LLM provider (gemini, openai, zhipu, qwen, kimi, ollama, lmstudio)
+# Primary LLM provider (gemini, openai, zhipu, deepseek, qwen, kimi, ollama, lmstudio)
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
 
 # Maximum tokens for LLM responses (increase for large JSON outputs)
@@ -83,6 +83,18 @@ KIMI_API_KEY = decrypt_env_var("KIMI_API_KEY", "")
 
 # Kimi K2 2.5 model (kimi-labs is recommended)
 KIMI_MODEL = os.getenv("KIMI_MODEL", "kimi-labs")
+
+# ==========================================
+# DEEPSEEK CONFIGURATION
+# ==========================================
+# Get your API key from: https://platform.deepseek.com/api_keys
+DEEPSEEK_API_KEY = decrypt_env_var("DEEPSEEK_API_KEY", "")
+
+# DeepSeek model (deepseek-chat is V3, deepseek-reasoner is R1 reasoning model)
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
+# Optional override of the OpenAI-compatible API endpoint
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 
 # ==========================================
 # OLLAMA CONFIGURATION (Local LLM)
@@ -264,6 +276,7 @@ AI_MODELS = {
         "Gemini",
         "OpenAI",
         "Zhipu",
+        "DeepSeek",
         "Qwen",
         "Kimi",
         "Ollama",
@@ -345,6 +358,13 @@ VIDEO_WORKFLOW = "wan22_workflow"
 # Each workflow is auto-detected from the workflow/video directory
 VIDEO_WORKFLOWS = {}
 
+# Per-shot clip duration range the shot planner LLM chooses from (seconds).
+# MiniMax H3 renders clips between 1 and 15 seconds; each workflow can clamp
+# further via min_duration/max_duration in its VIDEO_WORKFLOWS entry.
+# (Defined before the discovery loop below, which references these.)
+MIN_SHOT_DURATION = 1
+MAX_SHOT_DURATION = 15
+
 # ==========================================
 # DYNAMIC VIDEO WORKFLOW DISCOVERY
 # ==========================================
@@ -399,12 +419,14 @@ if os.path.exists(_video_workflow_dir):
                     _motion_prompt_node_id = None
                     _wan_video_node_id = None
                     _seed_node_id = None
-                    
+                    _duration_node_id = None
+
                     _load_image_candidates = []
                     _text_encode_candidates = []
                     _video_gen_candidates = []
                     _seed_candidates = []
-                    
+                    _primitive_float_candidates = []
+
                     # 1. First pass: strict tag matching and gathering candidates
                     for _n_id, _n_data in _wf_nodes.items():
                         if not isinstance(_n_data, dict): continue
@@ -412,7 +434,7 @@ if os.path.exists(_video_workflow_dir):
                         if not _title: _title = ""
                         _title = _title.lower()
                         _class_type = _n_data.get("class_type", "")
-                        
+
                         # Explicit title tag discovery
                         if "[motion_prompt]" in _title or "[prompt]" in _title:
                             _motion_prompt_node_id = _n_id
@@ -426,12 +448,16 @@ if os.path.exists(_video_workflow_dir):
                             _wan_video_node_id = _n_id
                         elif "[seed]" in _title:
                             _seed_node_id = _n_id
-                            
+                        elif "[duration]" in _title:
+                            _duration_node_id = _n_id
+
                         # Candidate gathering for heuristics
                         if "LoadImage" == _class_type:
                             _load_image_candidates.append(_n_id)
                         if "CLIPTextEncode" == _class_type:
                             _text_encode_candidates.append((_n_id, _title))
+                        if _class_type == "PrimitiveFloat":
+                            _primitive_float_candidates.append(_n_id)
                         if any(x in _class_type for x in ["WanImageToVideo", "WanVideoTextToVideo", "WanVideoSampler", "WanSampler", "WanVideoGenerator", "WanFirstLastFrameToVideo", "WanVideoFirstLastFrameToVideo", "MiniMaxH3ImageToVideo"]):
                             # Prioritize specialized Wan/MiniMax video nodes
                             _video_gen_candidates.insert(0, _n_id)
@@ -493,6 +519,11 @@ if os.path.exists(_video_workflow_dir):
                     if not _seed_node_id and _seed_candidates:
                         _seed_node_id = _seed_candidates[0]
 
+                    # Duration: title tag wins; fall back to a lone PrimitiveFloat
+                    # (e.g. the MiniMax H3 seconds input feeding its frame-count math node)
+                    if not _duration_node_id and len(_primitive_float_candidates) == 1:
+                        _duration_node_id = _primitive_float_candidates[0]
+
                     # Detect if this is an FLFI2V workflow
                     _is_flfi2v = "flf2v" in _wf_key.lower() or "flfi2v" in _wf_key.lower()
 
@@ -508,12 +539,19 @@ if os.path.exists(_video_workflow_dir):
                     if _motion_prompt_node_id: _detected_wf["motion_prompt_node_id"] = _motion_prompt_node_id
                     if _wan_video_node_id: _detected_wf["wan_video_node_id"] = _wan_video_node_id
                     if _seed_node_id: _detected_wf["seed_node_id"] = _seed_node_id
-                    
+                    if _duration_node_id: _detected_wf["duration_node_id"] = _duration_node_id
+
+                    # MiniMax H3 clips accept any length between 1 and 15 seconds
+                    if "minimax_h3" in _wf_key.lower():
+                        _detected_wf["min_duration"] = MIN_SHOT_DURATION
+                        _detected_wf["max_duration"] = MAX_SHOT_DURATION
+
                     VIDEO_WORKFLOWS[_wf_key] = _detected_wf
                         
                 except Exception as e:
-                    # Silently skip unparseable files
-                    pass
+                    # Skip unparseable files but surface why - a silent skip here
+                    # makes workflows vanish from the UI with no trace
+                    print(f"[WARN] Could not parse video workflow '{_wf_file}': {e}")
 
 # Legacy Key Mapping & Defaults
 # Resolve wan22_flfi2v to any discovered FLFI2V workflow
@@ -568,7 +606,7 @@ IMAGE_RESOLUTION = "2048"
 # IMAGE WORKFLOW CONFIGURATION
 # ==========================================
 # Active image workflow to use (must exist in IMAGE_WORKFLOWS)
-IMAGE_WORKFLOW = "flux"
+IMAGE_WORKFLOW = "krea2_reference"
 
 # Image workflow definitions
 # Each workflow is auto-detected from the workflow/image directory
@@ -743,8 +781,9 @@ if os.path.exists(_image_workflow_dir):
                     }
                         
                 except Exception as e:
-                    # Silently skip unparseable files
-                    pass
+                    # Skip unparseable files but surface why - a silent skip here
+                    # makes workflows vanish from the UI with no trace
+                    print(f"[WARN] Could not parse image workflow '{_wf_file}': {e}")
 
 # Ensure a "default" image workflow exists
 if "default" not in IMAGE_WORKFLOWS:
@@ -773,6 +812,13 @@ VIDEO_GENERATION_MODE = os.getenv("VIDEO_GENERATION_MODE", "comfyui")
 
 # Default video length per shot (in seconds)
 DEFAULT_SHOT_LENGTH = 5
+
+# MIN_SHOT_DURATION / MAX_SHOT_DURATION are defined above the workflow
+# discovery block (they are referenced there for MiniMax H3 workflows).
+
+# Cut times in video_prompt must leave this much room before the clip ends so
+# the final sub-shot can play out (H3 frame snapping can extend a clip slightly)
+VIDEO_PROMPT_CUT_MARGIN_SECONDS = 0.7
 
 # Maximum number of shots to generate (for testing)
 # Set to 0 for no limit (generates all shots from story)

@@ -143,11 +143,23 @@ def generate_image_comfyui(prompt: str, output_path: str, negative_prompt: str =
                     node_data["inputs"]["height"] = height
 
         # Set the text prompts using workflow-specific node IDs
+        # Prompt nodes are usually CLIPTextEncode ("text" input), but string
+        # primitive nodes (e.g. PrimitiveStringMultiline) expose "value" instead
         if text_node_id and text_node_id in api_format:
-            api_format[text_node_id]["inputs"]["text"] = prompt
+            _prompt_inputs = api_format[text_node_id]["inputs"]
+            if "text" in _prompt_inputs:
+                _prompt_inputs["text"] = prompt
+            elif "value" in _prompt_inputs:
+                _prompt_inputs["value"] = prompt
+            else:
+                logger.warning(f"Text node {text_node_id} has neither 'text' nor 'value' input; prompt not injected")
 
         if neg_text_node_id and neg_text_node_id in api_format and negative_prompt:
-            api_format[neg_text_node_id]["inputs"]["text"] = negative_prompt
+            _neg_inputs = api_format[neg_text_node_id]["inputs"]
+            if "text" in _neg_inputs:
+                _neg_inputs["text"] = negative_prompt
+            elif "value" in _neg_inputs:
+                _neg_inputs["value"] = negative_prompt
 
         # Inject reference image for IP-Adapter if provided
         if reference_image_path and load_reference_node_id and load_reference_node_id in api_format:

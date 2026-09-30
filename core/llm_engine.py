@@ -284,6 +284,70 @@ class ZAIProvider(LLMProvider):
             raise
 
 
+class DeepSeekProvider(LLMProvider):
+    """DeepSeek API provider (OpenAI-compatible)"""
+
+    def __init__(self, api_key: str, model: str, base_url: str = None):
+        self.api_key = api_key
+        self.model = model
+        self.env_key = "DEEPSEEK_API_KEY"
+        self.base_url = base_url or "https://api.deepseek.com"
+        self.timeout = 120  # Default timeout in seconds
+        self.max_tokens = getattr(config, 'LLM_MAX_TOKENS', 16384)
+
+    @property
+    def name(self) -> str:
+        return "DeepSeek"
+
+    @property
+    def requires_api_key(self) -> bool:
+        return True
+
+    def ask(self, prompt: str, response_format: str = None) -> str:
+        """Send prompt to DeepSeek API"""
+        self.validate_config()
+        self.log_request(prompt, response_format)
+        self.log_request_full(prompt, response_format)
+
+        try:
+            start_time = time.time()
+
+            url = f"{self.base_url}/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+
+            data = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "max_tokens": self.max_tokens
+            }
+
+            response = http_session.post(
+                url,
+                json=data,
+                headers=headers,
+                timeout=self.timeout
+            )
+
+            if response.status_code == 200:
+                result = response.json()
+                content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                self.log_response(content, time.time() - start_time)
+                self.log_response_full(content, time.time() - start_time)
+                return content
+            else:
+                error_msg = f"HTTP {response.status_code}: {response.text}"
+                raise Exception(error_msg)
+
+        except Exception as e:
+            elapsed = time.time() - start_time
+            self.log_error(e, elapsed)
+            raise
+
+
 class QwenProvider(LLMProvider):
     """Qwen (Alibaba Cloud) API provider"""
 
@@ -518,7 +582,7 @@ def get_provider(provider_name: Optional[str] = None, config_module=None) -> LLM
     Factory function to get LLM provider instance.
 
     Args:
-        provider_name: Name of provider (gemini, openai, zhipu, qwen, kimi, ollama, lmstudio)
+        provider_name: Name of provider (gemini, openai, zhipu, deepseek, qwen, kimi, ollama, lmstudio)
         config_module: Config module (defaults to global config)
 
     Returns:
@@ -550,6 +614,12 @@ def get_provider(provider_name: Optional[str] = None, config_module=None) -> LLM
         model = getattr(config, 'ZHIPU_MODEL', 'deep-v3')
         disable_ssl_verify = getattr(config, 'ZHIPU_DISABLE_SSL_VERIFY', False)
         return ZAIProvider(api_key=api_key, model=model, disable_ssl_verify=disable_ssl_verify)
+
+    elif provider_name == "deepseek":
+        api_key = getattr(config, 'DEEPSEEK_API_KEY', '')
+        model = getattr(config, 'DEEPSEEK_MODEL', 'deepseek-chat')
+        base_url = getattr(config, 'DEEPSEEK_BASE_URL', None)
+        return DeepSeekProvider(api_key=api_key, model=model, base_url=base_url)
 
     elif provider_name == "qwen":
         api_key = getattr(config, 'QWEN_API_KEY', '')
@@ -625,6 +695,17 @@ if __name__ == "__main__":
         provider = get_provider("kimi")
         print(f"[OK] {provider.name} provider instantiated")
         print(f"  Model: {provider.model}")
+        print(f"  Requires API key: {provider.requires_api_key}")
+        print(f"  Configuration valid: OK (skipping validation)")
+    except Exception as e:
+        print(f"[FAIL] {provider.name} provider failed: {e}")
+
+    # Test DeepSeek
+    try:
+        provider = get_provider("deepseek")
+        print(f"[OK] {provider.name} provider instantiated")
+        print(f"  Model: {provider.model}")
+        print(f"  Base URL: {provider.base_url}")
         print(f"  Requires API key: {provider.requires_api_key}")
         print(f"  Configuration valid: OK (skipping validation)")
     except Exception as e:

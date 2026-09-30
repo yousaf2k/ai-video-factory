@@ -25,8 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useGenerateSceneNarration, useSelectSceneNarration, useCancelSceneNarration } from "@/hooks/useShots";
+import { useGenerateSceneNarration, useSelectSceneNarration, useCancelSceneNarration, useDeleteSceneNarration } from "@/hooks/useShots";
 import { useParams } from "next/navigation";
+import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 
 interface SceneCardProps {
@@ -62,6 +63,7 @@ export function SceneCard({
   const generateNarration = useGenerateSceneNarration(projectId!);
   const selectNarration = useSelectSceneNarration(projectId!);
   const cancelNarration = useCancelSceneNarration(projectId!);
+  const deleteNarration = useDeleteSceneNarration(projectId!);
 
   const handleSave = () => {
     onUpdate?.(index, editedScene);
@@ -83,6 +85,13 @@ export function SceneCard({
       }
     });
     setIsGenDialogOpen(false);
+  };
+
+  const handleDeleteNarration = () => {
+    deleteNarration.mutate(index, {
+      onSuccess: () => toast.success(`Narration deleted for Scene ${index + 1}`),
+      onError: () => toast.error("Failed to delete narration"),
+    });
   };
 
   const isGenerating = progress !== undefined && progress >= 0;
@@ -419,6 +428,21 @@ export function SceneCard({
                     ))}
                   </SelectContent>
                 </Select>
+              )}
+
+              {scene.narration_path && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  title="Delete narration audio"
+                  disabled={deleteNarration.isPending}
+                  onClick={handleDeleteNarration}
+                >
+                  {deleteNarration.isPending
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : <Trash2 className="w-3 h-3" />}
+                </Button>
               )}
             </div>
           )}
