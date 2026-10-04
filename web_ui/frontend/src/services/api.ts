@@ -14,6 +14,11 @@ import type {
   AgentsByType,
   GlobalConfig,
   UpdateGlobalConfigRequest,
+  AssetLibraryInfo,
+  AssetTreeNode,
+  AssetEntry,
+  AssetUploadResult,
+  ResolvedAssetRef,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
@@ -495,6 +500,181 @@ class ApiClient {
 
   async launchBrowser(): Promise<{ status: string, message: string }> {
     const response = await this.client.post<{ status: string, message: string }>('/api/config/launch-browser');
+    return response.data;
+  }
+
+  // Asset library
+  async listAssetLibraries(): Promise<AssetLibraryInfo[]> {
+    const response = await this.client.get<AssetLibraryInfo[]>('/api/assets/libraries');
+    return response.data;
+  }
+
+  async updateAssetLibraries(paths: string[]): Promise<AssetLibraryInfo[]> {
+    const response = await this.client.post<AssetLibraryInfo[]>('/api/assets/libraries', { paths });
+    return response.data;
+  }
+
+  async getAssetTree(library?: string): Promise<AssetTreeNode[]> {
+    const response = await this.client.get<AssetTreeNode[]>('/api/assets/tree', {
+      params: { library },
+    });
+    return response.data;
+  }
+
+  async listAssets(cat: string, library?: string): Promise<AssetEntry[]> {
+    const response = await this.client.get<AssetEntry[]>('/api/assets/list', {
+      params: { cat, library },
+    });
+    return response.data;
+  }
+
+  async searchAssets(q: string, library?: string, type?: string): Promise<AssetEntry[]> {
+    const response = await this.client.get<AssetEntry[]>('/api/assets/search', {
+      params: { q, library, type },
+    });
+    return response.data;
+  }
+
+  async getAssetEntry(ref: string, probe: boolean = false): Promise<AssetEntry | ResolvedAssetRef> {
+    const response = await this.client.get<AssetEntry | ResolvedAssetRef>('/api/assets/entry', {
+      params: { ref, probe },
+    });
+    return response.data;
+  }
+
+  async uploadAssets(cat: string, files: File[], library?: string): Promise<AssetUploadResult> {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    formData.append('cat', cat);
+    if (library) formData.append('library', library);
+    const response = await this.client.post<AssetUploadResult>('/api/assets/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  }
+
+  async importAsset(ref: string, cat: string, title?: string, library?: string): Promise<AssetUploadResult> {
+    const response = await this.client.post<AssetUploadResult>('/api/assets/import', {
+      ref, cat, title, library,
+    });
+    return response.data;
+  }
+
+  async renameAsset(ref: string, title: string): Promise<AssetEntry> {
+    const response = await this.client.put<AssetEntry>('/api/assets/rename', { ref, title });
+    return response.data;
+  }
+
+  async moveAsset(ref: string, toCat: string): Promise<AssetEntry> {
+    const response = await this.client.put<AssetEntry>('/api/assets/move', { ref, to_cat: toCat });
+    return response.data;
+  }
+
+  async deleteAsset(ref: string, force: boolean = false): Promise<{ deleted: boolean }> {
+    const response = await this.client.delete<{ deleted: boolean }>('/api/assets/delete', {
+      params: { ref, force },
+    });
+    return response.data;
+  }
+
+  async createAssetCategory(cat: string, name: string, library?: string): Promise<{ cat: string }> {
+    const response = await this.client.post<{ cat: string }>('/api/assets/categories', {
+      cat,
+      name,
+      library,
+    });
+    return response.data;
+  }
+
+  async deleteAssetCategory(cat: string, force: boolean = false, library?: string): Promise<{ deleted: boolean }> {
+    const response = await this.client.delete<{ deleted: boolean }>('/api/assets/categories', {
+      params: { cat, force, library },
+    });
+    return response.data;
+  }
+
+  async moveAssetCategory(cat: string, toParent: string, library?: string): Promise<{ cat: string; new_cat: string }> {
+    const response = await this.client.put<{ cat: string; new_cat: string }>(
+      '/api/assets/categories/move',
+      { cat, to_parent: toParent, library }
+    );
+    return response.data;
+  }
+
+  async renameAssetCategory(cat: string, name: string, library?: string): Promise<{ cat: string; new_cat: string }> {
+    const response = await this.client.put<{ cat: string; new_cat: string }>(
+      '/api/assets/categories/rename',
+      { cat, name, library }
+    );
+    return response.data;
+  }
+
+  // Project asset pool + shot references
+  async getProjectAssets(projectId: string): Promise<ResolvedAssetRef[]> {
+    const response = await this.client.get<ResolvedAssetRef[]>(`/api/projects/${projectId}/assets`);
+    return response.data;
+  }
+
+  async addProjectAssets(projectId: string, refs: string[]): Promise<ResolvedAssetRef[]> {
+    const response = await this.client.post<ResolvedAssetRef[]>(`/api/projects/${projectId}/assets`, { refs });
+    return response.data;
+  }
+
+  async removeProjectAsset(projectId: string, ref: string, strip: boolean = true): Promise<{ removed: string; pool_size: number }> {
+    const path = ref.split('/').map(encodeURIComponent).join('/');
+    const response = await this.client.delete<{ removed: string; pool_size: number }>(
+      `/api/projects/${projectId}/assets/${path}`,
+      { params: { strip } }
+    );
+    return response.data;
+  }
+
+  async getShotReferences(projectId: string, shotId: string | number): Promise<ResolvedAssetRef[]> {
+    const response = await this.client.get<ResolvedAssetRef[]>(
+      `/api/projects/${projectId}/shots/${shotId}/references`
+    );
+    return response.data;
+  }
+
+  async setShotReferences(projectId: string, shotId: string | number, refs: string[]): Promise<ResolvedAssetRef[]> {
+    const response = await this.client.put<ResolvedAssetRef[]>(
+      `/api/projects/${projectId}/shots/${shotId}/references`,
+      { refs }
+    );
+    return response.data;
+  }
+
+  async addShotReferences(projectId: string, shotId: string | number, refs: string[]): Promise<ResolvedAssetRef[]> {
+    const response = await this.client.post<ResolvedAssetRef[]>(
+      `/api/projects/${projectId}/shots/${shotId}/references`,
+      { refs }
+    );
+    return response.data;
+  }
+
+  async removeShotReference(projectId: string, shotId: string | number, ref: string): Promise<ResolvedAssetRef[]> {
+    const path = ref.split('/').map(encodeURIComponent).join('/');
+    const response = await this.client.delete<ResolvedAssetRef[]>(
+      `/api/projects/${projectId}/shots/${shotId}/references/${path}`
+    );
+    return response.data;
+  }
+
+  async useReferenceAsSource(
+    projectId: string,
+    shotId: string | number,
+    ref: string,
+    slot: 'then' | 'now'
+  ): Promise<{ shot_id: string | number; slot: string; field: string; path: string }> {
+    const response = await this.client.post(
+      `/api/projects/${projectId}/shots/${shotId}/references/use-as-source`,
+      { ref, slot }
+    );
+    return response.data;
+  }
+
+  async getProjectMedia(projectId: string): Promise<ResolvedAssetRef[]> {
+    const response = await this.client.get<ResolvedAssetRef[]>(`/api/assets/projects/${projectId}/media`);
     return response.data;
   }
 

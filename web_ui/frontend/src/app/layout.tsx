@@ -36,6 +36,9 @@ export default function RootLayout({
                   <Link href="/projects" className="text-sm font-medium hover:text-primary transition-colors">
                     Projects
                   </Link>
+                  <Link href="/assets" className="text-sm font-medium hover:text-primary transition-colors">
+                    Assets
+                  </Link>
                   <QueueMenuLink />
                   <Link href="/agents" className="text-sm font-medium hover:text-primary transition-colors">
                     Agents

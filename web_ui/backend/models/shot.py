@@ -51,6 +51,9 @@ class Shot(BaseModel):
     soundfx_generated: bool = Field(default=False, description="Whether sound effects have been generated")
     soundfx_prompt: Optional[str] = Field(default=None, description="Prompt for sound effects generation")
 
+    # Asset references (asset library feature)
+    reference_asset_ids: Optional[List[str]] = Field(default=None, description="Ordered asset refs attached to this shot: 'i/{id}' library refs, '{library}/i/{id}' for non-default libraries, or 'p/{project_id}/{media_dir}/{filename}' for other projects' media. First = primary reference.")
+
     class Config:
         json_schema_extra = {
             "example": {

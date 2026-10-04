@@ -19,7 +19,7 @@ import config
 if sys.platform == 'win32':
     import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-from web_ui.backend.api import projects, stories, shots, config_api, queue, editor
+from web_ui.backend.api import projects, stories, shots, config_api, queue, editor, assets
 from web_ui.backend.websocket.manager import manager
 
 # Configure logging
@@ -133,6 +133,8 @@ app.include_router(shots.router)
 app.include_router(config_api.router)
 app.include_router(queue.router)
 app.include_router(editor.router)
+app.include_router(assets.router)
+app.include_router(assets.project_router)
 
 @app.get("/")
 async def root():

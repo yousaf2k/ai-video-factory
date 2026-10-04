@@ -5,6 +5,9 @@ import { MediaType } from '@/store/useEditorStore';
 import { api } from '@/services/api';
 import { Shot } from '@/types';
 import { toast } from 'sonner';
+import { flattenTree } from '../assets/assetUtils';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 interface AssetData {
   id: string;
@@ -67,11 +70,46 @@ function DraggableAsset({ asset }: { asset: AssetData }) {
 }
 
 export function AssetBrowser({ projectId }: { projectId?: string }) {
-  const [activeTab, setActiveTab] = useState<'project' | 'upload' | 'stock'>('project');
+  const [activeTab, setActiveTab] = useState<'project' | 'upload' | 'stock' | 'library'>('project');
   const [assets, setAssets] = useState<AssetData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Asset Library tab state
+  const [libCat, setLibCat] = useState('i');
+  const [libTree, setLibTree] = useState<{ name: string; path: string; children: { path: string; name: string }[] }[]>([]);
+  const [libAssets, setLibAssets] = useState<AssetData[]>([]);
+  const [libLoading, setLibLoading] = useState(false);
+
+  const fetchLibraryAssets = async (cat: string) => {
+    setLibLoading(true);
+    try {
+      const entries = await api.listAssets(cat);
+      setLibAssets(entries.map((entry) => ({
+        id: `lib-${entry.id}`,
+        name: entry.title,
+        type: (entry.type === 'music' ? 'audio' : entry.type) as MediaType,
+        url: `${API_BASE}${entry.url}`,
+        duration: 5,
+      })));
+    } catch (error) {
+      console.error('Failed to fetch library assets:', error);
+      setLibAssets([]);
+    } finally {
+      setLibLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'library') {
+      fetchLibraryAssets(libCat);
+      if (libTree.length === 0) {
+        api.getAssetTree().then(setLibTree).catch(() => setLibTree([]));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, libCat]);
 
   const fetchAssets = async () => {
     if (!projectId) return;
@@ -218,6 +256,12 @@ export function AssetBrowser({ projectId }: { projectId?: string }) {
         >
           Stock Sfx
         </button>
+        <button
+          className={`flex-1 py-3 text-[11px] uppercase tracking-wider font-bold transition-colors ${activeTab === 'library' ? 'text-indigo-400 border-b-2 border-indigo-500 bg-indigo-500/5' : 'text-slate-500 hover:text-slate-300'}`}
+          onClick={() => setActiveTab('library')}
+        >
+          Library
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
@@ -303,6 +347,31 @@ export function AssetBrowser({ projectId }: { projectId?: string }) {
                 </div>
               </label>
             </div>
+          </div>
+        ) : activeTab === 'library' ? (
+          <div className="space-y-2">
+            <select
+              className="w-full bg-slate-800 border border-slate-700 rounded text-xs text-slate-200 p-2"
+              value={libCat}
+              onChange={(e) => setLibCat(e.target.value)}
+            >
+              {flattenTree(libTree).map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {libLoading ? (
+              <div className="flex flex-col items-center justify-center h-40 text-slate-500 text-xs italic">
+                Loading library…
+              </div>
+            ) : libAssets.length > 0 ? (
+              libAssets.map((asset) => <DraggableAsset key={asset.id} asset={asset} />)
+            ) : (
+              <div className="flex flex-col items-center justify-center h-40 text-slate-500 text-xs italic p-4 text-center">
+                No assets in this category. Add some on the Assets page.
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-slate-500 text-xs italic p-4 text-center">

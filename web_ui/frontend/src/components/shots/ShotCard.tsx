@@ -25,6 +25,8 @@ import {
   ClipboardCheck,
   GripVertical,
   Volume2,
+  Paperclip,
+  FolderInput,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -48,6 +50,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import { cn, getMediaUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import ShotReferencesDialog from "@/components/assets/ShotReferencesDialog";
+import SaveToLibraryDialog from "@/components/assets/SaveToLibraryDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -155,6 +159,8 @@ export function ShotCard({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cacheBuster, setCacheBuster] = useState(Date.now());
   const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [referencesOpen, setReferencesOpen] = useState(false);
+  const [saveLibOpen, setSaveLibOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   // fullscreenVariationIndex: index into shot.image_paths; null = closed
   const [fullscreenVariationIndex, setFullscreenVariationIndex] = useState<number | null>(null);
@@ -246,6 +252,28 @@ export function ShotCard({
   })();
 
   const hasMultipleVariations = variationsCount > 1;
+
+  // The media the "Save to Asset Library" action exports (active view mode)
+  const saveToLibraryMedia = (() => {
+    if (viewMode === "video") {
+      const path = shot.is_flfi2v
+        ? (shot.departure_video_path || shot.meeting_video_path)
+        : shot.video_path;
+      return path ? {
+        ref: `p/${projectId}/videos/${path.split(/[\\/]/).pop()}`,
+        kind: "video" as const,
+        title: `Shot ${shot.index} video`,
+      } : null;
+    }
+    const path = shot.is_flfi2v
+      ? (shot.now_image_path || shot.then_image_path)
+      : shot.image_path;
+    return path ? {
+      ref: `p/${projectId}/images/${path.split(/[\\/]/).pop()}`,
+      kind: "image" as const,
+      title: `Shot ${shot.index} image`,
+    } : null;
+  })();
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -783,6 +811,32 @@ export function ShotCard({
               </span>
             </button>
           )}
+          <button
+            onClick={() => setReferencesOpen(true)}
+            className="p-1 hover:bg-sky-50 text-sky-600 rounded relative"
+            title="References"
+          >
+            <Paperclip className="w-4 h-4" />
+            {(shot.reference_asset_ids?.length ?? 0) > 0 && (
+              <span className="absolute -top-1 -right-1 bg-sky-500 text-white text-[9px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                {shot.reference_asset_ids!.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              const media = saveToLibraryMedia;
+              if (!media) {
+                toast.info(`No ${viewMode} to save yet`);
+                return;
+              }
+              setSaveLibOpen(true);
+            }}
+            className="p-1 hover:bg-emerald-50 text-emerald-600 rounded"
+            title={`Save active ${viewMode} to Asset Library`}
+          >
+            <FolderInput className="w-4 h-4" />
+          </button>
           <button
             onClick={async () => {
               setShowRegenModal("soundfx");
@@ -1524,6 +1578,24 @@ export function ShotCard({
           </div>
         );
       })()}
+      {referencesOpen && (
+        <ShotReferencesDialog
+          projectId={projectId}
+          shot={shot}
+          open={referencesOpen}
+          onClose={() => setReferencesOpen(false)}
+        />
+      )}
+      {saveLibOpen && saveToLibraryMedia && (
+        <SaveToLibraryDialog
+          projectId={projectId}
+          mediaRef={saveToLibraryMedia.ref}
+          kind={saveToLibraryMedia.kind}
+          defaultTitle={saveToLibraryMedia.title}
+          open={saveLibOpen}
+          onClose={() => setSaveLibOpen(false)}
+        />
+      )}
     </div>
   );
 }

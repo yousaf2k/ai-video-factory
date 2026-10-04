@@ -182,6 +182,10 @@ export interface Shot {
   soundfx_path?: string;
   soundfx_generated?: boolean;
   soundfx_prompt?: string;
+  // Asset references (asset library feature) — ordered, first = primary.
+  // Shapes: "i/{id}" (library), "{library}/i/{id}" (non-default library),
+  // "p/{project_id}/{media_dir}/{filename}" (other projects' media).
+  reference_asset_ids?: string[] | null;
 }
 export interface CreateProjectRequest {
   idea: string;
@@ -357,3 +361,69 @@ export interface QueueStatistics {
 }
 
 export type ViewMode = 'flat' | 'grouped';
+
+// ==========================================
+// Asset Library
+// ==========================================
+
+export type AssetType = 'image' | 'video' | 'audio' | 'music';
+
+// One library root folder (multiple folders supported via ASSET_LIBRARY_DIRS)
+export interface AssetLibraryInfo {
+  slug: string;
+  name: string;
+  path: string;
+  is_default: boolean;
+  exists: boolean;
+}
+
+// A single asset — the filename "{id}-{Title}.{ext}" is the metadata
+export interface AssetEntry {
+  ref: string; // "i/9f3ab21c" — stable id + type letter
+  library?: string | null;
+  id: string;
+  title: string;
+  type: AssetType;
+  letter: string; // i | v | a | m
+  cat: string; // "i/Characters/City"
+  category: string; // "Images/Characters/City" (display form)
+  filename: string;
+  ext: string;
+  url: string;
+  thumb_url?: string | null;
+  size_bytes: number;
+  modified_at?: string | null;
+  media?: { width?: number; height?: number; duration_sec?: number } | null;
+}
+
+export interface AssetTreeNode {
+  name: string;
+  letter: string;
+  path: string; // "i/Characters/City"
+  count: number;
+  children: AssetTreeNode[];
+}
+
+export interface AssetUploadResult {
+  saved: AssetEntry[];
+  skipped: { filename: string; reason: string }[];
+  rerouted: { filename: string; to: string }[];
+}
+
+// A reference resolved to a concrete file — from the asset library
+// (kind='library') or another project's media (kind='project').
+export interface ResolvedAssetRef {
+  ref: string;
+  kind: 'library' | 'project';
+  title: string;
+  type: AssetType;
+  letter?: string | null;
+  url: string;
+  thumb_url?: string | null;
+  source?: string | null;
+  exists: boolean;
+  size_bytes?: number;
+  modified_at?: string | null;
+  added_at?: string | null;
+  media?: { width?: number; height?: number; duration_sec?: number } | null;
+}
