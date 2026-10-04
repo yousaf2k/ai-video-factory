@@ -161,6 +161,42 @@ ABS_OUTPUT_DIR = resolve_path(OUTPUT_DIR)
 ABS_PROJECTS_DIR = resolve_path(PROJECTS_DIR)
 
 # ==========================================
+# ASSET LIBRARY CONFIGURATION
+# ==========================================
+# Asset library roots. Semicolon-separated list of folders holding asset
+# categories. The first entry is the default library served by the
+# /api/assets/{letter}/... URL scheme. Each library contains type folders
+# (Images/Videos/Audio/Music, see ASSET_TYPES below) with nested category
+# subfolders. Assets are single files named "{id}-{Title}.{ext}" — the
+# filename is the metadata, there is no index JSON.
+ASSET_LIBRARY_DIRS = os.getenv("ASSET_LIBRARY_DIRS", "output/Assets")
+
+# Main (top-level) asset categories: URL letter alias -> folder name + asset type
+ASSET_TYPES = {
+    "i": {"folder": "Images", "type": "image"},
+    "v": {"folder": "Videos", "type": "video"},
+    "a": {"folder": "Audio", "type": "audio"},
+    "m": {"folder": "Music", "type": "music"},
+}
+
+
+def get_asset_library_dirs():
+    """Parsed asset library roots as absolute paths.
+
+    Reads the env var on every call so a settings update takes effect live
+    (see update_env_config usage in config_api.py)."""
+    raw = os.environ.get("ASSET_LIBRARY_DIRS", ASSET_LIBRARY_DIRS) or ""
+    dirs = []
+    for part in raw.split(";"):
+        part = part.strip().strip('"')
+        if not part:
+            continue
+        dirs.append(resolve_path(part))
+    if not dirs:
+        dirs = [resolve_path("output/Assets")]
+    return dirs
+
+# ==========================================
 # CONFIGURATION UTILITY WRAPPERS
 # ==========================================
 # These wrapper functions provide convenient access to utility functions

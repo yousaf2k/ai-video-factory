@@ -1455,6 +1455,17 @@ class GenerationService:
             # Mark queue item as active
             self._mark_queue_item_active(project_id, shot_index, GenerationType.IMAGE)
 
+            # Asset library references attached to this shot — these take priority
+            # over character references (user explicitly chose them per shot)
+            try:
+                from web_ui.backend.services.asset_service import get_asset_service
+                asset_reference_paths = get_asset_service().collect_shot_image_refs(shot)
+            except Exception as ref_err:
+                logger.warning(f"Could not collect asset references for shot {shot_index}: {ref_err}")
+                asset_reference_paths = []
+            if asset_reference_paths:
+                logger.info(f"Shot {shot_index}: using {len(asset_reference_paths)} attached asset reference(s): {asset_reference_paths}")
+
             # Broadcast initial 0% so UI resets from any stale progress
             manager.broadcast_sync(project_id, {
                 "type": "progress",
@@ -1462,7 +1473,8 @@ class GenerationService:
                 "shot_index": shot_index,
                 "shot_id": shot.get('id'),
                 "generation_type": "image",
-                "progress": 0
+                "progress": 0,
+                "references_used": len(asset_reference_paths)
             })
 
             # Get character reference images for standard shots
@@ -1526,6 +1538,10 @@ class GenerationService:
                                 
                     if not reference_images:
                         reference_images = None
+
+            # Shot-attached asset references go first (user-chosen priority over character refs)
+            if asset_reference_paths:
+                reference_images = asset_reference_paths + (reference_images or [])
 
             # Run in thread pool to avoid blocking
             image_path = await asyncio.to_thread(
@@ -1707,6 +1723,15 @@ class GenerationService:
                         if not now_workflow or now_workflow == "flux":
                             now_workflow = "flux_ipadapter_now"
 
+                    # Shot-attached asset references take priority (user-chosen)
+                    try:
+                        from web_ui.backend.services.asset_service import get_asset_service
+                        now_asset_refs = get_asset_service().collect_shot_image_refs(shot_to_use)
+                    except Exception:
+                        now_asset_refs = []
+                    if now_asset_refs:
+                        now_reference_to_use = now_asset_refs + (now_reference_to_use or [])
+
                     result_path = await asyncio.to_thread(
                         self._generate_single_image, project_id, {**shot_to_use, 'image_prompt': now_prompt},
                         image_mode, now_workflow, now_seed, None, project_title, "now", now_reference_to_use, GenerationType.NOW_IMAGE,
@@ -1794,19 +1819,28 @@ class GenerationService:
                     })
 
                     then_workflow = image_workflow
-                    
+
                     # For Actor Face agent, we don't use 'now' as reference
                     then_reference_to_use = []
                     if not is_actor_face and current_now:
                         then_reference_to_use.append(config.resolve_path(current_now))
-                    
+
                     if actual_mode in ["geminiweb", "gemini"] and then_reference:
                         then_reference_to_use.append(config.resolve_path(then_reference))
                         logger.info(f"Added character reference for THEN generation: {then_reference}")
-                    
+
                     if actual_mode == "comfyui":
                         if not then_workflow or then_workflow == "flux":
                             then_workflow = "flux_ipadapter_then"
+
+                    # Shot-attached asset references take priority (user-chosen)
+                    try:
+                        from web_ui.backend.services.asset_service import get_asset_service
+                        then_asset_refs = get_asset_service().collect_shot_image_refs(shot_to_use)
+                    except Exception:
+                        then_asset_refs = []
+                    if then_asset_refs:
+                        then_reference_to_use = then_asset_refs + (then_reference_to_use or [])
 
                     result_path = await asyncio.to_thread(
                         self._generate_single_image, project_id, {**shot_to_use, 'image_prompt': then_prompt},
