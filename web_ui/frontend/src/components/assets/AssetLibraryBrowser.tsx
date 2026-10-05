@@ -14,6 +14,7 @@ import {
   HardDrive,
   Trash2,
   FolderInput,
+  Sparkles,
   X,
   Loader2,
 } from 'lucide-react';
@@ -36,6 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import AssetCard from './AssetCard';
 import AssetDetail from './AssetDetail';
+import GenerateAssetDialog from './GenerateAssetDialog';
 import UploadZone from './UploadZone';
 import AssetFolderTree from './AssetFolderTree';
 import {
@@ -62,6 +64,7 @@ const TYPE_FILTERS: { value: string; label: string }[] = [
   { value: 'video', label: 'Videos' },
   { value: 'audio', label: 'Audio' },
   { value: 'music', label: 'Music' },
+  { value: 'text', label: 'Guides' },
 ];
 
 export default function AssetLibraryBrowser() {
@@ -82,6 +85,7 @@ export default function AssetLibraryBrowser() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [showUpload, setShowUpload] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
 
   useEffect(() => {
     const saved = libraryReady && localStorage.getItem('assets_last_cat');
@@ -360,6 +364,10 @@ export default function AssetLibraryBrowser() {
           <Upload className="w-4 h-4 mr-1.5" />
           Upload
         </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowGenerate(true)}>
+          <Sparkles className="w-4 h-4 mr-1.5 text-primary" />
+          Generate
+        </Button>
         <Button variant="outline" size="sm" onClick={() => openNewCatDialog(currentCat)}>
           <FolderPlus className="w-4 h-4 mr-1.5" />
           New Category
@@ -507,6 +515,14 @@ export default function AssetLibraryBrowser() {
           </Button>
         </div>
       )}
+
+      {/* Generate dialog */}
+      <GenerateAssetDialog
+        open={showGenerate}
+        onOpenChange={setShowGenerate}
+        defaultCat={currentCat}
+        library={library}
+      />
 
       {/* Detail dialog */}
       <AssetDetail

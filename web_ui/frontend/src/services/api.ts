@@ -19,6 +19,10 @@ import type {
   AssetEntry,
   AssetUploadResult,
   ResolvedAssetRef,
+  AssetTextContent,
+  AssetGenerationStatus,
+  GenerateAssetRequest,
+  GenerateOptions,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
@@ -675,6 +679,36 @@ class ApiClient {
 
   async getProjectMedia(projectId: string): Promise<ResolvedAssetRef[]> {
     const response = await this.client.get<ResolvedAssetRef[]>(`/api/assets/projects/${projectId}/media`);
+    return response.data;
+  }
+
+  async getAssetText(ref: string): Promise<AssetTextContent> {
+    const response = await this.client.get<AssetTextContent>('/api/assets/content', { params: { ref } });
+    return response.data;
+  }
+
+  async getGenerateOptions(): Promise<GenerateOptions> {
+    const response = await this.client.get<GenerateOptions>('/api/assets/generate/options');
+    return response.data;
+  }
+
+  async startAssetGeneration(request: GenerateAssetRequest): Promise<AssetGenerationStatus> {
+    const response = await this.client.post<AssetGenerationStatus>('/api/assets/generate', request);
+    return response.data;
+  }
+
+  async listAssetGenerations(): Promise<AssetGenerationStatus[]> {
+    const response = await this.client.get<AssetGenerationStatus[]>('/api/assets/generate');
+    return response.data;
+  }
+
+  async getAssetGeneration(genId: string): Promise<AssetGenerationStatus> {
+    const response = await this.client.get<AssetGenerationStatus>(`/api/assets/generate/${genId}`);
+    return response.data;
+  }
+
+  async cancelAssetGeneration(genId: string): Promise<AssetGenerationStatus> {
+    const response = await this.client.delete<AssetGenerationStatus>(`/api/assets/generate/${genId}`);
     return response.data;
   }
 

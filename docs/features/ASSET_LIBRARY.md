@@ -1,5 +1,6 @@
 # Assets Feature — Design & Implementation Plan (v2)
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Features › Assets Feature — Design & Implementation Plan (v2)
 A global **Asset Library** (nested categories, multiple library folders, image/video/audio/music
 assets) plus **per-shot references**: assets attached to shots and injected into image/video
 generation as references.
@@ -57,6 +58,9 @@ E:/output/
     Music/
       Epic/
         d4a7b633-Epic Battle Theme.mp3
+    Guides/
+      Setup/
+        e5c9d744-Setup Guide.md
     .thumbs/                            # generated thumbnails: i_9f3ab21c.jpg, ... (skipped in scans)
   projects/{project_id}/
     project_assets.json                 # project's asset pool (the only new JSON, project-scoped)
@@ -116,6 +120,9 @@ folder — rename to Images/Videos/Audio/Music").
 
 The attach UI shows badges (`IMG`, `VID`, `SFX`) per reference indicating where it will be used,
 but does **not** block attaching — the generation layer filters by type.
+
+`Guides` (g, type `text`) is reference-only documentation (`.md`/`.txt`) — it is never a
+generation input.
 
 ---
 
@@ -398,3 +405,50 @@ sidecar), drag-drop move in browser, editor `AssetBrowser` integration.
    existing settings flow) or a settings dialog inside the `/assets` page?
 3. **Top-level category set** — fixed to `Images/Videos/Audio/Music` (recommended for now), or
    should the letter map be user-extendable (e.g. `Documents→d`)?
+
+---
+**Related docs:** [Asset Library](ASSET_LIBRARY.md) · [Then Vs Now Quick Start](ThenVsNow/THEN_VS_NOW_QUICKSTART.md) · [📚 Index](../DOCS_INDEX.md)
+
+---
+
+## 10. Later additions: Guides type + generate-into-library
+
+### 10.1 Guides (text assets)
+
+- `config.ASSET_TYPES` gained `"g": {"folder": "Guides", "type": "text"}`; extensions
+  `.md` / `.markdown` / `.txt` map to it (`EXTENSION_TYPES` in `asset_service.py`).
+- `GET /api/assets/content?ref=g/{id}` → `{ref, id, title, filename, ext, content}` —
+  full text of the file (`AssetService.read_text`).
+- No thumbnails; the UI (cards + detail) shows a `FileText` icon, and the detail dialog
+  renders the content as GitHub-flavored markdown (react-markdown + remark-gfm).
+
+### 10.2 Generate button in the Asset Library
+
+New service `web_ui/backend/services/asset_generation.py` runs generations **into** library
+categories as normal `{id}-{Title}.{ext}` assets (id + unique title reserved up front via
+`AssetService.prepare_target`; partial files are removed on failure/cancel). Runs reuse the
+same code paths as project shot generation:
+
+| Kind | Target | Source | Engine |
+|---|---|---|---|
+| `image` | `Images/...` | prompt (+ optional reference image refs) | `core.image_generator.generate_image` (configured mode) |
+| `video` | `Videos/...` | prompt + **required** `image_ref` (first frame) | ComfyUI i2v (`prompt_compiler` + `comfy_client`) or GeminiWeb per `VIDEO_GENERATION_MODE` |
+| `audio` | `Audio/...` | prompt + **required** `video_ref` | `SOUNDFX_WORKFLOWS` (MMAudio video→sound), ffmpeg-extracted to `.mp3` |
+
+Generations run as asyncio tasks tracked in memory; progress is polled.
+
+Endpoints (registered before the file-serving catch-alls):
+
+| Method & path | Purpose |
+|---|---|
+| `GET /api/assets/generate/options` | workflows per kind (`IMAGE_WORKFLOWS`/`VIDEO_WORKFLOWS`/`SOUNDFX_WORKFLOWS` keys), video mode, aspect ratios |
+| `POST /api/assets/generate` | start a generation (kind, prompt, cat, title?, workflow?, aspect_ratio?, seed?, duration?, image_ref?, video_ref?, reference_refs?) |
+| `GET /api/assets/generate` | recent generations (newest first) |
+| `GET /api/assets/generate/{id}` | status: queued/running/completed/failed/cancelled + progress; completed returns `ref`/`url`/`thumb_url` |
+| `DELETE /api/assets/generate/{id}` | best-effort cancel (queued tasks only for real cancellation; running ComfyUI jobs finish unless interrupted globally) |
+
+Frontend: `GenerateAssetDialog.tsx` (kind picker, category pre-selected from the browsed
+folder, prompt, workflow/aspect/duration/seed fields, source-asset pickers, polled progress
+panel) behind a **Generate** (Sparkles) button in the `/assets` browser toolbar. Completion
+refreshes tree/list/search queries. Status lives only in memory — restarting the backend
+loses history of in-flight runs (completed assets stay on disk).

@@ -4,7 +4,7 @@ Assets API endpoints
 Library browsing/mutation plus the file-serving URL scheme:
     GET /api/assets/{letter}/{category_path}/{id}        -> the asset file
     GET /api/assets/{letter}/{category_path}/{id}/thumb  -> cached thumbnail
-where letter is the type alias from config.ASSET_TYPES (i/v/a/m).
+where letter is the type alias from config.ASSET_TYPES (i/v/a/m/g).
 
 A second router (no prefix) hosts the per-project asset pool and per-shot
 reference endpoints under the existing /api/projects/... URL shapes.
@@ -25,8 +25,10 @@ from web_ui.backend.models.asset import (
     RenameAssetRequest, MoveAssetRequest, AdoptAssetRequest,
     CreateCategoryRequest, MoveCategoryRequest, RenameCategoryRequest,
     UpdateLibrariesRequest, UpdateRefsRequest, UseAsSourceRequest, ImportAssetRequest,
+    TextContent, GenerateAssetRequest, GenerationStatus, GenerateOptions,
 )
 from web_ui.backend.services.asset_service import get_asset_service
+from web_ui.backend.services.asset_generation import get_asset_generation_service
 from web_ui.backend.services.project_service import ProjectService
 
 logger = logging.getLogger(__name__)
@@ -132,6 +134,15 @@ async def get_project_media(project_id: str):
     """All media files of one project as attachable asset entries (Project Library tab)."""
     try:
         return asset_service.list_project_media(project_id)
+    except Exception as e:
+        raise _http_error(e)
+
+
+@router.get("/content", response_model=TextContent)
+async def get_asset_text(ref: str = Query(..., description='Text asset ref, e.g. "g/9f3ab21c"')):
+    """Full text/markdown content of a Guides asset."""
+    try:
+        return asset_service.read_text(ref)
     except Exception as e:
         raise _http_error(e)
 
@@ -259,6 +270,70 @@ async def adopt_asset(request: AdoptAssetRequest):
     """Rename a non-scheme file (e.g. "i/Characters/myphoto.png") into {id}-{Title}.ext."""
     try:
         return asset_service.adopt(request.ref_path, request.library)
+    except Exception as e:
+        raise _http_error(e)
+
+
+# ------------------------------------------------------------------
+# Generate into the library (image / video / sound)
+# Registered before the {letter}/... file-serving catch-alls.
+# ------------------------------------------------------------------
+
+@router.get("/generate/options", response_model=GenerateOptions)
+async def get_generate_options():
+    """Workflow choices for the generate dialog."""
+    image_workflows = [
+        {"key": key, "description": (info or {}).get("description", "")}
+        for key, info in sorted(getattr(config, "IMAGE_WORKFLOWS", {}).items())
+        if key != "default"
+    ]
+    video_workflows = [
+        {"key": key, "description": (info or {}).get("description", "")}
+        for key, info in sorted(getattr(config, "VIDEO_WORKFLOWS", {}).items())
+        if key != "default"
+    ]
+    soundfx_workflows = [
+        {"key": key, "description": (info or {}).get("description", "")}
+        for key, info in sorted(getattr(config, "SOUNDFX_WORKFLOWS", {}).items())
+        if key != "default"
+    ]
+    return GenerateOptions(
+        image_workflows=image_workflows,
+        video_workflows=video_workflows,
+        soundfx_workflows=soundfx_workflows,
+        video_mode=getattr(config, "VIDEO_GENERATION_MODE", "comfyui"),
+    )
+
+
+@router.post("/generate", response_model=GenerationStatus)
+async def start_asset_generation(request: GenerateAssetRequest):
+    """Start a generation into a library category. Returns the initial status;
+    poll GET /api/assets/generate/{id} until completed/failed."""
+    generation_service = get_asset_generation_service()
+    try:
+        return await generation_service.start(request)
+    except Exception as e:
+        raise _http_error(e)
+
+
+@router.get("/generate", response_model=List[GenerationStatus])
+async def list_asset_generations():
+    """Recent library generations (newest first)."""
+    return get_asset_generation_service().list()
+
+
+@router.get("/generate/{gen_id}", response_model=GenerationStatus)
+async def get_asset_generation(gen_id: str):
+    gen = get_asset_generation_service().get(gen_id)
+    if not gen:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Generation not found: {gen_id}")
+    return gen
+
+
+@router.delete("/generate/{gen_id}", response_model=GenerationStatus)
+async def cancel_asset_generation(gen_id: str):
+    try:
+        return get_asset_generation_service().cancel(gen_id)
     except Exception as e:
         raise _http_error(e)
 

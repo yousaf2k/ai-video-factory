@@ -122,3 +122,64 @@ class ImportAssetRequest(BaseModel):
     cat: str  # target category, e.g. "i/Characters"
     title: Optional[str] = None
     library: Optional[str] = None
+
+
+class TextContent(BaseModel):
+    """Full text of a Guides (text-type) asset."""
+    ref: str
+    id: str = ""
+    title: str
+    filename: str
+    ext: str
+    content: str
+
+
+class GenerateAssetRequest(BaseModel):
+    """Generate an image/video/sound asset directly into a library category."""
+    kind: str  # "image" | "video" | "audio"
+    prompt: str
+    cat: Optional[str] = None  # target category ("i", "i/Characters", ...); defaults to the kind's type root
+    title: Optional[str] = None
+    library: Optional[str] = None
+    workflow: Optional[str] = None  # workflow key; None = configured default
+    aspect_ratio: Optional[str] = None  # image/video: "16:9", "9:16", ...
+    seed: Optional[int] = None
+    duration: Optional[float] = None  # video clip length in seconds
+    image_ref: Optional[str] = None  # video: source image asset ref (required)
+    video_ref: Optional[str] = None  # audio: source video asset ref (required)
+    reference_refs: Optional[List[str]] = None  # image: extra reference image refs
+
+
+class GenerationStatus(BaseModel):
+    id: str
+    kind: str
+    status: str  # queued | running | completed | failed | cancelled
+    progress: int = 0
+    message: Optional[str] = None
+    prompt: str = ""
+    cat: str = ""
+    title: Optional[str] = None
+    library: Optional[str] = None
+    workflow: Optional[str] = None
+    aspect_ratio: Optional[str] = None
+    seed: Optional[int] = None
+    duration: Optional[float] = None
+    image_ref: Optional[str] = None
+    video_ref: Optional[str] = None
+    reference_refs: List[str] = []
+    ref: Optional[str] = None  # asset ref once completed
+    url: Optional[str] = None
+    thumb_url: Optional[str] = None
+    error: Optional[str] = None
+    created_at: Optional[str] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+
+
+class GenerateOptions(BaseModel):
+    """Available workflows/choices for the generate dialog."""
+    image_workflows: List[dict] = []
+    video_workflows: List[dict] = []
+    soundfx_workflows: List[dict] = []
+    video_mode: str = "comfyui"
+    aspect_ratios: List[str] = ["16:9", "9:16", "1:1", "4:3", "3:4"]

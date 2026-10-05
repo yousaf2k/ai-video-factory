@@ -31,6 +31,7 @@ EXTENSION_TYPES = {
     ".png": "i", ".jpg": "i", ".jpeg": "i", ".webp": "i", ".gif": "i", ".bmp": "i",
     ".mp4": "v", ".webm": "v", ".mov": "v", ".avi": "v", ".mkv": "v",
     ".mp3": "a", ".wav": "a", ".ogg": "a", ".m4a": "a", ".flac": "a", ".aac": "a",
+    ".md": "g", ".markdown": "g", ".txt": "g",
 }
 
 ILLEGAL_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|\r\n\t]')
@@ -222,7 +223,7 @@ class AssetService:
         only when create=True."""
         parts = [p for p in (cat or "").split("/") if p]
         if not parts:
-            raise ValueError("Category must start with a type letter (i/v/a/m)")
+            raise ValueError("Category must start with a type letter (i/v/a/m/g)")
         letter = parts[0].lower()
         if letter not in config.ASSET_TYPES:
             raise ValueError(f"Unknown asset type letter: {letter}")
@@ -247,7 +248,7 @@ class AssetService:
     def _validate_cat(self, cat: str) -> str:
         parts = [p for p in (cat or "").split("/") if p]
         if not parts or parts[0].lower() not in config.ASSET_TYPES:
-            raise ValueError(f"Category must start with a type letter (i/v/a/m): {cat}")
+            raise ValueError(f"Category must start with a type letter (i/v/a/m/g): {cat}")
         return "/".join([parts[0].lower()] + parts[1:])
 
     # ------------------------------------------------------------------
@@ -389,6 +390,26 @@ class AssetService:
         while f"{title} ({n})".lower() in existing_titles:
             n += 1
         return f"{title} ({n})"
+
+    def prepare_target(
+        self, cat: str, title: str, ext: str, library_slug: Optional[str] = None
+    ) -> Tuple[str, str, List[str], str, str]:
+        """Reserve a final asset path in cat: mints an id + unique title and returns
+        (letter, dir_abs, segments, filename, absolute_path). The caller writes the
+        file to absolute_path; once written, the directory mtime cache self-heals."""
+        cat = self._validate_cat(cat)
+        ext = ext if ext.startswith(".") else f".{ext}"
+        library_path = self._library_path(library_slug)
+        with self._lock:
+            self._ensure_type_folders(library_path)
+            letter, dir_abs, segments = self.resolve_category(library_path, cat, create=True)
+            asset_id = self._mint_asset_id(dir_abs)
+            final_title = self._unique_title(dir_abs, asset_id, sanitize_title(title))
+            filename = f"{asset_id}-{final_title}{ext}"
+            # The file is written later by the caller; drop the scan cache so the
+            # next listing re-reads the folder (dir mtime is unreliable on Windows).
+            self._dir_cache.pop(dir_abs, None)
+        return letter, dir_abs, segments, filename, os.path.join(dir_abs, filename)
 
     def upload(self, files: List[Tuple[str, Any]], cat: str, library_slug: Optional[str] = None) -> Dict[str, Any]:
         """files: list of (original_filename, binary file object). Returns saved
@@ -622,7 +643,7 @@ class AssetService:
     def delete_category(self, cat: str, library_slug: Optional[str] = None, force: bool = False) -> Dict[str, Any]:
         cat = self._validate_cat(cat)
         if "/" not in cat:
-            raise ValueError("Top-level type folders (Images/Videos/Audio/Music) cannot be deleted")
+            raise ValueError("Top-level type folders (Images/Videos/Audio/Music/Guides) cannot be deleted")
         library_path = self._library_path(library_slug)
         with self._lock:
             letter, dir_abs, segments = self.resolve_category(library_path, cat, create=False)
@@ -724,7 +745,7 @@ class AssetService:
         if letter == "i":
             return file_path
         if letter != "v":
-            raise FileNotFoundError("No thumbnail available for audio assets")
+            raise FileNotFoundError("No thumbnail available for non-video assets")
         library_path = self._library_path(library_slug)
         thumb = self._thumb_path(library_path, letter, asset_id)
         if os.path.isfile(thumb):
@@ -739,6 +760,24 @@ class AssetService:
         if result.returncode != 0 or not os.path.isfile(thumb):
             raise FileNotFoundError("Thumbnail generation failed")
         return thumb
+
+    def read_text(self, ref: str) -> Dict[str, Any]:
+        """Full text content of a Guides (text-type) asset."""
+        letter, _library_path, dir_abs, filename = self._locate(ref)
+        if letter != "g":
+            raise ValueError(f"Asset {ref} is not a text asset (type: {config.ASSET_TYPES[letter]['type']})")
+        file_path = os.path.join(dir_abs, filename)
+        parsed = parse_asset_filename(filename) or ("", os.path.splitext(filename)[0], os.path.splitext(filename)[1])
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        return {
+            "ref": ref,
+            "id": parsed[0],
+            "title": parsed[1],
+            "filename": filename,
+            "ext": parsed[2].lstrip("."),
+            "content": content,
+        }
 
     # ------------------------------------------------------------------
     # Ref resolution (library + project media) and project media listing

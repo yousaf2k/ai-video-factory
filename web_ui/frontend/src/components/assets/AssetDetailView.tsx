@@ -9,7 +9,10 @@ import { toast } from 'sonner';
 import {
   ExternalLink,
   Trash2,
+  Loader2,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useAssetEntry, useRenameAsset, useMoveAsset, useDeleteAsset, useAssetTree } from '@/hooks/useAssets';
+import { useAssetEntry, useAssetText, useRenameAsset, useMoveAsset, useDeleteAsset, useAssetTree } from '@/hooks/useAssets';
 import { formatBytes, flattenTree, TYPE_META } from './assetUtils';
 import type { AssetEntry, ResolvedAssetRef } from '@/types';
 
@@ -197,6 +200,7 @@ function LibraryAssetDetail({
             <audio src={detail.url} controls className="w-full" />
           </div>
         )}
+        {detail.letter === 'g' && <TextPreview assetRef={detail.ref} />}
       </div>
 
       {/* Rename */}
@@ -287,6 +291,19 @@ function LibraryAssetDetail({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Markdown/text preview for Guides assets (rendered from the file content). */
+function TextPreview({ assetRef }: { assetRef: string }) {
+  const { data, isLoading } = useAssetText(assetRef);
+  if (isLoading) {
+    return <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />;
+  }
+  return (
+    <div className="w-full max-h-[45vh] overflow-auto rounded-md border bg-background p-4 text-sm [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:bg-muted [&_code]:px-1 [&_code]:rounded [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{data?.content ?? ''}</ReactMarkdown>
     </div>
   );
 }

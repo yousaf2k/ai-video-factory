@@ -62,7 +62,7 @@ export default function UploadZone({ cat, library, onUploaded }: UploadZoneProps
         ref={inputRef}
         type="file"
         multiple
-        accept="image/*,video/*,audio/*"
+        accept="image/*,video/*,audio/*,.md,.markdown,.txt"
         className="hidden"
         onChange={(e) => {
           if (e.target.files) uploadFiles(e.target.files);
@@ -81,7 +81,7 @@ export default function UploadZone({ cat, library, onUploaded }: UploadZoneProps
             Drag files here or click to upload into <span className="font-medium">{cat}</span>
           </p>
           <p className="text-xs text-muted-foreground/70 mt-1">
-            Images, videos and audio — files are routed to the matching type folder automatically
+            Images, videos, audio and .md/.txt guides — files are routed to the matching type folder automatically
           </p>
         </>
       )}

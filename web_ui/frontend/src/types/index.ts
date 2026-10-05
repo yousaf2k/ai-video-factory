@@ -366,7 +366,7 @@ export type ViewMode = 'flat' | 'grouped';
 // Asset Library
 // ==========================================
 
-export type AssetType = 'image' | 'video' | 'audio' | 'music';
+export type AssetType = 'image' | 'video' | 'audio' | 'music' | 'text';
 
 // One library root folder (multiple folders supported via ASSET_LIBRARY_DIRS)
 export interface AssetLibraryInfo {
@@ -384,7 +384,7 @@ export interface AssetEntry {
   id: string;
   title: string;
   type: AssetType;
-  letter: string; // i | v | a | m
+  letter: string; // i | v | a | m | g
   cat: string; // "i/Characters/City"
   category: string; // "Images/Characters/City" (display form)
   filename: string;
@@ -408,6 +408,71 @@ export interface AssetUploadResult {
   saved: AssetEntry[];
   skipped: { filename: string; reason: string }[];
   rerouted: { filename: string; to: string }[];
+}
+
+// Full text of a Guides (text-type) asset
+export interface AssetTextContent {
+  ref: string;
+  id: string;
+  title: string;
+  filename: string;
+  ext: string;
+  content: string;
+}
+
+// One generation run into the library (image / video / sound)
+export interface AssetGenerationStatus {
+  id: string;
+  kind: 'image' | 'video' | 'audio';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  progress: number;
+  message?: string | null;
+  prompt: string;
+  cat: string;
+  title?: string | null;
+  library?: string | null;
+  workflow?: string | null;
+  aspect_ratio?: string | null;
+  seed?: number | null;
+  duration?: number | null;
+  image_ref?: string | null;
+  video_ref?: string | null;
+  reference_refs: string[];
+  ref?: string | null; // asset ref once completed
+  url?: string | null;
+  thumb_url?: string | null;
+  error?: string | null;
+  created_at?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+export interface GenerateAssetRequest {
+  kind: 'image' | 'video' | 'audio';
+  prompt: string;
+  cat?: string;
+  title?: string;
+  library?: string;
+  workflow?: string;
+  aspect_ratio?: string;
+  seed?: number;
+  duration?: number;
+  image_ref?: string;
+  video_ref?: string;
+  reference_refs?: string[];
+}
+
+export interface GenerateWorkflowOption {
+  key: string;
+  description: string;
+}
+
+export interface GenerateOptions {
+  image_workflows: GenerateWorkflowOption[];
+  video_workflows: GenerateWorkflowOption[];
+  soundfx_workflows: GenerateWorkflowOption[];
+  video_mode: string;
+  aspect_ratios: string[];
 }
 
 // A reference resolved to a concrete file — from the asset library

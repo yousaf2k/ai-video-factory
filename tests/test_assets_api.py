@@ -355,6 +355,115 @@ check("different content not skipped", r.status_code == 200 and len(r.json()["sa
 r = client.post("/api/assets/import", json={"ref": "p/proj_a/images/missing.png", "cat": "i"})
 check("import missing ref -> 404", r.status_code == 404, f"{r.status_code}")
 
+# --- Guides (text) assets ----------------------------------------------------
+MD_CONTENT = "# Setup Guide\n\nRun `npm install`.\n"
+r = client.post("/api/assets/upload",
+                files=[("files", ("setup guide.md", io.BytesIO(MD_CONTENT.encode("utf-8")), "text/markdown"))],
+                data={"cat": "g/Setup"})
+check("guides upload 200", r.status_code == 200, f"{r.status_code} {r.text[:300]}")
+g_saved = r.json()["saved"]
+check("guides saved 1", len(g_saved) == 1, r.text[:300])
+g_entry = g_saved[0]
+check("guides entry type text", g_entry["letter"] == "g" and g_entry["type"] == "text"
+      and g_entry["cat"] == "g/Setup" and g_entry["ext"] == "md", str(g_entry))
+check("guides no thumb_url", g_entry["thumb_url"] is None, str(g_entry.get("thumb_url")))
+r = client.get("/api/assets/tree")
+check("tree has Guides root", any(n["letter"] == "g" and n["name"] == "Guides" for n in r.json()), r.text[:300])
+r = client.get("/api/assets/content", params={"ref": g_entry["ref"]})
+check("guides content", r.status_code == 200 and r.json()["content"] == MD_CONTENT
+      and r.json()["title"] == "setup guide" and r.json()["ext"] == "md", r.text[:300])
+r = client.get(g_entry["url"])
+check("guides file served", r.status_code == 200 and "Setup Guide" in r.text, f"{r.status_code}")
+r = client.get(g_entry["url"] + "/thumb")
+check("guides thumb -> 404", r.status_code == 404, f"{r.status_code}")
+r = client.get("/api/assets/content", params={"ref": e1["ref"]})
+check("content of image -> 400", r.status_code == 400, f"{r.status_code}")
+r = client.post("/api/assets/upload",
+                files=[("files", ("script.py", io.BytesIO(b"print(1)"), "text/plain"))],
+                data={"cat": "g"})
+check("unsupported text ext skipped", r.status_code == 200 and len(r.json()["saved"]) == 0, r.text[:200])
+
+# --- Generate into the library ------------------------------------------------
+# The generation runs as an asyncio task on the app's loop, so these tests use a
+# context-managed TestClient (single long-lived loop) and monkeypatch the runners.
+import time
+from web_ui.backend.services import asset_generation as ag_module
+
+async def _fake_run_image(self, gen):
+    self._set(gen, progress=50)
+    with open(gen["path"], "wb") as f:
+        f.write(PNG_BYTES)
+
+ag_module.AssetGenerationService._run_image = _fake_run_image
+
+with TestClient(app) as gclient:
+    r = gclient.get("/api/assets/generate/options")
+    check("generate options 200", r.status_code == 200 and "aspect_ratios" in r.json(), f"{r.status_code}")
+
+    r = gclient.post("/api/assets/generate",
+                     json={"kind": "image", "prompt": "a red cube on marble", "cat": "i/Generated"})
+    check("generate image 200", r.status_code == 200, f"{r.status_code} {r.text[:300]}")
+    gen = r.json() if r.status_code == 200 else {}
+    gid = gen.get("id", "")
+    check("generate initial status", gen.get("status") in ("queued", "running"), str(gen))
+    for _ in range(60):
+        r = gclient.get(f"/api/assets/generate/{gid}")
+        if r.status_code == 200 and r.json()["status"] in ("completed", "failed"):
+            break
+        time.sleep(0.05)
+    check("generate image completed", r.status_code == 200 and r.json()["status"] == "completed", r.text[:300])
+    gref = r.json().get("ref", "")
+    check("generate entry ref", gref.startswith("i/"), gref)
+    if gref:
+        r = gclient.get(r.json()["url"])
+        check("generated file served", r.status_code == 200 and r.content == PNG_BYTES, f"{r.status_code}")
+        r = gclient.get("/api/assets/list", params={"cat": "i/Generated"})
+        check("generated file listed", r.status_code == 200 and len(r.json()) == 1, r.text[:200])
+
+    # Validation errors
+    r = gclient.post("/api/assets/generate", json={"kind": "image", "prompt": "   "})
+    check("generate empty prompt -> 400", r.status_code == 400, f"{r.status_code}")
+    r = gclient.post("/api/assets/generate", json={"kind": "video", "prompt": "x", "cat": "i/Nope", "image_ref": "i/abc"})
+    check("generate video wrong cat -> 400", r.status_code == 400, f"{r.status_code}")
+    r = gclient.post("/api/assets/generate", json={"kind": "video", "prompt": "x", "cat": "v"})
+    check("generate video missing image_ref -> 400", r.status_code == 400, f"{r.status_code}")
+    r = gclient.post("/api/assets/generate", json={"kind": "audio", "prompt": "x", "cat": "a"})
+    check("generate audio missing video_ref -> 400", r.status_code == 400, f"{r.status_code}")
+    r = gclient.post("/api/assets/generate", json={"kind": "music", "prompt": "x"})
+    check("generate bogus kind -> 400", r.status_code == 400, f"{r.status_code}")
+
+    # Failure path: runner raises, partial file is cleaned up
+    async def _failing_run_video(self, gen):
+        with open(gen["path"], "wb") as f:
+            f.write(b"partial")
+        raise RuntimeError("boom")
+
+    ag_module.AssetGenerationService._run_video = _failing_run_video
+    vdir = os.path.join(LIB1, "Videos")
+    files_before = set()
+    for root, _dirs, files in os.walk(vdir):
+        files_before.update(files)
+    r = gclient.post("/api/assets/generate",
+                     json={"kind": "video", "prompt": "fly over city", "cat": "v", "image_ref": e1["ref"]})
+    check("generate video started", r.status_code == 200, f"{r.status_code} {r.text[:200]}")
+    vid = r.json().get("id", "")
+    for _ in range(60):
+        r = gclient.get(f"/api/assets/generate/{vid}")
+        if r.status_code == 200 and r.json()["status"] in ("completed", "failed", "cancelled"):
+            break
+        time.sleep(0.05)
+    check("generate video failed", r.status_code == 200 and r.json()["status"] == "failed"
+          and "boom" in (r.json().get("error") or ""), r.text[:300])
+    files_after = set()
+    for root, _dirs, files in os.walk(vdir):
+        files_after.update(files)
+    check("failed video leaves no partial file", files_after == files_before, str(files_after - files_before))
+
+    r = gclient.get("/api/assets/generate")
+    check("generate list", r.status_code == 200 and isinstance(r.json(), list) and len(r.json()) >= 2, r.text[:200])
+    r = gclient.delete(f"/api/assets/generate/{gid}")
+    check("cancel finished is noop", r.status_code == 200 and r.json()["status"] == "completed", r.text[:200])
+
 print("PASSED:", len(passed))
 for p in passed:
     print("  ok:", p)

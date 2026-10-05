@@ -166,7 +166,7 @@ ABS_PROJECTS_DIR = resolve_path(PROJECTS_DIR)
 # Asset library roots. Semicolon-separated list of folders holding asset
 # categories. The first entry is the default library served by the
 # /api/assets/{letter}/... URL scheme. Each library contains type folders
-# (Images/Videos/Audio/Music, see ASSET_TYPES below) with nested category
+# (Images/Videos/Audio/Music/Guides, see ASSET_TYPES below) with nested category
 # subfolders. Assets are single files named "{id}-{Title}.{ext}" — the
 # filename is the metadata, there is no index JSON.
 ASSET_LIBRARY_DIRS = os.getenv("ASSET_LIBRARY_DIRS", "output/Assets")
@@ -177,6 +177,7 @@ ASSET_TYPES = {
     "v": {"folder": "Videos", "type": "video"},
     "a": {"folder": "Audio", "type": "audio"},
     "m": {"folder": "Music", "type": "music"},
+    "g": {"folder": "Guides", "type": "text"},
 }
 
 
