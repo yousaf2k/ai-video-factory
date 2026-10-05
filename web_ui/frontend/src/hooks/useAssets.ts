@@ -3,6 +3,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import type { GenerateAssetRequest } from '@/types';
 
 export function useAssetLibraries() {
   return useQuery({
@@ -234,5 +235,64 @@ export function useProjectMedia(projectId: string, enabled: boolean = true) {
     queryFn: () => api.getProjectMedia(projectId),
     enabled: !!projectId && enabled,
     staleTime: 10000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Guides (text) content + generation into the library
+// ---------------------------------------------------------------------------
+
+export function useAssetText(ref: string | null, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['asset-text', ref],
+    queryFn: () => api.getAssetText(ref!),
+    enabled: !!ref && enabled,
+    staleTime: 60000,
+  });
+}
+
+export function useGenerateOptions() {
+  return useQuery({
+    queryKey: ['asset-generate-options'],
+    queryFn: () => api.getGenerateOptions(),
+    staleTime: 60000,
+  });
+}
+
+export function useAssetGenerations() {
+  return useQuery({
+    queryKey: ['asset-generations'],
+    queryFn: () => api.listAssetGenerations(),
+    refetchInterval: (query) =>
+      query.state.data?.some((g) => g.status === 'queued' || g.status === 'running') ? 3000 : false,
+  });
+}
+
+export function useAssetGeneration(genId: string | null) {
+  return useQuery({
+    queryKey: ['asset-generation', genId],
+    queryFn: () => api.getAssetGeneration(genId!),
+    enabled: !!genId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'queued' || status === 'running' ? 1500 : false;
+    },
+  });
+}
+
+export function useStartGeneration() {
+  return useMutation({
+    mutationFn: (request: GenerateAssetRequest) => api.startAssetGeneration(request),
+  });
+}
+
+export function useCancelGeneration() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (genId: string) => api.cancelAssetGeneration(genId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-generations'] });
+      queryClient.invalidateQueries({ queryKey: ['asset-generation'] });
+    },
   });
 }

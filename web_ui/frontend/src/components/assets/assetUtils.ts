@@ -1,13 +1,14 @@
 /**
  * Shared helpers for asset library components
  */
-import { Image as ImageIcon, Film, Volume2, Music, type LucideIcon } from 'lucide-react';
+import { Image as ImageIcon, Film, Volume2, Music, FileText, type LucideIcon } from 'lucide-react';
 
 export const LETTER_FOLDER: Record<string, string> = {
   i: 'Images',
   v: 'Videos',
   a: 'Audio',
   m: 'Music',
+  g: 'Guides',
 };
 
 export const TYPE_META: Record<string, { label: string; badge: string; icon: LucideIcon }> = {
@@ -15,6 +16,7 @@ export const TYPE_META: Record<string, { label: string; badge: string; icon: Luc
   v: { label: 'VID', badge: 'bg-violet-500', icon: Film },
   a: { label: 'SFX', badge: 'bg-amber-500', icon: Volume2 },
   m: { label: 'MUS', badge: 'bg-emerald-500', icon: Music },
+  g: { label: 'MD', badge: 'bg-rose-500', icon: FileText },
 };
 
 export function formatBytes(bytes: number): string {
