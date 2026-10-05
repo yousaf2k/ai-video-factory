@@ -1,5 +1,6 @@
 # Prehistoric POV Agent Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › Prehistoric POV Agent Guide
 ## Overview
 
 The Prehistoric POV (Point of View) agents create immersive first-person dinosaur documentaries that place viewers directly in the prehistoric world through a survivor/explorer's eyes. Unlike traditional third-person documentaries, POV narratives feature visible human hands in every shot, diegetic camera work (the character is actively filming), and personal survival stakes.
@@ -616,3 +617,6 @@ python core/main.py \
 *Sony Venice 2 + Arri Signature Prime + 8K + Netflix Quality*
 *Hands Visible. Diegetic Camera. Immersive POV.*
 *Welcome to the past. Try not to become a fossil.*
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

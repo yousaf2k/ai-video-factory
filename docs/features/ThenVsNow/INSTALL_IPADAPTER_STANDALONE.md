@@ -1,5 +1,6 @@
 # Installing IP-Adapter Plus for Standalone ComfyUI
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Installing IP-Adapter Plus for Standalone ComfyUI
 Your ComfyUI Installation: **Standalone/Portable Build** (E:\ComfyUI)
 
 For standalone builds, you **must use ComfyUI Manager** to install custom nodes.
@@ -269,3 +270,6 @@ This gives you full control and easier debugging.
 **Estimated Time**: 5-10 minutes via Manager
 **Difficulty**: Easy
 **Required**: YES (for reference image feature)
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

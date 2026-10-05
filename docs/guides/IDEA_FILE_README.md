@@ -1,5 +1,6 @@
 # Loading Video Ideas from Text Files
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Loading Video Ideas from Text Files
 ## Overview
 
 The AI Video Factory supports loading video ideas from text files, providing convenient ways to manage and reuse your video concepts.
@@ -356,3 +357,6 @@ python core/main.py --idea-file path/to/idea.txt
 # Short form
 python core/main.py -f path/to/idea.txt
 ```
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

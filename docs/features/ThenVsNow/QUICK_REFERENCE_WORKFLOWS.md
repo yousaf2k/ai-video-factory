@@ -1,5 +1,6 @@
 # ComfyUI Workflows - Quick Reference Card
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › ComfyUI Workflows - Quick Reference Card
 Quick reference for the three IP-Adapter workflows used in ThenVsNow projects.
 
 ## Workflow Files Location
@@ -233,3 +234,6 @@ IMAGE_WORKFLOWS = {
 **Last Updated**: 2025-01-14
 **Version**: 1.0
 **Status**: Workflows Created, Ready for Import
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

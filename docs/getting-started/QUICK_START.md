@@ -1,5 +1,6 @@
 # Quick Start Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Getting Started › Quick Start Guide
 ## Before You Begin
 
 Make sure you have:
@@ -124,3 +125,6 @@ python projects.py view project_20250208_002238
 - **Detailed Setup**: `README_GEMINI_SETUP.md`
 - **Project Management**: `SESSION_GUIDE.md`
 - **Troubleshooting**: `SETUP_CHECKLIST.md`
+
+---
+**Related docs:** [Setup Checklist](SETUP_CHECKLIST.md) · [Configuration Guide](CONFIGURATION.md) · [Workflow Guide](../guides/WORKFLOW_GUIDE.md) · [ComfyUI Setup](../setup/COMFYUI_SETUP_CHECKLIST.md) · [📚 Index](../DOCS_INDEX.md)

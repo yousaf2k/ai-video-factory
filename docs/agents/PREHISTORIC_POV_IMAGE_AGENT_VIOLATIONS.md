@@ -1,5 +1,6 @@
 # Visual Focus Guidelines Violation Report
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › Visual Focus Guidelines Violation Report
 ## Date: 2026-02-26
 
 ## Problem Identified
@@ -196,3 +197,6 @@ After fixing:
 **Report Generated**: 2026-02-26
 **Status**: ⚠️ ACTION REQUIRED
 **Next Step**: Update image agent with visual focus guidelines
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

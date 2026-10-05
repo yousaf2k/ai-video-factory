@@ -1,5 +1,6 @@
 # "Then Vs Now" Feature with FLFI2V Support - Implementation Report
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › "Then Vs Now" Feature with FLFI2V Support - Implementation Report
 **Date:** March 12, 2026
 **Status:** ✅ Completed
 **Phase:** All 12 phases implemented
@@ -492,3 +493,6 @@ Potential improvements for future iterations:
 The "Then Vs Now" feature with FLFI2V support has been successfully implemented across all 12 phases. The implementation maintains backward compatibility with existing Documentary projects while providing a new, immersive way to create cinematic reunion videos.
 
 The feature is ready for testing and deployment. All code changes have been syntactically validated and follow the existing code patterns in the project.
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

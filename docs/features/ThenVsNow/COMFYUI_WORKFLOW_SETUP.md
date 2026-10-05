@@ -1,5 +1,6 @@
 # ComfyUI Workflow Setup Guide
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › ComfyUI Workflow Setup Guide
 This guide helps you set up the IP-Adapter workflows for ThenVsNow reference image support.
 
 ## Quick Start
@@ -305,3 +306,6 @@ For issues or questions:
 | SaveImage | 9 | 9 | 9 |
 
 These IDs must match the `config.py` workflow configurations!
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

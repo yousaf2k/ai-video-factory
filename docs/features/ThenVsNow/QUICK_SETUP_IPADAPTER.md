@@ -1,5 +1,6 @@
 # Quick Setup: IP-Adapter Plus Installation
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Quick Setup: IP-Adapter Plus Installation
 This guide helps you install IP-Adapter Plus to enable reference image support for ThenVsNow.
 
 ## Prerequisites
@@ -227,3 +228,6 @@ explorer "E:\ComfyUI\Output"
 **Estimated Total Time**: 15-20 minutes
 **Difficulty**: Easy (ComfyUI Manager) / Medium (Manual)
 **Required**: YES (for reference image feature)
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

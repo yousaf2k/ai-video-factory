@@ -1,5 +1,6 @@
 # Quick Start: Netflix Documentary Agent
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Getting Started › Quick Start: Netflix Documentary Agent
 ## 🎬 Generate Your First Netflix-Style Documentary
 
 ### Step 1: Choose Your Idea
@@ -161,3 +162,6 @@ python core/main.py --story-agent netflix_documentary --idea "A mysterious signa
 - Create urgency
 
 Ready to create binge-worthy content! 🎬
+
+---
+**Related docs:** [Setup Checklist](SETUP_CHECKLIST.md) · [Configuration Guide](CONFIGURATION.md) · [Workflow Guide](../guides/WORKFLOW_GUIDE.md) · [ComfyUI Setup](../setup/COMFYUI_SETUP_CHECKLIST.md) · [📚 Index](../DOCS_INDEX.md)

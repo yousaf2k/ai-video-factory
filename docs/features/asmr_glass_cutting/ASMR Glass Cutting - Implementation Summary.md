@@ -1,5 +1,6 @@
 # ASMR Glass Cutting - Implementation Summary
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › ASMR Glass Cutting › ASMR Glass Cutting - Implementation Summary
 ## Completed Features
 
 ✅ **Core Implementation**
@@ -82,3 +83,6 @@ Future enhancements documented in design spec:
 **Implementation completed: 2026-04-19**
 **Status:** Ready for production use
 **Co-Authored-By:** Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+**Related docs:** [ASMR User Guide](ASMR Glass Cutting - User Guide.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

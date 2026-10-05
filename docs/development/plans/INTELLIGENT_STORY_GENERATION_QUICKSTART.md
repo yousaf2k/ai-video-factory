@@ -305,8 +305,8 @@ A: System falls back to even distribution (backward compatible).
 ## Related Documentation
 
 - [Full Implementation Guide](INTELLIGENT_STORY_GENERATION_IMPLEMENTATION.md) - Technical details
-- [Configuration Guide](../config.py) - All configuration options
-- [Agent Development](../agents/) - Creating custom agents
+- [Configuration Guide](../../../config.py) - All configuration options
+- [Agent Development](../../../agents) - Creating custom agents
 
 ## Support
 

@@ -1,5 +1,6 @@
 # GeminiWeb Image Generation — Walkthrough
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › GeminiWeb Image Generation — Walkthrough
 ## Summary
 
 Added a new image generation mode called **"geminiweb"** that uses Playwright browser automation to generate images via `gemini.google.com/app` (NanoBanana Pro model). The prompt includes both the image description and desired aspect ratio.
@@ -8,11 +9,11 @@ Added a new image generation mode called **"geminiweb"** that uses Playwright br
 
 | File | Action | Description |
 |------|--------|-------------|
-| [geminiweb_image_generator.py](file:///c:/AI/ai_video_factory_v1/core/geminiweb_image_generator.py) | **NEW** | Browser automation module using Playwright |
-| [image_generator.py](file:///c:/AI/ai_video_factory_v1/core/image_generator.py) | Modified | Added [geminiweb](file:///c:/AI/ai_video_factory_v1/core/geminiweb_image_generator.py#427-663) mode dispatch in [generate_image()](file:///c:/AI/ai_video_factory_v1/core/image_generator.py#115-143) |
-| [config.py](file:///c:/AI/ai_video_factory_v1/config.py) | Modified | Added `GEMINIWEB_CHROME_PROFILE`, `GEMINIWEB_TIMEOUT`, `GEMINIWEB_URL` |
-| [page.tsx](file:///c:/AI/ai_video_factory_v1/web_ui/frontend/src/app/config/page.tsx) | Modified | Added "GeminiWeb" option to Image Mode dropdown |
-| [requirements.txt](file:///c:/AI/ai_video_factory_v1/requirements.txt) | Modified | Added `playwright>=1.40.0` |
+| [geminiweb_image_generator.py](../../core/geminiweb_image_generator.py) | **NEW** | Browser automation module using Playwright |
+| [image_generator.py](../../core/image_generator.py) | Modified | Added [geminiweb](../../core/geminiweb_image_generator.py#427-663) mode dispatch in [generate_image()](../../core/image_generator.py#115-143) |
+| [config.py](../../config.py) | Modified | Added `GEMINIWEB_CHROME_PROFILE`, `GEMINIWEB_TIMEOUT`, `GEMINIWEB_URL` |
+| [page.tsx](../../web_ui/frontend/src/app/config/page.tsx) | Modified | Added "GeminiWeb" option to Image Mode dropdown |
+| [requirements.txt](../../requirements.txt) | Modified | Added `playwright>=1.40.0` |
 
 ## Key Design Decisions
 
@@ -20,7 +21,7 @@ Added a new image generation mode called **"geminiweb"** that uses Playwright br
 - **Clipboard paste input method** — Text is typed via the `navigator.clipboard.writeText()` API and pasted via `Ctrl+V` to safely bypass Chrome's TrustedHTML policies on the Quill editor.
 - **Multiple image extraction strategies** — data URI → blob URL → HTTP download → screenshot fallback
 - **Module-level browser reuse** — browser context stays alive across calls for performance
-- **Lazy import** — `geminiweb_image_generator` only imported when mode is [geminiweb](file:///c:/AI/ai_video_factory_v1/core/geminiweb_image_generator.py#427-663)
+- **Lazy import** — `geminiweb_image_generator` only imported when mode is [geminiweb](../../core/geminiweb_image_generator.py#427-663)
 
 ## Verification Results
 
@@ -36,7 +37,7 @@ A live test was run to verify the full pipeline end-to-end.
 
 **Generated Image from the Live Test:**
 
-![A beautiful sunset over mountains with golden light, photorealistic, cinematic](file:///c:/AI/ai_video_factory_v1/output/test/geminiweb_test.png)
+![A beautiful sunset over mountains with golden light, photorealistic, cinematic](../../output/test/geminiweb_test.png)
 
 ## Setup Required
 
@@ -46,3 +47,6 @@ playwright install chromium
 ```
 
 On first run, **let Playwright launch Chrome and do not interact with the window while it is generating.** If you need to log in initially, the automation will fail for that run, but your login will be saved in the `output/chrome_profile` directory, and subsequent automated runs will work perfectly.
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

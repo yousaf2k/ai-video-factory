@@ -1,5 +1,6 @@
 # Setup Checklist - AI Film Studio Gemini Integration
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Getting Started › Setup Checklist - AI Film Studio Gemini Integration
 Use this checklist to verify your setup is complete and ready to run.
 
 ## ✅ Pre-Setup Checklist
@@ -277,3 +278,6 @@ python core/main.py
 ---
 
 *Last Updated: February 7, 2026*
+
+---
+**Related docs:** [Setup Checklist](SETUP_CHECKLIST.md) · [Configuration Guide](CONFIGURATION.md) · [Workflow Guide](../guides/WORKFLOW_GUIDE.md) · [ComfyUI Setup](../setup/COMFYUI_SETUP_CHECKLIST.md) · [📚 Index](../DOCS_INDEX.md)

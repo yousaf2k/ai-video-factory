@@ -1,5 +1,6 @@
 # Logging Documentation
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Logging Documentation
 ## Overview
 
 The AI Video Factory now includes comprehensive logging infrastructure using Python's built-in `logging` module. This provides persistent error tracking, API call auditing, and agent operation monitoring.
@@ -239,3 +240,6 @@ python -c "from core.agent_loader import AgentLoader; AgentLoader().list_agents(
 3. **Use decorators for consistency** - @log_api_call, @log_agent_call, @log_errors
 4. **Keep user-facing print()** - Console output for user interaction remains as print()
 5. **Don't log sensitive data** - API keys, passwords, personal information
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

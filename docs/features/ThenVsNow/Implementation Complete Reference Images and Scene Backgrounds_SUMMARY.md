@@ -1,5 +1,6 @@
 # 🎉 Implementation Complete: Reference Images & Scene Backgrounds
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › 🎉 Implementation Complete: Reference Images & Scene Backgrounds
 **Status**: ✅ **FULLY IMPLEMENTED** - Ready for ComfyUI workflow import and testing
 
 ## 📦 What Has Been Delivered
@@ -336,3 +337,6 @@ Estimated time to complete: **2-3 hours**
 **Status**: Production Ready (pending ComfyUI workflow import)
 **Lines of Code**: ~1,500 (backend + frontend)
 **Files Changed**: 22 (15 new, 7 modified)
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

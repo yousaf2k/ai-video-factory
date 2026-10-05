@@ -6,13 +6,13 @@ Implement functionality to group shots by scene and filter them by individual sc
 
 ### Frontend Enhancements
 
-#### [MODIFY] [types/index.ts](file:///c:/AI/ai_video_factory_v1/web_ui/frontend/src/types/index.ts)
+#### [MODIFY] [types/index.ts](../../../web_ui/frontend/src/types/index.ts)
 - Add `scene_index?: number` to the `Shot` interface.
 
-#### [MODIFY] [page.tsx](file:///c:/AI/ai_video_factory_v1/web_ui/frontend/src/app/projects/%5Bid%5D/edit/page.tsx)
+#### [MODIFY] [page.tsx](../../../web_ui/frontend/src/app/projects/[id]/edit/page.tsx)
 - Pass `project.story.scenes` to the `ShotGrid` component.
 
-#### [MODIFY] [ShotGrid.tsx](file:///c:/AI/ai_video_factory_v1/web_ui/frontend/src/components/shots/ShotGrid.tsx)
+#### [MODIFY] [ShotGrid.tsx](../../../web_ui/frontend/src/components/shots/ShotGrid.tsx)
 - Add state for `isGroupingEnabled` and `activeSceneTab` (default "All").
 - Add a "Group by Scene" toggle in the grid header.
 - Implement scene tabs (All + individual scenes) appearing above the grid when grouping is enabled.

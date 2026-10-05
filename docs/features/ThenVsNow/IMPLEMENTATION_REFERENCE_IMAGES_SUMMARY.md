@@ -1,5 +1,6 @@
 # Reference Images & Scene Backgrounds Implementation Summary
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Reference Images & Scene Backgrounds Implementation Summary
 ## Overview
 
 This implementation adds support for reference images (for facial consistency) and scene backgrounds to the ThenVsNow FLFI2V workflow. Users can now upload actual photos of actors and generate reusable scene backgrounds.
@@ -293,3 +294,6 @@ The system now supports the intended sequential generation:
 2. THEN after (NOW image + THEN reference)
 
 This ensures proper temporal flow and visual consistency in ThenVsNow videos.
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

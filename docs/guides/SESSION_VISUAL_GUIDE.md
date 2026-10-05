@@ -1,5 +1,6 @@
 # Project Management - Visual Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Project Management - Visual Guide
 ## Pipeline Flow with Project Management
 
 ```
@@ -252,3 +253,6 @@ Shot Breakdown:
 ✅ **Easy Management** - Simple commands
 ✅ **Debugging** - Review all data
 ✅ **Reusable** - Export prompts from projects
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

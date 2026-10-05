@@ -1,5 +1,6 @@
 # FLFI2V Toggle Buttons Fix
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › FLFI2V Toggle Buttons Fix
 **Date:** March 12, 2026
 **Status:** Fixed
 
@@ -115,3 +116,6 @@ Same pattern applies to videos:
 ---
 
 **Status:** ✅ Fixed and ready for use
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

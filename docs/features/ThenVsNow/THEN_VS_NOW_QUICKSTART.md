@@ -1,5 +1,6 @@
 # Then Vs Now Feature - Quick Start Guide
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Then Vs Now Feature - Quick Start Guide
 ## What is "Then Vs Now"?
 
 The "Then Vs Now" feature creates cinematic reunion videos where original cast members return to iconic movie sets. Each character appears in two forms:
@@ -337,3 +338,6 @@ The "Then Vs Now" feature creates immersive reunion videos with:
 ✅ Backward compatible with existing projects
 
 Try it with your favorite movie today!
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

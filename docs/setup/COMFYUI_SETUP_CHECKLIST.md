@@ -1,5 +1,6 @@
 # ComfyUI Image Generation - Setup Checklist
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Setup › ComfyUI Image Generation - Setup Checklist
 ## Quick Checklist for Using ComfyUI for Images
 
 ### Prerequisites
@@ -196,3 +197,6 @@ ugly, blurry, low quality, distorted, deformed, bad anatomy, bad proportions, du
 - **Complete Guide:** `COMFYUI_IMAGE_GUIDE.md`
 - **Quick Reference:** `COMFYUI_IMAGE_QUICKREF.md`
 - **Troubleshooting:** Check ComfyUI console for errors
+
+---
+**Related docs:** [Setup Checklist](../getting-started/SETUP_CHECKLIST.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Quick Start](../getting-started/QUICK_START.md) · [📚 Index](../DOCS_INDEX.md)

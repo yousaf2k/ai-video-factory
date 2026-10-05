@@ -1,5 +1,6 @@
 # ThenVsNow Thumbnail Prompt Guide
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › ThenVsNow Thumbnail Prompt Guide
 **Date:** March 12, 2026
 **Status:** Updated
 
@@ -453,3 +454,6 @@ Users can manually edit thumbnail prompts in the story.json file before generati
 - **Character Prompts:** `FLFI2V_SELFIE_COMPOSITION.md`
 - **Viewing Prompts:** `VIEWING_FLFI2V_PROMPTS.md`
 - **Quick Start:** `THEN_VS_NOW_QUICKSTART.md`
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

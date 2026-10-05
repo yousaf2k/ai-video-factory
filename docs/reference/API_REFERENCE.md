@@ -1,5 +1,6 @@
 # API Reference
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Reference › API Reference
 ## Overview
 
 This document provides detailed API documentation for all modules in the AI Video Factory system.
@@ -563,7 +564,7 @@ Get video idea from command line or file.
 ## Command-Line Interface
 
 ```bash
-python main.py [OPTIONS]
+python core/main.py [OPTIONS]
 ```
 
 **Options:**
@@ -581,7 +582,7 @@ python main.py [OPTIONS]
 
 **Example:**
 ```bash
-python main.py \
+python core/main.py \
   --idea "A sunset over the ocean" \
   --max-shots 5 \
   --shot-length 6 \
@@ -626,6 +627,9 @@ PromptID = str
 
 ## See Also
 
-- [Configuration Guide](CONFIGURATION.md)
-- [Camera LoRA Guide](CAMERA_LORA_GUIDE.md)
-- [Workflow Guide](WORKFLOW_GUIDE.md)
+- [Configuration Guide](../getting-started/CONFIGURATION.md)
+- [Camera LoRA Guide](../guides/CAMERA_LORA_GUIDE.md)
+- [Workflow Guide](../guides/WORKFLOW_GUIDE.md)
+
+---
+**Related docs:** [Configuration Guide](../getting-started/CONFIGURATION.md) · [Docs Index](../DOCS_INDEX.md) · [📚 Index](../DOCS_INDEX.md)

@@ -1,5 +1,6 @@
 # LM Studio LLM Setup Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Setup › LM Studio LLM Setup Guide
 ## Overview
 
 LM Studio is a **local LLM platform** with an OpenAI-compatible API. It offers:
@@ -423,3 +424,6 @@ For more information:
 - LM Studio Website: https://lmstudio.ai
 - LM Studio Docs: https://lmstudio.ai/docs
 - Model Library: https://lmstudio.ai/models
+
+---
+**Related docs:** [Setup Checklist](../getting-started/SETUP_CHECKLIST.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Quick Start](../getting-started/QUICK_START.md) · [📚 Index](../DOCS_INDEX.md)

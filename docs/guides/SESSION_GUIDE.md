@@ -1,5 +1,6 @@
 # Project Management Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Project Management Guide
 ## Overview
 
 The AI Film Studio now includes **crash recovery and project management**. All outputs (story, shots, images) are automatically saved, and you can continue interrupted generations.
@@ -293,3 +294,6 @@ The project management system ensures:
 ✅ **Smart Resuming** - Only does what's needed
 
 **Never lose progress again!**
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

@@ -1,5 +1,6 @@
 # Batch Video Generation from Images
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Batch Video Generation from Images
 Generate videos from existing images using ComfyUI's video generation models.
 
 ## Features
@@ -253,3 +254,6 @@ Potential features for future versions:
 - Image preprocessing (resize, format conversion)
 - Progress bar
 - Parallel processing for faster generation
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

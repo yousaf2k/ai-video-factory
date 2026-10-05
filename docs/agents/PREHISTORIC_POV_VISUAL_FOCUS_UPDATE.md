@@ -1,5 +1,6 @@
 # Prehistoric POV Agent - Visual Focus Guidelines Update
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › Prehistoric POV Agent - Visual Focus Guidelines Update
 ## Date: 2026-02-26
 
 ## Summary
@@ -127,3 +128,6 @@ Expected results:
 **Update completed**: 2026-02-26
 **Status**: ✅ Implemented and tested
 **Next**: Test agent generation to verify visual focus descriptions are correct
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

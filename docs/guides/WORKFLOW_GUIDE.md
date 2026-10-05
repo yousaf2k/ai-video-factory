@@ -1,5 +1,6 @@
 # Workflow Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Workflow Guide
 ## Overview
 
 The AI Video Factory follows a structured 7-step pipeline to transform ideas into fully rendered videos with narration. This guide explains each step and how to customize the workflow.
@@ -39,11 +40,11 @@ The idea is the starting point for your video. It can be:
 
 ```bash
 # Command line
-python main.py --idea "Your video idea here"
+python core/main.py --idea "Your video idea here"
 
 # From file
 echo "Your video idea" > input/story.txt
-python main.py
+python core/main.py
 ```
 
 ### Step 2: Story Generation
@@ -251,7 +252,7 @@ AUTO_STEP_MODE = False
 Resume from specific step:
 
 ```bash
-python main.py --project project_20260210_174844 --step 4
+python core/main.py --project project_20260210_174844 --step 4
 ```
 
 ## Regeneration
@@ -280,7 +281,7 @@ Create custom prompt templates in `agents/`:
 echo "Your custom story prompt..." > agents/story/cinematic.txt
 
 # Use custom agent
-python main.py --story-agent cinematic
+python core/main.py --story-agent cinematic
 ```
 
 ### Custom Workflows
@@ -312,25 +313,25 @@ WAN_VIDEO_NODE_ID = "98"      # Update to your WanImageToVideo node ID
 
 ```bash
 # Basic usage
-python main.py --idea "Your video idea"
+python core/main.py --idea "Your video idea"
 
 # Specify max shots
-python main.py --idea "Your idea" --max-shots 3
+python core/main.py --idea "Your idea" --max-shots 3
 
 # Specify shot length
-python main.py --idea "Your idea" --shot-length 10
+python core/main.py --idea "Your idea" --shot-length 10
 
 # Continue from project
-python main.py --project project_20260210_174844
+python core/main.py --project project_20260210_174844
 
 # Start from specific step
-python main.py --project project_20260210_174844 --step 4
+python core/main.py --project project_20260210_174844 --step 4
 
 # Use custom agents
-python main.py --story-agent dramatic --shots-agent artistic
+python core/main.py --story-agent dramatic --shots-agent artistic
 
 # Enable narration
-python main.py --generate-narration --tts-voice en-GB-SoniaNeural
+python core/main.py --generate-narration --tts-voice en-GB-SoniaNeural
 ```
 
 ## Error Handling
@@ -341,10 +342,10 @@ If the pipeline crashes, it can resume:
 
 ```bash
 # Automatically resume last project
-python main.py
+python core/main.py
 
 # Or specify project
-python main.py --project project_20260210_174844
+python core/main.py --project project_20260210_174844
 ```
 
 ### Failed Shots
@@ -353,7 +354,7 @@ Failed video renders are tracked and can be regenerated:
 
 ```bash
 # View failed shots in project summary
-python main.py --project project_20260210_174844
+python core/main.py --project project_20260210_174844
 
 # Regenerate failed shots only
 python regenerate.py --project project_20260210_174844 --videos --failed-only
@@ -413,7 +414,10 @@ Check ComfyUI console for errors.
 
 ## See Also
 
-- [Configuration Guide](CONFIGURATION.md)
+- [Configuration Guide](../getting-started/CONFIGURATION.md)
 - [Camera LoRA Guide](CAMERA_LORA_GUIDE.md)
-- [API Reference](API_REFERENCE.md)
-- [Quick Start](QUICK_START.md)
+- [API Reference](../reference/API_REFERENCE.md)
+- [Quick Start](../getting-started/QUICK_START.md)
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

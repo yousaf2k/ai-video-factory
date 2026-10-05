@@ -1,5 +1,6 @@
 # Selfie Vlogger Agents
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › Selfie Vlogger Agents
 ## Overview
 
 The Selfie Vlogger agents create authentic, first-person vlog-style content with GoPro camera aesthetics. Perfect for YouTube, TikTok, and Instagram content creators.
@@ -169,3 +170,6 @@ python render_videos.py
 2. Experiment with different camera types (selfie, fpv, walk)
 3. Customize the agent personalities to match your style
 4. Add your own catchphrases and signature style to the story agent
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

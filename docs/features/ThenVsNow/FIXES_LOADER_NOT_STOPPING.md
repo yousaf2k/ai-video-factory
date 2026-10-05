@@ -1,5 +1,6 @@
 # Error Handling Fix - Loader Not Stopping on Gemini Web Failures
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Error Handling Fix - Loader Not Stopping on Gemini Web Failures
 **Date:** March 12, 2026
 **Status:** Fixed
 
@@ -249,3 +250,6 @@ Both the WebSocket event (for real-time UI updates) and the HTTP response (for f
 ---
 
 **Status:** ✅ Fixed and deployed
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

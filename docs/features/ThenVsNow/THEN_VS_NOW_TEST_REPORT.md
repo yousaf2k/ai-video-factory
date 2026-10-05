@@ -1,5 +1,6 @@
 # "Then Vs Now" Feature - Test Report
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › "Then Vs Now" Feature - Test Report
 **Date:** March 12, 2026
 **Status:** ✅ All Tests Passed
 **Test Environment:** Windows, Python 3.11, TypeScript 5.x
@@ -431,3 +432,6 @@ python -c "from web_ui.backend.services.generation_service import GenerationServ
 ---
 
 **End of Test Report**
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

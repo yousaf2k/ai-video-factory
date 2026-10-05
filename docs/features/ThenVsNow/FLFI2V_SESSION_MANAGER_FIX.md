@@ -1,5 +1,6 @@
 # Bug Fix: Missing get_story Method in ProjectManager
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Bug Fix: Missing get_story Method in ProjectManager
 **Date:** March 12, 2026
 **Status:** ✅ Fixed
 **Severity:** High (blocks image generation for FLFI2V shots)
@@ -192,3 +193,6 @@ To prevent similar issues in the future:
 ## Status
 
 ✅ **RESOLVED** - The missing method has been added and all tests pass.
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

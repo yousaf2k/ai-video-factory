@@ -1,5 +1,6 @@
 # Video Idea Examples
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Getting Started › Video Idea Examples
 This directory contains example video ideas for the AI Video Factory.
 
 ## Usage
@@ -71,3 +72,6 @@ Peaceful, meditative, slow-motion nature documentary
 Camera:
 Static shots, gentle pans, close-ups of fish and leaves
 ```
+
+---
+**Related docs:** [Setup Checklist](SETUP_CHECKLIST.md) · [Configuration Guide](CONFIGURATION.md) · [Workflow Guide](../guides/WORKFLOW_GUIDE.md) · [ComfyUI Setup](../setup/COMFYUI_SETUP_CHECKLIST.md) · [📚 Index](../DOCS_INDEX.md)

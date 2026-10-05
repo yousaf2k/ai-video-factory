@@ -1,5 +1,6 @@
 # Ollama LLM Setup Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Setup › Ollama LLM Setup Guide
 ## Overview
 
 Ollama is a **local, open-source LLM platform** that runs entirely on your machine. It offers:
@@ -401,3 +402,6 @@ For more information:
 - Ollama Website: https://ollama.com
 - Ollama GitHub: https://github.com/ollama/ollama
 - Model Library: https://ollama.com/library
+
+---
+**Related docs:** [Setup Checklist](../getting-started/SETUP_CHECKLIST.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Quick Start](../getting-started/QUICK_START.md) · [📚 Index](../DOCS_INDEX.md)

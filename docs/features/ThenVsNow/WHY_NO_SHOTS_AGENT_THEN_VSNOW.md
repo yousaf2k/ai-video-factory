@@ -1,5 +1,6 @@
 # Why ThenVsNow Has No Shots Agent or Sub-LLM Calls
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Why ThenVsNow Has No Shots Agent or Sub-LLM Calls
 **Date:** March 12, 2026
 **Status:** By Design
 
@@ -381,6 +382,9 @@ The ThenVsNow workflow **intentionally skips** the shots agent and sub-LLM calls
 ---
 
 **See Also:**
-- [Then Vs Now Implementation Plan](../plans/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)
-- [Then Vs Now Quick Start](../guides/THEN_VS_NOW_QUICKSTART.md)
-- [Standard Workflow Guide](WORKFLOW_GUIDE.md)
+- [Then Vs Now Implementation Plan](THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)
+- [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md)
+- [Standard Workflow Guide](../../guides/WORKFLOW_GUIDE.md)
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

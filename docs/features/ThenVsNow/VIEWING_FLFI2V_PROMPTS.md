@@ -1,5 +1,6 @@
 # Viewing THEN and NOW Prompts in Shot Cards
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Viewing THEN and NOW Prompts in Shot Cards
 **Date:** March 12, 2026
 **Status:** Updated
 
@@ -276,3 +277,6 @@ with dark office background
 2. Use toggle buttons to switch between THEN and NOW
 3. Observe prompt section changing based on active mode
 4. Edit prompts to customize THEN/NOW separately
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

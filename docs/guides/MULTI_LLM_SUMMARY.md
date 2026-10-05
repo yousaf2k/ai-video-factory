@@ -1,5 +1,6 @@
 # Multi-LLM Provider Support - Implementation Complete ✅
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Multi-LLM Provider Support - Implementation Complete ✅
 ## 🎉 Successfully Implemented
 
 Comprehensive multi-LLM provider support has been added to AI Video Factory with **7 providers** fully functional.
@@ -435,3 +436,6 @@ All core modules now support any of the 7 LLM providers (5 cloud + 2 local) thro
 **Privacy options** - Use Ollama or LM Studio for 100% local, offline operation.
 
 Ready to scale your video generation with flexible LLM provider options! 🚀
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

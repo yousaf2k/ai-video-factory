@@ -1,5 +1,6 @@
 # Video Prompt Writing Guide (T2VA / I2VA / FL2VA / L2VA)
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Video Prompt Writing Guide (T2VA / I2VA / FL2VA / L2VA)
 ## 1. Task Overview
 
 - **T2VA**: Builds a complete audiovisual timeline from text.
@@ -220,3 +221,6 @@ overall_soundscape: Fingertips tap the glass before it scrapes across the tablet
 
 non_diegetic_music: A low electronic pulse at a slow tempo, ending immediately after the glass breaks.
 ```
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

@@ -1,5 +1,6 @@
 # How to Make Departure Videos - ThenVsNow FLFI2V Feature
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › How to Make Departure Videos - ThenVsNow FLFI2V Feature
 **Date:** March 12, 2026
 **Status:** Complete Guide
 
@@ -441,3 +442,6 @@ The system may include a feature to automatically generate scene images from set
 - [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md)
 - [FLFI2V Video Generation Logic](FLFI2V_VIDEO_GENERATION_LOGIC.md)
 - [Then Vs Now Motion Prompt Guide](THEN_VS_NOW_MOTION_PROMPT_GUIDE.md)
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

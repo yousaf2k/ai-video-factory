@@ -1,5 +1,6 @@
 # Complete Visual Flow: Reference Images & Scene Backgrounds
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Complete Visual Flow: Reference Images & Scene Backgrounds
 This document shows the complete data flow from UI upload to final image generation.
 
 ## System Architecture Overview
@@ -393,3 +394,6 @@ output/projects/abc123/
 ---
 
 **This visual guide shows how all components work together** to provide reference image support and scene background generation for ThenVsNow projects!
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

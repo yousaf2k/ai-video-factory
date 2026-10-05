@@ -1,5 +1,6 @@
 # Video Length Quick Reference
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Video Length Quick Reference
 ## Prompts You'll See
 
 When running `python core/main.py`:
@@ -82,3 +83,6 @@ TARGET_VIDEO_LENGTH = None # Or set to 60.0 for 60 seconds
 ## Need More Details?
 
 See `VIDEO_LENGTH_GUIDE.md` for complete documentation.
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

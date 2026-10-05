@@ -1,5 +1,6 @@
 # Prehistoric Dinosaur Documentary Agents
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › Prehistoric Dinosaur Documentary Agents
 ## Overview
 
 The Prehistoric Dinosaur agents create IMAX-scale, Netflix-quality prehistoric documentaries featuring photorealistic dinosaurs shot on Sony Venice 2 with Arri Signature Prime lenses. Perfect for YouTube channels focused on dinosaurs, paleontology, and natural history content.
@@ -411,3 +412,6 @@ python generate_story.py "The eternal struggle - Velociraptor pack hunting strat
 ---
 
 Create breathtaking dinosaur documentaries that rival major streaming network quality!
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)
