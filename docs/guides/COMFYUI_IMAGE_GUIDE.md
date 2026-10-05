@@ -1,5 +1,6 @@
 # ComfyUI Image Generation Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › ComfyUI Image Generation Guide
 ## Overview
 
 You can now choose between **TWO image generation methods**:
@@ -406,3 +407,6 @@ IMAGE_WORKFLOW_PATH = "workflow/flux_workflow.json"
 ✅ **Flexible** - Switch anytime, use different models
 
 **You have full control over image generation!**
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

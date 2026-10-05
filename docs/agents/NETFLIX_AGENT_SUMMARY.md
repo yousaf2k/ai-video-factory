@@ -1,5 +1,6 @@
 # Netflix Documentary Agent - Implementation Summary
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › Netflix Documentary Agent - Implementation Summary
 ## ✅ Created Successfully
 
 A new story agent `netflix_documentary` has been added to the AI Video Factory, specializing in binge-worthy dramatic documentaries with suspense, excitement, and curiosity.
@@ -269,3 +270,6 @@ python core/main.py --story-agent netflix_documentary --idea-file my_idea.txt
 ## Summary
 
 The `netflix_documentary` agent is now fully functional and ready to generate binge-worthy, suspenseful Netflix-style documentaries with mystery, excitement, and curiosity at their core.
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

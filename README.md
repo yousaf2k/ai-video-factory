@@ -7,14 +7,16 @@
 ## Features
 
 - 🎬 **End-to-End Pipeline**: From idea to final video in 7 automated steps
-- 🎨 **Dual Image Generation**: Gemini API or ComfyUI (Flux/SDXL/Flux 2) support with up to 2K resolution
-- 🎥 **Advanced Video Generation**: Wan 2.2 model with ComfyUI integration and HD resolution options (720p/1080p)
+- 🧠 **Multi-LLM Support**: Gemini, OpenAI, Zhipu, DeepSeek, Qwen, Kimi, Ollama, and LM Studio
+- 🎨 **Multiple Image Engines**: Gemini API, ComfyUI (Flux 2, Krea 2 reference, HiDream, Z-Image Turbo), or GeminiWeb browser automation — up to 2K resolution
+- 🎥 **Multiple Video Models**: Wan 2.2 (t2v/i2v/FLFI2V with VFI + super-resolution), MiniMax H3, and LTX-2 via ComfyUI, with HD options (720p/1080p)
 - 🚁 **Multi-Camera LoRA System**: Combine multiple camera movements (drone, orbit, dolly, zoom, etc.)
-- 🔄 **Flexible Motion Control**: Override departure prompts for custom shot-to-shot transitions
+- 🔊 **Sound FX Generation**: Per-shot sound effects via MMAudio workflows
+- 🖼️ **Asset Library**: Nested-category asset library (images/videos/audio/music) with per-shot reference injection
+- 👤 **Unified Character References**: Single `image_prompt` schema with 8-view character reference sheets (full-body + face close-ups)
 - 🎤 **Narration Support**: Optional TTS with ElevenLabs, Edge-TTS, or ComfyUI voices
 - 💾 **Project Management**: Crash recovery, thumbnail management (upload/regenerate), and selective regeneration
 - 🌐 **Modern Web UI**: FastAPI backend with a responsive React frontend for visual story editing and generation queue management
-- 📚 **Comprehensive Documentation**: Extensive guides and API references in `docs/`
 - ⏳ **Batch Queue**: Efficiently manage multiple generations with group selection and status tracking
 
 ## Quick Start
@@ -50,7 +52,7 @@ python core/main.py --idea "A beautiful sunset over the ocean"
 python web_ui/start.py
 ```
 
-Open your browser to `http://localhost:3000` to access the visual story editor and project manager. The backend API runs on `http://127.0.0.1:8000`.
+Open your browser to `http://localhost:3000` to access the visual story editor, asset library, and project manager. The backend API runs on `http://127.0.0.1:8000`.
 
 ## Project Structure
 
@@ -58,15 +60,15 @@ Open your browser to `http://localhost:3000` to access the visual story editor a
 ai_video_factory/
 ├── core/              # Core pipeline logic (story engine, shot planner, comfy client)
 ├── web_ui/            # Web application
-│   ├── backend/       # FastAPI backend and project services
+│   ├── backend/       # FastAPI backend (api/, services/, models/) and WebSocket progress
 │   └── frontend/      # React/Next.js frontend
-├── agents/            # Multi-category LLM agents (Documentary, Movie, Then Vs Now)
-├── workflow/          # ComfyUI JSON templates for images, videos, and TTS
-├── docs/              # Comprehensive guides (LoRA, ComfyUI setup, API ref)
-├── tests/             # Automated test suite
-├── output/            # Generated projects, media, and metadata
+├── agents/            # Multi-category LLM agent prompts (story/, shots/)
+├── workflow/          # ComfyUI JSON templates (image/, video/, soundfx/, voice/)
+├── docs/              # Comprehensive guides, setup checklists, and API reference
+├── tests/             # Automated test suite (unit + integration)
+├── output/            # Generated projects, media, and the asset library
 ├── config.py          # Centralized configuration and path management
-└── core/main.py       # Main CLI entry point
+└── AGENTS.md          # Canonical instructions for AI coding agents
 ```
 
 ### AI Agents Folder
@@ -78,21 +80,25 @@ This folder contains system prompts for LLM agents used in different stages of v
 ```bash
 agents/
 ├── story/             # Narrative generation
-│   ├── documentary/   # Realistic, historical, and educational
-│   ├── movie/         # Cinematic fiction and genres
-│   └── then_vs_now/   # Comparative storytelling
+│   ├── asmr/          # ASMR glass cutting project type
+│   ├── documentary/   # Realistic, historical, and educational (with _base/_contexts/_styles)
+│   ├── movie/         # Cinematic fiction and genres (with _base/_contexts/_styles)
+│   ├── system/        # Master script guidelines
+│   └── then_vs_now/   # Comparative storytelling (FLFI2V)
 └── shots/             # Visual prompt engineering
+    ├── base/          # Standard shot rules
     ├── cameras/       # Specialized camera configurations
     ├── contexts/      # Subject-specific visual data
-    └── styles/        # Artistic and atmospheric styles
+    ├── soundfx/       # Sound FX prompt rules
+    ├── styles/        # Artistic and atmospheric styles
+    └── videoprompt/   # Video-model-specific prompt rules (e.g. MiniMax H3)
 ```
 
 #### Available Story Agents
 
-- **Documentary**: `default`, `netflix_documentary`, `youtube_documentary`, `time_traveler`.
-- **Historical**: `greek_classical`, `roman_kingdom`, `indus_valley`, `plague_of_athens`.
-- **Movie**: `action`, `horror`.
-- **Specialized**: `then_vs_now` ⭐, `selfie_vlogger`.
+- **Documentary**: `default`, `documentary`, `netflix_documentary`, `youtube_documentary`, `youtube_news`, `time_traveler`, plus historical packs (`greek_*`, `roman_kingdom`, `indus_valley`, `plague_of_athens`, `persian_empire`, `prehistoric_*`).
+- **Movie**: `action`, `horror`, `comedy`, `cyberpunk`, `drama`, `fantasy`, `mystery`, `romance`, `scifi`, `thriller`, `western`.
+- **Specialized**: `asmr/asmr_glass_cutting`, `then_vs_now` ⭐, `selfie_vlogger`.
 
 #### How to Create a Custom Agent
 
@@ -109,8 +115,15 @@ python core/main.py --story-agent my_special_agent
 
 ### Resolution Selection
 Customize output quality via `config.py` or the Web UI:
-- **Images**: Up to 2048x2048 (Flux/Gemini)
-- **Videos**: 720p or 1080p (Wan 2.2)
+- **Images**: Up to 2048x2048 (Flux 2 / Krea 2 / Gemini)
+- **Videos**: 720p or 1080p (Wan 2.2, MiniMax H3, LTX-2)
+
+### Workflow Overrides
+Pick the generation workflow per run without touching `config.py`:
+
+```bash
+python core/main.py --idea "..." --video-workflow minimax_h3_i2v_8s --image-workflow krea2_reference
+```
 
 ### Departure Overrides
 For shots requiring specific motion transitions, use the **Departure Prompt** field in the Web UI to manually guide the AI's motion prediction.
@@ -127,7 +140,9 @@ python batch_videos.py --file ideas.txt
 
 For deep dives into specific subsystems, refer to the following guides:
 
+- 🤖 **[AGENTS.md](AGENTS.md)**: Canonical guidance for AI coding agents working on this repo.
 - 🎮 **[ComfyUI Setup](docs/setup/COMFYUI_SETUP_CHECKLIST.md)**: Hardware requirements and workflow installation.
 - 📸 **[Camera & LoRA Guide](docs/guides/CAMERA_LORA_GUIDE.md)**: Master the multi-camera motion system.
-- 🛠️ **[API Reference](docs/API_REFERENCE.md)**: Complete backend documentation.
+- 🖼️ **[Asset Library](docs/features/ASSET_LIBRARY.md)**: Asset library design and shot references.
+- 🛠️ **[API Reference](docs/reference/API_REFERENCE.md)**: Complete backend documentation.
 - 📚 **[Full Index](docs/DOCS_INDEX.md)**: Browse all available documentation.

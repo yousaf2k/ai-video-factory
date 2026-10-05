@@ -1,5 +1,6 @@
 # ThenVsNow Agent: Enhanced Scene Detail Requirements
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › ThenVsNow Agent: Enhanced Scene Detail Requirements
 **Date:** March 12, 2026
 **Status:** Updated
 
@@ -359,3 +360,6 @@ Hobbit holes with round doors, lush green gardens, warm sunlight
 2. Verify all 7 requirements are in generated scenes
 3. Check that set prompts are much more detailed than before
 4. Enjoy ultra-realistic set recreations!
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

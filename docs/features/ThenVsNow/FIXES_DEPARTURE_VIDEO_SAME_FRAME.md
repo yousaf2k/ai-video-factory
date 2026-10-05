@@ -1,5 +1,6 @@
 # Fix: Departure Video Using Same NOW Image for Both Frames
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Fix: Departure Video Using Same NOW Image for Both Frames
 **Date:** March 13, 2026
 **Status:** ✅ Fixed
 
@@ -268,6 +269,9 @@ if not last_frame_image:
 ---
 
 **See Also:**
-- [Departure Video Generation Logic](../guides/FLFI2V_VIDEO_GENERATION_LOGIC.md)
-- [How to Make Departure Videos](../guides/HOW_TO_MAKE_DEPARTURE_VIDEOS.md)
-- [Then Vs Now Quick Start](../guides/THEN_VS_NOW_QUICKSTART.md)
+- [Departure Video Generation Logic](FLFI2V_VIDEO_GENERATION_LOGIC.md)
+- [How to Make Departure Videos](HOW_TO_MAKE_DEPARTURE_VIDEOS.md)
+- [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md)
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

@@ -1,5 +1,6 @@
 # YouTube Documentary Agent - Implementation Checklist
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › YouTube Documentary Agent - Implementation Checklist
 ## Implementation Status: ✅ COMPLETE
 
 All phases of the YouTube Documentary Story Agent implementation have been successfully completed.
@@ -282,3 +283,6 @@ The YouTube Documentary Story Agent has been successfully implemented with all p
 
 **Implementation Date**: February 15, 2026
 **Status**: ✅ COMPLETE AND VERIFIED
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

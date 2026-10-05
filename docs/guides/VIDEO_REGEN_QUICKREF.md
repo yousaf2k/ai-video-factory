@@ -1,5 +1,6 @@
 # Video Regeneration - Quick Reference
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Video Regeneration - Quick Reference
 ## What It Does
 
 Re-render videos from existing projects WITHOUT regenerating images.
@@ -118,3 +119,6 @@ Typical: 2-4 minutes per 5-second shot on RTX 4090.
 ## Need More?
 
 See `VIDEO_REGENERATION_GUIDE.md` for complete documentation.
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

@@ -1,5 +1,6 @@
 # Configuration Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Getting Started › Configuration Guide
 ## Overview
 
 The AI Video Factory is configured through `config.py`, which contains all settings for API keys, model choices, workflow paths, and generation parameters.
@@ -190,7 +191,7 @@ CAMERA_LORA_MAPPING = {
 }
 ```
 
-**See Also:** [Camera LoRA Guide](CAMERA_LORA_GUIDE.md)
+**See Also:** [Camera LoRA Guide](../guides/CAMERA_LORA_GUIDE.md)
 
 ### 6. Agent Configuration
 
@@ -384,6 +385,9 @@ Then modify as needed.
 
 ## See Also
 
-- [Camera LoRA Guide](CAMERA_LORA_GUIDE.md)
-- [Workflow Guide](WORKFLOW_GUIDE.md)
+- [Camera LoRA Guide](../guides/CAMERA_LORA_GUIDE.md)
+- [Workflow Guide](../guides/WORKFLOW_GUIDE.md)
 - [Quick Start](QUICK_START.md)
+
+---
+**Related docs:** [Setup Checklist](SETUP_CHECKLIST.md) · [Workflow Guide](../guides/WORKFLOW_GUIDE.md) · [ComfyUI Setup](../setup/COMFYUI_SETUP_CHECKLIST.md) · [📚 Index](../DOCS_INDEX.md)

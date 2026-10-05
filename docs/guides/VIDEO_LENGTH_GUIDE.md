@@ -1,5 +1,6 @@
 # Video Length Configuration Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Video Length Configuration Guide
 ## Overview
 
 The AI Film Studio now supports **custom video lengths**. You can specify:
@@ -273,3 +274,6 @@ total_length = preset["total_length"]
 ✅ **Cost Predictable** - Know cost before generating
 
 **You have full control over your video length!**
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

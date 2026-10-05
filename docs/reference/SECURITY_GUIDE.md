@@ -1,5 +1,6 @@
 # API Secrets Security Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Reference › API Secrets Security Guide
 ## Overview
 
 The AI Video Factory now includes a secure secrets management system that encrypts API keys and sensitive information in your `.env` file. This prevents plaintext secrets from being stored in your configuration files.
@@ -335,3 +336,6 @@ project/
 ✅ **Compatible** - Works with existing `.env` files  
 
 **Remember**: Always backup your master key in a secure location!
+
+---
+**Related docs:** [Configuration Guide](../getting-started/CONFIGURATION.md) · [Docs Index](../DOCS_INDEX.md) · [📚 Index](../DOCS_INDEX.md)

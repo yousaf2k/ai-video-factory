@@ -1,5 +1,6 @@
 # Full-Reference Mode Rewrite Output Format Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Full-Reference Mode Rewrite Output Format Guide
 This guide explains how rewrite outputs are organized and written in full-reference mode.
 
 Write all six rewrite sections in English. Preserve the original language only for dialogue and lyrics inside `<d>` and for text visibly present in the scene.
@@ -339,3 +340,6 @@ N/A
 ```
 
 </details>
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

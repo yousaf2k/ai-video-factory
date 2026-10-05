@@ -1,5 +1,6 @@
 # Video Length Configuration - Visual Flow
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Video Length Configuration - Visual Flow
 ## User Input Flow
 
 ```
@@ -325,3 +326,6 @@ INPUT → Total Length + Shot Length
 ```
 
 **Video length control gives you precision and predictability!** 🎯
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

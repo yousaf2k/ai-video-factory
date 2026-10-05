@@ -1,5 +1,6 @@
 # Camera LoRA System Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Camera LoRA System Guide
 ## Overview
 
 The AI Video Factory uses a sophisticated **Multi-Camera LoRA System** that allows you to combine multiple camera movements in a single shot. Each camera type loads specific LoRA (Low-Rank Adaptation) files to enhance video generation with particular motion characteristics.
@@ -251,6 +252,9 @@ The camera LoRA system is integrated into:
 
 ## See Also
 
-- [Configuration Guide](CONFIGURATION.md)
+- [Configuration Guide](../getting-started/CONFIGURATION.md)
 - [Workflow Guide](WORKFLOW_GUIDE.md)
-- [API Reference](API_REFERENCE.md)
+- [API Reference](../reference/API_REFERENCE.md)
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

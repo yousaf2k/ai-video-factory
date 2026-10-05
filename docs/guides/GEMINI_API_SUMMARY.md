@@ -1,5 +1,6 @@
 # Gemini API Verification Summary
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Gemini API Verification Summary
 ## Date: 2025-02-15
 
 ## Status: ✓ API Key Valid | ⚠ Quota Exceeded
@@ -100,3 +101,6 @@ python test_gemini.py
 ✗ Quota: Exceeded (Free Tier Limits)
 
 **Action**: Either wait 57 seconds, upgrade to paid plan, or switch to Z.AI provider.
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

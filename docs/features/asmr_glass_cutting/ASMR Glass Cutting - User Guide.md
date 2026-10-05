@@ -1,5 +1,6 @@
 # ASMR Glass Cutting - User Guide
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › ASMR Glass Cutting › ASMR Glass Cutting - User Guide
 ## Overview
 
 The ASMR Glass Cutting project type generates cinematic ASMR videos of glass sculpture fruits and vegetables being cut. Each video features ultra-realistic glass textures, satisfying cutting sounds, and professional food ASMR styling.
@@ -148,3 +149,6 @@ python core/main.py \
   --story-agent asmr/asmr_glass_cutting
 ```
 Generates: Tomato, Cucumber, Bell Pepper, Carrot, Lettuce, etc.
+
+---
+**Related docs:** [ASMR User Guide](ASMR Glass Cutting - User Guide.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

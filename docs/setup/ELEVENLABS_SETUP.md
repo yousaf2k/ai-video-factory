@@ -1,5 +1,6 @@
 # ElevenLabs TTS Integration Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Setup › ElevenLabs TTS Integration Guide
 This guide explains how to set up and use ElevenLabs for text-to-speech narration generation.
 
 ## Prerequisites
@@ -215,3 +216,6 @@ POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}
 ```
 
 For more information, see: https://elevenlabs.io/docs
+
+---
+**Related docs:** [Setup Checklist](../getting-started/SETUP_CHECKLIST.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Quick Start](../getting-started/QUICK_START.md) · [📚 Index](../DOCS_INDEX.md)

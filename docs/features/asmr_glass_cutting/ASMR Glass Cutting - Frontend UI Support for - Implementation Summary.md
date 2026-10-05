@@ -1,5 +1,6 @@
 # Frontend UI Support for ASMR Glass Cutting - Implementation Summary
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › ASMR Glass Cutting › Frontend UI Support for ASMR Glass Cutting - Implementation Summary
 ## Changes Made
 
 ### 1. Added AsmrGlassCutting to ProjectType Enum
@@ -117,3 +118,6 @@ const filteredStoryAgents = agents?.story?.filter((agent: any) => {
 ---
 **Status:** Complete and ready for use
 **Co-Authored-By:** Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+**Related docs:** [ASMR User Guide](ASMR Glass Cutting - User Guide.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

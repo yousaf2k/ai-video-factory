@@ -1,5 +1,6 @@
 # ComfyUI Image Generation - Quick Reference
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › ComfyUI Image Generation - Quick Reference
 ## Two Modes Available
 
 **Gemini (Default)**
@@ -200,3 +201,6 @@ Gemini = Fast + Easy + Cost
 ComfyUI = Free + Control + Quality
 Choose what works for you!
 ```
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

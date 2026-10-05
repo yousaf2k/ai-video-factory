@@ -1,5 +1,7 @@
 # Documentation Organization - Complete ✅
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Guides › ORGANIZATION_SUMMARY
+
 ## Summary
 
 All markdown documentation files have been moved from the project root to the `docs/` folder for better organization.
@@ -71,3 +73,6 @@ Would you like me to:
 
 **Date**: 2026-02-15
 **Files Moved**: 12/13 markdown files
+
+---
+**Related docs:** [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [Configuration Guide](../../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](../../guides/CAMERA_LORA_GUIDE.md) · [API Reference](../../reference/API_REFERENCE.md) · [📚 Index](../../DOCS_INDEX.md)

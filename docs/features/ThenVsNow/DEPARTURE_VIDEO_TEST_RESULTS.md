@@ -1,5 +1,6 @@
 # Departure Video Generation Test Results
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Departure Video Generation Test Results
 **Test Date:** March 12, 2026
 **Status:** ✅ PASSED
 
@@ -295,3 +296,6 @@ The departure video generation logic is **ready for production use**. The system
 5. ✅ Generates videos with seed=1 for reproducibility
 
 **Action:** Proceed with generating departure videos for your ThenVsNow projects!
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

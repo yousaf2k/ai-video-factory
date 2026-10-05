@@ -1,5 +1,6 @@
 # Visual Guide: Building IP-Adapter Workflows in ComfyUI
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Visual Guide: Building IP-Adapter Workflows in ComfyUI
 This step-by-step guide shows you how to build the IP-Adapter workflows manually in ComfyUI.
 
 ## Prerequisites
@@ -374,3 +375,6 @@ If you're stuck:
 4. Use the conversion script to validate
 
 Remember: The workflows are now provided as templates, so you can import them directly into ComfyUI and customize!
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

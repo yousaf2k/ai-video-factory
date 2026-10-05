@@ -1,5 +1,6 @@
 # Reference Images & Scene Backgrounds - Verification Checklist
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Reference Images & Scene Backgrounds - Verification Checklist
 This checklist helps verify the complete implementation of reference images and scene backgrounds for ThenVsNow projects.
 
 ## Pre-Implementation Checks
@@ -345,3 +346,6 @@ tail -f output/logs/backend.log | grep -i "ipadapter"
 # Verify workflow files
 ls -la workflow/image/flux_ipadapter_*.json
 ```
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

@@ -1,191 +1,117 @@
-# 📚 AI Video Factory - Documentation Index
+# 📚 AI Video Factory — Documentation
 
-Complete guide to all documentation for the AI Video Factory system.
+Welcome to the AI Video Factory documentation. Start with the entry point for your goal below, or browse the full index.
+
+> **For AI coding agents:** the canonical instruction file is [`AGENTS.md`](../AGENTS.md) at the repository root.
+
+---
+
+## 🗂️ Documentation Map
+
+```
+docs/
+├── getting-started/    # New here? Quick start, setup checklist, configuration reference
+├── setup/              # Backend & provider installation (ComfyUI, Gemini, TTS, local LLMs)
+├── guides/             # How-to guides: pipeline, camera LoRA, video length, regeneration…
+├── features/           # Feature documentation: Asset Library, Then Vs Now, ASMR Glass Cutting
+├── agents/             # Guides for the built-in LLM story/shots agents
+├── reference/          # API reference & security guide
+└── development/        # Historical: plans, fixes, testing notes, walkthroughs, archive
+```
 
 ---
 
 ## 🎯 Quick Start for New Users
 
-### Start Here:
-
-1. **[README.md](../README.md)** - Project overview and quick start
-2. **[Quick Start](QUICK_START.md)** - Get running in 5 minutes
-3. **[Setup Checklist](SETUP_CHECKLIST.md)** - Step-by-step setup verification
+1. **[README.md](../README.md)** — Project overview and quick start
+2. **[Quick Start](getting-started/QUICK_START.md)** — Get running in minutes
+3. **[Setup Checklist](getting-started/SETUP_CHECKLIST.md)** — Step-by-step setup verification
+4. **[Configuration Guide](getting-started/CONFIGURATION.md)** — Complete `config.py` reference
+5. **[Example Ideas](getting-started/example_ideas.md)** — Sample video ideas to try
 
 ---
 
 ## 📖 Documentation by Category
 
-### Getting Started
+### Getting Started (`getting-started/`)
 
 | Document | Description |
 |----------|-------------|
-| [Quick Start](QUICK_START.md) | Fastest path to first video |
-| [Setup Checklist](SETUP_CHECKLIST.md) | Complete setup guide with checkboxes |
-| [ComfyUI Setup](COMFYUI_SETUP_CHECKLIST.md) | ComfyUI installation and configuration |
-| [Gemini Setup](README_GEMINI_SETUP.md) | Gemini API configuration |
+| [Quick Start](getting-started/QUICK_START.md) | Fastest path to your first video |
+| [Netflix Quick Start](getting-started/QUICK_START_NETFLIX.md) | Netflix-style documentary walkthrough |
+| [Setup Checklist](getting-started/SETUP_CHECKLIST.md) | Complete setup guide with checkboxes |
+| [Configuration Guide](getting-started/CONFIGURATION.md) ⭐ | Complete `config.py` reference |
+| [Example Ideas](getting-started/example_ideas.md) | Sample ideas for your first runs |
 
-### Configuration
-
-| Document | Description |
-|----------|-------------|
-| **[Configuration Guide](CONFIGURATION.md)** ⭐ | Complete config.py reference |
-| **[Camera LoRA Guide](CAMERA_LORA_GUIDE.md)** ⭐ | Multi-camera LoRA system |
-| [ComfyUI Image Guide](COMFYUI_IMAGE_GUIDE.md) | ComfyUI image generation setup |
-| [ElevenLabs Setup](ELEVENLABS_SETUP.md) | ElevenLabs TTS configuration |
-
-### Workflow & Pipeline
+### Setup (`setup/`)
 
 | Document | Description |
 |----------|-------------|
-| **[Workflow Guide](WORKFLOW_GUIDE.md)** ⭐ | Complete pipeline overview |
-| [Project Guide](SESSION_GUIDE.md) | Project management |
-| [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md) | Regenerate failed shots |
-| [Workflow Diagram](WORKFLOW_DIAGRAM.md) | Visual system architecture |
-| **[Then Vs Now Quick Start](features/thenvsnow/THEN_VS_NOW_QUICKSTART.md)** 🆕 | FLFI2V reunion video guide |
-| **[Then Vs Now Scene Requirements](features/thenvsnow/THEN_VS_NOW_SCENE_REQUIREMENTS.md)** 🆕 | 7 mandatory scene elements |
-| **[Then Vs Now Thumbnail Guide](features/thenvsnow/THEN_VS_NOW_THUMBNAIL_GUIDE.md)** 🆕 | YouTube thumbnail specifications |
-| **[Then Vs Now Motion Prompt Guide](features/thenvsnow/THEN_VS_NOW_MOTION_PROMPT_GUIDE.md)** 🆕 | Animation/motion prompt specs |
-| **[How to Make Departure Videos](features/thenvsnow/HOW_TO_MAKE_DEPARTURE_VIDEOS.md)** 🆕 | Departure video generation guide |
-| **[FLFI2V Video Generation Logic](features/thenvsnow/FLFI2V_VIDEO_GENERATION_LOGIC.md)** 🆕 | First/last frame logic |
-| **[Viewing FLFI2V Prompts](features/thenvsnow/VIEWING_FLFI2V_PROMPTS.md)** 🆕 | How to view THEN/NOW prompts |
-| **[FLFI2V Selfie Composition](features/thenvsnow/FLFI2V_SELFIE_COMPOSITION.md)** 🆕 | Selfie composition details |
+| [ComfyUI Setup](setup/COMFYUI_SETUP_CHECKLIST.md) | ComfyUI installation and configuration |
+| [Gemini Setup](setup/README_GEMINI_SETUP.md) | Gemini API configuration |
+| [ElevenLabs Setup](setup/ELEVENLABS_SETUP.md) | ElevenLabs TTS configuration |
+| [Ollama Setup](setup/OLLAMA_SETUP.md) | Local LLM via Ollama |
+| [LM Studio Setup](setup/LMSTUDIO_SETUP.md) / [Guide](setup/LMSTUDIO_SETUP_GUIDE.md) | Local LLM via LM Studio |
 
-### Reference
+### How-To Guides (`guides/`)
 
 | Document | Description |
 |----------|-------------|
-| **[API Reference](API_REFERENCE.md)** ⭐ | Complete API documentation |
-| [Features Overview](COMPLETE_FEATURE_OVERVIEW.md) | All features explained |
-| [Project Overview](PROJECT_OVERVIEW.md) | Project structure and implementation |
-| [Implementation Summary](IMPLEMENTATION_SUMMARY.md) | Technical implementation details |
-| **[Then Vs Now Implementation](features/thenvsnow/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)** 🆕 | FLFI2V technical docs |
+| [Workflow Guide](guides/WORKFLOW_GUIDE.md) ⭐ | Complete 7-step pipeline overview |
+| [Workflow Diagram](guides/WORKFLOW_DIAGRAM.md) | Visual system architecture |
+| [Camera LoRA Guide](guides/CAMERA_LORA_GUIDE.md) ⭐ | Multi-camera LoRA system |
+| [ComfyUI Image Guide](guides/COMFYUI_IMAGE_GUIDE.md) / [QuickRef](guides/COMFYUI_IMAGE_QUICKREF.md) | Image generation setup |
+| [Video Length Guide](guides/VIDEO_LENGTH_GUIDE.md) / [QuickRef](guides/VIDEO_LENGTH_QUICKREF.md) / [Diagram](guides/VIDEO_LENGTH_DIAGRAM.md) | Video length configuration |
+| [Auto Video Length](guides/AUTO_VIDEO_LENGTH_QUICK_GUIDE.md) | Automatic total-length targeting |
+| [Video Regeneration Guide](guides/VIDEO_REGENERATION_GUIDE.md) / [QuickRef](guides/VIDEO_REGEN_QUICKREF.md) | Regenerate failed shots |
+| [Project Guide](guides/SESSION_GUIDE.md) / [Visual Guide](guides/SESSION_VISUAL_GUIDE.md) | Project management |
+| [Project Overview](guides/PROJECT_OVERVIEW.md) | Project structure and implementation |
+| [Batch Videos](guides/BATCH_VIDEOS_README.md) / [Idea Files](guides/IDEA_FILE_README.md) | Batch processing |
+| [Multi-LLM Summary](guides/MULTI_LLM_SUMMARY.md) | Supported LLM providers |
+| [Gemini API](guides/GEMINI_API_SUMMARY.md) / [Gemini Web](guides/GEMINI_WEB_SUMMARY.md) | Generation backends |
+| [Logging](guides/LOGGING_README.md) / [Usage](guides/LOGGING_USAGE_SUMMARY.md) | Logging system |
+| **MiniMax H3 Prompt Guides** ([base](guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_base_en.md), [ref](guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_ref_en.md)) | Prompt-writing rules for MiniMax H3 video |
 
-### Quick Reference
-
-| Document | Description |
-|----------|-------------|
-| [ComfyUI Image QuickRef](COMFYUI_IMAGE_QUICKREF.md) | Image generation cheat sheet |
-| [Video Length Guide](VIDEO_LENGTH_GUIDE.md) | Video length configuration |
-| [Video Length QuickRef](VIDEO_LENGTH_QUICKREF.md) | Video length cheat sheet |
-| [Video Regeneration QuickRef](VIDEO_REGEN_QUICKREF.md) | Regeneration quick reference |
-| [Project Visual Guide](SESSION_VISUAL_GUIDE.md) | Visual project guide |
-| [Features Summary](FEATURES_SUMMARY.md) | Feature summary |
-| [New Features Summary](NEW_FEATURES_SUMMARY.md) | New features overview |
-| [Final Feature Summary](FINAL_FEATURE_SUMMARY.md) | Final feature list |
-
-### Testing
+### Features (`features/`)
 
 | Document | Description |
 |----------|-------------|
-| [Test Results](TEST_RESULTS.md) | System test results |
-| **[Then Vs Now Test Report](testing/THEN_VS_NOW_TEST_REPORT.md)** 🆕 | FLFI2V feature test results |
+| [Asset Library](features/ASSET_LIBRARY.md) 🆕 | Nested-category asset library and per-shot references |
+| **Then Vs Now** ([Quick Start](features/ThenVsNow/THEN_VS_NOW_QUICKSTART.md)) | FLFI2V reunion videos — scene requirements, departure videos, motion prompts, thumbnails, implementation |
+| **ASMR Glass Cutting** ([User Guide](features/asmr_glass_cutting/ASMR%20Glass%20Cutting%20-%20User%20Guide.md)) | ASMR project type — usage and implementation |
 
----
+Key Then Vs Now docs: [Scene Requirements](features/ThenVsNow/THEN_VS_NOW_SCENE_REQUIREMENTS.md) · [How to Make Departure Videos](features/ThenVsNow/HOW_TO_MAKE_DEPARTURE_VIDEOS.md) · [FLFI2V Video Generation Logic](features/ThenVsNow/FLFI2V_VIDEO_GENERATION_LOGIC.md) · [Motion Prompt Guide](features/ThenVsNow/THEN_VS_NOW_MOTION_PROMPT_GUIDE.md) · [Thumbnail Guide](features/ThenVsNow/THEN_VS_NOW_THUMBNAIL_GUIDE.md) · [FLFI2V Implementation](features/ThenVsNow/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)
 
-## 🎓 Learning Path
+### Agent Guides (`agents/`)
 
-### Beginner (New to AI Video Factory)
+The prompt templates themselves live in the [`agents/`](../agents/) directory — see [`AGENTS.md`](../AGENTS.md) for layout and authoring rules.
 
-1. **[README.md](../README.md)** - Understand what the system does
-2. **[Quick Start](QUICK_START.md)** - Get your first video running
-3. **[Setup Checklist](SETUP_CHECKLIST.md)** - Verify your setup
-4. Create your first video!
+| Document | Description |
+|----------|-------------|
+| [Netflix Documentary Agent](agents/NETFLIX_DOCUMENTARY_AGENT.md) / [Summary](agents/NETFLIX_AGENT_SUMMARY.md) | Netflix-style documentary agent |
+| [YouTube Agent Quick Start](agents/YOUTUBE_AGENT_QUICK_START.md) / [Checklist](agents/YOUTUBE_AGENT_CHECKLIST.md) | YouTube documentary agent |
+| [Prehistoric POV Quick Start](agents/PREHISTORIC_POV_QUICKSTART.md) / [Guide](agents/PREHISTORIC_POV_GUIDE.md) | Prehistoric POV agents |
+| [Selfie Vlogger Guide](agents/SELFIE_VLOGGER_GUIDE.md) | Selfie vlog agent |
 
-### Intermediate (Understanding the System)
+### Reference (`reference/`)
 
-1. **[Workflow Guide](WORKFLOW_GUIDE.md)** - Understand the 7-step pipeline
-2. **[Configuration Guide](CONFIGURATION.md)** - Learn all configuration options
-3. **[Camera LoRA Guide](CAMERA_LORA_GUIDE.md)** - Master the multi-camera system
-4. **[API Reference](API_REFERENCE.md)** - Understand the code structure
+| Document | Description |
+|----------|-------------|
+| [API Reference](reference/API_REFERENCE.md) ⭐ | Core module API documentation |
+| [Security Guide](reference/SECURITY_GUIDE.md) | API key encryption and secrets management |
 
-### Advanced (Customization & Development)
+### Development & History (`development/`)
 
-1. **[API Reference](API_REFERENCE.md)** - Complete API documentation
-2. **[Camera LoRA Guide](CAMERA_LORA_GUIDE.md)** - Add custom cameras and LoRAs
-3. **[Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Technical details
-4. Study source code in `core/` directory
+Historical records — implementation plans, bug-fix notes, and test reports. Useful for archaeology, not required reading.
 
----
-
-## 📋 Common Tasks
-
-### "I want to set up the system"
-
-1. Read [Quick Start](QUICK_START.md) (5 minutes)
-2. Follow [Setup Checklist](SETUP_CHECKLIST.md) (step-by-step)
-3. Configure ComfyUI: [ComfyUI Setup](COMFYUI_SETUP_CHECKLIST.md)
-
-### "I need to understand how it works"
-
-1. Read [Workflow Guide](WORKFLOW_GUIDE.md) (complete pipeline)
-2. Study [Configuration Guide](CONFIGURATION.md) (all settings)
-3. Review [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) (multi-camera system)
-
-### "Something isn't working"
-
-1. Check [Setup Checklist](SETUP_CHECKLIST.md) (troubleshooting section)
-2. Review [Gemini Setup](README_GEMINI_SETUP.md) (detailed troubleshooting)
-3. Check [Test Results](TEST_RESULTS.md) (common issues)
-
-### "I want to customize the system"
-
-1. Read [Configuration Guide](CONFIGURATION.md) (all settings)
-2. Study [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) (add cameras)
-3. Review [API Reference](API_REFERENCE.md) (code structure)
-
-### "I want to use multiple cameras"
-
-1. Read [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) (complete guide)
-2. Check [Configuration Guide](CONFIGURATION.md) (LORA_NODES setup)
-3. See examples in the guide
-
----
-
-## 🔍 Key Features Documentation
-
-### Multi-Camera LoRA System
-
-The AI Video Factory supports combining multiple camera movements in a single shot:
-
-```python
-# Single camera
-"camera": "drone"
-
-# Multiple cameras
-"camera": "drone, orbit"
-"camera": ["dolly", "zoom"]
-```
-
-**See:** [Camera LoRA Guide](CAMERA_LORA_GUIDE.md)
-
-### Dual Image Generation
-
-Choose between Gemini API or ComfyUI for image generation:
-
-```python
-# In config.py
-IMAGE_GENERATION_MODE = "gemini"  # or "comfyui"
-```
-
-**See:** [Configuration Guide](CONFIGURATION.md), [ComfyUI Image Guide](COMFYUI_IMAGE_GUIDE.md)
-
-### Project Management & Crash Recovery
-
-Full project tracking with automatic resume:
-
-```bash
-# List projects
-python projects.py --list
-
-# Resume project
-python main.py --project project_20260210_174844
-
-# Regenerate failed shots
-python regenerate.py --project project_20260210_174844 --videos --failed-only
-```
-
-**See:** [Project Guide](SESSION_GUIDE.md), [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md)
+| Folder | Contents |
+|--------|----------|
+| [plans/](development/plans/) | Feature implementation plans and summaries |
+| [fixes/](development/fixes/) | Bug fix summaries (scene graph, shot planner, socket exhaustion, …) |
+| [testing/](development/testing/) | Test results and LLM provider verification ([Test Results](development/testing/TEST_RESULTS.md), [Provider Status](development/testing/LLM_PROVIDER_STATUS.md)) |
+| [walkthroughs/](development/walkthroughs/) | Local LLM providers, scene grouping, Gemini Flow walkthroughs |
+| [code_reviews/](development/code_reviews/) | Code review reports |
+| [archive/](development/archive/) | Superseded feature summaries and design docs |
 
 ---
 
@@ -193,160 +119,68 @@ python regenerate.py --project project_20260210_174844 --videos --failed-only
 
 ```bash
 # Generate a video
-python main.py --idea "Your video idea"
+python core/main.py --idea "Your video idea"
 
 # With custom settings
-python main.py --idea "Your idea" --max-shots 5 --shot-length 8
+python core/main.py --idea "Your idea" --max-shots 5 --shot-length 8
+
+# Override workflows for a run
+python core/main.py --idea "Your idea" --video-workflow minimax_h3_i2v_8s --image-workflow krea2_reference
+
+# List agents / projects
+python core/main.py --list-agents
+python core/main.py --list-projects
 
 # Enable narration
-python main.py --idea "Your idea" --generate-narration --tts-voice en-US-AriaNeural
-
-# Resume from project
-python main.py --project project_20260210_174844
+python core/main.py --idea "Your idea" --tts-voice en-US-AriaNeural
 
 # Regenerate specific shots
-python regenerate.py --project project_20260210_174844 --shots 1,3,5
+python regenerate.py --project project_XXXXXXXX --shots 1,3,5
 
-# Test setup
-python test_setup.py
+# Start the Web UI
+python web_ui/start.py
+
+# Run tests
+python run_tests.py
 ```
 
 ---
 
-## 📁 Project Structure
+## 🔍 Key Features Documentation
 
+### Asset Library 🆕
+Nested-category asset library with per-shot references (library refs `i/{id}` and project-media refs `p/{project}/…`). Filename-as-metadata design.
+**See:** [Asset Library](features/ASSET_LIBRARY.md)
+
+### Multi-Camera LoRA System
+Combine multiple camera movements in a single shot:
+```python
+"camera": "drone, orbit"   # or ["dolly", "zoom"]
 ```
-ai_video_factory/
-├── README.md                    # Main project README
-├── config.py                    # All configuration
-├── main.py                      # Pipeline entry point
-├── regenerate.py                # Regeneration utility
-├── projects.py                  # Project management CLI
-│
-├── docs/                        # 📚 Documentation (this folder)
-│   ├── DOCS_INDEX.md           # ← You are here
-│   ├── CONFIGURATION.md        # Configuration reference
-│   ├── CAMERA_LORA_GUIDE.md    # Multi-camera system
-│   ├── WORKFLOW_GUIDE.md       # Pipeline overview
-│   ├── API_REFERENCE.md        # Complete API docs
-│   ├── QUICK_START.md          # Get started fast
-│   └── ... (see full list above)
-│
-├── core/                        # Core modules
-│   ├── main.py                 # Pipeline orchestration
-│   ├── story_engine.py         # Story generation
-│   ├── scene_graph.py          # Scene breakdown
-│   ├── shot_planner.py         # Shot planning
-│   ├── image_generator.py      # Image generation
-│   ├── prompt_compiler.py      # Workflow compilation
-│   ├── comfy_client.py         # ComfyUI interface
-│   └── project_manager.py      # Project management
-│
-├── agents/                      # Prompt templates
-│   ├── story/                  # Story generation agents
-│   ├── image_prompt/           # Image prompt agents
-│   ├── video_motion/           # Video motion agents
-│   └── narration/              # Narration agents
-│
-├── workflow/                    # ComfyUI workflows
-│   ├── video/                  # Video generation
-│   ├── image/                  # Image generation
-│   └── voice/                  # TTS workflows
-│
-├── input/                       # Input files
-│   └── story.txt               # Default idea input
-│
-└── output/                      # Output files
-    └── projects/               # Project folders
-```
+**See:** [Camera LoRA Guide](guides/CAMERA_LORA_GUIDE.md)
+
+### Multiple Video Models
+Wan 2.2 (t2v / i2v / FLFI2V, VFI + super-resolution), MiniMax H3, and LTX-2 workflows in `workflow/video/`; select per run with `--video-workflow`.
+**See:** [MiniMax H3 Prompt Guides](guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_base_en.md), [Then Vs Now Quick Start](features/ThenVsNow/THEN_VS_NOW_QUICKSTART.md)
+
+### Dual Image Generation
+Gemini API, ComfyUI (Flux 2, Krea 2 reference, HiDream, Z-Image Turbo), or GeminiWeb browser automation.
+**See:** [Configuration Guide](getting-started/CONFIGURATION.md), [ComfyUI Image Guide](guides/COMFYUI_IMAGE_GUIDE.md)
 
 ---
 
-## 🎯 Decision Tree
+## 🎓 Learning Path
 
-```
-Do you want to...
-│
-├─ Start using the system immediately?
-│  └─→ Read [Quick Start](QUICK_START.md)
-│
-├─ Understand how the pipeline works?
-│  └─→ Read [Workflow Guide](WORKFLOW_GUIDE.md)
-│
-├─ Configure the system?
-│  └─→ Read [Configuration Guide](CONFIGURATION.md)
-│
-├─ Use multiple camera movements?
-│  └─→ Read [Camera LoRA Guide](CAMERA_LORA_GUIDE.md)
-│
-├─ Set up the system step-by-step?
-│  └─→ Read [Setup Checklist](SETUP_CHECKLIST.md)
-│
-├─ Troubleshoot issues?
-│  └─→ Read [Setup Checklist](SETUP_CHECKLIST.md) (troubleshooting section)
-│
-├─ Customize or extend the system?
-│  └─→ Read [API Reference](API_REFERENCE.md)
-│
-├─ Regenerate failed videos?
-│  └─→ Read [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md)
-│
-└─ Find specific documentation?
-   └─→ Use this index (DOCS_INDEX.md)
-```
-
----
-
-## 💡 Tips
-
-1. **First time?** Start with [README.md](../README.md), then [Quick Start](QUICK_START.md)
-2. **Configuration?** See [Configuration Guide](CONFIGURATION.md) for all settings
-3. **Multi-camera?** Read [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) completely
-4. **Having trouble?** Check [Setup Checklist](SETUP_CHECKLIST.md) troubleshooting section
-5. **Development?** Use [API Reference](API_REFERENCE.md) as your guide
-6. **Visual learner?** [Workflow Diagram](WORKFLOW_DIAGRAM.md) has architecture diagrams
-
----
-
-## 📞 Quick Links
-
-### Setup
-- [Quick Start](QUICK_START.md)
-- [Setup Checklist](SETUP_CHECKLIST.md)
-- [ComfyUI Setup](COMFYUI_SETUP_CHECKLIST.md)
-- [Gemini Setup](README_GEMINI_SETUP.md)
-
-### Configuration
-- [Configuration Guide](CONFIGURATION.md)
-- [Camera LoRA Guide](CAMERA_LORA_GUIDE.md)
-- [ElevenLabs Setup](ELEVENLABS_SETUP.md)
-
-### Workflow
-- [Workflow Guide](WORKFLOW_GUIDE.md)
-- [Project Guide](SESSION_GUIDE.md)
-- [Video Regeneration Guide](VIDEO_REGENERATION_GUIDE.md)
-
-### Reference
-- [API Reference](API_REFERENCE.md)
-- [Features Overview](COMPLETE_FEATURE_OVERVIEW.md)
-- [Project Overview](PROJECT_OVERVIEW.md)
+- **Beginner:** [README](../README.md) → [Quick Start](getting-started/QUICK_START.md) → [Setup Checklist](getting-started/SETUP_CHECKLIST.md)
+- **Intermediate:** [Workflow Guide](guides/WORKFLOW_GUIDE.md) → [Configuration Guide](getting-started/CONFIGURATION.md) → [Camera LoRA Guide](guides/CAMERA_LORA_GUIDE.md)
+- **Advanced:** [API Reference](reference/API_REFERENCE.md) → [Asset Library](features/ASSET_LIBRARY.md) → [AGENTS.md](../AGENTS.md)
 
 ---
 
 ## 🔄 Documentation Updates
 
-**New in This Version:**
-
-- 🆕 **[Then Vs Now Implementation](features/thenvsnow/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)** - Complete FLFI2V feature documentation
-- 🆕 **[Then Vs Now Quick Start](features/thenvsnow/THEN_VS_NOW_QUICKSTART.md)** - User guide for FLFI2V reunion videos
-- ⭐ **[Configuration Guide](CONFIGURATION.md)** - Complete config.py reference
-- ⭐ **[Camera LoRA Guide](CAMERA_LORA_GUIDE.md)** - Multi-camera LoRA system documentation
-- ⭐ **[Workflow Guide](WORKFLOW_GUIDE.md)** - Complete pipeline overview
-- ⭐ **[API Reference](API_REFERENCE.md)** - Full API documentation
-
-**Last Updated:** March 12, 2026
-**Version:** 4.0 (FLFI2V Then Vs Now Feature)
+**Last Updated:** October 4, 2026
+**Version:** 5.1 (documentation reorganization: getting-started / setup / guides / features / agents / reference / development)
 
 ---
-
 **Happy Video Creating! 🎬**

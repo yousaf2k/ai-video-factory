@@ -1,5 +1,6 @@
 # LM Studio Setup Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Setup › LM Studio Setup Guide
 ## Status: Not Running
 
 LM Studio is not accessible at `http://localhost:1234`
@@ -157,3 +158,6 @@ Status: Not running
 **Links**:
 - LM Studio: https://lmstudio.ai/
 - Models: https://lmstudio.ai/models
+
+---
+**Related docs:** [Setup Checklist](../getting-started/SETUP_CHECKLIST.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Quick Start](../getting-started/QUICK_START.md) · [📚 Index](../DOCS_INDEX.md)

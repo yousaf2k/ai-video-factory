@@ -1,5 +1,6 @@
 # 🎬 AI Film Studio - Gemini Integration Complete
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › 🎬 AI Film Studio - Gemini Integration Complete
 ## 📋 Implementation Status: ✅ COMPLETE
 
 The AI Film Studio system has been successfully upgraded to integrate Google Gemini API for both text and image generation.
@@ -306,3 +307,6 @@ All documentation included in the project. Start with `QUICK_START.md` for faste
 **Date**: February 7, 2026
 **Status**: ✅ Implementation Complete
 **Ready For**: User Setup and Testing
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

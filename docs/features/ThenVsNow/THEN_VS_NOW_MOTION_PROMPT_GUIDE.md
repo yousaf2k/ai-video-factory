@@ -1,5 +1,6 @@
 # ThenVsNow Animation / Motion Prompt Guide
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › ThenVsNow Animation / Motion Prompt Guide
 **Date:** March 12, 2026
 **Status:** Updated
 
@@ -572,3 +573,6 @@ Users can manually edit motion prompts in shots.json before generation:
 - **Viewing Prompts:** `VIEWING_FLFI2V_PROMPTS.md`
 - **Quick Start:** `THEN_VS_NOW_QUICKSTART.md`
 - **Implementation Plan:** `plans/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md`
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

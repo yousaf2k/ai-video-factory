@@ -1,5 +1,6 @@
 # AI Film Studio - Workflow Architecture
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › AI Film Studio - Workflow Architecture
 ## System Flow Diagram
 
 ```
@@ -283,3 +284,6 @@ Image Generation
 ```
 
 This ensures graceful degradation - if some images fail, the system continues with those that succeeded.
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

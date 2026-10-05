@@ -1,5 +1,6 @@
 # Video Regeneration Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Video Regeneration Guide
 ## Overview
 
 The **Video Regeneration** feature allows you to re-render videos from existing projects without regenerating images. This is useful when you want to:
@@ -407,3 +408,6 @@ python regenerate.py --project project_XXX --length 10 --force
 ✅ **No Extra Cost** - Free ComfyUI rendering
 
 **Video regeneration gives you flexibility without wasting work!**
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

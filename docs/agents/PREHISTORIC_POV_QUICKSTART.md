@@ -1,5 +1,6 @@
 # Prehistoric POV Agents - Quick Start Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › Prehistoric POV Agents - Quick Start Guide
 ## What Are POV Agents?
 
 The `prehistoric_pov` agents create immersive **first-person dinosaur documentaries** where viewers experience the prehistoric world through a survivor's eyes. Every shot includes **visible human hands** holding cameras, creating visceral "you are there" content.
@@ -97,3 +98,6 @@ See `docs/PREHISTORIC_POV_GUIDE.md` for complete guide with examples, best pract
 **Ready to create immersive POV dinosaur documentaries!** 🦖
 
 Use `--story-agent prehistoric_pov --image-agent prehistoric_pov` to activate.
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

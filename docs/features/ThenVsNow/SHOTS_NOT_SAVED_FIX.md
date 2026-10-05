@@ -1,5 +1,6 @@
 # Critical Bug Fix: Shots Not Being Saved to JSON
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Critical Bug Fix: Shots Not Being Saved to JSON
 **Date:** March 12, 2026
 **Status:** ✅ Fixed
 **Severity:** Critical (images generated but not saved to shots.json)
@@ -360,3 +361,6 @@ To prevent similar bugs in the future:
 ```
 
 **End of Fix Report**
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

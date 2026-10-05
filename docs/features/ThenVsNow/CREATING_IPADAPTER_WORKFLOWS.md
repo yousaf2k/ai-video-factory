@@ -1,5 +1,6 @@
 # Creating IP-Adapter Workflows for ThenVsNow
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Creating IP-Adapter Workflows for ThenVsNow
 This guide explains how to create the three ComfyUI workflows needed for reference image support in ThenVsNow projects.
 
 ## Prerequisites
@@ -252,3 +253,6 @@ After creating workflows:
 - ComfyUI: https://github.com/comfyanonymous/ComfyUI
 - IP-Adapter Plus: https://github.com/cubiq/ComfyUI_IPAdapter_plus
 - Flux Model: https://huggingface.co/black-forest-labs/FLUX.1-dev
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

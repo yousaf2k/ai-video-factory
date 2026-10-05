@@ -1,5 +1,6 @@
 # YouTube Documentary Agent - Quick Start Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › YouTube Documentary Agent - Quick Start Guide
 ## What Is It?
 
 The YouTube Documentary Agent (`youtube_documentary`) creates viral, high-retention documentary scripts optimized specifically for YouTube. Unlike cinematic agents (Netflix), this agent focuses on:
@@ -243,3 +244,6 @@ For detailed implementation information, see:
 ## Summary
 
 The YouTube Documentary Agent is ready to use for creating engaging, viral documentary content optimized for YouTube's platform, algorithm, and viewer behavior patterns.
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

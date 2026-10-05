@@ -1,5 +1,6 @@
 # Image Visibility Bug Fix - FLFI2V Images Not Showing in UI
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Image Visibility Bug Fix - FLFI2V Images Not Showing in UI
 **Date:** March 12, 2026
 **Status:** ✅ Fixed
 **Severity:** High (images generated but not visible in UI)
@@ -321,3 +322,6 @@ return image_path
 ---
 
 **End of Fix Report**
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

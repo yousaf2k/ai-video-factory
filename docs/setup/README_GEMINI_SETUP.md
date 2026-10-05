@@ -1,5 +1,6 @@
 # AI Film Studio - Gemini Integration Setup Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Setup › AI Film Studio - Gemini Integration Setup Guide
 ## Overview
 
 This system has been upgraded to use Google Gemini for both text generation and image generation. Images are pre-generated using Gemini NanoBanana Pro, then passed to ComfyUI's Wan 2.2 workflow for video generation.
@@ -168,3 +169,6 @@ Approximately **$0.08 per image** at 2K resolution via Gemini NanoBanana Pro.
 - **New**: Gemini for text → Gemini for images → ComfyUI for video only
 
 The `llm_engine.py` file is kept as backup but is no longer used.
+
+---
+**Related docs:** [Setup Checklist](../getting-started/SETUP_CHECKLIST.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Quick Start](../getting-started/QUICK_START.md) · [📚 Index](../DOCS_INDEX.md)

@@ -1,5 +1,6 @@
 # Fix: Meeting/Departure Buttons Not Changing Motion Prompt
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › Fix: Meeting/Departure Buttons Not Changing Motion Prompt
 **Date:** March 12, 2026
 **Status:** ✅ Fixed
 
@@ -308,6 +309,9 @@ The Meeting/Departure toggle buttons now:
 ---
 
 **See Also:**
-- [FLFI2V Video Generation Logic](../guides/FLFI2V_VIDEO_GENERATION_LOGIC.md)
-- [Then Vs Now Motion Prompt Guide](../guides/THEN_VS_NOW_MOTION_PROMPT_GUIDE.md)
-- [How to Make Departure Videos](../guides/HOW_TO_MAKE_DEPARTURE_VIDEOS.md)
+- [FLFI2V Video Generation Logic](FLFI2V_VIDEO_GENERATION_LOGIC.md)
+- [Then Vs Now Motion Prompt Guide](THEN_VS_NOW_MOTION_PROMPT_GUIDE.md)
+- [How to Make Departure Videos](HOW_TO_MAKE_DEPARTURE_VIDEOS.md)
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

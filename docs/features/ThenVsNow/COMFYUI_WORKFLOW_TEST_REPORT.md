@@ -1,5 +1,6 @@
 # ComfyUI Workflow Test Results
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › ComfyUI Workflow Test Results
 **Date**: 2025-03-14
 **ComfyUI Version**: 0.16.3
 **GPU**: NVIDIA GeForce RTX 5070 Ti
@@ -172,3 +173,6 @@ git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus
 **Tested By**: Claude Code
 **Test Date**: 2025-03-14
 **ComfyUI**: http://127.0.0.1:8188
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

@@ -1,5 +1,6 @@
 # Logging Module Usage Summary
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Logging Module Usage Summary
 ## Overview
 Your codebase uses two main logging modules:
 - **`core/logger_config.py`** - Logger configuration and setup functions
@@ -350,3 +351,6 @@ Your logging system is well-structured with:
 - ✅ **Automatic logging** for critical operations (API calls, agent calls)
 
 The decorators provide automatic, structured logging without cluttering function code with manual logger calls.
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

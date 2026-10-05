@@ -1,5 +1,6 @@
 # FLFI2V Video Generation Logic
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › FLFI2V Video Generation Logic
 **Date:** March 12, 2026
 **Status:** Updated
 
@@ -285,3 +286,6 @@ When testing FLFI2V video generation:
 - `web_ui/backend/services/generation_service.py`
 - `web_ui/backend/models/story.py`
 - `web_ui/frontend/src/types/index.ts`
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

@@ -1,5 +1,6 @@
 # Automatic Video Length Calculation - Quick Guide
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Automatic Video Length Calculation - Quick Guide
 ## What's New?
 
 The system now automatically calculates how many shots are needed to reach your target video length. No more manual shot counting!
@@ -181,3 +182,6 @@ Examples:
 - 120s ÷ 5s = 24 shots (2 minutes)
 - 60s ÷ 3s = 20 shots (1 minute, faster shots)
 ```
+
+---
+**Related docs:** [Workflow Guide](WORKFLOW_GUIDE.md) · [Configuration Guide](../getting-started/CONFIGURATION.md) · [Camera LoRA Guide](CAMERA_LORA_GUIDE.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)

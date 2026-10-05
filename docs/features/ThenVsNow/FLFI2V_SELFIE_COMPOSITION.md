@@ -1,5 +1,6 @@
 # FLFI2V Creative Direction Update: Selfie Composition
 
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › FLFI2V Creative Direction Update: Selfie Composition
 **Date:** March 12, 2026
 **Status:** Updated
 
@@ -282,3 +283,6 @@ warm lamp lighting, vintage desk and chair, atmospheric shadows, rich wood tones
 2. Generate images to see the new selfie composition
 3. Verify iPhone 15 Pro Max is visible
 4. Check that both characters appear in NOW images
+
+---
+**Related docs:** [Then Vs Now Quick Start](THEN_VS_NOW_QUICKSTART.md) · [Asset Library](../ASSET_LIBRARY.md) · [Workflow Guide](../../guides/WORKFLOW_GUIDE.md) · [📚 Index](../../DOCS_INDEX.md)

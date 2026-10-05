@@ -1,5 +1,6 @@
 # Netflix Documentary Agent Documentation
 
+> 📚 [Docs Index](../DOCS_INDEX.md) › Agent Guides › Netflix Documentary Agent Documentation
 ## Overview
 
 The `netflix_documentary` agent creates gripping, binge-worthy dramatic documentaries with mystery, suspense, and high-stakes storytelling typical of Netflix original documentaries.
@@ -290,3 +291,6 @@ Study these Netflix documentary patterns:
 - `input/examples/netflix_style_ideas.md` - Example ideas crafted for this agent
 - `IDEA_FILE_README.md` - How to use idea files
 - `LOGGING_README.md` - Understanding generated logs
+
+---
+**Related docs:** [Agent authoring rules (AGENTS.md)](../../AGENTS.md) · [API Reference](../reference/API_REFERENCE.md) · [📚 Index](../DOCS_INDEX.md)
