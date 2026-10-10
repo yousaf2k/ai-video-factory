@@ -29,6 +29,8 @@ class GenerateCharacterReferenceRequest(BaseModel):
     image_workflow: Optional[str] = None
     seed: Optional[int] = None
     gemini_mode: Optional[str] = None
+    gemini_model: Optional[str] = None
+    gemini_thinking: Optional[str] = None
 from web_ui.backend.services.project_service import ProjectService
 from web_ui.backend.services.generation_service import get_generation_service
 from core.story_engine import build_story

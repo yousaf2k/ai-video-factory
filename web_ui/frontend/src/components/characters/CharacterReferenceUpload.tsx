@@ -185,7 +185,9 @@ export default function CharacterReferenceUpload({
         image_mode: options.mode,
         image_workflow: options.workflow,
         seed: options.seed ? Number(options.seed) : undefined,
-        gemini_mode: options.gemini_mode
+        gemini_mode: options.gemini_mode,
+        gemini_model: options.gemini_model,
+        gemini_thinking: options.gemini_thinking
       });
       setShowGenerationDialog(false);
       setSelectedVariant(null);

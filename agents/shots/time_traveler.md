@@ -14,4 +14,3 @@
 
 ## Input
 {USER_INPUT}
-ike through your lens.

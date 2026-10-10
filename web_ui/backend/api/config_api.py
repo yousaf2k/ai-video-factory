@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 import sys
 import os
+import re
 import logging
 
 # Add parent directory to path
@@ -45,6 +46,8 @@ class UpdateConfigRequest(BaseModel):
     frontend_port: Optional[int] = None
     backend_bind_host: Optional[str] = None
     frontend_bind_host: Optional[str] = None
+    geminiweb_model: Optional[str] = None
+    geminiweb_thinking: Optional[str] = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -132,6 +135,8 @@ async def get_config():
             ),
             "gemini_watermark_tool_image": getattr(config, 'GEMINI_WATERMARK_TOOL_IMAGE', ''),
             "gemini_watermark_tool_video": getattr(config, 'GEMINI_WATERMARK_TOOL_VIDEO', ''),
+            "geminiweb_model": getattr(config, 'GEMINIWEB_MODEL', '3.8 Flash'),
+            "geminiweb_thinking": getattr(config, 'GEMINIWEB_THINKING', 'Low'),
             "watermark_removal_method": getattr(config, 'WATERMARK_REMOVAL_METHOD', 'builtin'),
             "backend_host": getattr(config, 'BACKEND_HOST', '127.0.0.1'),
             "backend_port": getattr(config, 'BACKEND_PORT', 8000),
@@ -190,6 +195,10 @@ async def update_config(request: UpdateConfigRequest):
             updates["GEMINI_WATERMARK_TOOL_IMAGE"] = request.gemini_watermark_tool_image
         if request.gemini_watermark_tool_video is not None:
             updates["GEMINI_WATERMARK_TOOL_VIDEO"] = request.gemini_watermark_tool_video
+        if request.geminiweb_model is not None:
+            updates["GEMINIWEB_MODEL"] = request.geminiweb_model
+        if request.geminiweb_thinking is not None:
+            updates["GEMINIWEB_THINKING"] = request.geminiweb_thinking
         if request.watermark_removal_method is not None:
             updates["WATERMARK_REMOVAL_METHOD"] = request.watermark_removal_method
         if request.backend_host is not None:
@@ -228,27 +237,54 @@ async def update_config(request: UpdateConfigRequest):
         )
 
 
-@router.get("/agents/{agent_type}/{agent_id}")
-async def get_agent_content(agent_type: str, agent_id: str):
-    """Get content of an agent prompt file"""
+@router.get("/agents/tree")
+async def get_agents_tree():
+    """Get full agent file tree grouped by type and category, including base/component files"""
     try:
         loader = get_agent_loader()
+        return loader.list_agent_tree()
+    except Exception as e:
+        logger.error(f"Error listing agent tree: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list agent tree: {str(e)}"
+        )
+
+
+@router.get("/agents/{agent_type}/{agent_id:path}")
+async def get_agent_content(agent_type: str, agent_id: str, raw: bool = False):
+    """Get content of an agent prompt file.
+
+    raw=true returns the file content as-is (keeps {{include:...}} directives),
+    along with the list of included files. Default returns the include-expanded
+    prompt used at generation time.
+    """
+    try:
+        loader = get_agent_loader()
+        if raw:
+            content = loader.load_prompt_raw(agent_type, agent_id)
+            includes = re.findall(r'\{\{include:(.+?)\}\}', content)
+            return {"content": content, "raw": True, "includes": [i.strip() for i in includes]}
         content = loader.load_prompt(agent_type, agent_id)
         return {"content": content}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Agent not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error loading agent content: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/agents/{agent_type}/{agent_id}")
+@router.post("/agents/{agent_type}/{agent_id:path}")
 async def update_agent_content(agent_type: str, agent_id: str, request: UpdateAgentRequest):
     """Update content of an agent prompt file"""
     try:
         loader = get_agent_loader()
         loader.save_prompt(agent_type, agent_id, request.content)
         return {"status": "success", "message": f"Agent {agent_id} updated"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error updating agent content: {e}")
         raise HTTPException(status_code=500, detail=str(e))

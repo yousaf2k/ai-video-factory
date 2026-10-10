@@ -12,6 +12,7 @@ import type {
   Shot,
   UpdateShotRequest,
   AgentsByType,
+  AgentTree,
   GlobalConfig,
   UpdateGlobalConfigRequest,
   AssetLibraryInfo,
@@ -177,6 +178,8 @@ class ApiClient {
       image_workflow?: string;
       seed?: number;
       gemini_mode?: string;
+      gemini_model?: string;
+      gemini_thinking?: string;
     }
   ): Promise<any> {
     const response = await this.client.post(
@@ -195,7 +198,9 @@ class ApiClient {
     seed?: number,
     promptOverride?: string,
     imageVariant?: string,
-    geminiMode?: string
+    geminiMode?: string,
+    geminiModel?: string,
+    geminiThinking?: string
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-image`, {
       force,
@@ -205,6 +210,8 @@ class ApiClient {
       prompt_override: promptOverride || undefined,
       image_variant: imageVariant || undefined,
       gemini_mode: geminiMode || undefined,
+      gemini_model: geminiModel || undefined,
+      gemini_thinking: geminiThinking || undefined,
     });
   }
 
@@ -222,7 +229,9 @@ class ApiClient {
     resolution?: string,
     geminiMode?: string,
     soundfxWorkflow?: string,
-    soundfxPrompt?: string
+    soundfxPrompt?: string,
+    geminiModel?: string,
+    geminiThinking?: string
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-video`, {
       force,
@@ -235,6 +244,8 @@ class ApiClient {
       prompt_override: promptOverride || undefined,
       resolution: resolution || undefined,
       gemini_mode: geminiMode || undefined,
+      gemini_model: geminiModel || undefined,
+      gemini_thinking: geminiThinking || undefined,
       soundfx_workflow: soundfxWorkflow || undefined,
       soundfx_prompt: soundfxPrompt || undefined,
     });
@@ -422,6 +433,8 @@ class ApiClient {
       then_prompt_override?: string;
       resolution?: string;
       gemini_mode?: string;
+      gemini_model?: string;
+      gemini_thinking?: string;
       soundfx_workflow?: string;
       soundfx_prompt?: string;
     }
@@ -466,6 +479,11 @@ class ApiClient {
     return response.data;
   }
 
+  async getAgentTree(): Promise<AgentTree> {
+    const response = await this.client.get<AgentTree>('/api/config/agents/tree');
+    return response.data;
+  }
+
   async getConfig(): Promise<GlobalConfig> {
     const response = await this.client.get<GlobalConfig>('/api/config');
     return response.data;
@@ -476,9 +494,20 @@ class ApiClient {
     return response.data;
   }
 
-  async getAgentContent(agentType: string, agentId: string): Promise<string> {
-    const response = await this.client.get<{ content: string }>(`/api/config/agents/${agentType}/${agentId}`);
+  async getAgentContent(agentType: string, agentId: string, raw: boolean = false): Promise<string> {
+    const response = await this.client.get<{ content: string }>(
+      `/api/config/agents/${agentType}/${agentId}`,
+      { params: raw ? { raw: true } : undefined }
+    );
     return response.data.content;
+  }
+
+  async getAgentFileRaw(agentType: string, agentId: string): Promise<{ content: string; includes: string[] }> {
+    const response = await this.client.get<{ content: string; includes: string[] }>(
+      `/api/config/agents/${agentType}/${agentId}`,
+      { params: { raw: true } }
+    );
+    return response.data;
   }
 
   async updateAgentContent(agentType: string, agentId: string, content: string): Promise<any> {

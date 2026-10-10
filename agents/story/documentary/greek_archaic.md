@@ -1,8 +1,8 @@
 # Agent: Greek Archaic Journey
 
-{{include:base_standard}}
-{{include:style_documentary}}
-{{include:context_greek_archaic}}
+{{include:_base/base_standard}}
+{{include:_styles/style_documentary}}
+{{include:_contexts/context_greek_archaic}}
 
 ## Perspective
 

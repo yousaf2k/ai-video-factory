@@ -1,7 +1,7 @@
 # Agent: Default Cinematic Documentary
 
-{{include:base_standard}}
-{{include:style_documentary}}
+{{include:_base/base_standard}}
+{{include:_styles/style_documentary}}
 
 ## Input
 {USER_INPUT}

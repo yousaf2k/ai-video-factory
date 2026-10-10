@@ -96,7 +96,7 @@ agents/
 
 #### Available Story Agents
 
-- **Documentary**: `default`, `documentary`, `netflix_documentary`, `youtube_documentary`, `youtube_news`, `time_traveler`, plus historical packs (`greek_*`, `roman_kingdom`, `indus_valley`, `plague_of_athens`, `persian_empire`, `prehistoric_*`).
+- **Documentary**: `default`, `netflix_documentary`, `youtube_documentary`, `youtube_news`, `time_traveler`, plus historical packs (`greek_*`, `roman_kingdom`, `indus_valley`, `plague_of_athens`, `persian_empire`, `prehistoric_*`).
 - **Movie**: `action`, `horror`, `comedy`, `cyberpunk`, `drama`, `fantasy`, `mystery`, `romance`, `scifi`, `thriller`, `western`.
 - **Specialized**: `asmr/asmr_glass_cutting`, `then_vs_now` ⭐, `selfie_vlogger`.
 
@@ -105,7 +105,7 @@ agents/
 1. **Select a category** (e.g., `agents/story/documentary/`)
 2. **Create a new `.md` file** (e.g., `my_special_agent.md`)
 3. **Write the system prompt** using the `{USER_INPUT}` placeholder for the dynamic prompt.
-4. **Leverage Modularity**: You can include base files and contexts using the `#include` directive (handled by `AgentLoader`).
+4. **Leverage Modularity**: You can include base files and contexts using the `{{include:name}}` directive, e.g. `{{include:base_standard}}` (handled by `AgentLoader`; name has no `.md` extension).
 
 ```bash
 python core/main.py --story-agent my_special_agent

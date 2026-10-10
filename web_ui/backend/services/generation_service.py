@@ -95,6 +95,26 @@ class GenerationService:
         return title
 
     @staticmethod
+    def _resolve_gemini_mode(request: Any = None, shot: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """Build the gemini_mode transport value from the separate
+        gemini_model / gemini_thinking request fields (exact Gemini Web picker
+        values, e.g. '3.8 Flash' + 'High'), transported as '<model>|<thinking>'.
+
+        Falls back to the legacy gemini_mode string (six-mode names or a stored
+        pair) and finally to the config defaults. An empty part means 'leave
+        that dimension unchanged'."""
+        model = getattr(request, 'gemini_model', None) if request else None
+        thinking = getattr(request, 'gemini_thinking', None) if request else None
+        if model or thinking:
+            return f"{model or ''}|{thinking or ''}"
+        import config
+        return (
+            (getattr(request, 'gemini_mode', None) if request else None)
+            or (shot or {}).get('gemini_mode')
+            or f"{getattr(config, 'GEMINIWEB_MODEL', '3.8 Flash')}|{getattr(config, 'GEMINIWEB_THINKING', 'Low')}"
+        )
+
+    @staticmethod
     def get_item_engine(item: QueueItem) -> str:
         """Resolve which engine will process this item"""
         import config
@@ -937,7 +957,7 @@ class GenerationService:
             soundfx_prompt=soundfx_prompt,
             draft_low_res_video=getattr(request, 'draft_low_res_video', False) if request else False,
             resolution=(getattr(request, 'resolution', None) or None) if request else None,
-            gemini_mode=(getattr(request, 'gemini_mode', None) or shot.get('gemini_mode', None) or config.GEMINIWEB_DEFAULT_MODE) if request else (shot.get('gemini_mode', None) or config.GEMINIWEB_DEFAULT_MODE)
+            gemini_mode=self._resolve_gemini_mode(request, shot)
         )
 
     def _get_queue_item_id(
@@ -1187,7 +1207,7 @@ class GenerationService:
             image_mode=getattr(request, 'image_mode', None),
             image_workflow=getattr(request, 'image_workflow', None),
             seed=getattr(request, 'seed', None),
-            gemini_mode=getattr(request, 'gemini_mode', None),
+            gemini_mode=self._resolve_gemini_mode(request),
             status=QueueItemStatus.QUEUED,
             progress=0,
             priority=40, # Characters higher priority

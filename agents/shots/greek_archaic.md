@@ -8,4 +8,3 @@
 
 ## Input
 {USER_INPUT}
- and achievement of this transformative era.

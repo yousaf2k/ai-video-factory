@@ -350,42 +350,78 @@ def _rename_current_chat(page, project_title: str) -> bool:
 
 def _set_gemini_mode(page, mode: str):
     """
-    Select the Gemini model mode via the UI.
+    Select the Gemini Web model and thinking level via the UI.
 
-    2026-09: Gemini's picker now offers three models (3.5 Flash-Lite, 3.8 Flash,
-    3.1 Pro) plus an "Extended thinking" toggle. We expose six modes:
-        Fast            -> 3.5 Flash-Lite, Extended thinking OFF
-        Medium          -> 3.8 Flash,      Extended thinking OFF
-        Pro             -> 3.1 Pro,        Extended thinking OFF
-        Fast Thinking   -> 3.5 Flash-Lite, Extended thinking ON
-        Medium Thinking -> 3.8 Flash,      Extended thinking ON
-        Pro Thinking    -> 3.1 Pro,        Extended thinking ON
-    Legacy names map as: fast -> Fast, thinking -> Medium Thinking, pro -> Pro.
+    Values mirror the Gemini Web picker exactly:
+        Models:   '3.5 Flash-Lite' (Fastest answers), '3.8 Flash' (All-around
+                  help), '3.1 Pro' (Advanced reasoning)
+        Thinking: 'Low' (Quick and efficient — extended thinking off; the
+                  picker label then carries no effort suffix), 'Medium'
+                  (Balanced depth), 'High' (Extra thorough)
+
+    `mode` accepts, in order of precedence:
+      1. A "<model>|<thinking>" pair with the exact names above, e.g.
+         "3.8 Flash|High" (what the Web UI sends).
+      2. A bare model or thinking name from the lists above — only that
+         dimension is changed.
+      3. A legacy six-mode name (Fast / Medium / Pro / Fast Thinking /
+         Medium Thinking / Pro Thinking / thinking) for old stored configs:
+         Fast->Flash-Lite Low, Medium->Flash Low, Pro->Pro Low, and the
+         * Thinking variants -> High.
 
     Current state is parsed from the picker button's aria-label
-    ("Open mode picker, currently <model>[ Extended]"). Model items are matched
-    by text because their data-test-id values are unstable hashes.
+    ("Open mode picker, currently <model>[ Low|Medium|High]"). Items are
+    matched by text because their data-test-id values are unstable hashes.
+    Every item click applies and closes the menu, and each dimension survives
+    a change of the other, so a model-only or effort-only change needs a
+    single opening; only a change of both dimensions reopens the menu. When
+    the picker already shows the requested combination it is not opened at
+    all.
     """
     if not mode:
-        mode = getattr(config, 'GEMINIWEB_DEFAULT_MODE', 'Fast')
+        mode = f"{getattr(config, 'GEMINIWEB_MODEL', '3.8 Flash')}|{getattr(config, 'GEMINIWEB_THINKING', 'Low')}"
 
-    mode_key = mode.lower().strip()
-    mode_map = {
-        'fast': ('flash-lite', False),
-        'medium': ('flash', False),
-        'pro': ('pro', False),
-        'fast thinking': ('flash-lite', True),
-        'medium thinking': ('flash', True),
-        'pro thinking': ('pro', True),
+    mode_key = str(mode).lower().strip()
+    legacy_map = {
+        'fast': ('flash-lite', 'low'),
+        'medium': ('flash', 'low'),
+        'pro': ('pro', 'low'),
+        'fast thinking': ('flash-lite', 'high'),
+        'medium thinking': ('flash', 'high'),
+        'pro thinking': ('pro', 'high'),
         # legacy names
-        'thinking': ('flash', True),
+        'thinking': ('flash', 'high'),
     }
-    desired = mode_map.get(mode_key)
-    if not desired:
+    model_aliases = {
+        '3.5 flash-lite': 'flash-lite',
+        '3.5 flash lite': 'flash-lite',
+        'flash-lite': 'flash-lite',
+        '3.8 flash': 'flash',
+        'flash': 'flash',
+        '3.1 pro': 'pro',
+    }
+    thinking_aliases = {'low': 'low', 'medium': 'medium', 'high': 'high'}
+
+    desired_model = None
+    desired_effort = None
+    if mode_key in legacy_map:
+        desired_model, desired_effort = legacy_map[mode_key]
+    elif '|' in mode_key:
+        model_part, _, thinking_part = mode_key.partition('|')
+        desired_model = model_aliases.get(model_part.strip())
+        desired_effort = thinking_aliases.get(thinking_part.strip())
+        if desired_model is None and desired_effort is None:
+            logger.warning(f"Unknown Gemini model/thinking '{mode}', skipping selection.")
+            return
+    elif mode_key in model_aliases:
+        desired_model = model_aliases[mode_key]
+    elif mode_key in thinking_aliases:
+        desired_effort = thinking_aliases[mode_key]
+    else:
         logger.warning(f"Unknown Gemini mode '{mode}', skipping selection.")
         return
-    desired_model, desired_extended = desired
-    # Menu item texts start with these labels (e.g. "3.5 Flash-Lite Fastest answers")
+    # Menu item texts start with these labels (e.g. "3.5 Flash-Lite Fastest answers",
+    # "High Extra thorough")
     model_menu_labels = {
         'flash-lite': '3.5 flash-lite',
         'flash': '3.8 flash',
@@ -403,9 +439,14 @@ def _set_gemini_mode(page, mode: str):
             if 'currently' not in aria:
                 return None
             current = aria.split('currently', 1)[1].strip()
-            extended = current.endswith('extended')
-            model = current[:-len('extended')].strip() if extended else current
-            return {'model': model, 'extended': extended}
+            # "Flash High" -> effort 'high'; plain "Flash" means thinking off (Low)
+            effort = 'low'
+            for lvl in ('medium', 'high', 'low'):
+                if current.endswith(lvl):
+                    effort = lvl
+                    current = current[:-len(lvl)].strip()
+                    break
+            return {'model': current, 'effort': effort}
         except Exception:
             return None
 
@@ -419,20 +460,33 @@ def _set_gemini_mode(page, mode: str):
                 text = (it.text_content() or '').strip().lower()
                 if text.startswith(prefix) and it.is_visible():
                     it.click()
-                    time.sleep(2)  # menu closes on selection
+                    time.sleep(2)  # item click applies and closes the menu
                     return True
             except Exception:
                 continue
         return False
 
+    def _matches(state):
+        # Only enforce the dimensions that were actually requested.
+        if not state:
+            return False
+        if desired_model is not None and state['model'] != desired_model:
+            return False
+        if desired_effort is not None and state['effort'] != desired_effort:
+            return False
+        return True
+
     logger.info(f"Setting Gemini mode to: {mode}")
     try:
         state = _read_state()
-        if state and state['model'] == desired_model and state['extended'] == desired_extended:
-            logger.info(f"Gemini is already in {mode} mode (model={state['model']}, extended={state['extended']}).")
+        if _matches(state):
+            logger.info(
+                f"Gemini is already in the requested mode "
+                f"(model={state['model']}, thinking={state['effort']}); skipping picker."
+            )
             return
 
-        if state is None or state['model'] != desired_model:
+        if desired_model is not None and (state is None or state['model'] != desired_model):
             _open_menu()
             if not _click_menu_item(model_menu_labels[desired_model]):
                 logger.warning(f"Could not find model menu item for '{desired_model}'")
@@ -440,18 +494,18 @@ def _set_gemini_mode(page, mode: str):
                 return
             state = _read_state()
 
-        if state is not None and state['extended'] != desired_extended:
+        if desired_effort is not None and not _matches(state):
             _open_menu()
-            if not _click_menu_item('extended thinking'):
-                logger.warning("Could not find 'Extended thinking' menu item")
+            if not _click_menu_item(desired_effort):
+                logger.warning(f"Could not find thinking menu item for '{desired_effort}'")
                 page.keyboard.press('Escape')
                 return
             state = _read_state()
 
-        if state and state['model'] == desired_model and state['extended'] == desired_extended:
-            logger.info(f"Successfully set Gemini mode to {mode} (model={desired_model}, extended={desired_extended}).")
+        if _matches(state):
+            logger.info(f"Successfully set Gemini mode: {mode} (model={desired_model}, thinking={desired_effort}).")
         else:
-            logger.warning(f"Gemini mode selection did not verify: wanted {desired}, got {state}")
+            logger.warning(f"Gemini mode selection did not verify: wanted {mode}, got {state}")
     except Exception as e:
         logger.error(f"Error setting Gemini mode: {e}")
 
@@ -619,8 +673,10 @@ def _wait_for_own_video_response(page, prompt_text: str, timeout_s: float = 300)
         try:
             if page.evaluate(_LOCATE_READY_JS, prompt_text):
                 return True
-        except Exception:
-            return False
+        except Exception as e:
+            # Message virtualization can tear down the JS execution context
+            # mid-poll; keep waiting instead of aborting on a transient error.
+            logger.debug(f"Own video response poll error (will retry): {e}")
         time.sleep(5)
     return False
 
@@ -723,18 +779,41 @@ def _try_download_native(page, output_path: str, prompt_text: str = None) -> Opt
         # 2026-09: parallel workers share the project chat — scope to the
         # response following OUR prompt when we know it.
         own_container = None
+        prompt_scoped = bool(prompt_text)
         if prompt_text:
             if _wait_for_own_video_response(page, prompt_text):
                 own_container = _locate_own_video_container(page, prompt_text)
                 if own_container is not None:
                     logger.info("Located own video response by prompt text")
+            if own_container is None:
+                # 2026-10: with a known prompt, a page-wide fallback here could
+                # click a NEIGHBOUR response's download button (wrong video for
+                # this shot). Fail and let the caller retry instead.
+                logger.warning(
+                    "Own video response not found; refusing page-wide "
+                    "fallback (failing instead of wrong video)")
+                return None
 
         if own_container is not None:
-            # Own response first: click the download button inside it.
+            # Own response only: click the download button inside it.
             downloaded = _click_visible_download_button(scope=own_container)
             if downloaded:
                 return downloaded
-            logger.info("Own response has no visible download control; falling back to page-wide search")
+            # The player controls overlay can need hover to appear — retry
+            # within the OWN response before giving up.
+            try:
+                own_container.scroll_into_view_if_needed()
+                own_container.hover(timeout=3000)
+                time.sleep(2.0)
+                downloaded = _click_visible_download_button(scope=own_container)
+                if downloaded:
+                    return downloaded
+            except Exception as hover_err:
+                logger.debug(f"Own-container hover retry failed: {hover_err}")
+            logger.warning(
+                "Own response has no usable download control; failing instead "
+                "of page-wide search (wrong video is worse than a retry)")
+            return None
 
         # Fast path: the button is now permanently in the DOM, no hover needed.
         downloaded = _click_visible_download_button()

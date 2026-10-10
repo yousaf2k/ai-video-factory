@@ -7,4 +7,3 @@
 
 ## Input
 {USER_INPUT}
-orld this remarkable civilization through your lens.

@@ -227,6 +227,8 @@ export interface GlobalConfig {
   gemini_watermark_tool_video?: string;
   watermark_removal_method?: string;
   geminiweb_default_mode?: string;
+  geminiweb_model?: string;
+  geminiweb_thinking?: string;
 }
 
 export interface UpdateGlobalConfigRequest {
@@ -247,6 +249,8 @@ export interface UpdateGlobalConfigRequest {
   gemini_watermark_tool_video?: string;
   watermark_removal_method?: string;
   geminiweb_default_mode?: string;
+  geminiweb_model?: string;
+  geminiweb_thinking?: string;
 }
 
 export interface UpdateStoryRequest {
@@ -301,6 +305,27 @@ export interface AgentsByType {
   shots: Agent[];
   narration: Agent[];
 }
+
+// Agents editor: hierarchical tree of agent files
+export interface AgentFileRef {
+  id: string;        // e.g. "documentary/default" or "documentary/_base/base_standard"
+  name: string;      // file name without .md
+  is_base: boolean;  // base/component file (included by agents, not runnable itself)
+  group?: string;    // subdir group, e.g. "_base" | "_contexts" | "_styles" | "base"
+}
+
+export interface AgentCategory {
+  id: string;        // e.g. "documentary", "_root" (flat files), "base"
+  name: string;
+  is_base: boolean;  // whole category is a base/component collection
+  agents: AgentFileRef[];
+  base_files: AgentFileRef[];
+}
+
+export type AgentTree = {
+  story: AgentCategory[];
+  shots: AgentCategory[];
+};
 
 // Queue types
 export enum GenerationType {

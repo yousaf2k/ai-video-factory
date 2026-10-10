@@ -8,4 +8,3 @@
 
 ## Input
 {USER_INPUT}
-ntually lay the foundations for the rise of the polis.

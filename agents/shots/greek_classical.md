@@ -7,4 +7,3 @@
 
 ## Input
 {USER_INPUT}
-ry age that shaped Western civilization.

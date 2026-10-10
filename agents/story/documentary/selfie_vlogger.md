@@ -1,7 +1,7 @@
 # Agent: Selfie Vlog
 
-{{include:base_standard}}
-{{include:style_vlog}}
+{{include:_base/base_standard}}
+{{include:_styles/style_vlog}}
 
 ## Input
 {USER_INPUT}

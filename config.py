@@ -1349,7 +1349,26 @@ GEMINIWEB_TIMEOUT = 300
 # Gemini web URL
 GEMINIWEB_URL = "https://gemini.google.com/app"
 
-# Default Gemini Mode: "Fast", "Thinking", or "Pro"
+# Gemini Web model + thinking level. The values map 1:1 to the Gemini Web
+# mode picker: models "3.5 Flash-Lite" (Fastest answers), "3.8 Flash"
+# (All-around help), "3.1 Pro" (Advanced reasoning); thinking levels "Low"
+# (Quick and efficient — extended thinking off), "Medium" (Balanced depth),
+# "High" (Extra thorough).
+_GEMINIWEB_LEGACY_MODES = {
+    'fast': ('3.5 Flash-Lite', 'Low'),
+    'medium': ('3.8 Flash', 'Low'),
+    'pro': ('3.1 Pro', 'Low'),
+    'fast thinking': ('3.5 Flash-Lite', 'High'),
+    'medium thinking': ('3.8 Flash', 'High'),
+    'pro thinking': ('3.1 Pro', 'High'),
+    'thinking': ('3.8 Flash', 'High'),
+}
+_gm, _gt = _GEMINIWEB_LEGACY_MODES.get(
+    os.getenv("GEMINIWEB_DEFAULT_MODE", "Fast").lower().strip(),
+    ('3.8 Flash', 'Low'))
+GEMINIWEB_MODEL = os.getenv("GEMINIWEB_MODEL", _gm)
+GEMINIWEB_THINKING = os.getenv("GEMINIWEB_THINKING", _gt)
+# Legacy six-mode name kept for backward compatibility of stored configs.
 GEMINIWEB_DEFAULT_MODE = os.getenv("GEMINIWEB_DEFAULT_MODE", "Fast")
 # ==========================================
 # Web UI Configuration
