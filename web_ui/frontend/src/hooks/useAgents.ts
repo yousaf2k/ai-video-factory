@@ -13,6 +13,14 @@ export function useAgents() {
   });
 }
 
+// Hook to get the hierarchical agent file tree (categories + base files)
+export function useAgentTree() {
+  return useQuery({
+    queryKey: ['agent-tree'],
+    queryFn: () => api.getAgentTree(),
+  });
+}
+
 // Hook to get global config
 export function useConfig() {
   return useQuery({
@@ -33,11 +41,14 @@ export function useUpdateConfig() {
   });
 }
 
-// Hook to get content of an agent file
+// Hook to get the raw content of an agent file (keeps {{include:...}} directives)
 export function useAgentContent(agentType: string | null, agentId: string | null) {
   return useQuery({
     queryKey: ['agent-content', agentType, agentId],
-    queryFn: () => agentType && agentId ? api.getAgentContent(agentType, agentId) : Promise.resolve(''),
+    queryFn: () =>
+      agentType && agentId
+        ? api.getAgentFileRaw(agentType, agentId)
+        : Promise.resolve({ content: '', includes: [] as string[] }),
     enabled: !!agentType && !!agentId,
   });
 }

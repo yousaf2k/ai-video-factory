@@ -1,7 +1,7 @@
 # Agent: YouTube Viral Documentary
 
-{{include:base_standard}}
-{{include:style_retention}}
+{{include:_base/base_standard}}
+{{include:_styles/style_retention}}
 
 ## Visual Style
 

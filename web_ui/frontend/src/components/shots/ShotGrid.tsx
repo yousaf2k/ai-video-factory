@@ -7,6 +7,13 @@ import { Shot, Scene } from "@/types";
 import { useAgents, useConfig } from "@/hooks/useAgents";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
+import {
+  GEMINI_MODELS,
+  GEMINI_THINKING,
+  DEFAULT_GEMINI_MODEL,
+  DEFAULT_GEMINI_THINKING,
+  decodeLegacyGeminiMode,
+} from "@/lib/geminiModes";
 import { useUpdateShots } from "@/hooks/useShots";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import {
@@ -147,8 +154,19 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [batchSkipImages, setBatchSkipImages] = usePersistedState<boolean>(`batch_skip_images_${projectId}`, true);
   const [queueSetting, setQueueSetting] = usePersistedState<string>(`batch_queue_setting_${projectId}`, "all_images_then_videos");
   const [appendImagePrompt, setAppendImagePrompt] = usePersistedState<string>(`batch_append_image_prompt_${projectId}`, "default");
-  const [geminiMode, setGeminiMode] = useState<string>(() => {
-    return localStorage.getItem(`gemini_mode_${projectId}`) || "Fast";
+  const [geminiModel, setGeminiModel] = useState<string>(() => {
+    return (
+      localStorage.getItem(`gemini_model_${projectId}`) ||
+      decodeLegacyGeminiMode(localStorage.getItem(`gemini_mode_${projectId}`)).model ||
+      DEFAULT_GEMINI_MODEL
+    );
+  });
+  const [geminiThinking, setGeminiThinking] = useState<string>(() => {
+    return (
+      localStorage.getItem(`gemini_thinking_${projectId}`) ||
+      decodeLegacyGeminiMode(localStorage.getItem(`gemini_mode_${projectId}`)).thinking ||
+      DEFAULT_GEMINI_THINKING
+    );
   });
 
   const [ttsMethod, setTtsMethod] = usePersistedState<string>(`batch_tts_method_${projectId}`, "local");
@@ -247,12 +265,11 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
       setVideoWorkflow(globalConfig.video_workflow);
     }
 
-    const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`);
-    if (savedGeminiMode) {
-      setGeminiMode(savedGeminiMode);
-    } else if (globalConfig?.geminiweb_default_mode) {
-      setGeminiMode(globalConfig.geminiweb_default_mode);
-    }
+    const savedModel = localStorage.getItem(`gemini_model_${projectId}`);
+    const savedThinking = localStorage.getItem(`gemini_thinking_${projectId}`);
+    const legacyPair = decodeLegacyGeminiMode(localStorage.getItem(`gemini_mode_${projectId}`));
+    setGeminiModel(savedModel || legacyPair.model || globalConfig?.geminiweb_model || DEFAULT_GEMINI_MODEL);
+    setGeminiThinking(savedThinking || legacyPair.thinking || globalConfig?.geminiweb_thinking || DEFAULT_GEMINI_THINKING);
 
     const savedSoundfxWf = localStorage.getItem(`batch_soundfx_workflow_${projectId}`);
     if (savedSoundfxWf) {
@@ -424,7 +441,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
           then_prompt_override: batchUseThenOverride ? batchThenPrompt : undefined,
           resolution: resolution,
-          gemini_mode: geminiMode,
+          gemini_mode: `${geminiModel}|${geminiThinking}`,
+          gemini_model: geminiModel,
+          gemini_thinking: geminiThinking,
           generate_soundfx: generateSoundFX,
           soundfx_workflow: generateSoundFX ? soundfxWorkflow : undefined,
           soundfx_prompt: generateSoundFX && batchSoundfxPrompt ? batchSoundfxPrompt : undefined,
@@ -442,7 +461,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           image_mode: imageMode,
           image_workflow: imageWorkflow,
           then_prompt_override: batchUseThenOverride ? batchThenPrompt : undefined,
-          gemini_mode: geminiMode,
+          gemini_mode: `${geminiModel}|${geminiThinking}`,
+          gemini_model: geminiModel,
+          gemini_thinking: geminiThinking,
         });
       } catch (error) {
         console.error("Failed to start batch image generation:", error);
@@ -459,7 +480,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           append_image_prompt: appendImagePrompt === "default" ? undefined : appendImagePrompt,
           departure_prompt_override: batchUseDepartureOverride ? batchDeparturePrompt : undefined,
           resolution: resolution,
-          gemini_mode: geminiMode,
+          gemini_mode: `${geminiModel}|${geminiThinking}`,
+          gemini_model: geminiModel,
+          gemini_thinking: geminiThinking,
           generate_soundfx: generateSoundFX,
           soundfx_workflow: generateSoundFX ? soundfxWorkflow : undefined,
           soundfx_prompt: generateSoundFX && batchSoundfxPrompt ? batchSoundfxPrompt : undefined,
@@ -1459,30 +1482,50 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                   </div>
 
                   {imageMode === "geminiweb" && (
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Gemini Mode
-                      </label>
-                      <Select
-                        value={geminiMode}
-                        onValueChange={(val) => {
-                          setGeminiMode(val);
-                          localStorage.setItem(`gemini_mode_${projectId}`, val);
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Gemini Mode" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
-                          <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
-                          <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
-                          <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
-                          <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
-                          <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Gemini Model
+                        </label>
+                        <Select
+                          value={geminiModel}
+                          onValueChange={(val) => {
+                            setGeminiModel(val);
+                            localStorage.setItem(`gemini_model_${projectId}`, val);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Gemini Model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {GEMINI_MODELS.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Extended Thinking
+                        </label>
+                        <Select
+                          value={geminiThinking}
+                          onValueChange={(val) => {
+                            setGeminiThinking(val);
+                            localStorage.setItem(`gemini_thinking_${projectId}`, val);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Thinking Level" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {GEMINI_THINKING.map((t) => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
                   )}
 
                   {imageMode === "comfyui" && (
@@ -1585,30 +1628,50 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                   </div>
 
                   {videoMode === "geminiweb" && (
-                    <div>
-                      <label className="block text-sm font-medium mb-1">
-                        Gemini Mode
-                      </label>
-                      <Select
-                        value={geminiMode}
-                        onValueChange={(val) => {
-                          setGeminiMode(val);
-                          localStorage.setItem(`gemini_mode_${projectId}`, val);
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Gemini Mode" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
-                          <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
-                          <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
-                          <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
-                          <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
-                          <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Gemini Model
+                        </label>
+                        <Select
+                          value={geminiModel}
+                          onValueChange={(val) => {
+                            setGeminiModel(val);
+                            localStorage.setItem(`gemini_model_${projectId}`, val);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Gemini Model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {GEMINI_MODELS.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          Extended Thinking
+                        </label>
+                        <Select
+                          value={geminiThinking}
+                          onValueChange={(val) => {
+                            setGeminiThinking(val);
+                            localStorage.setItem(`gemini_thinking_${projectId}`, val);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Thinking Level" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {GEMINI_THINKING.map((t) => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
                   )}
 
                   <div>

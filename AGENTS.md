@@ -70,13 +70,12 @@ npm run lint      # Run linter
 ### Testing
 
 ```bash
-python run_tests.py                      # Run all tests
-pytest tests/test_assets_api.py -v       # Specific test file
-pytest tests/integration/ -v             # Integration tests only
+python run_tests.py                      # Run all tests (offline unit tests)
+pytest tests/test_agent_loader.py -v     # Specific test file
 pytest tests/ --cov=core --cov-report=html
 ```
 
-Mock external services (ComfyUI, LLM providers) in tests; shared fixtures live in `tests/conftest.py`.
+`pytest tests/` collects only offline unit tests (`tests/*.py`, `tests/unit/`). Files listed in `collect_ignore` in `tests/conftest.py` are manual verification scripts that need live services (LLM providers, the web backend on :8000, ComfyUI, Gemini Flow) — run them directly, e.g. `python tests/test_queue.py`. Mock external services (ComfyUI, LLM providers) in unit tests; shared fixtures live in `tests/conftest.py`.
 
 ## Architecture Overview
 
@@ -92,7 +91,7 @@ Idea → Story → Scene Graph → Shots → Images → Videos → Narration
 ### Core Components (`core/`)
 
 - **LLM layer** (`llm_engine.py`, `gemini_engine.py`): provider abstraction, text + JSON-structured outputs, selected via `LLM_PROVIDER`.
-- **Agent system** (`agent_loader.py`): modular prompt templates in `agents/` with `#include` composition and `{USER_INPUT}` placeholder.
+- **Agent system** (`agent_loader.py`): modular prompt templates in `agents/` with `{{include:name}}` composition and `{USER_INPUT}` placeholder.
 - **Story pipeline** (`story_engine.py`, `scene_graph.py`, `shot_planner.py`): story → visual scenes → shots with camera movements, prompts, durations; scene duration validation and auto-correction.
 - **Generation layer** (`image_generator.py`, `comfyui_image_generator.py`, `geminiweb_image_generator.py`, `comfy_client.py`, `flowweb_video_generator.py`): Gemini API / ComfyUI (Flux, Krea2, HiDream, Z-Image) / GeminiWeb browser automation for images; Wan 2.2, MiniMax H3, LTX-2 via ComfyUI for video.
 - **Workflow compiler** (`prompt_compiler.py`, `workflow_loader.py`): auto-discovers workflows from `workflow/`, supports API JSON and Workflow JSON, detects node IDs via title tags (`[prompt]`, `[image_in]`, `[video_out]`, …) or heuristics.
@@ -137,7 +136,7 @@ Notable defaults: `IMAGE_WORKFLOW = "krea2_reference"`, `VIDEO_WORKFLOW = "wan22
 ## Agent Development
 
 1. Create a `.md` file in the right category: `agents/story/…` or `agents/shots/…`
-2. Use `{USER_INPUT}` for dynamic content and `#include path/to/file.md` for composition
+2. Use `{USER_INPUT}` for dynamic content and `{{include:name}}` for composition — name has no `.md` extension and is resolved relative to the including file's directory, its sibling subdirectories, and the agent type root (e.g. `{{include:styles/style_shots_artistic}}`, `{{include:_base/base_movie_standard}}`)
 3. Reference via `--story-agent {name}` or `--shots-agent {name}` (subdirectory paths like `asmr/asmr_glass_cutting` work)
 
 Agent layout:

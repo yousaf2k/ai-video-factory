@@ -10,6 +10,10 @@ output/
 input/
 /*test*.py
 
+# Local scratch files (test.bat holds live API keys - never commit)
+/*test*.bat
+.video_agent/
+
 # Log files
 *.log
 

@@ -5,17 +5,22 @@ Agent folder structure:
 agents/
 ├── story/
 │   ├── default.md
-│   ├── dramatic.md
-│   └── documentary.md
-├── narration/
-│   ├── default.md
-│   └── documentary.md
-├── image/
-│   ├── default.md
-│   └── artistic.md
-└── video/
+│   ├── documentary/         # category with wrapper agents
+│   │   ├── _base/           # component files (not selectable agents)
+│   │   ├── _contexts/
+│   │   └── _styles/
+│   ├── movie/
+│   ├── asmr/
+│   ├── then_vs_now/
+│   └── system/
+└── shots/
     ├── default.md
-    └── cinematic.md
+    ├── base/                # type-level base dir (component files)
+    ├── cameras/
+    ├── contexts/
+    ├── styles/
+    ├── soundfx/
+    └── videoprompt/
 """
 import os
 import re
@@ -35,6 +40,9 @@ AGENT_TYPES = {
     'story': 'Story generation agent',
     'shots': 'Shots prompt engineering agent',
 }
+
+# Directories holding shared/base component files (not selectable as run agents)
+BASE_DIR_NAMES = {"base", "common", "cameras", "contexts", "styles", "soundfx", "videoprompt"}
 
 
 class AgentLoader:
@@ -59,7 +67,7 @@ class AgentLoader:
         List all available agents for a given type.
 
         Args:
-            agent_type: Type of agent ('story', 'narration', 'image', 'video')
+            agent_type: Type of agent ('story', 'shots')
 
         Returns:
             List of agent names (without .md extension)
@@ -74,9 +82,9 @@ class AgentLoader:
         agents = []
         # Support both flat files and agents design nested in subdirectories
         for item in agent_dir.iterdir():
-            # Skip hidden folders and partial/internal folders
+            # Skip hidden folders and base/component folders (not runnable agents)
             if item.is_dir():
-                if item.name.startswith(("_", ".")) or item.name in ["base", "common"]:
+                if item.name.startswith(".") or self._is_base_dir(item.name):
                     continue
                 
                 for file in item.glob("*.md"):
@@ -95,12 +103,135 @@ class AgentLoader:
                     
         return sorted(agents)
 
+    @staticmethod
+    def _file_item(agent_id: str, is_base: bool, group: Optional[str] = None) -> dict:
+        return {
+            "id": agent_id,
+            "name": agent_id.split("/")[-1],
+            "is_base": is_base,
+            "group": group,
+        }
+
+    def list_category_files(self, agent_type: str, category_dir: Path, category_id: str,
+                            include_base_dirs: bool = True, all_base: bool = False,
+                            include_dirs: bool = True) -> dict:
+        """
+        Collect agent and base files from a category directory.
+
+        Files directly in the category dir are agents; files inside base dirs
+        (_*, base, common) or _-prefixed files are base/component files.
+
+        Args:
+            agent_type: Agent type ('story', 'shots')
+            category_dir: Directory to scan
+            category_id: Category id used as id prefix ("" for type root)
+            include_base_dirs: When False, base subdirs are skipped (they are
+                listed as their own categories by list_agent_tree).
+            all_base: Treat every collected file as a base/component file
+                (used when scanning a type-level base dir such as shots/base).
+            include_dirs: When False, only files directly in category_dir are
+                scanned (used for the type root so nested categories are not
+                duplicated).
+        """
+        agents, base_files = [], []
+
+        if not category_dir.exists():
+            return {"agents": agents, "base_files": base_files}
+
+        def add(file: Path, group: Optional[str] = None):
+            rel = file.relative_to(category_dir).with_suffix("")
+            agent_id = "/".join(([category_id] if category_id else []) + list(rel.parts))
+            item = self._file_item(agent_id, all_base or group is not None)
+            if group:
+                item["group"] = group
+            (base_files if (all_base or group is not None) else agents).append(item)
+
+        for item in sorted(category_dir.iterdir()):
+            if item.is_dir():
+                if not include_dirs or item.name.startswith("."):
+                    continue
+                if self._is_base_dir(item.name):
+                    if not include_base_dirs:
+                        continue
+                    for file in sorted(item.glob("*.md")):
+                        if not file.name.startswith("."):
+                            add(file, item.name)
+                else:
+                    for file in sorted(item.glob("*.md")):
+                        if not file.name.startswith(("_", ".")):
+                            add(file)
+            elif item.is_file() and item.suffix == ".md":
+                if item.name.startswith("."):
+                    continue
+                if item.name.startswith("_"):
+                    add(item, "_root")
+                else:
+                    add(item)
+
+        return {"agents": agents, "base_files": base_files}
+
+    def list_agent_tree(self) -> dict:
+        """
+        List all agent files grouped by type and category, including base/component files.
+
+        Used by the Web UI agents editor:
+        - Each type (story/shots) contains a list of categories.
+        - A category holds runnable `agents` and editable `base_files`
+          (from _base/_contexts/_styles/base/common subdirs).
+        - Flat .md files at the type root are grouped under the "_root" category.
+        """
+        tree = {}
+
+        for agent_type in AGENT_TYPES:
+            type_dir = self.agents_dir / agent_type
+            categories = []
+
+            # Flat files at the type root become the "_root" (General) category;
+            # subdirs at this level are skipped (they get their own categories)
+            root_files = self.list_category_files(agent_type, type_dir, "", include_dirs=False)
+            if root_files["agents"] or root_files["base_files"]:
+                categories.append({
+                    "id": "_root",
+                    "name": "General",
+                    "is_base": False,
+                    **root_files,
+                })
+
+            if type_dir.exists():
+                for item in sorted(type_dir.iterdir()):
+                    if not item.is_dir() or item.name.startswith("."):
+                        continue
+
+                    if self._is_base_dir(item.name):
+                        # Base dir at type level (e.g. shots/base) -> its own category
+                        files = self.list_category_files(agent_type, item, item.name, all_base=True)
+                        if files["agents"] or files["base_files"]:
+                            categories.append({
+                                "id": item.name,
+                                "name": item.name.replace("_", " ").title(),
+                                "is_base": True,
+                                **files,
+                            })
+                    else:
+                        files = self.list_category_files(agent_type, item, item.name)
+                        if files["agents"] or files["base_files"]:
+                            categories.append({
+                                "id": item.name,
+                                "name": item.name.replace("_", " ").title(),
+                                "is_base": False,
+                                **files,
+                            })
+
+            tree[agent_type] = categories
+
+        return tree
+
     def load_prompt(self, agent_type: str, agent_name: str = "default") -> str:
         """
         Load a system prompt for a specific agent.
 
         Args:
-            agent_type: Type of agent ('story', 'narration', 'image', 'video')
+            agent_type: Type of agent ('story', 'shots')
             agent_name: Name of the agent (default: "default")
 
         Returns:
@@ -121,7 +252,7 @@ class AgentLoader:
                 contents.append(self.load_prompt(agent_type, name))
             return "\n\n".join(contents)
 
-        agent_file = self.agents_dir / agent_type / f"{agent_name}.md"
+        agent_file = self._resolve_agent_file(agent_type, agent_name)
 
         if not agent_file.exists():
             available = self.list_agents(agent_type)
@@ -217,26 +348,59 @@ class AgentLoader:
 
         return include_pattern.sub(replace_include, content)
 
+    @staticmethod
+    def _is_base_dir(name: str) -> bool:
+        """Check if a directory holds base/component files rather than runnable agents."""
+        return name.startswith("_") or name in BASE_DIR_NAMES
+
+    def _resolve_agent_file(self, agent_type: str, agent_name: str) -> Path:
+        """Resolve an agent id to a file path, ensuring it stays inside the agents dir."""
+        if agent_type not in AGENT_TYPES:
+            raise ValueError(f"Unknown agent type: {agent_type}. Must be one of: {list(AGENT_TYPES.keys())}")
+
+        if not agent_name or agent_name.strip() in ("", ".", ".."):
+            raise ValueError("Invalid agent name")
+
+        agent_file = (self.agents_dir / agent_type / f"{agent_name}.md").resolve()
+
+        # Prevent path traversal (agent ids come from the Web UI)
+        type_root = (self.agents_dir / agent_type).resolve()
+        if not str(agent_file).startswith(str(type_root) + os.sep):
+            raise ValueError(f"Invalid agent path: {agent_name}")
+
+        return agent_file
+
+    def load_prompt_raw(self, agent_type: str, agent_name: str = "default") -> str:
+        """
+        Load the raw content of an agent file without resolving {{include:...}} directives.
+
+        This is what editors should use - saving include-expanded content back
+        to disk would destroy the modular {{include:...}} structure.
+        """
+        agent_file = self._resolve_agent_file(agent_type, agent_name)
+
+        if not agent_file.exists():
+            raise FileNotFoundError(f"Agent file not found: {agent_file}")
+
+        with open(agent_file, 'r', encoding='utf-8') as f:
+            return f.read()
+
     def save_prompt(self, agent_type: str, agent_name: str, content: str):
         """
         Save/update a system prompt for a specific agent.
 
         Args:
-            agent_type: Type of agent ('story', 'narration', 'image', 'video')
-            agent_name: Name of the agent
+            agent_type: Type of agent ('story', 'shots')
+            agent_name: Name of the agent (may be nested, e.g. "documentary/default")
             content: The new system prompt content
         """
-        if agent_type not in AGENT_TYPES:
-            raise ValueError(f"Unknown agent type: {agent_type}. Must be one of: {list(AGENT_TYPES.keys())}")
+        agent_file = self._resolve_agent_file(agent_type, agent_name)
 
-        agent_dir = self.agents_dir / agent_type
-        os.makedirs(agent_dir, exist_ok=True)
-        
-        agent_file = agent_dir / f"{agent_name}.md"
-        
+        agent_file.parent.mkdir(parents=True, exist_ok=True)
+
         with open(agent_file, 'w', encoding='utf-8') as f:
             f.write(content)
-        
+
         logger.info(f"Saved agent prompt: {agent_file}")
 
     def format_prompt(self, agent_type: str, user_input: str, agent_name: str = "default") -> str:
@@ -244,7 +408,7 @@ class AgentLoader:
         Load and format a system prompt with user input.
 
         Args:
-            agent_type: Type of agent ('story', 'narration', 'image', 'video')
+            agent_type: Type of agent ('story', 'shots')
             user_input: The user input to insert into the prompt
             agent_name: Name of the agent (default: "default")
 
@@ -306,7 +470,7 @@ def load_agent_prompt(agent_type: str, user_input: str, agent_name: str = "defau
     Convenience function to load and format an agent prompt.
 
     Args:
-        agent_type: Type of agent ('story', 'narration', 'image', 'video')
+        agent_type: Type of agent ('story', 'shots')
         user_input: The user input to insert into the prompt
         agent_name: Name of the agent (default: "default")
 

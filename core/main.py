@@ -637,7 +637,7 @@ def submit_and_verify_video(template, shot, shot_length, project_id, shot_idx, p
                 image_path=shot['image_path'],
                 motion_prompt=motion_prompt,
                 output_path=video_save_path,
-                gemini_mode=getattr(config, 'GEMINIWEB_DEFAULT_MODE', 'Fast')
+                gemini_mode=f"{getattr(config, 'GEMINIWEB_MODEL', '3.8 Flash')}|{getattr(config, 'GEMINIWEB_THINKING', 'Low')}"
             )
             
             # Restore original image_path if we overrode it

@@ -105,6 +105,8 @@ class RegenerateImageRequest(BaseModel):
     prompt_override: Optional[str] = Field(default=None, description="Override the image prompt for this generation only")
     image_variant: Optional[str] = Field(default=None, description="Image variant for FLFI2V: 'then', 'now', or 'both'")
     gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
+    gemini_model: Optional[str] = Field(default=None, description="Exact Gemini Web model ('3.5 Flash-Lite', '3.8 Flash', '3.1 Pro')")
+    gemini_thinking: Optional[str] = Field(default=None, description="Exact Gemini Web thinking level ('Low', 'Medium', 'High')")
 
 
 
@@ -121,6 +123,8 @@ class RegenerateVideoRequest(BaseModel):
     prompt_type: Optional[str] = Field(default=None, description="Prompt to use for this generation: 'motion' or 'video' (None = shot/project default)")
     resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
     gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
+    gemini_model: Optional[str] = Field(default=None, description="Exact Gemini Web model ('3.5 Flash-Lite', '3.8 Flash', '3.1 Pro')")
+    gemini_thinking: Optional[str] = Field(default=None, description="Exact Gemini Web thinking level ('Low', 'Medium', 'High')")
     soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")
     soundfx_prompt: Optional[str] = Field(default=None, description="Prompt override for sound FX generation")
 
@@ -146,6 +150,8 @@ class BatchRegenerateRequest(BaseModel):
     then_prompt_override: Optional[str] = Field(default=None, description="Override standard then prompt for batch generation")
     resolution: Optional[str] = Field(default=None, description="Video resolution: '480p', '720p', etc.")
     gemini_mode: Optional[str] = Field(default=None, description="Override Gemini model mode")
+    gemini_model: Optional[str] = Field(default=None, description="Exact Gemini Web model ('3.5 Flash-Lite', '3.8 Flash', '3.1 Pro')")
+    gemini_thinking: Optional[str] = Field(default=None, description="Exact Gemini Web thinking level ('Low', 'Medium', 'High')")
     soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")
     soundfx_prompt: Optional[str] = Field(default=None, description="Prompt override for sound FX generation")
 

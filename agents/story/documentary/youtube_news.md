@@ -1,7 +1,7 @@
 # Agent: YouTube Sensational News
 
-{{include:base_standard}}
-{{include:style_retention}}
+{{include:_base/base_standard}}
+{{include:_styles/style_retention}}
 
 ## Video Objective
 Generate a fast-paced, sensational news story tailored for the YouTube Shorts platform (typically 60 to 120 seconds). The narrative should hook the viewer instantly, deliver breaking news or shocking facts rapidly, and maintain high retention.

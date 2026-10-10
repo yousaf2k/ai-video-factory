@@ -1,7 +1,23 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python core/secrets.py encrypt)"
+      "Bash(python core/secrets.py encrypt)",
+      "mcp__plugin_serena_serena__initial_instructions",
+      "Bash(python:*)",
+      "mcp__plugin_serena_serena__replace_content",
+      "mcp__plugin_serena_serena__activate_project",
+      "Bash(grep -il \"edge\" core/narration_generator.py web_ui/backend/services/*.py)",
+      "Bash(grep -rn \"shots_agent\\\\|story_agent\" \"C:\\\\AI\\\\ai_video_factory_v1\\\\web_ui\\\\frontend\\\\src\" --include=*.tsx --include=*.ts -l)",
+      "Bash(grep -rn \"MultiAgentSelector\" \"C:\\\\AI\\\\ai_video_factory_v1\\\\web_ui\\\\frontend\\\\src\" --include=*.tsx)",
+      "Bash(grep -n \"agents\" \"C:\\\\AI\\\\ai_video_factory_v1\\\\web_ui\\\\backend\\\\api\"/*.py)",
+      "mcp__plugin_serena_serena__find_symbol",
+      "mcp__plugin_serena_serena__search_for_pattern",
+      "mcp__plugin_serena_serena__read_file",
+      "Bash(awk 'NR>=1800 && NR<=1945 && \\(/def /||/prompt_override/||/request\\\\./\\)' web_ui/backend/services/generation_service.py)",
+      "Bash(grep -n \"regenerate_shot_video\\\\|prompt_override\" web_ui/backend/api/*.py)",
+      "Bash(grep -rn \"prompt_override\" web_ui/backend/ --include=*.py)",
+      "Bash(grep -rn \"RegenerateVideoRequest\\\\|BatchRegenerateRequest\" web_ui/backend/api/*.py web_ui/backend/services/*.py)",
+      "Bash(npx tsc:*)"
     ]
   },
   "plugins": {

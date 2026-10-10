@@ -1301,6 +1301,8 @@ export function ShotCard({
               promptOverride: config.promptOverride?.trim() || undefined,
               imageVariant,
               geminiMode: config.gemini_mode,
+              geminiModel: config.gemini_model,
+              geminiThinking: config.gemini_thinking,
             });
             toast.info("Image regeneration started", {
               description: `Shot ${shot.index}${shot.is_flfi2v && imageVariant ? ` (${imageVariant.toUpperCase()})` : ""} image is being generated.`,
@@ -1319,6 +1321,8 @@ export function ShotCard({
               promptOverride: config.promptOverride?.trim() || undefined,
               resolution: config.resolution,
               geminiMode: config.gemini_mode,
+              geminiModel: config.gemini_model,
+              geminiThinking: config.gemini_thinking,
               soundfxWorkflow: config.soundfxWorkflow,
               soundfxPrompt: config.soundfxPrompt,
             });

@@ -1,7 +1,7 @@
 # Agent: Netflix Mystery Documentary
 
-{{include:base_standard}}
-{{include:style_mystery}}
+{{include:_base/base_standard}}
+{{include:_styles/style_mystery}}
 
 ## Perspective
 

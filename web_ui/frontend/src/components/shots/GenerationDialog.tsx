@@ -11,6 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useConfig } from "@/hooks/useAgents";
+import {
+  GEMINI_MODELS,
+  GEMINI_THINKING,
+  DEFAULT_GEMINI_MODEL,
+  DEFAULT_GEMINI_THINKING,
+  decodeLegacyGeminiMode,
+} from "@/lib/geminiModes";
 
 export type GenerationType = "image" | "video" | "soundfx";
 
@@ -25,6 +32,8 @@ export interface GenerationConfig {
   draftLowResVideo?: boolean;
   resolution?: string;
   gemini_mode?: string;
+  gemini_model?: string;
+  gemini_thinking?: string;
   soundfxWorkflow?: string;
   soundfxPrompt?: string;
 }
@@ -67,7 +76,8 @@ export function GenerationDialog({
   const [mode, setMode] = useState("comfyui");
   const [workflow, setWorkflow] = useState<string>("default");
   const [soundfxWorkflow, setSoundfxWorkflow] = useState<string>("mmaudio");
-  const [geminiMode, setGeminiMode] = useState("Fast");
+  const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
+  const [geminiThinking, setGeminiThinking] = useState(DEFAULT_GEMINI_THINKING);
   
   // Image Specific State
   const [seed, setSeed] = useState<number | "">("");
@@ -106,8 +116,19 @@ export function GenerationDialog({
           setWorkflow("flux2");
         }
         
-        const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`) || globalConfig?.geminiweb_default_mode || "Fast";
-        setGeminiMode(savedGeminiMode);
+        const legacyPair = decodeLegacyGeminiMode(localStorage.getItem(`gemini_mode_${projectId}`));
+        setGeminiModel(
+          localStorage.getItem(`gemini_model_${projectId}`) ||
+          legacyPair.model ||
+          globalConfig?.geminiweb_model ||
+          DEFAULT_GEMINI_MODEL
+        );
+        setGeminiThinking(
+          localStorage.getItem(`gemini_thinking_${projectId}`) ||
+          legacyPair.thinking ||
+          globalConfig?.geminiweb_thinking ||
+          DEFAULT_GEMINI_THINKING
+        );
       } else if (type === "soundfx") {
         const savedSoundfxWf = localStorage.getItem(`soundfx_workflow_${projectId}`);
         if (savedSoundfxWf && (!globalConfig?.available_soundfx_workflows || globalConfig.available_soundfx_workflows.includes(savedSoundfxWf))) {
@@ -151,8 +172,19 @@ export function GenerationDialog({
         const savedRes = localStorage.getItem(`video_resolution_${projectId}`);
         if (savedRes) setResolution(savedRes);
  
-        const savedGeminiMode = localStorage.getItem(`gemini_mode_${projectId}`) || globalConfig?.geminiweb_default_mode || "Fast";
-        setGeminiMode(savedGeminiMode);
+        const legacyPair = decodeLegacyGeminiMode(localStorage.getItem(`gemini_mode_${projectId}`));
+        setGeminiModel(
+          localStorage.getItem(`gemini_model_${projectId}`) ||
+          legacyPair.model ||
+          globalConfig?.geminiweb_model ||
+          DEFAULT_GEMINI_MODEL
+        );
+        setGeminiThinking(
+          localStorage.getItem(`gemini_thinking_${projectId}`) ||
+          legacyPair.thinking ||
+          globalConfig?.geminiweb_thinking ||
+          DEFAULT_GEMINI_THINKING
+        );
       }
     }
   }, [isOpen, type, projectId, globalConfig]);
@@ -170,7 +202,9 @@ export function GenerationDialog({
       generateSoundFX: type === "video" ? generateSoundFX : undefined,
       draftLowResVideo: type === "video" ? draftLowResVideo : undefined,
       resolution: type === "video" ? resolution : undefined,
-      gemini_mode: mode === "geminiweb" ? geminiMode : undefined,
+      gemini_mode: mode === "geminiweb" ? `${geminiModel}|${geminiThinking}` : undefined,
+      gemini_model: mode === "geminiweb" ? geminiModel : undefined,
+      gemini_thinking: mode === "geminiweb" ? geminiThinking : undefined,
       soundfxWorkflow: (type === "soundfx" || generateSoundFX) ? soundfxWorkflow : undefined,
       soundfxPrompt: (type === "soundfx" || generateSoundFX) ? (soundfxPrompt || undefined) : undefined,
     });
@@ -231,30 +265,50 @@ export function GenerationDialog({
               </div>
 
               {mode === "geminiweb" && (
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
-                    Gemini Mode
-                  </label>
-                  <Select
-                    value={geminiMode}
-                    onValueChange={(val) => {
-                      setGeminiMode(val);
-                      localStorage.setItem(`gemini_mode_${projectId}`, val);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Gemini Mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
-                      <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
-                      <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
-                      <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
-                      <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
-                      <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Gemini Model
+                    </label>
+                    <Select
+                      value={geminiModel}
+                      onValueChange={(val) => {
+                        setGeminiModel(val);
+                        localStorage.setItem(`gemini_model_${projectId}`, val);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Gemini Model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_MODELS.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Extended Thinking
+                    </label>
+                    <Select
+                      value={geminiThinking}
+                      onValueChange={(val) => {
+                        setGeminiThinking(val);
+                        localStorage.setItem(`gemini_thinking_${projectId}`, val);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Thinking Level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_THINKING.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
               )}
 
               {mode === "comfyui" && (
@@ -387,30 +441,50 @@ export function GenerationDialog({
               </div>
               
               {mode === "geminiweb" && (
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">
-                    Gemini Mode
-                  </label>
-                  <Select
-                    value={geminiMode}
-                    onValueChange={(val) => {
-                      setGeminiMode(val);
-                      localStorage.setItem(`gemini_mode_${projectId}`, val);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Gemini Mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
-                      <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
-                      <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
-                      <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
-                      <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
-                      <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Gemini Model
+                    </label>
+                    <Select
+                      value={geminiModel}
+                      onValueChange={(val) => {
+                        setGeminiModel(val);
+                        localStorage.setItem(`gemini_model_${projectId}`, val);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Gemini Model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_MODELS.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Extended Thinking
+                    </label>
+                    <Select
+                      value={geminiThinking}
+                      onValueChange={(val) => {
+                        setGeminiThinking(val);
+                        localStorage.setItem(`gemini_thinking_${projectId}`, val);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Thinking Level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GEMINI_THINKING.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
               )}
               
               {mode === "comfyui" && (

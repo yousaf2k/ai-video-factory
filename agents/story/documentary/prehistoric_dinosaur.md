@@ -1,8 +1,8 @@
 # Agent: IMAX Prehistoric Dinosaurs
 
-{{include:base_standard}}
-{{include:style_documentary}}
-{{include:context_prehistoric_dinosaurs}}
+{{include:_base/base_standard}}
+{{include:_styles/style_documentary}}
+{{include:_contexts/context_prehistoric_dinosaurs}}
 
 ## Input
 {USER_INPUT}

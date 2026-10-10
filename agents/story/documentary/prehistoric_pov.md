@@ -1,8 +1,8 @@
 # Agent: Prehistoric POV Survival
 
-{{include:base_standard}}
-{{include:style_pov_survival}}
-{{include:context_prehistoric_dinosaurs}}
+{{include:_base/base_standard}}
+{{include:_styles/style_pov_survival}}
+{{include:_contexts/context_prehistoric_dinosaurs}}
 
 ## Input
 {USER_INPUT}

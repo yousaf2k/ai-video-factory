@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { GEMINI_MODELS, GEMINI_THINKING } from "@/lib/geminiModes";
 
 export default function ConfigPage() {
   const router = useRouter();
@@ -42,6 +43,8 @@ export default function ConfigPage() {
     gemini_watermark_tool_video: "",
     watermark_removal_method: "builtin",
     geminiweb_default_mode: "Fast",
+    geminiweb_model: "3.8 Flash",
+    geminiweb_thinking: "Low",
   });
 
   useEffect(() => {
@@ -63,6 +66,8 @@ export default function ConfigPage() {
         gemini_watermark_tool_video: config.gemini_watermark_tool_video || "",
         watermark_removal_method: config.watermark_removal_method || "builtin",
         geminiweb_default_mode: config.geminiweb_default_mode || "Fast",
+        geminiweb_model: config.geminiweb_model || "3.8 Flash",
+        geminiweb_thinking: config.geminiweb_thinking || "Low",
       });
     }
   }, [config]);
@@ -260,28 +265,48 @@ export default function ConfigPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/30 pt-4">
             <div>
               <label className="block text-sm font-medium mb-1">
-                Gemini Web Mode (Default)
+                Gemini Web Model (Default)
               </label>
               <Select
-                value={formData.geminiweb_default_mode}
+                value={formData.geminiweb_model}
                 onValueChange={(val) =>
-                  setFormData({ ...formData, geminiweb_default_mode: val })
+                  setFormData({ ...formData, geminiweb_model: val })
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select Gemini Mode" />
+                  <SelectValue placeholder="Select Gemini Model" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Fast">Fast (3.5 Flash-Lite)</SelectItem>
-                  <SelectItem value="Medium">Medium (3.8 Flash)</SelectItem>
-                  <SelectItem value="Pro">Pro (3.1 Pro)</SelectItem>
-                  <SelectItem value="Fast Thinking">Fast Thinking (3.5 Flash-Lite + Thinking)</SelectItem>
-                  <SelectItem value="Medium Thinking">Medium Thinking (3.8 Flash + Thinking)</SelectItem>
-                  <SelectItem value="Pro Thinking">Pro Thinking (3.1 Pro + Thinking)</SelectItem>
+                  {GEMINI_MODELS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-muted-foreground mt-1">
-                Default model behavior for GeminiWeb image and video generation.
+                Default model for GeminiWeb image and video generation.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Gemini Web Thinking (Default)
+              </label>
+              <Select
+                value={formData.geminiweb_thinking}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, geminiweb_thinking: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Thinking Level" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GEMINI_THINKING.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Default extended-thinking level (Low = thinking off), as in the Gemini Web picker.
               </p>
             </div>
           </div>

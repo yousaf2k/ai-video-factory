@@ -7,11 +7,45 @@ from core.logger_config import setup_agent_logger
 from web_ui.backend.models.story import ProjectType
 import config
 import json
+import re
 import uuid
 
 
 # Get logger for story engine operations
 logger = setup_agent_logger(__name__)
+
+
+def parse_llm_json(text):
+    """
+    Parse JSON from an LLM response, tolerating markdown code fences
+    and surrounding prose.
+
+    Even when asked for response_format="application/json", providers
+    sometimes wrap the payload in ```json fences or prefix it with
+    prose, which plain json.loads() rejects. Strip the fences first,
+    then fall back to the outermost {...} or [...] span in the text.
+
+    Raises json.JSONDecodeError if no JSON value can be recovered.
+    """
+    cleaned = (text or "").strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```\s*$", "", cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        last_err = None
+        for open_ch, close_ch in (("{", "}"), ("[", "]")):
+            start = cleaned.find(open_ch)
+            end = cleaned.rfind(close_ch)
+            if start != -1 and end > start:
+                try:
+                    return json.loads(cleaned[start:end + 1])
+                except json.JSONDecodeError as e:
+                    last_err = e
+        if last_err:
+            raise last_err
+        raise json.JSONDecodeError("No JSON found in LLM response", cleaned, 0)
 
 
 def validate_and_adjust_scene_durations(story, target_length, tolerance=0.15):
@@ -126,12 +160,17 @@ def build_story(idea, agent_name="default", target_length=None, aspect_ratio="16
     master_json_str = provider.ask(master_prompt, response_format="application/json")
     
     try:
-        master_data = json.loads(master_json_str)
+        master_data = parse_llm_json(master_json_str)
         master_script = master_data.get("master_script", "")
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse master script JSON. Proceeding without master script data.")
+    except json.JSONDecodeError as e:
+        logger.warning(
+            f"Failed to parse master script JSON ({e}). "
+            f"Keeping scene-pass title/style. Response snippet: {str(master_json_str)[:200]!r}"
+        )
         master_script = idea
-        master_data = {"title": "Generated Story", "style": "cinematic", "master_script": master_script}
+        # Empty dict so the merge below falls through to the story's own
+        # title/style instead of overwriting them with placeholders.
+        master_data = {}
 
     # Pass 2: Break down into scenes
     print("\n[STORY] Pass 2: Generating Scenes from Master Script...")
@@ -177,7 +216,7 @@ Return JSON:
     # Merge, Validate, and Format
     if target_length:
         try:
-            story = json.loads(story_json_str)
+            story = parse_llm_json(story_json_str)
             # Add total_duration to story dict
             story['total_duration'] = int(target_length)
 
@@ -198,7 +237,7 @@ Return JSON:
     else:
         # Format JSON with proper indentation even when no target_length
         try:
-            story = json.loads(story_json_str)
+            story = parse_llm_json(story_json_str)
             story['title'] = master_data.get('title', story.get('title', 'Video'))
             story['style'] = master_data.get('style', story.get('style', 'cinematic'))
             story['master_script'] = master_script
@@ -249,7 +288,7 @@ def build_story_then_vs_now(movie_name: str, agent_name: str = "then_vs_now/then
     print(f"[INFO] Generating ThenVsNow story for movie: {movie_name}")
 
     story_json_str = provider.ask(prompt, response_format="application/json")
-    story = json.loads(story_json_str)
+    story = parse_llm_json(story_json_str)
 
     # Ensure project_type is set
     story['project_type'] = ProjectType.THEN_VS_NOW
@@ -331,7 +370,7 @@ def build_story_asmr_glass_cutting(
 
     try:
         story_json_str = provider.ask(prompt, response_format="application/json")
-        story = json.loads(story_json_str)
+        story = parse_llm_json(story_json_str)
 
         # Handle case where LLM returns an array instead of object
         if isinstance(story, list):

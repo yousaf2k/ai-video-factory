@@ -29,7 +29,6 @@ ALL_AGENTS = [
     'selfie_vlogger',
     'roman_kingdom',
     'indus_valley',
-    'indus_valley_civilization',
     'plague_of_athens',
     'futuristic',
     'greek_dark_ages',
