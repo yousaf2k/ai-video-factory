@@ -53,6 +53,22 @@ export function useAgentContent(agentType: string | null, agentId: string | null
   });
 }
 
+// Hook to get the preview structure of an agent file (includes resolved as nested segments)
+export function useAgentPreview(
+  agentType: string | null,
+  agentId: string | null,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ['agent-preview', agentType, agentId],
+    queryFn: () =>
+      agentType && agentId
+        ? api.getAgentPreview(agentType, agentId)
+        : Promise.resolve({ content: '', expanded: '', segments: [] }),
+    enabled: enabled && !!agentType && !!agentId,
+  });
+}
+
 // Hook to update content of an agent file
 export function useUpdateAgentContent(agentType: string, agentId: string) {
   const queryClient = useQueryClient();
@@ -61,6 +77,7 @@ export function useUpdateAgentContent(agentType: string, agentId: string) {
     mutationFn: (content: string) => api.updateAgentContent(agentType, agentId, content),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent-content', agentType, agentId] });
+      queryClient.invalidateQueries({ queryKey: ['agent-preview', agentType, agentId] });
     },
   });
 }

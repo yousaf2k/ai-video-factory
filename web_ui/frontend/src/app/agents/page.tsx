@@ -12,15 +12,23 @@ import { toast } from "sonner";
 import {
   useAgentTree,
   useAgentContent,
+  useAgentPreview,
   useUpdateAgentContent,
 } from "@/hooks/useAgents";
-import type { AgentCategory, AgentFileRef, AgentTree } from "@/types";
+import type {
+  AgentCategory,
+  AgentFileRef,
+  AgentTree,
+  AgentSegment,
+  AgentIncludeSegment,
+} from "@/types";
 import {
   Save,
   RotateCcw,
   FileText,
   FileCode2,
   ChevronRight,
+  ChevronDown,
   Eye,
   Code,
   Layers,
@@ -80,7 +88,8 @@ export default function AgentsPage() {
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<SelectedFile | null>(null);
   const [search, setSearch] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
+  // Preview (with includes embedded) is the default view for a file
+  const [showPreview, setShowPreview] = useState(true);
 
   // Drafts keep unsaved edits alive while switching between files
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -96,6 +105,11 @@ export default function AgentsPage() {
     data: fileData,
     isLoading: isLoadingContent,
   } = useAgentContent(selectedFile?.type ?? null, selectedFile?.file.id ?? null);
+
+  const {
+    data: previewData,
+    isLoading: isLoadingPreview,
+  } = useAgentPreview(selectedFile?.type ?? null, selectedFile?.file.id ?? null, showPreview);
 
   const serverContent = fileData?.content;
   const includes = useMemo(
@@ -141,7 +155,7 @@ export default function AgentsPage() {
         description: `${selectedFile.file.name}.md has unsaved edits.`,
       });
     }
-    setShowPreview(false);
+    setShowPreview(true);
     setSelectedFile({ type: agentType, file });
   };
 
@@ -494,9 +508,19 @@ export default function AgentsPage() {
                 ) : showPreview ? (
                   <div className="flex-1 overflow-y-auto p-8 bg-card">
                     <div className="prose prose-sm prose-invert max-w-none">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {editContent}
-                      </ReactMarkdown>
+                      {dirty && (
+                        <div className="not-prose mb-4 px-3 py-2 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs">
+                          Preview shows the saved file — unsaved edits are not
+                          included. Save to update the preview.
+                        </div>
+                      )}
+                      {isLoadingPreview || !previewData ? (
+                        <div className="not-prose flex items-center justify-center py-24 text-muted-foreground">
+                          <RotateCcw className="w-6 h-6 animate-spin" />
+                        </div>
+                      ) : (
+                        <SegmentList segments={previewData.segments} />
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -518,7 +542,10 @@ export default function AgentsPage() {
                 </span>
                 <span className="whitespace-nowrap">
                   {editContent.length.toLocaleString()} chars
-                  {showPreview && " · Preview mode"}
+                  {showPreview &&
+                    (previewData
+                      ? ` · Preview · ${previewData.expanded.length.toLocaleString()} chars with includes`
+                      : " · Preview")}
                 </span>
               </div>
             </>
@@ -534,6 +561,75 @@ export default function AgentsPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Preview: render the file's segments recursively. Text segments render as
+ * markdown; each resolved {{include:...}} renders as a collapsible section
+ * (expanded by default) with its own nested segments.
+ */
+function SegmentList({ segments }: { segments: AgentSegment[] }) {
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.type === "text" ? (
+          <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
+            {seg.content}
+          </ReactMarkdown>
+        ) : (
+          <IncludeSection key={i} segment={seg} />
+        )
+      )}
+    </>
+  );
+}
+
+function IncludeSection({ segment }: { segment: AgentIncludeSegment }) {
+  const [open, setOpen] = useState(true);
+
+  // NOTE: the section body must NOT live under the `not-prose` header wrapper —
+  // Tailwind Typography excludes every descendant of a not-prose ancestor, so
+  // the markdown would render unstyled. Header and body are kept as siblings.
+  return (
+    <div className="my-4 border rounded-lg overflow-hidden bg-card">
+      <div className="not-prose border-b bg-muted/60">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left text-xs transition-colors"
+          title={segment.path ? `${segment.path}.md` : segment.name}
+        >
+          <ChevronDown
+            className={cn(
+              "w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform",
+              !open && "-rotate-90"
+            )}
+          />
+          <FileCode2 className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+          <span className="font-mono font-semibold">{segment.name}</span>
+          {segment.path && (
+            <span className="font-mono text-muted-foreground truncate hidden md:inline">
+              {segment.path}.md
+            </span>
+          )}
+          {!segment.found && (
+            <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-500/15 text-red-600 dark:text-red-400">
+              include not found
+            </span>
+          )}
+          {segment.circular && (
+            <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
+              circular
+            </span>
+          )}
+        </button>
+      </div>
+      {open && (
+        <div className="px-4 py-2 prose prose-sm prose-invert max-w-none">
+          <SegmentList segments={segment.children} />
+        </div>
+      )}
     </div>
   );
 }

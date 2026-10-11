@@ -13,6 +13,7 @@ import type {
   UpdateShotRequest,
   AgentsByType,
   AgentTree,
+  AgentPreview,
   GlobalConfig,
   UpdateGlobalConfigRequest,
   AssetLibraryInfo,
@@ -506,6 +507,14 @@ class ApiClient {
     const response = await this.client.get<{ content: string; includes: string[] }>(
       `/api/config/agents/${agentType}/${agentId}`,
       { params: { raw: true } }
+    );
+    return response.data;
+  }
+
+  async getAgentPreview(agentType: string, agentId: string): Promise<AgentPreview> {
+    const response = await this.client.get<AgentPreview>(
+      `/api/config/agents/${agentType}/${agentId}`,
+      { params: { view: 'preview' } }
     );
     return response.data;
   }
