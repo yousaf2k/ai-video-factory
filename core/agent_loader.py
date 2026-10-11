@@ -268,6 +268,117 @@ class AgentLoader:
         # Use parent folder of agent_file as initial base_dir
         return self._process_includes(agent_type, content, {str(agent_file.resolve())}, base_dir=agent_file.parent)
 
+    def load_prompt_segments(self, agent_type: str, agent_name: str = "default") -> dict:
+        """
+        Build a preview structure for an agent file.
+
+        Returns the raw content split into text segments and resolved
+        {{include:...}} sections (expanded recursively), plus the fully
+        expanded prompt. Used by the Web UI preview so every included file
+        can be rendered inline as its own collapsible section.
+        """
+        agent_file = self._resolve_agent_file(agent_type, agent_name)
+
+        if not agent_file.exists():
+            raise FileNotFoundError(f"Agent file not found: {agent_file}")
+
+        with open(agent_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        segments = self._build_segments(
+            agent_type, content, {str(agent_file.resolve())}, agent_file.parent
+        )
+        return {
+            "content": content,
+            "expanded": self.load_prompt(agent_type, agent_name),
+            "segments": segments,
+        }
+
+    def _build_segments(self, agent_type: str, content: str, seen_paths: Set[str], base_dir: Path) -> list:
+        """Split content into text and include segments, expanding includes recursively."""
+        segments = []
+        include_pattern = re.compile(r'\{\{include:(.+?)\}\}')
+        pos = 0
+
+        for match in include_pattern.finditer(content):
+            if match.start() > pos:
+                segments.append({"type": "text", "content": content[pos:match.start()]})
+
+            include_name = match.group(1).strip()
+            include_file = self._resolve_include_path(include_name, base_dir, agent_type)
+
+            if include_file is None:
+                segments.append({
+                    "type": "include", "name": include_name, "path": None,
+                    "found": False, "circular": False, "children": [],
+                })
+            else:
+                abs_path = str(include_file.resolve())
+                segment_path = self._relative_include_path(include_file)
+                if abs_path in seen_paths:
+                    segments.append({
+                        "type": "include", "name": include_name, "path": segment_path,
+                        "found": True, "circular": True, "children": [],
+                    })
+                else:
+                    with open(include_file, 'r', encoding='utf-8') as f:
+                        include_content = f.read()
+                    children = self._build_segments(
+                        agent_type, include_content, seen_paths | {abs_path}, include_file.parent
+                    )
+                    segments.append({
+                        "type": "include", "name": include_name, "path": segment_path,
+                        "found": True, "circular": False, "children": children,
+                    })
+            pos = match.end()
+
+        if pos < len(content):
+            segments.append({"type": "text", "content": content[pos:]})
+        return segments
+
+    def _relative_include_path(self, path: Path) -> str:
+        """Path relative to the agents dir without .md extension (for display)."""
+        try:
+            rel = path.resolve().relative_to(self.agents_dir.resolve())
+            return str(rel.with_suffix("")).replace(os.sep, "/")
+        except ValueError:
+            return str(path)
+
+    def _resolve_include_path(self, include_name: str, base_dir: Path, agent_type: str) -> Optional[Path]:
+        """
+        Resolve an {{include:name}} directive to a file path, or None if not found.
+
+        Search order:
+        1. Global path relative to the agents root (when the name contains a slash)
+        2. Direct path in the including file's directory
+        3. Subdirectories of the including file's directory (e.g. _base, _styles)
+        4. Direct path in the agent type root
+        5. Subdirectories of the agent type root
+        """
+        paths_to_try = []
+        if "/" in include_name:
+            paths_to_try.append(self.agents_dir / f"{include_name}.md")
+
+        paths_to_try.append(base_dir / f"{include_name}.md")
+
+        if base_dir.exists():
+            for item in base_dir.iterdir():
+                if item.is_dir() and not item.name.startswith("."):
+                    paths_to_try.append(item / f"{include_name}.md")
+
+        agent_type_dir = self.agents_dir / agent_type
+        paths_to_try.append(agent_type_dir / f"{include_name}.md")
+
+        if agent_type_dir.exists() and agent_type_dir != base_dir:
+            for item in agent_type_dir.iterdir():
+                if item.is_dir() and not item.name.startswith("."):
+                    paths_to_try.append(item / f"{include_name}.md")
+
+        for p in paths_to_try:
+            if p.exists():
+                return p
+        return None
+
     def _process_includes(self, agent_type: str, content: str, seen_paths: Set[str] = None, base_dir: Path = None) -> str:
         """
         Process {{include:path}} directives in the content.
@@ -291,57 +402,22 @@ class AgentLoader:
         
         def replace_include(match):
             include_name = match.group(1).strip()
-            
-            # Resolve the include path
-            # Strategy:
-            # 1. If it contains a slash, try relative to agents_dir root (global include)
-            # 2. Try relative to the current file's directory (sibling include)
-            # 3. Try relative to search subdirectories (e.g. _base, _styles, _contexts)
-            # 4. Try relative to the agent_type root (standard include)
-            
-            paths_to_try = []
-            if "/" in include_name:
-                paths_to_try.append(self.agents_dir / f"{include_name}.md")
-            
-            # 1. Direct path in base_dir
-            paths_to_try.append(base_dir / f"{include_name}.md")
-            
-            # 2. Search in subdirectories of base_dir (e.g., _base, _contexts)
-            if base_dir.exists():
-                for item in base_dir.iterdir():
-                    if item.is_dir() and not item.name.startswith("."):
-                        paths_to_try.append(item / f"{include_name}.md")
-            
-            # 3. Direct path in agent_type root
-            agent_type_dir = self.agents_dir / agent_type
-            paths_to_try.append(agent_type_dir / f"{include_name}.md")
-            
-            # 4. Search in subdirectories of agent_type root
-            if agent_type_dir.exists() and agent_type_dir != base_dir:
-                for item in agent_type_dir.iterdir():
-                    if item.is_dir() and not item.name.startswith("."):
-                        paths_to_try.append(item / f"{include_name}.md")
 
-            include_file = None
-            for p in paths_to_try:
-                if p.exists():
-                    include_file = p
-                    break
+            include_file = self._resolve_include_path(include_name, base_dir, agent_type)
 
-            if not include_file:
-                logger.error(f"Include file not found: {include_name} (Tried: {[str(p) for p in paths_to_try]})")
+            if include_file is None:
+                logger.error(f"Include file not found: {include_name}")
                 return f"<!-- Include not found: {include_name} -->"
 
-
             abs_path = str(include_file.resolve())
-            
+
             if abs_path in seen_paths:
                 logger.warning(f"Circular dependency detected for: {abs_path}")
                 return f"<!-- Circular dependency detected: {include_name} -->"
-            
+
             with open(include_file, 'r', encoding='utf-8') as f:
                 include_content = f.read()
-            
+
             # Recursive call with new base_dir (parent of current include)
             new_seen_paths = seen_paths | {abs_path}
             return self._process_includes(agent_type, include_content, new_seen_paths, base_dir=include_file.parent)
