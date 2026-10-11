@@ -108,16 +108,13 @@ class QueueService:
                     'saved_at': datetime.utcnow().isoformat()
                 }
 
-                # Write to temp file first, then rename (atomic write)
+                # Write to temp file first, then atomic rename (no window where
+                # the queue file is missing or half-written)
                 temp_path = self._persistence_path + '.tmp'
                 with open(temp_path, 'w') as f:
                     json.dump(data, f, indent=2, default=str)
 
-                # Rename temp to actual file
-                if os.path.exists(temp_path):
-                    if os.path.exists(self._persistence_path):
-                        os.remove(self._persistence_path)
-                    os.rename(temp_path, self._persistence_path)
+                os.replace(temp_path, self._persistence_path)
 
                 logger.debug(f"Saved {len(self._queue)} items to {self._persistence_path}")
         except Exception as e:

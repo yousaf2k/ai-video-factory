@@ -137,10 +137,10 @@ async def save_timeline(project_id: str, timeline_data: dict):
         editor_dir = os.path.join(project_dir, "editor")
         os.makedirs(editor_dir, exist_ok=True)
 
-        # Save timeline.json
+        # Save timeline.json (atomic)
         timeline_path = os.path.join(editor_dir, "timeline.json")
-        with open(timeline_path, 'w', encoding='utf-8') as f:
-            json.dump(timeline_data, f, indent=2, ensure_ascii=False)
+        from core.json_atomic import atomic_write_json
+        atomic_write_json(timeline_path, timeline_data)
 
         logger.info(f"Saved timeline for project {project_id}")
 
