@@ -556,19 +556,27 @@ class GenerationService:
                 gemini_mode=item.gemini_mode
             )
             
-            # Update story.json
+            # Update story.json under the project lock with a fresh on-disk read,
+            # so a parallel character completion can't be overwritten by a stale snapshot.
             relative_path = self._get_relative_path(image_path)
-            if variant == "character":
-                character['character_reference_image_path'] = relative_path
-            elif variant == "then":
-                character['then_reference_image_path'] = relative_path
-            elif variant == "now":
-                character['now_reference_image_path'] = relative_path
-                
-            story_path = os.path.join(self.project_manager.get_project_dir(item.project_id), "story.json")
-            with open(story_path, 'w', encoding='utf-8') as f:
-                json.dump(story, f, indent=4, ensure_ascii=False)
-                
+            variant_field_map = {
+                "character": "character_reference_image_path",
+                "then": "then_reference_image_path",
+                "now": "now_reference_image_path",
+            }
+            variant_field = variant_field_map.get(variant)
+            character_index = item.character_index
+
+            def apply_character_ref(story):
+                characters = story.get('characters', [])
+                if variant_field and 0 <= character_index < len(characters):
+                    characters[character_index][variant_field] = relative_path
+
+            updated_story = self.project_manager.update_story_safely(item.project_id, apply_character_ref)
+
+            if updated_story:
+                story = updated_story
+
             item.status = QueueItemStatus.COMPLETED
             item.completed_at = __import__('datetime').datetime.utcnow()
             item.progress = 100
@@ -1693,25 +1701,21 @@ class GenerationService:
                     logger.info(f"Recovery: found missing variation {os.path.basename(filepath)}")
         
         if recovered_variations:
-            if 'image_paths' not in shot_to_use:
-                shot_to_use['image_paths'] = []
-            for v in recovered_variations:
-                if v not in shot_to_use['image_paths']:
-                    shot_to_use['image_paths'].append(v)
-            self.project_manager.update_shot_metadata(project_id, {'image_paths': shot_to_use['image_paths']}, shot_id=shot_id)
+            # Dedupe-append happens against the FRESH list inside the lock
+            self.project_manager.append_shot_media_paths(
+                project_id, recovered_variations, shot_id=shot_id, list_field='image_paths'
+            )
 
         # Generate NOW image
         if image_variant in ["now", "both"]:
             if not shot_to_use.get('now_image_generated') or force:
                 try:
-                    # Preserve old NOW image
+                    # Preserve old NOW image (dedupe-append under the lock, fresh list)
                     old_now_path = shot_to_use.get('now_image_path')
                     if old_now_path:
-                        if 'image_paths' not in shot_to_use:
-                            shot_to_use['image_paths'] = []
-                        if old_now_path not in shot_to_use['image_paths']:
-                            shot_to_use['image_paths'].append(old_now_path)
-                            self.project_manager.update_shot_metadata(project_id, {'image_paths': shot_to_use['image_paths']}, shot_id=shot_id)
+                        self.project_manager.append_shot_media_paths(
+                            project_id, [old_now_path], shot_id=shot_id, list_field='image_paths'
+                        )
 
                     now_prompt = prompt_override if prompt_override and prompt_override.strip() else shot_to_use.get('now_image_prompt', '')
                     if set_prompt:
@@ -1762,15 +1766,11 @@ class GenerationService:
                     shot_to_use['now_image_path'] = self._get_relative_path(result_path)
                     results['now'] = shot_to_use['now_image_path']
 
-                    if 'image_paths' not in shot_to_use:
-                        shot_to_use['image_paths'] = []
-                    if shot_to_use['now_image_path'] not in shot_to_use['image_paths']:
-                        shot_to_use['image_paths'].append(shot_to_use['now_image_path'])
-
+                    # Persist scalars now; update_shot_metadata appends now_image_path
+                    # to image_paths deduped against the FRESH list under the lock.
                     self.project_manager.update_shot_metadata(project_id, {
                         'now_image_generated': True,
-                        'now_image_path': shot_to_use['now_image_path'],
-                        'image_paths': shot_to_use['image_paths']
+                        'now_image_path': shot_to_use['now_image_path']
                     }, shot_id=shot_id)
 
                     self._mark_queue_item_completed(project_id, shot_index, GenerationType.NOW_IMAGE)
@@ -1816,11 +1816,9 @@ class GenerationService:
 
                     old_then_path = shot_to_use.get('then_image_path')
                     if old_then_path:
-                        if 'image_paths' not in shot_to_use:
-                            shot_to_use['image_paths'] = []
-                        if old_then_path not in shot_to_use['image_paths']:
-                            shot_to_use['image_paths'].append(old_then_path)
-                            self.project_manager.update_shot_metadata(project_id, {'image_paths': shot_to_use['image_paths']}, shot_id=shot_id)
+                        self.project_manager.append_shot_media_paths(
+                            project_id, [old_then_path], shot_id=shot_id, list_field='image_paths'
+                        )
 
                     then_prompt = prompt_override if prompt_override and prompt_override.strip() else shot_to_use.get('then_image_prompt', '')
                     # Note: per user request, background (set_prompt) is NOT added to THEN prompts
@@ -1872,15 +1870,11 @@ class GenerationService:
                     shot_to_use['then_image_path'] = self._get_relative_path(result_path)
                     results['then'] = shot_to_use['then_image_path']
 
-                    if 'image_paths' not in shot_to_use:
-                        shot_to_use['image_paths'] = []
-                    if shot_to_use['then_image_path'] not in shot_to_use['image_paths']:
-                        shot_to_use['image_paths'].append(shot_to_use['then_image_path'])
-                    
+                    # Persist scalars now; update_shot_metadata appends then_image_path
+                    # to image_paths deduped against the FRESH list under the lock.
                     self.project_manager.update_shot_metadata(project_id, {
                         'then_image_generated': True,
-                        'then_image_path': shot_to_use['then_image_path'],
-                        'image_paths': shot_to_use['image_paths']
+                        'then_image_path': shot_to_use['then_image_path']
                     }, shot_id=shot_id)
 
                     self._mark_queue_item_completed(project_id, shot_index, GenerationType.THEN_IMAGE)
@@ -1991,20 +1985,14 @@ class GenerationService:
                 logger.info(f"Shot {shot_index} already has video, skipping")
                 return shot.get('video_path')
 
-            # Preserve old video_path in video_paths before regenerating
+            # Preserve old video_path in video_paths before regenerating.
+            # The dedupe-append happens inside the lock against the fresh list
+            # from disk (no stale snapshot write-back).
             old_video_path = shot.get('video_path')
             if old_video_path:
-                if 'video_paths' not in shot:
-                    shot['video_paths'] = []
-                
-                # Normalize both for reliable comparison
-                abs_old = config.resolve_path(old_video_path)
-                abs_list = [config.resolve_path(p) for p in shot['video_paths']]
-                
-                if abs_old not in abs_list:
-                    shot['video_paths'].append(old_video_path)
-                    # Save updated video_paths immediately
-                    self.project_manager.update_shot_metadata(project_id, {'video_paths': shot['video_paths']}, shot_id=shot_id)
+                self.project_manager.append_shot_media_paths(
+                    project_id, [old_video_path], shot_id=shot_id, list_field='video_paths'
+                )
 
             # Generate video for single shot
             logger.info(f"Regenerating video for shot {shot_index} using mode {video_mode or 'default'}")
@@ -2541,20 +2529,11 @@ class GenerationService:
                     logger.info(f"Video Recovery: found missing variation {os.path.basename(filepath)}")
         
         if recovered_variations:
-            if 'video_paths' not in current_shot:
-                current_shot['video_paths'] = []
-            
-            # Resolve existing paths for comparison
-            existing_abs = [config.resolve_path(p) for p in current_shot['video_paths']]
-            
-            for v in recovered_variations:
-                abs_v = os.path.abspath(v)
-                if abs_v not in existing_abs:
-                    rel_v = self._get_relative_path(v)
-                    current_shot['video_paths'].append(rel_v)
-                    existing_abs.append(abs_v) # Update for next iteration
-            
-            self.project_manager.update_shot_metadata(project_id, {'video_paths': current_shot['video_paths']}, shot_id=shot_id)
+            # Dedupe-append happens against the FRESH list inside the lock
+            rel_variations = [self._get_relative_path(v) for v in recovered_variations]
+            self.project_manager.append_shot_media_paths(
+                project_id, rel_variations, shot_id=shot_id, list_field='video_paths'
+            )
 
         # Generate meeting video
         if video_variant in ["meeting", "both"]:
@@ -2564,17 +2543,12 @@ class GenerationService:
             
             if meeting_prompt and (not current_shot.get('meeting_video_rendered') or force):
                 try:
-                    # Preserve old meeting video before generating new one
+                    # Preserve old meeting video (dedupe-append under the lock, fresh list)
                     old_meeting_path = current_shot.get('meeting_video_path')
                     if old_meeting_path:
-                        if 'video_paths' not in current_shot:
-                            current_shot['video_paths'] = []
-                        
-                        abs_old = config.resolve_path(old_meeting_path)
-                        existing_abs = [config.resolve_path(p) for p in current_shot['video_paths']]
-                        
-                        if abs_old not in existing_abs:
-                            current_shot['video_paths'].append(old_meeting_path)
+                        self.project_manager.append_shot_media_paths(
+                            project_id, [old_meeting_path], shot_id=shot_id, list_field='video_paths'
+                        )
 
                     next_version = self._get_next_video_version(
                         self.project_manager.get_videos_dir(project_id), shot_index, "meeting"
@@ -2669,17 +2643,12 @@ class GenerationService:
             
             if departure_prompt and (not current_shot.get('departure_video_rendered') or force):
                 try:
-                    # Preserve old departure video before generating new one
+                    # Preserve old departure video (dedupe-append under the lock, fresh list)
                     old_departure_path = current_shot.get('departure_video_path')
                     if old_departure_path:
-                        if 'video_paths' not in current_shot:
-                            current_shot['video_paths'] = []
-                        
-                        abs_old = config.resolve_path(old_departure_path)
-                        existing_abs = [config.resolve_path(p) for p in current_shot['video_paths']]
-                        
-                        if abs_old not in existing_abs:
-                            current_shot['video_paths'].append(old_departure_path)
+                        self.project_manager.append_shot_media_paths(
+                            project_id, [old_departure_path], shot_id=shot_id, list_field='video_paths'
+                        )
 
                     next_version = self._get_next_video_version(
                         self.project_manager.get_videos_dir(project_id), shot_index, "departure"
@@ -2861,29 +2830,19 @@ class GenerationService:
             # Convert to relative path
             relative_path = self._get_relative_path(result_path)
 
-            # Load and update story
-            story_path = os.path.join(project_dir, "story.json")
-            with open(story_path, 'r', encoding='utf-8') as f:
-                story_data = json.load(f)
-
-            scenes = story_data.get('scenes', [])
-
-            # Find scene by scene_id
-            scene_found = False
-            for i, scene in enumerate(scenes):
-                if str(scene.get('scene_id')) == str(scene_id):
-                    scenes[i]['background_image_path'] = relative_path
-                    scenes[i]['background_generated'] = True
-                    scenes[i]['background_is_generated'] = True  # AI-generated
-                    scene_found = True
-                    break
-
-            if not scene_found:
+            # Update story.json under the project lock with a fresh on-disk read,
+            # so concurrent scene updates can't be overwritten by a stale snapshot.
+            def set_scene_background(story_data):
+                scenes = story_data.get('scenes', [])
+                for i, scene in enumerate(scenes):
+                    if str(scene.get('scene_id')) == str(scene_id):
+                        scenes[i]['background_image_path'] = relative_path
+                        scenes[i]['background_generated'] = True
+                        scenes[i]['background_is_generated'] = True  # AI-generated
+                        return
                 raise RuntimeError(f"Scene with scene_id {scene_id} not found in story.json")
-            
-            # Save story
-            with open(story_path, 'w', encoding='utf-8') as f:
-                json.dump(story_data, f, indent=4, ensure_ascii=False)
+
+            self.project_manager.update_story_safely(project_id, set_scene_background)
 
             # Mark as completed in queue
             self._mark_queue_item_completed(project_id, None, GenerationType.BACKGROUND, scene_id=scene_id)
@@ -2967,16 +2926,23 @@ class GenerationService:
             )
             
             if result["status"] == "success":
-                # Update story.json with the new path
+                # Update story.json under the project lock with a fresh on-disk read
                 rel_path = result["rel_path"]
-                scene['narration_path'] = rel_path
-                if 'narration_paths' not in scene:
-                    scene['narration_paths'] = []
-                if rel_path not in scene['narration_paths']:
-                    scene['narration_paths'].append(rel_path)
-                
-                with open(story_path, 'w', encoding='utf-8') as f:
-                    json.dump(story_data, f, indent=4)
+
+                def set_scene_narration(story_data):
+                    scenes = story_data.get('scenes', [])
+                    if scene_id < 0 or scene_id >= len(scenes):
+                        raise ValueError(f"Scene index {scene_id} out of range")
+                    scene = scenes[scene_id]
+                    scene['narration_path'] = rel_path
+                    narration_paths = scene.get('narration_paths')
+                    if not isinstance(narration_paths, list):
+                        narration_paths = []
+                        scene['narration_paths'] = narration_paths
+                    if rel_path not in narration_paths:
+                        narration_paths.append(rel_path)
+
+                self.project_manager.update_story_safely(project_id, set_scene_narration)
                 
                 # Broadcast completion
                 manager.broadcast_sync(project_id, {

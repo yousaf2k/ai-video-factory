@@ -180,6 +180,72 @@ async def get_shot(project_id: str, shot_id_or_index: str):
     return shot
 
 
+# Generation results are owned by the backend (queue workers, pipeline) and are
+# never edited from the shot editor. When a client PUTs its full shots snapshot,
+# that snapshot may be stale (fetched before parallel generations finished), so
+# these fields are restored from the fresh on-disk state before the save.
+# Everything else (prompts, duration, index, scene_id, ...) stays client-owned.
+GENERATION_STATUS_FIELDS = (
+    'image_generated', 'image_path', 'image_paths',
+    'video_rendered', 'video_path', 'video_paths',
+    'then_image_generated', 'then_image_path',
+    'now_image_generated', 'now_image_path',
+    'meeting_video_rendered', 'meeting_video_path',
+    'departure_video_rendered', 'departure_video_path',
+    'soundfx_generated', 'soundfx_path',
+)
+
+# Fields copied verbatim (never renamed by update_shots, stored relative)
+_VERBATIM_STATUS_FIELDS = {'soundfx_generated', 'soundfx_path'}
+
+
+def merge_fresh_generation_status(incoming_shots, current_shots, rename_operations):
+    """
+    Restore backend-owned generation status fields on ``incoming_shots`` from
+    ``current_shots`` (the FRESH on-disk list, read inside the project lock),
+    matching shots by id. Must run inside the lock, before the list replace.
+
+    Paths renamed by this very request (reorder changes the shot_NNN filename
+    prefix) are preserved: a fresh path that was renamed maps to the incoming
+    (already rewritten) path, so reorder saves don't point at stale names.
+    Shots absent from disk (inserted) keep their client values; shots absent
+    from the incoming list stay deleted.
+    """
+    rename_map = {}
+    for src, _tmp, dst in rename_operations:
+        rename_map[os.path.normcase(os.path.abspath(src))] = os.path.abspath(dst)
+
+    def _map_renamed(path):
+        abs_path = os.path.normcase(os.path.abspath(config.resolve_path(path)))
+        return rename_map.get(abs_path)
+
+    fresh_by_id = {s.get('id'): s for s in current_shots if s.get('id')}
+
+    for shot in incoming_shots:
+        fresh = fresh_by_id.get(shot.get('id'))
+        if not fresh:
+            continue  # new/inserted shot: client values are authoritative
+        for field in GENERATION_STATUS_FIELDS:
+            if field not in fresh:
+                continue
+            fresh_value = fresh[field]
+            if field in _VERBATIM_STATUS_FIELDS:
+                shot[field] = fresh_value
+            elif isinstance(fresh_value, list):
+                merged = []
+                for p in fresh_value:
+                    if not p:
+                        continue
+                    renamed = _map_renamed(p)
+                    merged.append(renamed if renamed else os.path.abspath(config.resolve_path(p)))
+                shot[field] = merged
+            elif isinstance(fresh_value, str) and fresh_value:
+                renamed = _map_renamed(fresh_value)
+                shot[field] = renamed if renamed else os.path.abspath(config.resolve_path(fresh_value))
+            else:
+                shot[field] = fresh_value
+
+
 @router.put("")
 async def update_shots(project_id: str, request: UpdateShotsRequest):
     """Update shots (reorder, edit prompts)"""
@@ -273,8 +339,12 @@ async def update_shots(project_id: str, request: UpdateShotsRequest):
                     shutil.move(tmp, dst)
                 except: pass
 
-        # Atomic update
+        # Atomic update. The incoming list is the client's snapshot and may be
+        # stale (saved while generations were running), so backend-owned status
+        # fields are merged from the FRESH on-disk list inside the lock before
+        # the replace — a stale save can no longer erase generation results.
         def modify_func(current_shots):
+            merge_fresh_generation_status(shots_dicts, current_shots, rename_operations)
             current_shots[:] = shots_dicts
         project_service.project_manager.update_shots_safely(project_id, modify_func)
 

@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
 from core.project_manager import ProjectManager
+from core import json_atomic
 from web_ui.backend.models.project import (
     ProjectMetadata, ProjectDetail, ProjectListItem,
     CreateProjectRequest, UpdateProjectRequest
@@ -153,13 +154,11 @@ class ProjectService:
                 # Save story.json
                 project_dir = self.project_manager.get_project_dir(project_id)
                 story_path = os.path.join(project_dir, "story.json")
-                with open(story_path, 'w', encoding='utf-8') as f:
-                    json.dump(story, f, indent=2, ensure_ascii=False)
+                json_atomic.atomic_write_json(story_path, story)
 
                 # Save shots.json directly (bypass shot planner)
                 shots_path = os.path.join(project_dir, "shots.json")
-                with open(shots_path, 'w', encoding='utf-8') as f:
-                    json.dump(shots, f, indent=2, ensure_ascii=False)
+                json_atomic.atomic_write_json(shots_path, shots)
 
                 # Update metadata with story info
                 meta['idea'] = story.get('title', request.idea)
@@ -212,13 +211,11 @@ class ProjectService:
                 # Save story.json
                 project_dir = self.project_manager.get_project_dir(project_id)
                 story_path = os.path.join(project_dir, "story.json")
-                with open(story_path, 'w', encoding='utf-8') as f:
-                    json.dump(story, f, indent=2, ensure_ascii=False)
+                json_atomic.atomic_write_json(story_path, story)
 
                 # Save shots.json directly (bypass shot planner)
                 shots_path = os.path.join(project_dir, "shots.json")
-                with open(shots_path, 'w', encoding='utf-8') as f:
-                    json.dump(shots, f, indent=2, ensure_ascii=False)
+                json_atomic.atomic_write_json(shots_path, shots)
 
                 # Update metadata with story info
                 meta['idea'] = story.get('title', request.idea)
@@ -297,9 +294,7 @@ class ProjectService:
                     "total_duration": calculated_duration
                 }
                 
-                with open(story_path, 'w', encoding='utf-8') as f:
-                    json.dump(dummy_story, f, indent=2, ensure_ascii=False)
-
+                json_atomic.atomic_write_json(story_path, dummy_story)
                 # Save updated metadata
                 self.project_manager._save_meta(project_id, meta)
 
@@ -388,16 +383,15 @@ class ProjectService:
             'narration_generated': False
         }
 
-        # Reset shot status in shots.json
+        # Reset shot status in shots.json (atomic write; the copy is a fresh
+        # project dir with a single writer, so no lock is needed)
         shots_path = os.path.join(new_project_dir, "shots.json")
         if os.path.exists(shots_path):
-            with open(shots_path, 'r', encoding='utf-8') as f:
-                shots = json.load(f)
+            shots = json_atomic.read_json(shots_path, default=[])
             for shot in shots:
                 shot['image_generated'] = False
                 shot['video_rendered'] = False
-            with open(shots_path, 'w', encoding='utf-8') as f:
-                json.dump(shots, f, indent=2, ensure_ascii=False)
+            json_atomic.atomic_write_json(shots_path, shots)
 
         self.project_manager._save_meta(new_project_id, new_meta)
 
