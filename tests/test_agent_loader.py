@@ -152,3 +152,45 @@ def test_path_traversal_rejected(tmp_path):
         loader.load_prompt_raw("story", "../secret")
     with pytest.raises(ValueError):
         loader.save_prompt("story", "../../secret", "data")
+
+
+def test_load_prompt_segments_structure(loader):
+    """Preview segments split text/includes and resolve nested children."""
+    data = loader.load_prompt_segments("story", "documentary/default")
+    assert data["content"].startswith("# Agent:")
+    assert "{{include:" not in data["expanded"]  # expanded view has directives resolved
+    assert data["segments"][0]["type"] == "text"
+
+    includes = {s["name"]: s for s in data["segments"] if s["type"] == "include"}
+    assert "_base/base_standard" in includes
+    assert "_styles/style_documentary" in includes
+
+    std = includes["_base/base_standard"]
+    assert std["found"] and not std["circular"]
+    assert std["path"] == "story/documentary/_base/base_standard"
+    # nested include inside the base file resolves as a child section
+    child_names = [c["name"] for c in std["children"] if c["type"] == "include"]
+    assert "_base/base_story_format" in child_names
+
+    # the trailing text segment carries the user input placeholder
+    assert data["segments"][-1]["type"] == "text"
+    assert "{USER_INPUT}" in data["segments"][-1]["content"]
+
+
+def test_load_prompt_segments_reports_missing_and_circular(tmp_path):
+    loader = _make_loader(tmp_path, {
+        "story/main.md": "A {{include:ghost}} {{include:loop}}",
+        "story/loop.md": "L {{include:main}}",
+    })
+    data = loader.load_prompt_segments("story", "main")
+    includes = {s["name"]: s for s in data["segments"] if s["type"] == "include"}
+
+    assert not includes["ghost"]["found"]
+    assert includes["ghost"]["path"] is None
+    assert includes["ghost"]["children"] == []
+
+    assert includes["loop"]["found"]
+    nested = includes["loop"]["children"]
+    circular = [c for c in nested if c["type"] == "include"]
+    assert circular and circular[0]["name"] == "main"
+    assert circular[0]["circular"]

@@ -252,15 +252,21 @@ async def get_agents_tree():
 
 
 @router.get("/agents/{agent_type}/{agent_id:path}")
-async def get_agent_content(agent_type: str, agent_id: str, raw: bool = False):
+async def get_agent_content(agent_type: str, agent_id: str, raw: bool = False, view: Optional[str] = None):
     """Get content of an agent prompt file.
 
     raw=true returns the file content as-is (keeps {{include:...}} directives),
     along with the list of included files. Default returns the include-expanded
     prompt used at generation time.
+    view=preview returns the raw content split into text/include segments,
+    with every include resolved and nested, plus the fully expanded prompt —
+    used by the Web UI preview mode to render each included file as its own
+    collapsible section.
     """
     try:
         loader = get_agent_loader()
+        if view == "preview":
+            return loader.load_prompt_segments(agent_type, agent_id)
         if raw:
             content = loader.load_prompt_raw(agent_type, agent_id)
             includes = re.findall(r'\{\{include:(.+?)\}\}', content)

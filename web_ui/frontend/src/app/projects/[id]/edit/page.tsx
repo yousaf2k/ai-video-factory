@@ -3,7 +3,7 @@
  */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -17,7 +17,7 @@ import { Image as ImageIcon, Video as VideoIcon } from "lucide-react";
 import { useProject } from "@/hooks/useProjects";
 import { useUpdateStory, useGenerateStory } from "@/hooks/useStory";
 import { useShots, useReplanShots } from "@/hooks/useShots";
-import { useAgents } from "@/hooks/useAgents";
+import { useAgents, useAgentTree } from "@/hooks/useAgents";
 import { SceneList } from "@/components/scenes/SceneList";
 import { ShotGrid } from "@/components/shots/ShotGrid";
 import { Scene, Story, Shot, ProjectType, Character } from "@/types";
@@ -47,7 +47,23 @@ export default function ProjectEditPage() {
   const { data: project, isLoading, error } = useProject(projectId);
   const { data: shots } = useShots(projectId);
   const { data: agents } = useAgents();
+  const { data: agentTree } = useAgentTree();
   const queryClient = useQueryClient();
+
+  // Component libraries (cameras/styles/contexts/soundfx) for the custom
+  // shots-agent composer. These live in the agent tree, not the flat
+  // runnable-agents list.
+  const shotComponents = useMemo(() => {
+    const cats = agentTree?.shots ?? [];
+    const byCat = (id: string) =>
+      (cats.find((c: any) => c.id === id)?.base_files ?? []) as any[];
+    return {
+      cameras: byCat("cameras"),
+      styles: byCat("styles"),
+      contexts: byCat("contexts"),
+      soundfx: byCat("soundfx"),
+    };
+  }, [agentTree]);
   
   // Filter story agents based on project type
   const filteredStoryAgents = agents?.story?.filter((agent: any) => {
@@ -103,6 +119,14 @@ export default function ProjectEditPage() {
   const [selectedContext, setSelectedContext] = useState<string>("none");
   const [selectedSoundFX, setSelectedSoundFX] = useState<string>("none");
   const [maxShots, setMaxShots] = useState(0);
+  // Component values last filled from the selected predefined agent's own
+  // includes; null once the user builds a custom composition
+  const [predefinedComposition, setPredefinedComposition] = useState<{
+    camera: string;
+    style: string;
+    context: string;
+    soundfx: string;
+  } | null>(null);
 
   // Initialize and sync story when project loads
   useEffect(() => {
@@ -120,6 +144,73 @@ export default function ProjectEditPage() {
       })
       .catch(console.error);
   }, []);
+
+  // Pre-fill the Re-plan Shots dialog from the project's saved shots agent
+  // (the value chosen at project creation / in project settings)
+  const shotsAgentInitialized = useRef(false);
+  useEffect(() => {
+    if (!project || !agents || !agentTree || shotsAgentInitialized.current) return;
+    shotsAgentInitialized.current = true;
+
+    const saved = (project.shots_agent ?? "").trim();
+    if (!saved || saved === "default") return;
+
+    if (saved.includes(",")) {
+      // Custom composition saved by this dialog: base + category-prefixed ids
+      const known = new Set<string>((agents.shots ?? []).map((a: any) => a.id));
+      (agentTree.shots ?? []).forEach((c: any) =>
+        (c.base_files ?? []).forEach((f: any) => known.add(f.id))
+      );
+      const byPrefix = (prefix: string) => {
+        const part = saved
+          .split(",")
+          .map((p) => p.trim())
+          .find((p) => p.startsWith(`${prefix}/`) && known.has(p));
+        return part ?? "none";
+      };
+      setShotsAgentMode("custom");
+      setSelectedCamera(byPrefix("cameras"));
+      setSelectedStyle(byPrefix("styles"));
+      setSelectedContext(byPrefix("contexts"));
+      setSelectedSoundFX(byPrefix("soundfx"));
+    } else if ((agents.shots ?? []).some((a: any) => !a.category && a.id === saved)) {
+      setSelectedShotsAgent(saved);
+      setShotsAgentMode("predefined");
+    }
+    // Unknown saved values fall back to the dialog defaults
+  }, [project, agents, agentTree]);
+
+  // Fill the component dropdowns from the selected predefined agent's includes
+  useEffect(() => {
+    if (shotsAgentMode !== "predefined" || !selectedShotsAgent) return;
+    let cancelled = false;
+    api
+      .getAgentFileRaw("shots", selectedShotsAgent)
+      .then((raw) => {
+        if (cancelled) return;
+        const includes = (raw.includes ?? []).map((i: string) => i.trim());
+        const pick = (cat: keyof typeof shotComponents, prefix: string) => {
+          const inc = includes.find((i: string) => i.startsWith(`${prefix}/`));
+          if (!inc) return "none";
+          return shotComponents[cat].some((a: any) => a.id === inc) ? inc : "none";
+        };
+        const composition = {
+          camera: pick("cameras", "cameras"),
+          style: pick("styles", "styles"),
+          context: pick("contexts", "contexts"),
+          soundfx: pick("soundfx", "soundfx"),
+        };
+        setSelectedCamera(composition.camera);
+        setSelectedStyle(composition.style);
+        setSelectedContext(composition.context);
+        setSelectedSoundFX(composition.soundfx);
+        setPredefinedComposition(composition);
+      })
+      .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+  }, [shotsAgentMode, selectedShotsAgent, shotComponents]);
 
   const handleUpdateScene = async (index: number, updatedScene: Scene) => {
     if (!story || !story.scenes) {
@@ -413,17 +504,28 @@ export default function ProjectEditPage() {
 
   const handleReplanShots = async () => {
     try {
-      let finalAgent = selectedShotsAgent;
-      if (shotsAgentMode === "custom") {
-        const parts = [
-          "base/base_shots_standard",
-          selectedCamera === "none" ? "" : selectedCamera,
-          selectedStyle === "none" ? "" : selectedStyle,
-          selectedContext === "none" ? "" : selectedContext,
-          selectedSoundFX === "none" ? "" : selectedSoundFX
-        ].filter(Boolean);
-        finalAgent = parts.join(", ");
-      }
+      // Send the predefined agent id when its components are untouched so its
+      // full include set (possibly several contexts/styles) is preserved;
+      // send an explicit composition once the dropdowns are overridden.
+      const untouched =
+        shotsAgentMode === "predefined" &&
+        predefinedComposition !== null &&
+        selectedCamera === predefinedComposition.camera &&
+        selectedStyle === predefinedComposition.style &&
+        selectedContext === predefinedComposition.context &&
+        selectedSoundFX === predefinedComposition.soundfx;
+
+      const finalAgent = untouched
+        ? selectedShotsAgent
+        : [
+            "base/base_shots_standard",
+            selectedCamera === "none" ? "" : selectedCamera,
+            selectedStyle === "none" ? "" : selectedStyle,
+            selectedContext === "none" ? "" : selectedContext,
+            selectedSoundFX === "none" ? "" : selectedSoundFX,
+          ]
+            .filter(Boolean)
+            .join(", ");
 
       await replanShotsMutation.mutateAsync({
         max_shots: maxShots,
@@ -892,6 +994,13 @@ export default function ProjectEditPage() {
                   <Select
                     value={shotsAgentMode === "custom" ? "custom" : selectedShotsAgent}
                     onValueChange={(val) => {
+                      // Clear components immediately; the fetch effect below
+                      // refills them from the selected agent's includes
+                      setPredefinedComposition(null);
+                      setSelectedCamera("none");
+                      setSelectedStyle("none");
+                      setSelectedContext("none");
+                      setSelectedSoundFX("none");
                       if (val === "custom") {
                         setShotsAgentMode("custom");
                       } else {
@@ -920,15 +1029,19 @@ export default function ProjectEditPage() {
                   </Select>
                 </div>
 
-                {shotsAgentMode === "custom" && (
-                  <div className="space-y-3 p-4 border rounded-md bg-muted/30">
+                <div className="p-4 border rounded-md bg-muted/30">
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Components of the selected agent. Change any of them to build
+                    a custom composition — applied when you re-plan.
+                  </p>
+                  <div className="space-y-3">
                     <div>
                       <label className="block text-xs font-medium mb-1 text-muted-foreground">Camera Agent</label>
                       <Select value={selectedCamera} onValueChange={setSelectedCamera}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select camera..." /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
-                          {agents?.shots?.filter((a: any) => a.category === 'cameras').map((a: any) => (
+                          {shotComponents.cameras.map((a: any) => (
                             <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -940,7 +1053,7 @@ export default function ProjectEditPage() {
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select style..." /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
-                          {agents?.shots?.filter((a: any) => a.category === 'styles').map((a: any) => (
+                          {shotComponents.styles.map((a: any) => (
                             <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -952,7 +1065,7 @@ export default function ProjectEditPage() {
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select context..." /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
-                          {agents?.shots?.filter((a: any) => a.category === 'contexts').map((a: any) => (
+                          {shotComponents.contexts.map((a: any) => (
                             <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -964,14 +1077,14 @@ export default function ProjectEditPage() {
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select soundfx..." /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
-                          {agents?.shots?.filter((a: any) => a.category === 'soundfx').map((a: any) => (
+                          {shotComponents.soundfx.map((a: any) => (
                             <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
 
               <div>

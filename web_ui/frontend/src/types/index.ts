@@ -327,6 +327,29 @@ export type AgentTree = {
   shots: AgentCategory[];
 };
 
+// Agents editor: preview segments (raw file split around resolved {{include:...}} directives)
+export interface AgentTextSegment {
+  type: "text";
+  content: string;
+}
+
+export interface AgentIncludeSegment {
+  type: "include";
+  name: string;        // include name as written, e.g. "_base/base_standard"
+  path: string | null; // resolved agents-relative path without .md; null when not found
+  found: boolean;
+  circular: boolean;
+  children: AgentSegment[];
+}
+
+export type AgentSegment = AgentTextSegment | AgentIncludeSegment;
+
+export interface AgentPreview {
+  content: string;   // raw file content (with include directives)
+  expanded: string;  // fully include-expanded prompt as sent to the LLM
+  segments: AgentSegment[];
+}
+
 // Queue types
 export enum GenerationType {
   IMAGE = "image",
