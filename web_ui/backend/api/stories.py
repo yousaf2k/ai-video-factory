@@ -128,11 +128,14 @@ async def delete_scene_narration(project_id: str, scene_id: int):
                 os.remove(file_path)
                 deleted.append(rel_path)
 
-        scene.pop('narration_path', None)
-        scene.pop('narration_paths', None)
+        # Clear the narration refs on the FRESH story under the project lock
+        def clear_scene_narration(current_story):
+            current_scenes = current_story.get('scenes', [])
+            if 0 <= scene_id < len(current_scenes):
+                current_scenes[scene_id].pop('narration_path', None)
+                current_scenes[scene_id].pop('narration_paths', None)
 
-        with open(story_path, 'w', encoding='utf-8') as f:
-            json.dump(story_data, f, indent=4)
+        story_data = project_manager.update_story_safely(project_id, clear_scene_narration) or story_data
 
         from web_ui.backend.websocket.manager import manager
         manager.broadcast_sync(project_id, {
@@ -174,13 +177,14 @@ async def select_scene_narration(project_id: str, scene_id: int, request: Select
         # Verify the path exists in narration_paths
         if 'narration_paths' not in scene or request.narration_path not in scene['narration_paths']:
             raise ValueError("Narration path not found in variations")
-        
-        # Update active path
-        scene['narration_path'] = request.narration_path
-        
-        # Save story
-        with open(story_path, 'w', encoding='utf-8') as f:
-            json.dump(story_data, f, indent=4)
+
+        # Update active path on the FRESH story under the project lock
+        def select_scene_narration(current_story):
+            current_scenes = current_story.get('scenes', [])
+            if 0 <= scene_id < len(current_scenes):
+                current_scenes[scene_id]['narration_path'] = request.narration_path
+
+        story_data = project_manager.update_story_safely(project_id, select_scene_narration) or story_data
         
         # Broadcast the change
         from web_ui.backend.websocket.manager import manager
@@ -313,10 +317,11 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
             # Update shots.json
             project_manager.save_shots(project_id, shots)
 
-            # Update project metadata
-            meta['steps']['story'] = True
-            meta['stats']['total_shots'] = len(shots)
-            project_manager._save_meta(project_id, meta)
+            # Update project metadata (fresh meta read under the project lock)
+            def mark_asmr_story_meta(current_meta):
+                current_meta['steps']['story'] = True
+                current_meta['stats']['total_shots'] = len(shots)
+            meta = project_manager.update_meta_safely(project_id, mark_asmr_story_meta) or meta
 
             return {
                 "story": story,
@@ -339,19 +344,17 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
             
             # Save story.json
             project_manager.save_story(project_id, json.dumps(story, indent=2, ensure_ascii=False))
-            
-            # Save shots.json directly
-            project_dir = project_manager.get_project_dir(project_id)
-            shots_path = os.path.join(project_dir, "shots.json")
-            with open(shots_path, 'w', encoding='utf-8') as f:
-                json.dump(shots, f, indent=2, ensure_ascii=False)
+
+            # Save shots.json atomically under the project lock
+            project_manager.save_shots(project_id, shots)
                 
-            # Update metadata
-            meta['steps']['story'] = True
-            meta['steps']['scene_graph'] = True
-            meta['steps']['shots'] = True
-            meta['stats']['total_shots'] = len(shots)
-            project_manager._save_meta(project_id, meta)
+            # Update metadata (fresh meta read under the project lock)
+            def mark_thenvsnow_meta(current_meta):
+                current_meta['steps']['story'] = True
+                current_meta['steps']['scene_graph'] = True
+                current_meta['steps']['shots'] = True
+                current_meta['stats']['total_shots'] = len(shots)
+            project_manager.update_meta_safely(project_id, mark_thenvsnow_meta)
             
             logger.info(f"ThenVsNow story regenerated with {len(shots)} shots")
             return project_service.get_project(project_id)
@@ -444,14 +447,16 @@ async def upload_character_reference(
         with open(file_path, 'wb') as f:
             shutil.copyfileobj(file.file, f)
 
-        # Update character model
+        # Update character model on the FRESH story under the project lock
         field_name = f"{variant}_reference_image_path"
         relative_path = f"output/projects/{project_id}/references/{unique_filename}"
-        character[field_name] = relative_path
 
-        # Save story
-        with open(story_path, 'w', encoding='utf-8') as f:
-            json.dump(story_data, f, indent=4, ensure_ascii=False)
+        def set_character_ref(current_story):
+            current_characters = current_story.get('characters', [])
+            if 0 <= character_index < len(current_characters):
+                current_characters[character_index][field_name] = relative_path
+
+        story_data = project_manager.update_story_safely(project_id, set_character_ref) or story_data
 
         # Broadcast update
         from web_ui.backend.websocket.manager import manager
@@ -582,15 +587,18 @@ async def upload_scene_background(
         with open(file_path, 'wb') as f:
             shutil.copyfileobj(file.file, f)
 
-        # Update scene model
+        # Update scene model on the FRESH story under the project lock
         relative_path = f"output/projects/{project_id}/backgrounds/{unique_filename}"
-        scenes[scene_index]['background_image_path'] = relative_path
-        scenes[scene_index]['background_generated'] = True
-        scenes[scene_index]['background_is_generated'] = False  # Uploaded, not generated
 
-        # Save story
-        with open(story_path, 'w', encoding='utf-8') as f:
-            json.dump(story_data, f, indent=4, ensure_ascii=False)
+        def set_scene_background(current_story):
+            for current_scene in current_story.get('scenes', []):
+                if current_scene.get('scene_id') == scene_id:
+                    current_scene['background_image_path'] = relative_path
+                    current_scene['background_generated'] = True
+                    current_scene['background_is_generated'] = False  # Uploaded, not generated
+                    return
+
+        story_data = project_manager.update_story_safely(project_id, set_scene_background) or story_data
 
         # Broadcast update
         from web_ui.backend.websocket.manager import manager

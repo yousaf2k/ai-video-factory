@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 import contextlib
 from core.logger_config import get_logger
+from core import json_atomic
 import config
 
 
@@ -16,6 +17,10 @@ logger = get_logger(__name__)
 
 
 class ProjectManager:
+    # Single lock guarding all JSON read-modify-write transactions of one
+    # project (shots.json, meta, story.json) so multi-file updates stay atomic.
+    PROJECT_LOCK_NAME = ".project_lock"
+
     def __init__(self, projects_dir=None):
         if projects_dir is None:
             # Import here to avoid circular dependencies
@@ -23,56 +28,32 @@ class ProjectManager:
             self.projects_dir = getattr(config, 'ABS_PROJECTS_DIR', "output/projects")
         else:
             self.projects_dir = projects_dir
-            
+
         os.makedirs(self.projects_dir, exist_ok=True)
 
-    @contextlib.contextmanager
-    def lock_project(self, project_id: str, timeout: int = 15):
-        """
-        File-based lock to prevent concurrent read-modify-write collisions on shots.json.
-        Uses atomic directory creation (supported across Windows and POSIX).
-        """
+    def _project_lock_path(self, project_id: str) -> str:
         project_dir = os.path.join(self.projects_dir, project_id)
         os.makedirs(project_dir, exist_ok=True)
-        lock_dir = os.path.join(project_dir, ".shots_lock")
-        
-        start_time = time.time()
-        acquired = False
-        
-        while time.time() - start_time < timeout:
-            try:
-                os.mkdir(lock_dir)
-                acquired = True
-                break
-            except FileExistsError:
-                # Check if the lock is stale (e.g., from a crash)
-                try:
-                    # If lock is older than 60 seconds, remove it as stale safety
-                    mtime = os.path.getmtime(lock_dir)
-                    if time.time() - mtime > 60:
-                        logger.warning(f"Removing stale project lock for {project_id}")
-                        os.rmdir(lock_dir)
-                        continue
-                except:
-                    pass
-                time.sleep(0.1)
-                
-        if not acquired:
-            logger.error(f"Timed out acquiring lock for project: {project_id}")
-            raise TimeoutError(f"Could not acquire project lock for {project_id} after {timeout} seconds.")
-            
-        try:
+        return os.path.join(project_dir, self.PROJECT_LOCK_NAME)
+
+    @contextlib.contextmanager
+    def lock_project(self, project_id: str, timeout: int = 30):
+        """
+        File-based lock to prevent concurrent read-modify-write collisions on a
+        project's JSON files. Re-entrant within a process/thread and safe
+        across processes (atomic directory creation, stale-lock recovery).
+        """
+        with json_atomic.file_lock(self._project_lock_path(project_id), timeout=timeout):
             yield
-        finally:
-            try:
-                os.rmdir(lock_dir)
-            except Exception as e:
-                logger.warning(f"Failed to release project lock for {project_id}: {e}")
 
     def update_shots_safely(self, project_id: str, modify_func):
         """
         Atomically loads, modifies, and saves shots.json with explicit file locking.
-        
+
+        The shot list is always re-read from disk inside the lock — never taken
+        from an in-memory snapshot — so concurrent writers cannot overwrite
+        each other's updates.
+
         Args:
             project_id: The ID of the project.
             modify_func: A callable that accepts a list of shot dictionaries or None and updates in-place.
@@ -86,7 +67,7 @@ class ProjectManager:
     def update_meta_safely(self, project_id: str, modify_func):
         """
         Atomically loads, modifies, and saves project metadata with explicit file locking.
-        
+
         Args:
             project_id: The ID of the project.
             modify_func: A callable that accepts a metadata dictionary and updates it in-place.
@@ -100,32 +81,94 @@ class ProjectManager:
             self._save_meta(project_id, meta)
             return meta
 
+    def update_story_safely(self, project_id: str, modify_func):
+        """
+        Atomically loads, modifies, and saves story.json with explicit file locking.
+
+        The story is always re-read from disk inside the lock, so writers that
+        ran to completion while this generation was in flight (e.g. a parallel
+        character-image completion) are never overwritten by a stale snapshot.
+
+        Args:
+            project_id: The ID of the project.
+            modify_func: A callable that accepts the parsed story dict and updates it in-place.
+
+        Returns:
+            The updated story dict, or None if story.json is missing/corrupt.
+        """
+        story_path = os.path.join(self.get_project_dir(project_id), "story.json")
+        with self.lock_project(project_id):
+            if not os.path.exists(story_path):
+                logger.warning(f"Story file not found for locked update: {story_path}")
+                return None
+            story = json_atomic.read_json(story_path, default=None)
+            if story is None:
+                logger.error(f"Malformed story.json for project: {project_id}")
+                return None
+            modify_func(story)
+            json_atomic.atomic_write_json(story_path, story, indent=4)
+            return story
+
+    def append_shot_media_paths(self, project_id: str, paths, shot_id: str = None,
+                                shot_index: int = None, list_field: str = 'image_paths'):
+        """
+        Append media paths (image/video variations) to a shot's path list.
+
+        The dedupe-and-append happens inside the lock against the FRESH list
+        from disk, so concurrent generations adding variations to the same shot
+        never drop each other's entries (unlike passing a full list captured
+        earlier from a stale snapshot).
+        """
+        if not paths:
+            return
+
+        def modify_shot(shots):
+            target_shot = self._find_shot(shots, shot_id, shot_index)
+            if not target_shot:
+                logger.warning(f"append_shot_media_paths: could not find shot ID={shot_id}, Index={shot_index}")
+                return
+            path_list = target_shot.get(list_field)
+            if not isinstance(path_list, list):
+                path_list = []
+                target_shot[list_field] = path_list
+            existing_abs = {config.resolve_path(p) for p in path_list if p}
+            for p in paths:
+                if not p:
+                    continue
+                abs_p = config.resolve_path(p)
+                if abs_p not in existing_abs:
+                    path_list.append(abs_p)
+                    existing_abs.add(abs_p)
+
+        self.update_shots_safely(project_id, modify_shot)
+
+    @staticmethod
+    def _find_shot(shots, shot_id=None, shot_index=None):
+        """Locate a shot dict by ID (preferred), falling back to 1-based index. Returns None if not found."""
+        if shot_id:
+            for s in shots:
+                if s.get('id') == shot_id:
+                    return s
+        if shot_index is not None:
+            if 0 <= shot_index - 1 < len(shots):
+                return shots[shot_index - 1]
+        return None
+
     def update_shot_metadata(self, project_id: str, updates: dict, shot_id: str = None, shot_index: int = None):
         """
         Update metadata for a specific shot using ID (preferred) or index.
-        Thread-safe and race-condition proof via update_shots_safely.
+        Race-proof: shots.json AND the meta stats are updated under ONE lock,
+        with the shot list re-read fresh from disk (never an in-memory snapshot).
         """
-        def modify_shot(shots):
-            target_shot = None
-            
-            # 1. Try to find by ID
-            if shot_id:
-                for s in shots:
-                    if s.get('id') == shot_id:
-                        target_shot = s
-                        break
-            
-            # 2. Skip fallback if ID was provided but not found (safety)
-            # 3. Try to find by index if no ID or ID not found
-            if not target_shot and shot_index is not None:
-                if 0 <= shot_index - 1 < len(shots):
-                    target_shot = shots[shot_index - 1]
-                    
+        with self.lock_project(project_id):
+            shots = self._load_shots(project_id)
+            target_shot = self._find_shot(shots, shot_id, shot_index)
+
             if target_shot:
                 # Apply updates
                 for key, value in updates.items():
                     target_shot[key] = value
-                
+
                 # Special handling for path lists (image_paths, video_paths)
                 # Map specific path fields to their corresponding variation lists
                 path_to_list_map = {
@@ -136,7 +179,7 @@ class ProjectManager:
                     'meeting_video_path': 'video_paths',
                     'departure_video_path': 'video_paths'
                 }
-                
+
                 for update_key, list_key in path_to_list_map.items():
                     if update_key in updates:
                         path = updates[update_key]
@@ -144,33 +187,29 @@ class ProjectManager:
                             # Normalize path to absolute for reliable comparison
                             # (_load_shots ensures existing list items are also absolute)
                             abs_path = config.resolve_path(path)
-                            
+
                             if list_key not in target_shot:
                                 target_shot[list_key] = []
-                            
+
                             # Check for existence using absolute path
                             if abs_path not in target_shot[list_key]:
                                 target_shot[list_key].append(abs_path)
             else:
                 logger.warning(f"Could not find shot to update: ID={shot_id}, Index={shot_index}")
-                return  # Move to next step if no shot for stats update
 
-        # Update shots.json atomically
-        updated_shots = self.update_shots_safely(project_id, modify_shot)
-        
-        # Update metadata stats (total counts) - do it SAFELY using update_meta_safely
-        def modify_meta(meta):
-            try:
-                images_generated = sum(1 for s in updated_shots if s.get('image_generated', False))
-                videos_rendered = sum(1 for s in updated_shots if s.get('video_rendered', False))
-                
-                meta['stats']['images_generated'] = images_generated
-                meta['stats']['videos_rendered'] = videos_rendered
-            except Exception as e:
-                logger.error(f"Failed to update metadata stats in locked block: {e}")
-                
-        self.update_meta_safely(project_id, modify_meta)
-        return True # Best effort
+            self._save_shots(project_id, shots)
+
+            # Update metadata stats from the SAME transaction (fresh meta read)
+            meta = self.load_project(project_id)
+            if meta:
+                try:
+                    meta.setdefault('stats', {})
+                    meta['stats']['images_generated'] = sum(1 for s in shots if s.get('image_generated', False))
+                    meta['stats']['videos_rendered'] = sum(1 for s in shots if s.get('video_rendered', False))
+                    self._save_meta(project_id, meta)
+                except Exception as e:
+                    logger.error(f"Failed to update metadata stats in locked block: {e}")
+        return True  # Best effort
 
     def get_latest_project(self):
         """Get the most recent incomplete project, or None if all complete"""
@@ -281,13 +320,12 @@ class ProjectManager:
         return self.load_project(project_id)
 
     def save_story(self, project_id, story_json):
-        """Save story output"""
+        """Save story output (full replacement, written atomically)"""
         project_dir = os.path.join(self.projects_dir, project_id)
         story_path = os.path.join(project_dir, "story.json")
 
         logger.debug(f"Saving story to: {story_path}")
-        with open(story_path, 'w', encoding='utf-8') as f:
-            f.write(story_json)
+        json_atomic.atomic_write_json(story_path, json.loads(story_json) if isinstance(story_json, str) else story_json, indent=2)
 
         # Update metadata safely
         def modify_meta(meta):
@@ -295,7 +333,12 @@ class ProjectManager:
         self.update_meta_safely(project_id, modify_meta)
 
     def save_shots(self, project_id, shots):
-        """Save shot data (image prompts, motion prompts) and initialize status fields"""
+        """Save shot data (image prompts, motion prompts) and initialize status fields.
+
+        Full-list replacement — intended for (re-)planning, not for recording
+        generation results. Written atomically under the project lock so it can
+        never interleave with a concurrent update_shots_safely transaction.
+        """
         project_dir = os.path.join(self.projects_dir, project_id)
         shots_path = os.path.join(project_dir, "shots.json")
 
@@ -306,7 +349,7 @@ class ProjectManager:
         shots_with_batch.sort(key=lambda x: (x[1].get('batch_number', x[0] + 1), x[0]))
 
         import uuid
-        
+
         # Add status fields to each shot with reindexed values (1 to n)
         shots_with_status = []
         for idx, (original_idx, shot) in enumerate(shots_with_batch, start=1):
@@ -358,15 +401,15 @@ class ProjectManager:
             batch_counts[batch_num] = batch_counts.get(batch_num, 0) + 1
         logger.info(f"Shots sorted by batch_number: {batch_counts}")
 
-        # Save to shots.json
-        with open(shots_path, 'w', encoding='utf-8') as f:
-            json.dump(shots_with_status, f, indent=2, ensure_ascii=False)
+        # Save to shots.json (atomic, under the project lock) and refresh stats
+        with self.lock_project(project_id):
+            json_atomic.atomic_write_json(shots_path, shots_with_status)
 
-        # Update metadata safely - only store stats, not the shots array
-        def modify_meta(meta):
-            meta['stats']['total_shots'] = len(shots)
-            meta['steps']['shots'] = True
-        self.update_meta_safely(project_id, modify_meta)
+            meta = self.load_project(project_id)
+            if meta:
+                meta['stats']['total_shots'] = len(shots)
+                meta['steps']['shots'] = True
+                self._save_meta(project_id, meta)
 
     def relativize_path(self, path):
         """Convert an absolute path to a relative path if it's within the project root or output dir"""
@@ -539,13 +582,12 @@ class ProjectManager:
             return None
 
     def _save_meta(self, project_id, meta):
-        """Save project metadata"""
+        """Save project metadata (atomic)"""
         project_dir = os.path.join(self.projects_dir, project_id)
         os.makedirs(project_dir, exist_ok=True)
 
         meta_path = os.path.join(project_dir, f"{project_id}_meta.json")
-        with open(meta_path, 'w', encoding='utf-8') as f:
-            json.dump(meta, f, indent=2, ensure_ascii=False)
+        json_atomic.atomic_write_json(meta_path, meta)
 
     def _update_shots_file(self, project_id, shots):
         """Update the shots.json file with current shot data"""
@@ -601,8 +643,7 @@ class ProjectManager:
                 if field in shot:
                     shot[field] = [self.relativize_path(p) for p in shot.get(field, [])]
 
-        with open(shots_path, 'w', encoding='utf-8') as f:
-            json.dump(shots, f, indent=2, ensure_ascii=False)
+        json_atomic.atomic_write_json(shots_path, shots)
 
     def list_all_projects(self):
         """List all projects with their status"""

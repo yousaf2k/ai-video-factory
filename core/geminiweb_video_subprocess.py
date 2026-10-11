@@ -171,19 +171,19 @@ def _registry_get_chat_url(project_title: str):
 
 
 def _registry_set_chat_url(project_title: str, chat_url: str) -> None:
-    """Store chat_url under project_title (best-effort)."""
+    """Store chat_url under project_title (locked, atomic read-modify-write)."""
     try:
-        import json
+        from core import json_atomic
         path = _get_chat_registry_path()
-        data = {}
-        if os.path.exists(path):
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
         if chat_url and '/app/' in chat_url:
-            data[project_title] = chat_url.split('?')[0]
+            def _set(data):
+                if not isinstance(data, dict):
+                    data = {}
+                data[project_title] = chat_url.split('?')[0]
+                return data
+
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            json_atomic.update_json(path, _set, default={})
             logger.info(f"Registered project chat: '{project_title}' -> {chat_url}")
     except Exception as e:
         logger.debug(f"Chat registry write failed: {e}")

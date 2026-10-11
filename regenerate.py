@@ -72,23 +72,24 @@ def regenerate_images(project_id):
             project_mgr.mark_image_generated(project_id, shot_idx, expected_path)
 
     if not failed_images:
-        print("[INFO] No failed images found. All images are intact.")
-        # Create a new shots array with image_path included for video regeneration
-        shots_with_paths = []
+        print("[INFO] No failed images found. All images intact.")
+        # Sync image_path for shots whose file exists — locked read-modify-write
+        # against the FRESH shots.json (never the stale in-memory list)
+        path_updates = {}
         for idx, shot in enumerate(shots):
             shot_idx = shot.get('index', idx + 1)
             expected_filename = f"shot_{shot_idx:03d}.png"
             expected_path = os.path.join(images_dir, expected_filename)
             if os.path.exists(expected_path):
-                # Normalize path to use forward slashes (JSON-safe)
-                normalized_path = expected_path.replace('\\', '/')
-                shot['image_path'] = normalized_path
-            shots_with_paths.append(shot)
+                path_updates[shot_idx] = expected_path.replace('\\', '/')
 
-        # Save the updated shots array with proper paths
-        shots_path = os.path.join(project_mgr.get_project_dir(project_id), "shots.json")
-        with open(shots_path, 'w', encoding='utf-8') as f:
-            json.dump(shots_with_paths, f, indent=2, ensure_ascii=False)
+        def set_image_paths(current_shots):
+            for current_shot in current_shots:
+                idx = current_shot.get('index')
+                if idx in path_updates:
+                    current_shot['image_path'] = path_updates[idx]
+
+        project_mgr.update_shots_safely(project_id, set_image_paths)
         return True
 
     print(f"[INFO] Found {len(failed_images)} failed image(s)")
@@ -133,28 +134,24 @@ def regenerate_images(project_id):
 
     print(f"\n[SUCCESS] Regenerated {regenerated_count}/{len(failed_images)} images")
 
-    # Final sync: create shots array with image_path for all shots
-    shots_with_paths = []
+    # Final sync: write image_path for all shots whose file exists — locked
+    # read-modify-write against the FRESH shots.json so concurrent updates
+    # (e.g. from the Web UI) are preserved
+    path_updates = {}
     for idx, shot in enumerate(shots):
         shot_idx = shot.get('index', idx + 1)
         expected_filename = f"shot_{shot_idx:03d}.png"
         expected_path = os.path.join(images_dir, expected_filename)
-
-        # Copy the shot data
-        shot_with_path = shot.copy()
-
-        # Add image_path if file exists
         if os.path.exists(expected_path):
-            # Normalize path to use forward slashes (JSON-safe)
-            normalized_path = expected_path.replace('\\', '/')
-            shot_with_path['image_path'] = normalized_path
+            path_updates[shot_idx] = expected_path.replace('\\', '/')
 
-        shots_with_paths.append(shot_with_path)
+    def set_image_paths(current_shots):
+        for current_shot in current_shots:
+            idx = current_shot.get('index')
+            if idx in path_updates:
+                current_shot['image_path'] = path_updates[idx]
 
-    # Save updated shots to file
-    shots_path = os.path.join(project_mgr.get_project_dir(project_id), "shots.json")
-    with open(shots_path, 'w', encoding='utf-8') as f:
-        json.dump(shots_with_paths, f, indent=2, ensure_ascii=False)
+    project_mgr.update_shots_safely(project_id, set_image_paths)
 
     print(f"[INFO] Updated shots.json and project metadata")
     print(f"[INFO] Shots now have image_path field for video regeneration")
