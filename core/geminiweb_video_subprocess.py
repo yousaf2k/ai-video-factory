@@ -90,6 +90,7 @@ def _get_chat_registry_path() -> str:
 # block each other. The lock is held from acquisition until registration (the
 # whole generation), and is stolen if stale (crashed worker).
 _HELD_CHAT_LOCK: Optional[str] = None
+_CHAT_LOCK_DEPTH = 0
 _CHAT_LOCK_STALE_SECONDS = 900  # steal after 15 min (covers video generation)
 
 
@@ -99,30 +100,35 @@ def _chat_lock_path(project_title: str) -> str:
 
 
 def _acquire_chat_lock(project_title: str) -> str:
-    """Wait for exclusive right to create the project chat.
+    """Acquire the per-project generation lock (waits while another worker's
+    generation is in flight; re-entrant for the same process).
 
-    Returns one of:
-      'registered' — another worker registered the chat while we waited;
-                     caller should re-check the registry and join it.
-      'acquired'   — lock is held; caller may create the chat (must release).
-      'timeout'    — gave up waiting; caller proceeds best-effort (a duplicate
-                     chat may result, same as before the lock existed).
+    2026-10: this lock covers WHOLE generations. Overlapping generations in
+    one conversation trigger Gemini's image-swap bug (one response's image is
+    dropped and replaced by the other exchange's picture), so a waiter must
+    not proceed while the lock file exists - even if the chat is already in
+    the registry (the old 'registered' short-circuit did exactly that and
+    defeated serialization for every existing project).
+
+    Returns 'acquired' (lock held; release via _release_chat_lock) or
+    'timeout' (caller proceeds best-effort).
     """
-    global _HELD_CHAT_LOCK
+    global _HELD_CHAT_LOCK, _CHAT_LOCK_DEPTH
     timeout = int(getattr(config, 'GEMINIWEB_CHAT_LOCK_TIMEOUT', 600))
     deadline = time.time() + timeout
     lock_path = _chat_lock_path(project_title)
 
     while True:
-        # Another worker may have registered the chat while we wait.
-        if _registry_get_chat_url(project_title):
-            return 'registered'
+        if _HELD_CHAT_LOCK == project_title:
+            _CHAT_LOCK_DEPTH += 1
+            return 'acquired'
         try:
             fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             os.write(fd, f"{os.getpid()} {time.time()}".encode())
             os.close(fd)
             _HELD_CHAT_LOCK = project_title
-            logger.info(f"Acquired chat-creation lock for '{project_title}'")
+            _CHAT_LOCK_DEPTH = 0
+            logger.info(f"Acquired chat generation lock for '{project_title}'")
             return 'acquired'
         except FileExistsError:
             # Steal a stale lock left behind by a crashed worker.
@@ -137,22 +143,28 @@ def _acquire_chat_lock(project_title: str) -> str:
             logger.debug(f"Chat lock open failed: {e}")
             return 'timeout'
         if time.time() >= deadline:
-            logger.warning(f"Chat-creation lock wait timed out for '{project_title}' after {timeout}s")
+            logger.warning(f"Chat lock wait timed out for '{project_title}' after {timeout}s")
             return 'timeout'
         time.sleep(3)
 
 
 def _release_chat_lock(project_title: str) -> None:
-    """Release the per-project chat-creation lock (best-effort)."""
-    global _HELD_CHAT_LOCK
+    """Release the per-project generation lock (re-entrancy aware)."""
+    global _HELD_CHAT_LOCK, _CHAT_LOCK_DEPTH
     if _HELD_CHAT_LOCK != project_title:
+        return
+    if _CHAT_LOCK_DEPTH > 0:
+        # Inner scope (e.g. _ensure_project_chat) released its share; the
+        # whole-generation lock stays held by the outer run().
+        _CHAT_LOCK_DEPTH -= 1
         return
     try:
         os.remove(_chat_lock_path(project_title))
     except OSError:
         pass
     _HELD_CHAT_LOCK = None
-    logger.info(f"Released chat-creation lock for '{project_title}'")
+    logger.info(f"Released chat generation lock for '{project_title}'")
+
 
 def _registry_get_chat_url(project_title: str):
     """Return the stored chat URL for project_title, if any."""
@@ -628,12 +640,30 @@ def _wait_for_verification_complete(page):
 # the download to the response following OUR prompt, not "last one on page".
 _LOCATE_READY_JS = """(prompt) => {
   const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
-  const needle = norm(prompt).slice(0, 1000);
-  if (!needle) return false;
+  const full = norm(prompt);
+  if (!full) return false;
+  // 2026-10: Gemini collapses long query bubbles - the textContent becomes the
+  // first ~100 chars plus an ellipsis and a repeat of the prompt truncated at
+  // ~640 chars, so a long prompt never appears contiguously. Try progressively
+  // shorter needles; the first length with a match wins (ties -> most recent).
   const all = Array.from(document.querySelectorAll('user-query, message-content, model-response'));
-  let qi = -1;
+  const qIdx = [];
+  const qTexts = [];
   for (let i = 0; i < all.length; i++) {
-    if (all[i].tagName.toLowerCase() === 'user-query' && norm(all[i].textContent).includes(needle)) qi = i;
+    if (all[i].tagName.toLowerCase() === 'user-query') {
+      qIdx.push(i);
+      qTexts.push(norm(all[i].textContent));
+    }
+  }
+  let qi = -1;
+  for (const L of [1000, 800, 600, 500, 400, 300, 250, 200, 150, 100]) {
+    const needle = full.slice(0, L);
+    if (!needle) break;
+    let found = -1;
+    for (let k = 0; k < qTexts.length; k++) {
+      if (qTexts[k].includes(needle)) found = qIdx[k];
+    }
+    if (found !== -1) { qi = found; break; }
   }
   if (qi === -1) return false;
   for (let i = qi + 1; i < all.length; i++) {
@@ -647,12 +677,27 @@ _LOCATE_READY_JS = """(prompt) => {
 
 _LOCATE_CONTAINER_JS = """(prompt) => {
   const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
-  const needle = norm(prompt).slice(0, 1000);
-  if (!needle) return null;
+  const full = norm(prompt);
+  if (!full) return null;
+  // Same collapsed-query handling as _LOCATE_READY_JS above.
   const all = Array.from(document.querySelectorAll('user-query, message-content, model-response'));
-  let qi = -1;
+  const qIdx = [];
+  const qTexts = [];
   for (let i = 0; i < all.length; i++) {
-    if (all[i].tagName.toLowerCase() === 'user-query' && norm(all[i].textContent).includes(needle)) qi = i;
+    if (all[i].tagName.toLowerCase() === 'user-query') {
+      qIdx.push(i);
+      qTexts.push(norm(all[i].textContent));
+    }
+  }
+  let qi = -1;
+  for (const L of [1000, 800, 600, 500, 400, 300, 250, 200, 150, 100]) {
+    const needle = full.slice(0, L);
+    if (!needle) break;
+    let found = -1;
+    for (let k = 0; k < qTexts.length; k++) {
+      if (qTexts[k].includes(needle)) found = qIdx[k];
+    }
+    if (found !== -1) { qi = found; break; }
   }
   if (qi === -1) return null;
   for (let i = qi + 1; i < all.length; i++) {
@@ -931,6 +976,17 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
         page.add_init_script("window.close = () => {};")
 
         try:
+            # ── Serialize generations per project chat ────────────────────
+            # 2026-10: overlapping generations in one conversation trigger
+            # Gemini's image-swap bug (one response's image is dropped and
+            # replaced by the other exchange's picture). Hold the per-project
+            # chat lock for the WHOLE generation.
+            if project_title and _acquire_chat_lock(project_title) == 'timeout':
+                logger.warning(
+                    "Chat lock wait timed out; proceeding unlocked "
+                    "(overlapping generations in one chat risk Gemini's "
+                    "image-swap bug)")
+
             # ── Fast path: chat URL known from the registry — go straight to
             # the chat (skips the app home entirely). The chat page has the
             # same mode picker as the app home.
@@ -1116,13 +1172,20 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
             if project_title and not used_existing_chat:
                 if _rename_current_chat(page, project_title):
                     _registry_set_chat_url(project_title, page.url)
-                _release_chat_lock(project_title)
 
             # ── Download the video ───────────────────────────────────────────
             # Scoped to the response following OUR prompt so parallel workers
             # sharing the project chat never download each other's videos.
             result = _try_download_native(page, output_path, prompt_text=full_prompt)
-            
+
+            if not result and prompt_text:
+                # Right after completion the download control may not be
+                # attached yet or the file preparation can lag - give it one
+                # settled retry before falling back.
+                logger.warning("First download attempt failed; retrying once after 20s")
+                time.sleep(20)
+                result = _try_download_native(page, output_path, prompt_text=full_prompt)
+
             if not result:
                 # Try fallback (blob / direct fetch)
                 result = _download_video_fallback(page, output_path)
@@ -1170,6 +1233,24 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
 
 if __name__ == "__main__":
     import argparse
+    try:
+        # Persist the run log - parallel-download failures were previously
+        # undiagnosable because subprocess output was dropped.
+        import logging as _logging
+        from logging.handlers import RotatingFileHandler
+        _log_dir = getattr(config, 'LOG_DIR', 'logs')
+        os.makedirs(_log_dir, exist_ok=True)
+        _fh = RotatingFileHandler(
+            os.path.join(_log_dir, 'geminiweb_video_subprocess.log'),
+            maxBytes=2000000, backupCount=2, encoding='utf-8')
+        _fh.setLevel(_logging.DEBUG)
+        _fh.setFormatter(_logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s():%(lineno)d | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'))
+        _logging.getLogger().addHandler(_fh)
+        _logging.getLogger().setLevel(_logging.DEBUG)
+    except Exception:
+        pass
     parser = argparse.ArgumentParser()
     parser.add_argument("image_path")
     parser.add_argument("motion_prompt")

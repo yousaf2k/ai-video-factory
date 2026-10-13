@@ -158,6 +158,7 @@ def _get_chat_registry_path() -> str:
 # block each other. The lock is held from acquisition until registration (the
 # whole generation), and is stolen if stale (crashed worker).
 _HELD_CHAT_LOCK: Optional[str] = None
+_CHAT_LOCK_DEPTH = 0
 _CHAT_LOCK_STALE_SECONDS = 900  # steal after 15 min (covers video generation)
 
 
@@ -167,30 +168,35 @@ def _chat_lock_path(project_title: str) -> str:
 
 
 def _acquire_chat_lock(project_title: str) -> str:
-    """Wait for exclusive right to create the project chat.
+    """Acquire the per-project generation lock (waits while another worker's
+    generation is in flight; re-entrant for the same process).
 
-    Returns one of:
-      'registered' — another worker registered the chat while we waited;
-                     caller should re-check the registry and join it.
-      'acquired'   — lock is held; caller may create the chat (must release).
-      'timeout'    — gave up waiting; caller proceeds best-effort (a duplicate
-                     chat may result, same as before the lock existed).
+    2026-10: this lock covers WHOLE generations. Overlapping generations in
+    one conversation trigger Gemini's image-swap bug (one response's image is
+    dropped and replaced by the other exchange's picture), so a waiter must
+    not proceed while the lock file exists - even if the chat is already in
+    the registry (the old 'registered' short-circuit did exactly that and
+    defeated serialization for every existing project).
+
+    Returns 'acquired' (lock held; release via _release_chat_lock) or
+    'timeout' (caller proceeds best-effort).
     """
-    global _HELD_CHAT_LOCK
+    global _HELD_CHAT_LOCK, _CHAT_LOCK_DEPTH
     timeout = int(getattr(config, 'GEMINIWEB_CHAT_LOCK_TIMEOUT', 600))
     deadline = time.time() + timeout
     lock_path = _chat_lock_path(project_title)
 
     while True:
-        # Another worker may have registered the chat while we wait.
-        if _registry_get_chat_url(project_title):
-            return 'registered'
+        if _HELD_CHAT_LOCK == project_title:
+            _CHAT_LOCK_DEPTH += 1
+            return 'acquired'
         try:
             fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             os.write(fd, f"{os.getpid()} {time.time()}".encode())
             os.close(fd)
             _HELD_CHAT_LOCK = project_title
-            logger.info(f"Acquired chat-creation lock for '{project_title}'")
+            _CHAT_LOCK_DEPTH = 0
+            logger.info(f"Acquired chat generation lock for '{project_title}'")
             return 'acquired'
         except FileExistsError:
             # Steal a stale lock left behind by a crashed worker.
@@ -205,22 +211,27 @@ def _acquire_chat_lock(project_title: str) -> str:
             logger.debug(f"Chat lock open failed: {e}")
             return 'timeout'
         if time.time() >= deadline:
-            logger.warning(f"Chat-creation lock wait timed out for '{project_title}' after {timeout}s")
+            logger.warning(f"Chat lock wait timed out for '{project_title}' after {timeout}s")
             return 'timeout'
         time.sleep(3)
 
 
 def _release_chat_lock(project_title: str) -> None:
-    """Release the per-project chat-creation lock (best-effort)."""
-    global _HELD_CHAT_LOCK
+    """Release the per-project generation lock (re-entrancy aware)."""
+    global _HELD_CHAT_LOCK, _CHAT_LOCK_DEPTH
     if _HELD_CHAT_LOCK != project_title:
+        return
+    if _CHAT_LOCK_DEPTH > 0:
+        # Inner scope (e.g. _ensure_project_chat) released its share; the
+        # whole-generation lock stays held by the outer run().
+        _CHAT_LOCK_DEPTH -= 1
         return
     try:
         os.remove(_chat_lock_path(project_title))
     except OSError:
         pass
     _HELD_CHAT_LOCK = None
-    logger.info(f"Released chat-creation lock for '{project_title}'")
+    logger.info(f"Released chat generation lock for '{project_title}'")
 
 
 def _registry_get_chat_url(project_title: str) -> Optional[str]:
@@ -775,12 +786,31 @@ def _inject_text_into_input(page, input_element, text: str) -> bool:
 # text, then the response content that immediately follows it.
 _LOCATE_READY_JS = """(prompt) => {
   const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
-  const needle = norm(prompt).slice(0, 1000);
-  if (!needle) return false;
+  const full = norm(prompt);
+  if (!full) return false;
+  // 2026-10: Gemini collapses long query bubbles — the textContent becomes the
+  // first ~100 chars + '…' + a repeat of the prompt truncated at ~640 chars,
+  // so a long prompt never appears contiguously and a single long needle
+  // never matches. Try progressively shorter needles; the first length with a
+  // match wins (ties resolve to the most recent query).
   const all = Array.from(document.querySelectorAll('user-query, message-content, model-response'));
-  let qi = -1;
+  const qIdx = [];
+  const qTexts = [];
   for (let i = 0; i < all.length; i++) {
-    if (all[i].tagName.toLowerCase() === 'user-query' && norm(all[i].textContent).includes(needle)) qi = i;
+    if (all[i].tagName.toLowerCase() === 'user-query') {
+      qIdx.push(i);
+      qTexts.push(norm(all[i].textContent));
+    }
+  }
+  let qi = -1;
+  for (const L of [1000, 800, 600, 500, 400, 300, 250, 200, 150, 100]) {
+    const needle = full.slice(0, L);
+    if (!needle) break;
+    let found = -1;
+    for (let k = 0; k < qTexts.length; k++) {
+      if (qTexts[k].includes(needle)) found = qIdx[k];
+    }
+    if (found !== -1) { qi = found; break; }
   }
   if (qi === -1) return false;
   for (let i = qi + 1; i < all.length; i++) {
@@ -794,12 +824,27 @@ _LOCATE_READY_JS = """(prompt) => {
 
 _LOCATE_CONTAINER_JS = """(prompt) => {
   const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
-  const needle = norm(prompt).slice(0, 1000);
-  if (!needle) return null;
+  const full = norm(prompt);
+  if (!full) return null;
+  // Same collapsed-query handling as _LOCATE_READY_JS above.
   const all = Array.from(document.querySelectorAll('user-query, message-content, model-response'));
-  let qi = -1;
+  const qIdx = [];
+  const qTexts = [];
   for (let i = 0; i < all.length; i++) {
-    if (all[i].tagName.toLowerCase() === 'user-query' && norm(all[i].textContent).includes(needle)) qi = i;
+    if (all[i].tagName.toLowerCase() === 'user-query') {
+      qIdx.push(i);
+      qTexts.push(norm(all[i].textContent));
+    }
+  }
+  let qi = -1;
+  for (const L of [1000, 800, 600, 500, 400, 300, 250, 200, 150, 100]) {
+    const needle = full.slice(0, L);
+    if (!needle) break;
+    let found = -1;
+    for (let k = 0; k < qTexts.length; k++) {
+      if (qTexts[k].includes(needle)) found = qIdx[k];
+    }
+    if (found !== -1) { qi = found; break; }
   }
   if (qi === -1) return null;
   for (let i = qi + 1; i < all.length; i++) {
@@ -1110,7 +1155,7 @@ def _try_download_native(page, output_path: str, prompt_text: str = None) -> Opt
                             if data_url and ',' in data_url:
                                 _, data = data_url.split(',', 1)
                                 img_bytes = base64.b64decode(data)
-                                if len(img_bytes) > 200000:
+                                if len(img_bytes) > 100000:
                                     with open(output_path, 'wb') as f:
                                         f.write(img_bytes)
                                     logger.info(f"Strategy 0 SUCCESS: {output_path} ({len(img_bytes):,} bytes, full resolution)")
@@ -1128,7 +1173,10 @@ def _try_download_native(page, output_path: str, prompt_text: str = None) -> Opt
                             if data_url and ',' in data_url:
                                 _, data = data_url.split(',', 1)
                                 img_bytes = base64.b64decode(data)
-                                if len(img_bytes) > 200000:
+                                # 2026-10: dark 9:16 previews measure ~115KB —
+                                # the old 200KB gate rejected a perfectly
+                                # matched preview and failed the whole run.
+                                if len(img_bytes) > 100000:
                                     with open(output_path, 'wb') as f:
                                         f.write(img_bytes)
                                     logger.info(f"Strategy 0 SUCCESS (preview quality): {output_path} ({len(img_bytes):,} bytes)")
@@ -1153,7 +1201,18 @@ def _try_download_native(page, output_path: str, prompt_text: str = None) -> Opt
         canvas_candidates = []
         try:
             if own_container is not None:
-                own_img = own_container.query_selector('img')
+                own_img = None
+                try:
+                    own_img = own_container.query_selector('img')
+                except Exception:
+                    own_img = None
+                if own_img is None:
+                    # The ElementHandle can go stale across the (slow) Strategy 0
+                    # click attempts - virtualization re-renders the message.
+                    # Re-locate it from the prompt before giving up.
+                    own_container = _locate_own_response_container(page, prompt_text)
+                    if own_container is not None:
+                        own_img = own_container.query_selector('img')
                 if own_img is not None:
                     canvas_candidates.append(own_img)
         except Exception as ce:
@@ -1193,7 +1252,10 @@ def _try_download_native(page, output_path: str, prompt_text: str = None) -> Opt
                 if data_url and ',' in data_url:
                     _, data = data_url.split(',', 1)
                     img_bytes = base64.b64decode(data)
-                    if len(img_bytes) > 200000:
+                    # The own-response candidate is the exact displayed image,
+                    # so a small extract (dark 9:16 scenes) is still correct.
+                    min_bytes = 50000 if prompt_scoped else 200000
+                    if len(img_bytes) > min_bytes:
                         with open(output_path, 'wb') as f:
                             f.write(img_bytes)
                         logger.info(f"Canvas fallback SUCCESS: {output_path} ({len(img_bytes):,} bytes, {nw}px)")
@@ -1532,17 +1594,11 @@ def _download_image_fallback(page, image_src: str, output_path: str) -> Optional
                     return output_path
         except Exception: pass
 
-    # 4. Element screenshot (Absolute last resort)
-    try:
-        page.evaluate("() => document.querySelectorAll('footer, .chat-input, .prompt-area').forEach(el => el.style.display='none')")
-        for sel in ['message-content img', 'div[data-message-id] img', 'button.image-button img']:
-            for img in reversed(page.query_selector_all(sel)):
-                if img.get_attribute('src') == image_src:
-                    img.scroll_into_view_if_needed()
-                    time.sleep(0.5)
-                    img.screenshot(path=output_path)
-                    return output_path
-    except Exception: pass
+    # 4. No element-screenshot last resort: the chat composer/footer floats
+    # above tall (e.g. 9:16) images, so an element screenshot bakes chat UI
+    # into the saved file and looks like a valid generation. Fail instead —
+    # the caller saves a diagnostic screenshot and the shot can be retried.
+    return None
 
 
 def _remove_watermark(image_path: str, media_type: str = "image"):
@@ -1689,6 +1745,19 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
         page.add_init_script(BLOB_SNIFFER_JS)
 
         try:
+            # ── Serialize generations per project chat ────────────────────
+            # 2026-10: when two images generate at the same time in one
+            # conversation, Gemini's UI drops one response's image and shows
+            # the other exchange's picture in its place. The vanished image
+            # makes its worker time out, and the other worker risks saving
+            # the swapped picture. Hold the per-project chat lock for the
+            # WHOLE generation so two runs in one project never overlap.
+            if project_title and _acquire_chat_lock(project_title) == 'timeout':
+                logger.warning(
+                    "Chat lock wait timed out; proceeding unlocked "
+                    "(overlapping generations in one chat risk Gemini's "
+                    "image-swap bug)")
+
             # ── Fast path: chat URL known from the registry — go straight to
             # the chat (skips the app home entirely). The chat page has the
             # same mode picker as the app home.
@@ -1951,7 +2020,6 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
             if project_title and not used_existing_chat:
                 if _rename_current_chat(page, project_title):
                     _registry_set_chat_url(project_title, page.url)
-                _release_chat_lock(project_title)
 
             if not image_src:
                 logger.error("No image was generated by Gemini")
@@ -1968,6 +2036,13 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
             # Scoped to the response following OUR prompt so parallel workers
             # sharing the project chat never download each other's images.
             result = _try_download_native(page, output_path, prompt_text=full_prompt)
+            if not result and prompt_text:
+                # Right after completion the download control may not be
+                # attached yet or the full-resolution blob preparation can
+                # lag - give it one settled retry before falling back.
+                logger.warning("First download attempt failed; retrying once after 20s")
+                time.sleep(20)
+                result = _try_download_native(page, output_path, prompt_text=full_prompt)
             if not result:
                 # Fallback: extract from src attribute (data URI / blob URL)
                 result = _download_image_fallback(page, image_src, output_path)
@@ -2001,6 +2076,24 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
 
 if __name__ == "__main__":
     import argparse
+    try:
+        # Persist the run log - parallel-download failures were previously
+        # undiagnosable because subprocess output was dropped.
+        import logging as _logging
+        from logging.handlers import RotatingFileHandler
+        _log_dir = getattr(config, 'LOG_DIR', 'logs')
+        os.makedirs(_log_dir, exist_ok=True)
+        _fh = RotatingFileHandler(
+            os.path.join(_log_dir, 'geminiweb_subprocess.log'),
+            maxBytes=2000000, backupCount=2, encoding='utf-8')
+        _fh.setLevel(_logging.DEBUG)
+        _fh.setFormatter(_logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s():%(lineno)d | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'))
+        _logging.getLogger().addHandler(_fh)
+        _logging.getLogger().setLevel(_logging.DEBUG)
+    except Exception:
+        pass
     parser = argparse.ArgumentParser()
     parser.add_argument("prompt")
     parser.add_argument("output_path")
