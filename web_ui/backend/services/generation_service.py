@@ -577,6 +577,15 @@ class GenerationService:
             if updated_story:
                 story = updated_story
 
+            # Character references flow to shots as asset references — attach the
+            # new image to the character's shots so generation picks it up from
+            # reference_asset_ids instead of name matching.
+            if variant == "character":
+                try:
+                    self.project_manager.sync_character_asset_refs(item.project_id)
+                except Exception as sync_err:
+                    logger.warning(f"Could not sync character asset refs after generation: {sync_err}")
+
             item.status = QueueItemStatus.COMPLETED
             item.completed_at = __import__('datetime').datetime.utcnow()
             item.progress = 100
@@ -1483,8 +1492,9 @@ class GenerationService:
             # Mark queue item as active
             self._mark_queue_item_active(project_id, shot_index, GenerationType.IMAGE)
 
-            # Asset library references attached to this shot — these take priority
-            # over character references (user explicitly chose them per shot)
+            # Asset library references attached to this shot are the only source
+            # of reference images (character references are attached to shots as
+            # asset references — see ProjectManager.sync_character_asset_refs)
             try:
                 from web_ui.backend.services.asset_service import get_asset_service
                 asset_reference_paths = get_asset_service().collect_shot_image_refs(shot)
@@ -1505,71 +1515,11 @@ class GenerationService:
                 "references_used": len(asset_reference_paths)
             })
 
-            # Get character reference images for standard shots
-            reference_images = None
-            import config
-            actual_mode = image_mode or config.IMAGE_GENERATION_MODE
-            if story.get('characters'):
-                character_name = shot.get('character_name')
-                shot_prompt = shot.get('image_prompt', '').lower()
-                matched_characters = []
-                
-                import re
-                if character_name:
-                    for char in story['characters']:
-                        if char.get('name') == character_name:
-                            matched_characters.append(char)
-                            break
-                            
-                sorted_chars = sorted(story['characters'], key=lambda c: len(c.get('name', '')), reverse=True)
-                for char in sorted_chars:
-                    name = char.get('name', '')
-                    if not name or char in matched_characters:
-                        continue
-                    
-                    name_lower = name.lower()
-                    # 1. Direct match (e.g. "FirstName LastName" in prompt)
-                    if name_lower in shot_prompt:
-                        matched_characters.append(char)
-                        continue
-                        
-                    # 2. Word-based match (e.g. "FirstName" in prompt matches character "FirstName LastName")
-                    # We check if any significant word of the name exists as a whole word in the prompt
-                    name_parts = [re.escape(w.lower()) for w in name.split() if len(w) >= 3]
-                    for part in name_parts:
-                        if re.search(rf'\b{part}\b', shot_prompt):
-                            matched_characters.append(char)
-                            break
-
-                if matched_characters:
-                    reference_images = []
-                    for char in matched_characters:
-                        # Prioritize the new unified character_reference_image_path
-                        char_ref = char.get('character_reference_image_path')
-                        then_ref = char.get('then_reference_image_path')
-                        now_ref = char.get('now_reference_image_path')
-                        face_ref = char.get('face_reference_image_path')
-                        full_ref = char.get('full_reference_image_path')
-                        
-                        if actual_mode in ["geminiweb", "gemini"]:
-                            # Gemini can handle multiple images
-                            if char_ref: reference_images.append(config.resolve_path(char_ref))
-                            if then_ref: reference_images.append(config.resolve_path(then_ref))
-                            if now_ref: reference_images.append(config.resolve_path(now_ref))
-                            if face_ref: reference_images.append(config.resolve_path(face_ref))
-                            if full_ref: reference_images.append(config.resolve_path(full_ref))
-                        else:
-                            # ComfyUI/Standard usually takes one reference primary
-                            ref = char_ref or face_ref or full_ref or then_ref or now_ref
-                            if ref:
-                                reference_images.append(config.resolve_path(ref))
-                                
-                    if not reference_images:
-                        reference_images = None
-
-            # Shot-attached asset references go first (user-chosen priority over character refs)
-            if asset_reference_paths:
-                reference_images = asset_reference_paths + (reference_images or [])
+            # Reference images come exclusively from the shot's attached asset
+            # references. Character references are part of those: they are
+            # attached to the character's shots as asset references when
+            # uploaded/generated (ProjectManager.sync_character_asset_refs).
+            reference_images = asset_reference_paths or None
 
             # Run in thread pool to avoid blocking
             image_path = await asyncio.to_thread(
@@ -3039,6 +2989,13 @@ class GenerationService:
 
             # Save shots
             self.project_manager.save_shots(project_id, shots)
+
+            # Fresh shots don't have the characters' reference images attached
+            # yet — re-attach them as asset references where characters have one.
+            try:
+                self.project_manager.sync_character_asset_refs(project_id)
+            except Exception as sync_err:
+                logger.warning(f"Could not sync character asset refs after replan: {sync_err}")
 
             logger.info(f"Re-planned {len(shots)} shots")
             return shots

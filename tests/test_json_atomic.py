@@ -551,3 +551,144 @@ class TestStaleClientMerge:
         assert shots["shot001"]["image_generated"] is False                   # correctly still false
         assert shots["shot002"]["image_generated"] is True                    # concurrent result kept
         assert shots["shot002"]["image_path"] == "C:/out/images/shot_002_001.png"
+
+
+# =====================================================================
+# Character references -> shot asset references
+# =====================================================================
+
+class TestSyncCharacterAssetRefs:
+    """Character reference images attach to their shots as project-media asset
+    references (reference_asset_ids) so image generation consumes asset
+    references instead of matching characters by name at generation time."""
+
+    def _save_story(self, pm, project_id, characters):
+        pm.save_story(project_id, json.dumps({"title": "t", "characters": characters}))
+
+    def test_attaches_ref_to_matching_shots(self, pm, project_id):
+        _make_shots(pm, project_id, 2)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "Elena"}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path":
+                f"output/projects/{project_id}/references/ab12cd34_character_ref.png"},
+        ])
+
+        updated = pm.sync_character_asset_refs(project_id)
+
+        assert updated == 1
+        shots = {s["id"]: s for s in pm.get_shots(project_id)}
+        assert shots["shot001"]["reference_asset_ids"] == [
+            f"p/{project_id}/references/ab12cd34_character_ref.png"]
+        assert not shots["shot002"].get("reference_asset_ids")  # other character's shot untouched
+
+    def test_generated_ref_in_images_dir(self, pm, project_id):
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "Elena"}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path":
+                f"output/projects/{project_id}/images/char_001_character_001.png"},
+        ])
+
+        pm.sync_character_asset_refs(project_id)
+
+        shots = pm.get_shots(project_id)
+        assert shots[0]["reference_asset_ids"] == [
+            f"p/{project_id}/images/char_001_character_001.png"]
+
+    def test_idempotent_and_keeps_user_refs(self, pm, project_id):
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "Elena",
+             "reference_asset_ids": ["i/9f3ab21c"]}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path":
+                f"output/projects/{project_id}/references/ab12cd34_character_ref.png"},
+        ])
+
+        assert pm.sync_character_asset_refs(project_id) == 1
+        # Second run must not duplicate
+        assert pm.sync_character_asset_refs(project_id) == 0
+
+        refs = pm.get_shots(project_id)[0]["reference_asset_ids"]
+        assert refs == ["i/9f3ab21c", f"p/{project_id}/references/ab12cd34_character_ref.png"]
+
+    def test_skips_flfi2v_shots(self, pm, project_id):
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "Elena", "is_flfi2v": True}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path":
+                f"output/projects/{project_id}/references/ab12cd34_character_ref.png"},
+        ])
+
+        assert pm.sync_character_asset_refs(project_id) == 0
+        assert not pm.get_shots(project_id)[0].get("reference_asset_ids")
+
+    def test_ignores_paths_outside_project_media(self, pm, project_id):
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "Elena"}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path": "E:/elsewhere/ref.png"},
+            {"name": "NoRef"},  # no reference image
+        ])
+
+        assert pm.sync_character_asset_refs(project_id) == 0
+        assert not pm.get_shots(project_id)[0].get("reference_asset_ids")
+
+    def test_no_characters(self, pm, project_id):
+        _make_shots(pm, project_id, 1)
+        self._save_story(pm, project_id, [])
+        assert pm.sync_character_asset_refs(project_id) == 0
+
+    def test_character_name_whitespace_tolerant(self, pm, project_id):
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "  Elena  "}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path":
+                f"output/projects/{project_id}/references/ab12cd34_character_ref.png"},
+        ])
+
+        assert pm.sync_character_asset_refs(project_id) == 1
+
+    def test_regenerated_ref_replaces_old(self, pm, project_id):
+        """Regenerating a character image produces a new filename — the sync must
+        swap the attached ref, not accumulate old versions."""
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "Elena"}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path":
+                f"output/projects/{project_id}/images/char_001_character_001.png"},
+        ])
+        pm.sync_character_asset_refs(project_id)
+
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path":
+                f"output/projects/{project_id}/images/char_001_character_002.png"},
+        ])
+        assert pm.sync_character_asset_refs(project_id) == 1
+
+        shot = pm.get_shots(project_id)[0]
+        assert shot["reference_asset_ids"] == [
+            f"p/{project_id}/images/char_001_character_002.png"]
+        assert shot["synced_character_asset_refs"] == [
+            f"p/{project_id}/images/char_001_character_002.png"]
+
+    def test_removed_ref_cleans_up_attached_refs(self, pm, project_id):
+        """Clearing the character's reference image also detaches it from shots."""
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "Elena"}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path":
+                f"output/projects/{project_id}/references/ab12cd34_character_ref.png"},
+        ])
+        pm.sync_character_asset_refs(project_id)
+
+        self._save_story(pm, project_id, [{"name": "Elena"}])
+        assert pm.sync_character_asset_refs(project_id) == 1
+        assert not pm.get_shots(project_id)[0].get("reference_asset_ids")
