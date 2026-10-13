@@ -1346,6 +1346,11 @@ if not os.path.isabs(GEMINIWEB_CHROME_PROFILE):
 # Timeout for waiting for image generation (seconds)
 GEMINIWEB_TIMEOUT = 300
 
+# Seconds a GeminiWeb worker waits for the per-project generation lock before
+# proceeding unlocked. The lock serializes image/video generations per project
+# chat (Gemini drops one response's image when two generate simultaneously).
+GEMINIWEB_CHAT_LOCK_TIMEOUT = int(os.getenv("GEMINIWEB_CHAT_LOCK_TIMEOUT", "600"))
+
 # Gemini web URL
 GEMINIWEB_URL = "https://gemini.google.com/app"
 
