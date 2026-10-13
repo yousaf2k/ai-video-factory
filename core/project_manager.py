@@ -109,6 +109,87 @@ class ProjectManager:
             json_atomic.atomic_write_json(story_path, story, indent=4)
             return story
 
+    def sync_character_asset_refs(self, project_id: str) -> int:
+        """
+        Attach each character's reference image to that character's shots as a
+        project-media asset reference (reference_asset_ids), so image generation
+        consumes asset references directly instead of matching characters by
+        name against shot prompts at generation time.
+
+        Only standard (non-FLFI2V) shots are touched — FLFI2V shots resolve
+        then/now references from the character separately. Refs the sync
+        attached earlier are tracked per shot (synced_character_asset_refs) and
+        replaced on the next sync, so regenerating a character image swaps the
+        attached ref instead of accumulating old versions. Refs the user
+        attached manually are never touched. The character ref is appended
+        after user refs (order = priority, first is primary). Idempotent.
+
+        Returns the number of shots updated.
+        """
+        story = self.get_story(project_id)
+        characters = (story or {}).get('characters') or []
+        if not characters:
+            return 0
+
+        # Character name -> asset ref for its reference image
+        name_to_ref = {}
+        all_names = set()
+        for char in characters:
+            name = (char.get('name') or '').strip()
+            if not name:
+                continue
+            all_names.add(name)
+            ref_path = char.get('character_reference_image_path')
+            if not ref_path:
+                continue
+            asset_ref = self._project_media_asset_ref(project_id, self.relativize_path(ref_path))
+            if asset_ref:
+                name_to_ref[name] = asset_ref
+        if not all_names:
+            return 0
+
+        updated = 0
+
+        def modify(shots):
+            nonlocal updated
+            for shot in shots:
+                if shot.get('is_flfi2v'):
+                    continue
+                name = (shot.get('character_name') or '').strip()
+                if name not in all_names:
+                    continue
+                asset_ref = name_to_ref.get(name)
+                original_refs = shot.get('reference_asset_ids') or []
+                synced = shot.get('synced_character_asset_refs') or []
+                refs = [r for r in original_refs if r not in synced]
+                if asset_ref and asset_ref not in refs:
+                    refs.append(asset_ref)
+                if refs == original_refs:
+                    continue
+                shot['reference_asset_ids'] = refs
+                shot['synced_character_asset_refs'] = [asset_ref] if asset_ref else []
+                updated += 1
+
+        self.update_shots_safely(project_id, modify)
+        if updated:
+            logger.info(f"Attached character asset references to {updated} shot(s) in project {project_id}")
+        return updated
+
+    @staticmethod
+    def _project_media_asset_ref(project_id: str, rel_path: str):
+        """Convert 'output/projects/{pid}/{media_dir}/{filename}' into the
+        'p/{pid}/{media_dir}/{filename}' asset reference, or None when the path
+        is not project media in an image directory."""
+        p = (rel_path or '').replace('\\', '/')
+        prefix = f"output/projects/{project_id}/"
+        if not p.startswith(prefix):
+            return None
+        rest = p[len(prefix):]
+        media_dir, _, filename = rest.partition('/')
+        if not filename or media_dir not in ("images", "references", "backgrounds"):
+            return None
+        return f"p/{project_id}/{rest}"
+
     def append_shot_media_paths(self, project_id: str, paths, shot_id: str = None,
                                 shot_index: int = None, list_field: str = 'image_paths'):
         """
@@ -369,6 +450,7 @@ class ProjectManager:
                 'scene_id': shot.get('scene_id', 0),
                 'batch_number': shot.get('batch_number', idx),
                 'reference_asset_ids': shot.get('reference_asset_ids', []),
+                'synced_character_asset_refs': shot.get('synced_character_asset_refs', []),
                 # Status fields
                 'image_generated': shot.get('image_generated', False),
                 'image_path': shot.get('image_path'),

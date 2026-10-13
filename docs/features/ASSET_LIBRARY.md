@@ -316,11 +316,17 @@ strip like the Media Gallery in the edit page, lines 1031-1046):
 - GeminiWeb / Gemini API: every path is passed (`--reference-image` subprocess args,
   `geminiweb_image_generator.py:497-502`).
 
-Change: after character references are collected, resolve the shot's `reference_asset_ids` —
-library refs (`i/…`) via id-prefix scan, project refs (`p/…`) via `config.resolve_path` + existence
-check — and append `image`-type assets. Priority: **shot references first** (user explicitly chose
-them), then character references. Log which references were used and include them in the progress
-payload so the UI can show “N references used”.
+Change: image generation resolves **only** the shot's `reference_asset_ids` — library refs
+(`i/…`) via id-prefix scan, project refs (`p/…`) via `config.resolve_path` + existence check —
+and passes existing `image`-type assets as the reference list. There is no name-based character
+matching at generation time any more: character references are attached to the character's shots
+as project refs (`p/{project_id}/{media_dir}/{filename}`) by `ProjectManager.sync_character_asset_refs`,
+which runs when a reference is uploaded or AI-generated (and after a shots replan), appending the
+character ref after any refs the user chose manually (order = priority, first is primary). Synced
+refs are tracked per shot (`synced_character_asset_refs`), so regenerating a character image swaps
+the attached ref instead of accumulating old versions, and user-chosen refs are never touched.
+FLFI2V shots are skipped — they keep their own then/now resolution. Log which references were used
+and include them in the progress payload so the UI can show “N references used”.
 
 ### 6.2 Video generation
 

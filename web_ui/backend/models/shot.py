@@ -53,6 +53,7 @@ class Shot(BaseModel):
 
     # Asset references (asset library feature)
     reference_asset_ids: Optional[List[str]] = Field(default=None, description="Ordered asset refs attached to this shot: 'i/{id}' library refs, '{library}/i/{id}' for non-default libraries, or 'p/{project_id}/{media_dir}/{filename}' for other projects' media. First = primary reference.")
+    synced_character_asset_refs: Optional[List[str]] = Field(default=None, description="Internal bookkeeping: refs attached by ProjectManager.sync_character_asset_refs (character reference images). Replaced on the next sync; never includes user-attached refs.")
 
     class Config:
         json_schema_extra = {

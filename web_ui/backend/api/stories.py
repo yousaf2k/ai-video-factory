@@ -458,6 +458,15 @@ async def upload_character_reference(
 
         story_data = project_manager.update_story_safely(project_id, set_character_ref) or story_data
 
+        # Character references flow to shots as asset references — attach the
+        # uploaded image to the character's shots so generation picks it up from
+        # reference_asset_ids instead of name matching.
+        if variant == "character":
+            try:
+                project_manager.sync_character_asset_refs(project_id)
+            except Exception as sync_err:
+                logger.warning(f"Could not sync character asset refs after upload: {sync_err}")
+
         # Broadcast update
         from web_ui.backend.websocket.manager import manager
         manager.broadcast_sync(project_id, {
