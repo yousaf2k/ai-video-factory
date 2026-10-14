@@ -99,6 +99,40 @@ def _chat_lock_path(project_title: str) -> str:
     return os.path.join(getattr(config, 'OUTPUT_DIR', 'output'), f'chat_lock_{safe}.lock')
 
 
+def _lock_holder_dead(lock_path: str) -> bool:
+    """True if the lock file's holder PID is no longer running.
+
+    Windows-safe: os.kill(pid, 0) would *terminate* processes on Windows, so
+    use OpenProcess + WaitForSingleObject(0) instead. Unreadable files fall
+    back to the age-based staleness check (False)."""
+    try:
+        with open(lock_path, encoding='utf-8') as f:
+            pid = int(f.read().split()[0])
+    except Exception:
+        return False
+    if pid <= 0:
+        return True
+    if os.name != 'nt':
+        try:
+            os.kill(pid, 0)
+            return False
+        except OSError:
+            return True
+    try:
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        SYNCHRONIZE = 0x00100000
+        h = k32.OpenProcess(SYNCHRONIZE, False, pid)
+        if not h:
+            # ERROR_ACCESS_DENIED means the process exists but is protected.
+            return k32.GetLastError() != 5
+        res = k32.WaitForSingleObject(h, 0)  # 0 = exited, 258 = still running
+        k32.CloseHandle(h)
+        return res != 0x102
+    except Exception:
+        return False
+
+
 def _acquire_chat_lock(project_title: str) -> str:
     """Acquire the per-project generation lock (waits while another worker's
     generation is in flight; re-entrant for the same process).
@@ -131,10 +165,12 @@ def _acquire_chat_lock(project_title: str) -> str:
             logger.info(f"Acquired chat generation lock for '{project_title}'")
             return 'acquired'
         except FileExistsError:
-            # Steal a stale lock left behind by a crashed worker.
+            # Steal a stale lock: the holder process is dead (its finally
+            # never ran), or the file is older than the staleness backstop.
             try:
-                if time.time() - os.path.getmtime(lock_path) > _CHAT_LOCK_STALE_SECONDS:
-                    logger.warning(f"Stealing stale chat lock: {lock_path}")
+                if _lock_holder_dead(lock_path) or (
+                        time.time() - os.path.getmtime(lock_path) > _CHAT_LOCK_STALE_SECONDS):
+                    logger.warning(f"Stealing stale chat lock (dead holder): {lock_path}")
                     os.remove(lock_path)
                     continue
             except OSError:
@@ -270,25 +306,30 @@ def _ensure_project_chat(page, project_title: str) -> bool:
         # each create their own chat. While waiting we poll the registry; once
         # the first worker registers, we join its chat instead.
         lock_status = _acquire_chat_lock(project_title)
-        if lock_status == 'registered':
-            saved_url = _registry_get_chat_url(project_title)
-            if saved_url and _open_project_chat_by_url(page, saved_url):
-                logger.info(f"Joined project chat registered by a parallel worker for '{project_title}'")
-                return True
-        if project_title and _registry_get_chat_url(project_title) and lock_status == 'acquired':
-            # Double-check: a worker may have registered between lock
-            # acquisition and this check.
-            saved_url = _registry_get_chat_url(project_title)
-            if saved_url and _open_project_chat_by_url(page, saved_url):
-                _release_chat_lock(project_title)
-                return True
+        try:
+            if lock_status == 'registered':
+                saved_url = _registry_get_chat_url(project_title)
+                if saved_url and _open_project_chat_by_url(page, saved_url):
+                    logger.info(f"Joined project chat registered by a parallel worker for '{project_title}'")
+                    return True
+            if project_title and _registry_get_chat_url(project_title) and lock_status == 'acquired':
+                # Double-check: a worker may have registered between lock
+                # acquisition and this check.
+                saved_url = _registry_get_chat_url(project_title)
+                if saved_url and _open_project_chat_by_url(page, saved_url):
+                    return True
 
-        logger.info(f"Using current/new chat; it will be renamed after generation.")
-        new_chat_btn = page.query_selector('a[href="/app"], button:has-text("New chat")')
-        if new_chat_btn and not page.url.endswith('/app'):
-            new_chat_btn.click()
-            time.sleep(2)
-        return False
+            logger.info(f"Using current/new chat; it will be renamed after generation.")
+            new_chat_btn = page.query_selector('a[href="/app"], button:has-text("New chat")')
+            if new_chat_btn and not page.url.endswith('/app'):
+                new_chat_btn.click()
+                time.sleep(2)
+            return False
+        finally:
+            # Pair EVERY path's inner acquire with a release (depth-counted):
+            # the whole-generation lock stays held by run()'s outer acquire.
+            if lock_status == 'acquired':
+                _release_chat_lock(project_title)
     except Exception as e:
         logger.warning(f"Error while managing project chat: {e}")
         return False
@@ -968,6 +1009,18 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
     logger.debug(f"  Prompt: {motion_prompt[:100]}...")
     logger.debug(f"  Reference Image: {image_path}")
 
+    # ── Serialize generations per project chat ────────────────────
+    # 2026-10: overlapping generations in one conversation trigger
+    # Gemini's image-swap bug (one response's image is dropped and
+    # replaced by the other exchange's picture). Acquire BEFORE the
+    # browser launch so a waiting worker does not sit on a blank
+    # Chrome window.
+    if project_title and _acquire_chat_lock(project_title) == 'timeout':
+        logger.warning(
+            "Chat lock wait timed out; proceeding unlocked "
+            "(overlapping generations in one chat risk Gemini's "
+            "image-swap bug)")
+
     with sync_playwright() as playwright_instance:
         context = _create_browser_context(playwright_instance, profile_dir)
         page = context.new_page()
@@ -976,17 +1029,6 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
         page.add_init_script("window.close = () => {};")
 
         try:
-            # ── Serialize generations per project chat ────────────────────
-            # 2026-10: overlapping generations in one conversation trigger
-            # Gemini's image-swap bug (one response's image is dropped and
-            # replaced by the other exchange's picture). Hold the per-project
-            # chat lock for the WHOLE generation.
-            if project_title and _acquire_chat_lock(project_title) == 'timeout':
-                logger.warning(
-                    "Chat lock wait timed out; proceeding unlocked "
-                    "(overlapping generations in one chat risk Gemini's "
-                    "image-swap bug)")
-
             # ── Fast path: chat URL known from the registry — go straight to
             # the chat (skips the app home entirely). The chat page has the
             # same mode picker as the app home.
@@ -1217,10 +1259,13 @@ def run(image_path: str, motion_prompt: str, output_path: str, project_title: st
                 return None
 
         finally:
-            # Never leave the per-project chat lock held on failure — a stale
-            # lock would block parallel runs until the staleness timeout.
+            # Never leave the per-project chat lock held: drain any leaked
+            # inner acquisitions so the lock file is always removed.
             if project_title:
-                _release_chat_lock(project_title)
+                for _ in range(10):
+                    if _HELD_CHAT_LOCK != project_title:
+                        break
+                    _release_chat_lock(project_title)
             try:
                 page.close()
             except Exception:
