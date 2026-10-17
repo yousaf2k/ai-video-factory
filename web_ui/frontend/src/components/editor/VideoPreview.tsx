@@ -388,7 +388,8 @@ export function VideoPreview() {
   }, [clips, currentTime, tracks]);
 
   const topVideoClip = useMemo(() => {
-    const videos = activeClips.filter((c: any) => c.type === 'video');
+    // Placeholder clips reserve timeline space but have no media to show
+    const videos = activeClips.filter((c: any) => c.type === 'video' && !c.placeholder);
     if (videos.length === 0) return null;
     return [...videos].sort((a, b) => {
       const priority: Record<string, number> = { 'v2': 2, 'v1': 1 };

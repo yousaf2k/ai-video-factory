@@ -692,3 +692,165 @@ class TestSyncCharacterAssetRefs:
         self._save_story(pm, project_id, [{"name": "Elena"}])
         assert pm.sync_character_asset_refs(project_id) == 1
         assert not pm.get_shots(project_id)[0].get("reference_asset_ids")
+
+    def test_prompt_fallback_attach(self, pm, project_id):
+        """Shots without character attribution get refs via name-in-prompt
+        matching (movie shot planners don't emit character_name)."""
+        _make_shots(pm, project_id, 3)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"image_prompt": "A lone detective in a trench coat"}))
+        pm.update_shots_safely(project_id, lambda shots: shots[1].update(
+            {"image_prompt": "Inspector Jamshed walks down the street"}))
+        pm.update_shots_safely(project_id, lambda shots: shots[2].update(
+            {"image_prompt": "a rusty knife glinting"}))
+        self._save_story(pm, project_id, [
+            {"name": "Inspector Jamshed", "character_reference_image_path":
+                f"output/projects/{project_id}/references/ab12cd34_character_ref.png"},
+        ])
+
+        assert pm.sync_character_asset_refs(project_id) == 1
+        shots = pm.get_shots(project_id)
+        assert shots[1]["reference_asset_ids"] == [
+            f"p/{project_id}/references/ab12cd34_character_ref.png"]
+        assert not shots[0].get("reference_asset_ids")  # "detective" alone doesn't match
+        assert not shots[2].get("reference_asset_ids")
+
+    def test_prompt_fallback_word_match(self, pm, project_id):
+        """A significant name word matches as a whole word ('Jamshed' alone)."""
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"image_prompt": "close-up of Jamshed in the rain, the cat sleeps"}))
+        self._save_story(pm, project_id, [
+            {"name": "Inspector Jamshed", "character_reference_image_path":
+                f"output/projects/{project_id}/references/ab12cd34_character_ref.png"},
+        ])
+        assert pm.sync_character_asset_refs(project_id) == 1
+
+    def test_multiple_characters_on_one_shot(self, pm, project_id):
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"characters": ["Elena", "Marco"]}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path":
+                f"output/projects/{project_id}/references/elena_ref.png"},
+            {"name": "Marco", "character_reference_image_path":
+                f"output/projects/{project_id}/references/marco_ref.png"},
+        ])
+        assert pm.sync_character_asset_refs(project_id) == 1
+        refs = pm.get_shots(project_id)[0]["reference_asset_ids"]
+        assert refs == [f"p/{project_id}/references/elena_ref.png",
+                        f"p/{project_id}/references/marco_ref.png"]
+
+    def test_adopts_matching_user_ref_into_tracking(self, pm, project_id):
+        """A ref the user attached manually that equals the character's current
+        image is adopted into the sync tracking (future regens swap it)."""
+        ref_path = f"output/projects/{project_id}/references/ab12cd34_character_ref.png"
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "Elena",
+             "reference_asset_ids": [f"p/{project_id}/references/ab12cd34_character_ref.png"]}))
+        self._save_story(pm, project_id, [
+            {"name": "Elena", "character_reference_image_path": ref_path},
+        ])
+
+        assert pm.sync_character_asset_refs(project_id) == 1  # marker adoption counts
+        shot = pm.get_shots(project_id)[0]
+        assert shot["reference_asset_ids"] == [f"p/{project_id}/references/ab12cd34_character_ref.png"]
+        assert shot["synced_character_asset_refs"] == [f"p/{project_id}/references/ab12cd34_character_ref.png"]
+        # And it's now stable
+        assert pm.sync_character_asset_refs(project_id) == 0
+
+
+    def test_short_words_ignored(self, pm, project_id):
+        """'The Shadow' must not match a prompt merely because it contains 'the'."""
+        _make_shots(pm, project_id, 2)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"image_prompt": "the harbor at night, long shadows between the cranes"}))
+        pm.update_shots_safely(project_id, lambda shots: shots[1].update(
+            {"image_prompt": "The Shadow waits on the pier"}))
+        self._save_story(pm, project_id, [
+            {"name": "The Shadow", "character_reference_image_path":
+                f"output/projects/{project_id}/references/shadow_ref.png"},
+        ])
+        assert pm.sync_character_asset_refs(project_id) == 1
+        shots = pm.get_shots(project_id)
+        assert not shots[0].get("reference_asset_ids")  # scenery 'shadows' ≠ the character
+        assert shots[1]["reference_asset_ids"] == [f"p/{project_id}/references/shadow_ref.png"]
+
+    def test_common_noun_lowercase_not_matched(self, pm, project_id):
+        """'rich shadow detail' in an otherwise capitalized prompt must not
+        attach The Shadow — word matches require the capitalized proper noun."""
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"image_prompt": "Moody wide shot of a dark harbor at night, rich shadow detail"}))
+        self._save_story(pm, project_id, [
+            {"name": "The Shadow", "character_reference_image_path":
+                f"output/projects/{project_id}/references/shadow_ref.png"},
+        ])
+        assert pm.sync_character_asset_refs(project_id) == 0
+        assert not pm.get_shots(project_id)[0].get("reference_asset_ids")
+
+    def test_sync_persists_matched_characters(self, pm, project_id):
+        """Matched names are written to shot['characters'] so the UI can show
+        them; existing attribution is never overwritten."""
+        _make_shots(pm, project_id, 2)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"image_prompt": "Inspector Jamshed at the dock"}))
+        pm.update_shots_safely(project_id, lambda shots: shots[1].update(
+            {"image_prompt": "Inspector Jamshed again", "characters": ["Custom"]}))
+        self._save_story(pm, project_id, [{"name": "Inspector Jamshed"}])
+
+        def set_ref(story):
+            story["characters"][0]["character_reference_image_path"] = (
+                f"output/projects/{project_id}/references/ab12cd34_character_ref.png")
+        pm.update_story_safely(project_id, set_ref)
+
+        assert pm.sync_character_asset_refs(project_id) == 1
+        shots = pm.get_shots(project_id)
+        assert shots[0]["characters"] == ["Inspector Jamshed"]
+        assert shots[0]["reference_asset_ids"] == [
+            f"p/{project_id}/references/ab12cd34_character_ref.png"]
+        # explicit attribution the sync can't resolve is left alone entirely
+        assert shots[1]["characters"] == ["Custom"]
+        assert not shots[1].get("reference_asset_ids")
+        # Idempotent
+        assert pm.sync_character_asset_refs(project_id) == 0
+
+    def test_save_shots_preserves_character_fields(self, pm, project_id):
+        """Replanning must not strip character attribution or sync markers."""
+        _make_shots(pm, project_id, 1)
+        pm.update_shots_safely(project_id, lambda shots: shots[0].update(
+            {"character_name": "Elena", "characters": ["Elena"], "props": ["Lantern"],
+             "synced_character_asset_refs": ["p/x/references/e.png"],
+             "synced_video_ref_asset_refs": ["p/x/backgrounds/b.png"]}))
+
+        pm.save_shots(project_id, pm.get_shots(project_id))  # full-list rewrite
+        shot = pm.get_shots(project_id)[0]
+        assert shot["character_name"] == "Elena"
+        assert shot["characters"] == ["Elena"]
+        assert shot["props"] == ["Lantern"]
+        assert shot["synced_character_asset_refs"] == ["p/x/references/e.png"]
+        assert shot["synced_video_ref_asset_refs"] == ["p/x/backgrounds/b.png"]
+
+
+class TestBuildCharactersBlock:
+    """Story cast injection into shot planning prompts."""
+
+    def test_block_lists_names_and_descriptions(self):
+        from core.shot_planner import build_characters_block
+        block = build_characters_block([
+            {"name": "Inspector Jamshed", "image_prompt": "A rugged man in his 40s",
+             "attire": "dark trench coat"},
+            {"name": "The Shadow", "image_prompt": "A faceless figure"},
+            {"name": ""},
+        ])
+        assert "Inspector Jamshed: A rugged man in his 40s dark trench coat" in block
+        assert "The Shadow: A faceless figure" in block
+        assert "'characters'" in block  # instructs the LLM to emit the field
+
+    def test_empty_when_no_characters(self):
+        from core.shot_planner import build_characters_block
+        assert build_characters_block([]) == ""
+        assert build_characters_block(None) == ""
+        assert build_characters_block([{"image_prompt": "no name"}]) == ""
+

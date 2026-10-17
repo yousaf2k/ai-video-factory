@@ -98,10 +98,11 @@ class CreateProjectRequest(BaseModel):
     """Request to create a new project"""
     idea: str = Field(..., description="Video idea/prompt", min_length=1)
     project_id: Optional[str] = Field(default=None, description="Optional custom project ID")
-    project_type: ProjectType = Field(default=ProjectType.DOCUMENTARY, description="Project Type (1=Documentary, 2=ThenVsNow)")
+    project_type: ProjectType = Field(default=ProjectType.DOCUMENTARY, description="Project Type (1=Documentary, 2=ThenVsNow, 3=Movie, 4=ASMR)")
     story_agent: str = Field(default="default", description="Story generation agent")
     shots_agent: str = Field(default="default", description="Shots prompt agent")
     prompt_mode: str = Field(default="video", description="Default prompt style for video generation: 'video' (timestamped H3 video_prompt) or 'motion' (motion_prompt)")
+    video_generation_type: Optional[str] = Field(default=None, description="Visual input strategy setting (independent of project type): 't2v' (text to video), 'i2v' (image to video, default), 'r2v' (reference to video)")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
     prompts_file: Optional[str] = Field(default=None, description="Path to a custom prompts file")
     aspect_ratio: str = Field(default="16:9", description="Video aspect ratio (16:9, 9:16, or 21:8)")
@@ -113,6 +114,13 @@ class CreateProjectRequest(BaseModel):
             raise ValueError("aspect_ratio must be '16:9', '9:16', or '21:8'")
         return v
 
+    @field_validator('video_generation_type')
+    @classmethod
+    def validate_video_generation_type(cls, v):
+        if v is not None and v not in ("t2v", "i2v", "r2v"):
+            raise ValueError("video_generation_type must be 't2v', 'i2v' or 'r2v'")
+        return v
+
 
 class UpdateProjectRequest(BaseModel):
     """Request to update project metadata"""
@@ -121,12 +129,20 @@ class UpdateProjectRequest(BaseModel):
     story_agent: Optional[str] = None
     shots_agent: Optional[str] = None
     prompt_mode: Optional[str] = Field(default=None, description="Default prompt style: 'video' or 'motion'")
+    video_generation_type: Optional[str] = Field(default=None, description="Visual input strategy: 't2v', 'i2v' or 'r2v'")
 
     @field_validator('prompt_mode')
     @classmethod
     def validate_prompt_mode(cls, v):
         if v is not None and v not in ["video", "motion"]:
             raise ValueError("prompt_mode must be 'video' or 'motion'")
+        return v
+
+    @field_validator('video_generation_type')
+    @classmethod
+    def validate_video_generation_type(cls, v):
+        if v is not None and v not in ("t2v", "i2v", "r2v"):
+            raise ValueError("video_generation_type must be 't2v', 'i2v' or 'r2v'")
         return v
     aspect_ratio: Optional[str] = Field(default=None, description="Video aspect ratio (16:9, 9:16, or 21:8)")
 

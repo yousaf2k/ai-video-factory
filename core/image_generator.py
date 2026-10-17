@@ -138,7 +138,7 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
         mode = config.IMAGE_GENERATION_MODE
 
     # Auto-switch to ComfyUI if reference image provided with non-ComfyUI mode
-    if reference_images and mode != "comfyui" and mode != "geminiweb":
+    if reference_images and mode not in ("comfyui", "geminiweb", "flow"):
         logger.warning("Reference images require ComfyUI mode. Auto-switching from '%s' to 'comfyui'", mode)
         mode = "comfyui"
 
@@ -148,6 +148,9 @@ def generate_image(prompt: str, output_path: str, aspect_ratio: str = None, reso
     elif mode == "geminiweb":
         from core.geminiweb_image_generator import generate_image_geminiweb
         return generate_image_geminiweb(prompt, output_path, aspect_ratio=aspect_ratio, project_title=project_title, reference_image_path=reference_images, gemini_mode=gemini_mode)
+    elif mode == "flow":
+        from core.flowweb_image_generator import generate_image_flowweb
+        return generate_image_flowweb(prompt, output_path, aspect_ratio=aspect_ratio, project_title=project_title, reference_image_path=reference_images)
     else:
         return generate_image_gemini(prompt, output_path, aspect_ratio, resolution, seed)
 
@@ -242,7 +245,7 @@ def generate_images_for_shots(
     if mode is None:
         mode = config.IMAGE_GENERATION_MODE
 
-    mode_names = {"gemini": "Gemini", "comfyui": "ComfyUI", "geminiweb": "GeminiWeb"}
+    mode_names = {"gemini": "Gemini", "comfyui": "ComfyUI", "geminiweb": "GeminiWeb", "flow": "Flow"}
     mode_name = mode_names.get(mode, mode.capitalize())
     total_images = len(shots) * images_per_shot
 

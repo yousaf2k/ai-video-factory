@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Scene } from '@/types';
 import { GenerationDialog, GenerationConfig } from '../shots/GenerationDialog';
+import { useProject } from '@/hooks/useProjects';
 import { toast } from 'sonner';
 
 interface SceneBackgroundManagerProps {
@@ -23,6 +24,11 @@ export default function SceneBackgroundManager({
   const [generating, setGenerating] = useState(false);
   const [showGenModal, setShowGenModal] = useState(false);
   const queryClient = useQueryClient();
+  const { data: project } = useProject(projectId);
+  // Reference-sheet (r2v) projects generate backgrounds from the scene
+  // location — a set_prompt is not required (backend builds the sheet prompt).
+  const isR2V = project?.video_generation_type === "r2v";
+  const canGenerate = !!scene.set_prompt || (isR2V && !!scene.location);
 
   const getMediaUrl = (path: string) => {
     if (!path) return '';
@@ -70,9 +76,13 @@ export default function SceneBackgroundManager({
 
   const handleGenerateSubmit = async (config: GenerationConfig) => {
     setShowGenModal(false);
-    
-    if (!scene.set_prompt) {
-      toast.warning('Scene must have a set_prompt to generate background');
+
+    if (!canGenerate) {
+      toast.warning(
+        isR2V
+          ? 'Scene must have a set_prompt or a location to generate background'
+          : 'Scene must have a set_prompt to generate background'
+      );
       return;
     }
 
@@ -239,7 +249,7 @@ export default function SceneBackgroundManager({
 
           <button
             onClick={() => setShowGenModal(true)}
-            disabled={generating || !scene.set_prompt}
+            disabled={generating || !canGenerate}
             className="flex-1 px-3 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-purple-700 dark:hover:bg-purple-800"
           >
             {generating ? 'Generating...' : 'Generate AI'}
@@ -247,9 +257,11 @@ export default function SceneBackgroundManager({
         </div>
       )}
 
-      {!scene.set_prompt && (
+      {!canGenerate && (
         <p className="text-xs text-amber-600 dark:text-amber-400">
-          ⚠️ Add a set_prompt to enable AI generation
+          {isR2V
+            ? '⚠️ Add a set_prompt or a scene location to enable AI generation'
+            : '⚠️ Add a set_prompt to enable AI generation'}
         </p>
       )}
 
@@ -259,7 +271,7 @@ export default function SceneBackgroundManager({
         type="image"
         projectId={projectId}
         isPending={generating}
-        defaultPromptOverride={scene.set_prompt}
+        defaultPromptOverride={scene.set_prompt || undefined}
         onSubmit={handleGenerateSubmit}
         title="Generate Scene Background"
       />

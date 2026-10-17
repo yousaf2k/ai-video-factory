@@ -3,6 +3,7 @@ Configuration for AI Film Studio System
 """
 import os
 import json
+import re
 from dotenv import load_dotenv
 
 # Load environment variables from .env file in the same directory as config.py
@@ -35,6 +36,9 @@ CONCURRENT_GENERATION_LIMITS = {
     "comfyui": int(os.getenv("CONCURRENT_COMFYUI_LIMIT", "1")),     # ComfyUI is VRAM heavy
     "gemini": int(os.getenv("CONCURRENT_GEMINI_LIMIT", "2")),       # Gemini API can handle more
     "geminiweb": int(os.getenv("CONCURRENT_GEMINIWEB_LIMIT", "1")), # Browser automation is heavy
+    # Flow image generation drives the same cloned browser profiles as
+    # GeminiWeb, so it shares the browser worker pool limit.
+    "flow": int(os.getenv("CONCURRENT_GEMINIWEB_LIMIT", "1")),
     "default": int(os.getenv("CONCURRENT_DEFAULT_LIMIT", "1"))      # Fallback for other engines
 }
 
@@ -463,6 +467,8 @@ if os.path.exists(_video_workflow_dir):
                     _video_gen_candidates = []
                     _seed_candidates = []
                     _primitive_float_candidates = []
+                    _ref_image_nodes = []  # [(index, node_id)] from [ref_N] title tags
+                    _is_r2v = False        # MiniMax H3 Reference-to-Video workflow
 
                     # 1. First pass: strict tag matching and gathering candidates
                     for _n_id, _n_data in _wf_nodes.items():
@@ -491,6 +497,15 @@ if os.path.exists(_video_workflow_dir):
                         # Candidate gathering for heuristics
                         if "LoadImage" == _class_type:
                             _load_image_candidates.append(_n_id)
+                        # Reference-to-video (r2v): the MiniMax H3 R2V node is the video
+                        # generator, and [ref_N]-tagged LoadImage nodes are ref slots
+                        if _class_type == "MiniMaxH3ReferenceToVideo":
+                            _video_gen_candidates.insert(0, _n_id)
+                            _is_r2v = True
+                        if _title.startswith("[ref_"):
+                            _tag_ref = re.match(r"\[ref_(\d+)\]", _title)
+                            if _tag_ref:
+                                _ref_image_nodes.append((int(_tag_ref.group(1)), _n_id))
                         if "CLIPTextEncode" == _class_type:
                             _text_encode_candidates.append((_n_id, _title))
                         if _class_type == "PrimitiveFloat":
@@ -577,6 +592,19 @@ if os.path.exists(_video_workflow_dir):
                     if _wan_video_node_id: _detected_wf["wan_video_node_id"] = _wan_video_node_id
                     if _seed_node_id: _detected_wf["seed_node_id"] = _seed_node_id
                     if _duration_node_id: _detected_wf["duration_node_id"] = _duration_node_id
+
+                    # Reference-to-video workflows: refs wire through [ref_N] slots;
+                    # the single-image / first-last image mappings don't apply
+                    if _is_r2v:
+                        _detected_wf["is_ref2video"] = True
+                        _ref_image_nodes.sort()
+                        if _ref_image_nodes:
+                            _detected_wf["reference_image_node_ids"] = [nid for _, nid in _ref_image_nodes]
+                        elif _load_image_candidates:
+                            _detected_wf["reference_image_node_ids"] = list(_load_image_candidates)
+                        _detected_wf.pop("load_image_node_id", None)
+                        _detected_wf.pop("load_image_first_node_id", None)
+                        _detected_wf.pop("load_image_last_node_id", None)
 
                     # MiniMax H3 clips accept any length between 1 and 15 seconds
                     if "minimax_h3" in _wf_key.lower():
@@ -1375,6 +1403,35 @@ GEMINIWEB_MODEL = os.getenv("GEMINIWEB_MODEL", _gm)
 GEMINIWEB_THINKING = os.getenv("GEMINIWEB_THINKING", _gt)
 # Legacy six-mode name kept for backward compatibility of stored configs.
 GEMINIWEB_DEFAULT_MODE = os.getenv("GEMINIWEB_DEFAULT_MODE", "Fast")
+
+
+# ==========================================
+# FLOWWEB (GOOGLE FLOW) IMAGE GENERATION
+# ==========================================
+# Browser-based image generation via https://flow.google.com/ (Google Flow).
+# Uses the same Playwright browser profile as GeminiWeb (shared Google login).
+FLOWWEB_URL = os.getenv("FLOWWEB_URL", "https://flow.google.com/")
+
+# Timeout for waiting for a Flow image generation (seconds)
+FLOWWEB_TIMEOUT = int(os.getenv("FLOWWEB_TIMEOUT", "300"))
+
+# Default Flow image model. Matches the Flow model picker exactly:
+# "Nano Banana Pro", "Nano Banana 2 Lite", "Nano Banana 2.1".
+# The automation only changes the model when the picker shows a different one.
+FLOW_IMAGE_MODEL = os.getenv("FLOW_IMAGE_MODEL", "Nano Banana 2.1")
+
+# Outputs per prompt: "x1" (default), "x2", "x3", "x4".
+FLOW_IMAGE_OUTPUTS = os.getenv("FLOW_IMAGE_OUTPUTS", "x1")
+
+# Agent mode stays OFF by default; the automation never toggles the Agent
+# button in Flow's prompt bar.
+FLOW_AGENT_MODE = os.getenv("FLOW_AGENT_MODE", "false").lower() == "true"
+
+# How many image generations may run in parallel inside ONE Flow project.
+# Flow's grid handles concurrent generations natively (that is what the x2-x4
+# outputs option does). Results are attributed to their prompt via the tile
+# label, so parallel prompts should be distinct.
+FLOW_PROJECT_CONCURRENCY = int(os.getenv("FLOW_PROJECT_CONCURRENCY", "2"))
 # ==========================================
 # Web UI Configuration
 # ==========================================

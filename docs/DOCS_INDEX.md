@@ -77,6 +77,8 @@ docs/
 | Document | Description |
 |----------|-------------|
 | [Asset Library](features/ASSET_LIBRARY.md) 🆕 | Nested-category asset library and per-shot references |
+| [Ref2Video & Video Generation Types](features/REF2VIDEO.md) 🆕 | t2v / i2v / r2v video generation setting — reference sheets, MiniMax H3 Ref2VA prompts, props, voices |
+| [Google Flow Image Generation](features/FLOW_IMAGE.md) 🆕 | `flow` image mode — browser automation of flow.google.com (projects, settings, Nano Banana models) |
 | **Then Vs Now** ([Quick Start](features/ThenVsNow/THEN_VS_NOW_QUICKSTART.md)) | FLFI2V reunion videos — scene requirements, departure videos, motion prompts, thumbnails, implementation |
 | **ASMR Glass Cutting** ([User Guide](features/asmr_glass_cutting/ASMR%20Glass%20Cutting%20-%20User%20Guide.md)) | ASMR project type — usage and implementation |
 
@@ -164,8 +166,8 @@ Wan 2.2 (t2v / i2v / FLFI2V, VFI + super-resolution), MiniMax H3, and LTX-2 work
 **See:** [MiniMax H3 Prompt Guides](guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_base_en.md), [Then Vs Now Quick Start](features/ThenVsNow/THEN_VS_NOW_QUICKSTART.md)
 
 ### Dual Image Generation
-Gemini API, ComfyUI (Flux 2, Krea 2 reference, HiDream, Z-Image Turbo), or GeminiWeb browser automation.
-**See:** [Configuration Guide](getting-started/CONFIGURATION.md), [ComfyUI Image Guide](guides/COMFYUI_IMAGE_GUIDE.md)
+Gemini API, ComfyUI (Flux 2, Krea 2 reference, HiDream, Z-Image Turbo), GeminiWeb browser automation, or Google Flow (`flow.google.com`) browser automation.
+**See:** [Configuration Guide](getting-started/CONFIGURATION.md), [ComfyUI Image Guide](guides/COMFYUI_IMAGE_GUIDE.md), [Google Flow Image Generation](features/FLOW_IMAGE.md)
 
 ---
 

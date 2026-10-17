@@ -41,7 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/services/api";
-import { type CreateProjectRequest, ProjectType } from "@/types";
+import { type CreateProjectRequest, ProjectType, type VideoGenerationType } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 
 export default function ProjectsPage() {
@@ -58,6 +58,8 @@ export default function ProjectsPage() {
 
   // Project type and Agent selection state
   const [selectedProjectType, setSelectedProjectType] = useState<number>(ProjectType.Documentary);
+  // Video generation type: standalone setting, independent of project type
+  const [videoGenerationType, setVideoGenerationType] = useState<VideoGenerationType>("i2v");
   const [selectedStoryAgent, setSelectedStoryAgent] = useState("choose");
   const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
 
@@ -118,6 +120,7 @@ export default function ProjectsPage() {
       total_duration: totalDuration,
       prompts_file: promptsFile.trim() || undefined,
       aspect_ratio: selectedAspectRatio,
+      video_generation_type: videoGenerationType,
     };
 
     try {
@@ -471,6 +474,38 @@ export default function ProjectsPage() {
                         <SelectItem value="4">ASMR Glass Cutting</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5">
+                      Video Generation
+                    </label>
+                    <Select
+                      value={videoGenerationType}
+                      onValueChange={(val) => {
+                        const vgt = val as VideoGenerationType;
+                        setVideoGenerationType(vgt);
+                        // r2v/t2v need their prompt-format shots agents; keep a
+                        // manual agent choice unless it was one of the defaults
+                        if (vgt === "r2v") setSelectedShotsAgent("base/base_shots_r2v");
+                        else if (vgt === "t2v") setSelectedShotsAgent("base/base_shots_t2v");
+                        else if (["default", "base/base_shots_r2v", "base/base_shots_t2v"].includes(selectedShotsAgent))
+                          setSelectedShotsAgent("default");
+                      }}
+                    >
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Select Video Generation" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="i2v">Image to Video (default)</SelectItem>
+                        <SelectItem value="t2v">Text to Video</SelectItem>
+                        <SelectItem value="r2v">Reference to Video</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      How shot videos get their visuals — works with any project type. r2v uses
+                      character/background/prop reference sheets instead of first-frame images.
+                    </p>
                   </div>
 
                   {selectedProjectType === ProjectType.Documentary && (

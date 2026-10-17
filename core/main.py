@@ -61,6 +61,20 @@ from core.image_generator import generate_image_gemini
 from core.project_manager import ProjectManager
 
 
+def plan_shots_with_cast(graph, story_json, max_shots=None, shots_agent="default", shots_per_scene=None):
+    """
+    plan_shots with the story's cast injected (scenes themselves unchanged from
+    the scene graph), so shot prompts name the characters consistently and each
+    shot carries a 'characters' field for reference attachment.
+    """
+    try:
+        story_data = json.loads(story_json) if isinstance(story_json, str) else (story_json or {})
+    except (TypeError, ValueError):
+        story_data = {}
+    payload = {'scenes': graph, 'characters': story_data.get('characters') or []}
+    return plan_shots(payload, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
+
+
 def generate_unique_video_filename(videos_dir, shot_idx):
     """
     Generate a unique video filename based on shot index.
@@ -194,6 +208,57 @@ def resolve_video_prompt(shot):
         if prompt_type is None and getattr(config, 'DEFAULT_PROMPT_MODE', 'video') == 'video':
             return shot_video_prompt
     return shot.get('motion_prompt', "Animate this image realistically")
+
+
+def _get_video_generation_type(project_id, project_mgr):
+    """Project's visual input strategy: 'i2v' (default), 'r2v' or 't2v'."""
+    meta = project_mgr.load_project(project_id) or {}
+    vgt = (meta.get('video_generation_type') or 'i2v').lower()
+    return vgt if vgt in ('i2v', 'r2v', 't2v') else 'i2v'
+
+
+def _valid_shots_for_video_generation(project_id, project_mgr, shots):
+    """Shots eligible for video rendering.
+
+    r2v/t2v projects render every non-FLFI2V shot (no first-frame images);
+    standard (i2v) projects require a generated image per shot.
+    """
+    if _get_video_generation_type(project_id, project_mgr) in ('r2v', 't2v'):
+        return [s for s in shots if not s.get('is_flfi2v')]
+    return [s for s in shots if s.get('image_path')]
+
+
+def _prepare_ref_mode_shot(project_id, project_mgr, shot):
+    """Prepare a shot for r2v/t2v submission.
+
+    r2v: resolves the shot's reference_asset_ids (synced in priority order:
+    characters -> background -> props) into ordered reference-image paths.
+    Both: composes the final video prompt (voice-text embedding, <Picture>
+    pruning against actually-attached refs) and forces prompt_type='video'.
+    """
+    vgt = _get_video_generation_type(project_id, project_mgr)
+    attached = None
+    if vgt == 'r2v':
+        from core.asset_refs import resolve_shot_video_reference_paths
+        max_refs = getattr(config, 'REF2VIDEO_MAX_IMAGE_REFS', 9)
+        ref_paths = resolve_shot_video_reference_paths(shot, max_refs=max_refs)
+        shot['video_reference_paths'] = ref_paths
+        attached = len(ref_paths)
+        print(f"[R2V] Shot {shot.get('index', '?')}: {attached} reference image(s) attached")
+
+    from core.r2v_composer import compose_video_prompt
+    story = project_mgr.get_story(project_id)
+    composed, problems = compose_video_prompt(
+        shot, story,
+        attached_picture_count=attached,
+        r2v_six_sections=(vgt == 'r2v'),
+    )
+    if problems:
+        print(f"[WARN] Shot {shot.get('index', '?')}: composed prompt problems: {'; '.join(problems)}")
+    if composed:
+        shot['video_prompt'] = composed
+        shot['prompt_type'] = 'video'
+    return shot
 
 
 def enhance_motion_prompts_with_triggers(shots):
@@ -678,7 +743,10 @@ def submit_and_verify_video(template, shot, shot_length, project_id, shot_idx, p
                 return False, "FlowWeb generation failed", None
 
         # Default: ComfyUI
-        wf = compile_workflow(template, shot, video_length_seconds=shot_length)
+        wf = compile_workflow(
+            template, shot, video_length_seconds=shot_length,
+            reference_images=shot.get('video_reference_paths'),
+        )
         result = submit(wf)
 
         # Restore original image_path if we overrode it
@@ -1300,7 +1368,14 @@ def run_new_project(project_mgr, args=None):
     print("="*70)
 
     # Create new project
-    project_id, project_meta = project_mgr.create_project(idea)
+    video_generation_type = getattr(args, 'video_generation_type', None) if args else None
+    if video_generation_type in ('r2v', 't2v') and not getattr(args, 'video_workflow', None):
+        # r2v/t2v imply the MiniMax H3 r2v workflow (t2v = same workflow with
+        # zero refs attached) unless the user explicitly overrode --video-workflow
+        if 'video_minimax_h3_r2v' in getattr(config, 'VIDEO_WORKFLOWS', {}):
+            config.VIDEO_WORKFLOW = 'video_minimax_h3_r2v'
+            print(f"[INFO] video_generation_type '{video_generation_type}': defaulting video workflow to video_minimax_h3_r2v")
+    project_id, project_meta = project_mgr.create_project(idea, video_generation_type=video_generation_type)
 
     logger.info(f"Project created: {project_id}")
     # Store LLM config in project
@@ -1355,6 +1430,14 @@ def run_new_project(project_mgr, args=None):
     # Get agent selection from args or config
     story_agent = getattr(args, 'story_agent', None) or config.STORY_AGENT
     shots_agent = getattr(args, 'shots_agent', None) or config.SHOTS_AGENT
+
+    # r2v/t2v projects need their prompt-format agents; default when the user
+    # did not explicitly pick a shots agent
+    _vgt_for_agent = video_generation_type
+    if _vgt_for_agent in ('r2v', 't2v') and not getattr(args, 'shots_agent', None):
+        _default_ref_agents = {'r2v': 'base/base_shots_r2v', 't2v': 'base/base_shots_t2v'}
+        shots_agent = _default_ref_agents[_vgt_for_agent]
+        print(f"[INFO] video_generation_type '{_vgt_for_agent}': defaulting shots agent to {shots_agent}")
 
     # Get narration settings
     generate_narration = not getattr(args, 'no_narration', False) and config.GENERATE_NARRATION
@@ -1551,7 +1634,7 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
     elif not steps.get('shots', False):
         logger.info("STEP 4: Shot Planning")
         print("\nSTEP 4: Shot Planning")
-        shots = plan_shots(graph, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
+        shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
         # Enhance motion prompts with trigger keywords for LoRA activation
         shots = enhance_motion_prompts_with_triggers(shots)
         project_mgr.save_shots(project_id, shots)
@@ -1562,8 +1645,37 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
         with open(shots_path, 'r', encoding='utf-8') as f:
             shots = json.load(f)
 
-    # STEP 4.5: Image Generation
-    if not steps.get('images', False):
+    # STEP 4.5: Image Generation (standard i2v projects only — r2v/t2v skip
+    # first-frame images entirely; r2v generates reference sheets instead)
+    video_gen_type = _get_video_generation_type(project_id, project_mgr)
+    if video_gen_type in ('r2v', 't2v'):
+        if not steps.get('images', False):
+            if video_gen_type == 'r2v':
+                logger.info("STEP 4.5: Reference Sheets (r2v — no first-frame images)")
+                print("\nSTEP 4.5: Reference Sheets (r2v)")
+                from core.sheet_generator import (
+                    ensure_character_sheets, ensure_background_sheets, ensure_prop_sheets,
+                )
+                gen_kwargs = {
+                    'image_mode': image_mode,
+                    'aspect_ratio': getattr(config, 'IMAGE_ASPECT_RATIO', '16:9'),
+                }
+                chars = ensure_character_sheets(project_mgr, project_id, **gen_kwargs)
+                bgs = ensure_background_sheets(project_mgr, project_id, **gen_kwargs)
+                props = ensure_prop_sheets(project_mgr, project_id, **gen_kwargs)
+                print(f"[INFO] r2v sheets: {len(chars)} character, {len(bgs)} background, {len(props)} prop")
+                synced = project_mgr.sync_shot_video_refs(project_id)
+                print(f"[INFO] r2v: synced video reference attachments on {synced} shot(s)")
+            else:
+                logger.info("STEP 4.5: skipped (t2v — direct text-to-video)")
+                print("\nSTEP 4.5: skipped (t2v — no images, no references)")
+            project_mgr.mark_step_complete(project_id, 'images')
+            # Reload shots (the r2v sync wrote reference_asset_ids)
+            shots_dir = project_mgr.get_project_dir(project_id)
+            shots_path = os.path.join(shots_dir, "shots.json")
+            with open(shots_path, 'r', encoding='utf-8') as f:
+                shots = json.load(f)
+    elif not steps.get('images', False):
         logger.info("STEP 4.5: Image Generation")
         print("\nSTEP 4.5: Image Generation")
         _generate_images(project_id, project_mgr, shots, image_mode, negative_prompt, images_per_shot)
@@ -1631,7 +1743,7 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
 
     if not steps.get('videos', False):
         # Filter to only shots with successfully generated images
-        valid_shots = [s for s in shots if s.get('image_path')]
+        valid_shots = _valid_shots_for_video_generation(project_id, project_mgr, shots)
 
         if not valid_shots:
             logger.error("No images were successfully generated. Cannot proceed.")
@@ -1672,7 +1784,7 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
             project_mgr._save_meta(project_id, project_meta)
 
             # Now render videos
-            valid_shots = [s for s in shots if s.get('image_path')]
+            valid_shots = _valid_shots_for_video_generation(project_id, project_mgr, shots)
             # Count shots that actually need rendering
             shots_status = project_mgr.get_shots(project_id)
             # Use dictionary lookup for reliable access by shot index
@@ -1832,7 +1944,7 @@ def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, ne
         elif current_step == 4:  # Shot Planning
             if not project_meta.get('steps', {}).get('shots', False):
                 print("\nSTEP 4: Shot Planning")
-                shots = plan_shots(graph, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
+                shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
                 # Enhance motion prompts with trigger keywords for LoRA activation
                 shots = enhance_motion_prompts_with_triggers(shots)
                 project_mgr.save_shots(project_id, shots)
@@ -1859,7 +1971,7 @@ def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, ne
         elif current_step == 6:  # Video Rendering
             if not project_meta.get('steps', {}).get('videos', False):
                 # Filter to only shots with successfully generated images
-                valid_shots = [s for s in shots if s.get('image_path')]
+                valid_shots = _valid_shots_for_video_generation(project_id, project_mgr, shots)
 
                 if not valid_shots:
                     print("[ERROR] No images were successfully generated. Cannot proceed.")
@@ -2039,31 +2151,42 @@ def _generate_images(project_id, project_mgr, shots, image_mode, negative_prompt
 def _render_videos(project_id, project_mgr, valid_shots, shot_length, shots):
     """Render videos for all shots and all image variations"""
     video_mode = getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
-    
+    video_gen_type = _get_video_generation_type(project_id, project_mgr)
+    ref_mode = video_gen_type in ('r2v', 't2v')
+
+    if ref_mode and video_mode != 'comfyui':
+        print(f"[ERROR] video_generation_type '{video_gen_type}' requires the ComfyUI engine "
+              f"(VIDEO_GENERATION_MODE=comfyui), but '{video_mode}' is configured.")
+        return
+
     template = None
     if video_mode != 'geminiweb':
         work_name = getattr(config, 'VIDEO_WORKFLOW', 'default')
         workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
-        
+
         workflow_path = config.WORKFLOW_PATH
         if workflow_config:
             workflow_path = workflow_config.get('workflow_path', config.WORKFLOW_PATH)
-            
+
         template = load_workflow(workflow_path, video_length_seconds=shot_length)
 
     # Load shots status from shots.json to check which videos are already rendered
     shots_status = project_mgr.get_shots(project_id)
     shots_status_dict = {s['index']: s for s in shots_status}
 
-    # Filter out shots without images (in case of partial failure)
-    shots_with_images = [s for s in valid_shots if s.get('image_path')]
+    if ref_mode:
+        # r2v/t2v: no first-frame images — every non-FLFI2V shot renders once
+        valid_shots = [s for s in valid_shots if not s.get('is_flfi2v')]
+    else:
+        # Filter out shots without images (in case of partial failure)
+        shots_with_images = [s for s in valid_shots if s.get('image_path')]
 
-    if len(shots_with_images) < len(valid_shots):
-        skipped = len(valid_shots) - len(shots_with_images)
-        print(f"[INFO] Skipping {skipped} shot(s) without images (partial image generation failure)")
+        if len(shots_with_images) < len(valid_shots):
+            skipped = len(valid_shots) - len(shots_with_images)
+            print(f"[INFO] Skipping {skipped} shot(s) without images (partial image generation failure)")
 
-    # Update valid_shots to only include shots with images
-    valid_shots = shots_with_images
+        # Update valid_shots to only include shots with images
+        valid_shots = shots_with_images
 
     # Track results
     successful_renders = 0
@@ -2082,23 +2205,30 @@ def _render_videos(project_id, project_mgr, valid_shots, shot_length, shots):
             continue
 
         # Get all image paths for this shot
-        image_paths = shot.get('image_paths', [])
-        if not image_paths:
-            # Fall back to single image_path
-            image_path = shot.get('image_path')
-            if image_path:
-                image_paths = [image_path]
+        if ref_mode:
+            # r2v/t2v: no first frame — compose refs/prompt and render once
+            _prepare_ref_mode_shot(project_id, project_mgr, shot)
+            image_paths = [None]
+        else:
+            image_paths = shot.get('image_paths', [])
+            if not image_paths:
+                # Fall back to single image_path
+                image_path = shot.get('image_path')
+                if image_path:
+                    image_paths = [image_path]
 
-        if not image_paths:
-            print(f"\n[SKIP] Shot {shot_idx}: No images found")
-            errors.append(f"Shot {shot_idx}: No images found")
-            failed_renders += 1
-            continue
+            if not image_paths:
+                print(f"\n[SKIP] Shot {shot_idx}: No images found")
+                errors.append(f"Shot {shot_idx}: No images found")
+                failed_renders += 1
+                continue
 
-        # Print image name before video generation
-        print(f"\n[PROCESS] Shot {shot_idx}: Using image '{os.path.basename(image_paths[0])}'")
+            # Print image name before video generation
+            print(f"\n[PROCESS] Shot {shot_idx}: Using image '{os.path.basename(image_paths[0])}'")
 
         # Render video for each image variation
+        if ref_mode:
+            print(f"\n[SUBMIT] Shot {shot_idx} ({video_gen_type}: reference/prompt driven)")
         print(f"[SUBMIT] Shot {shot_idx} ({shot_length}s each, {len(image_paths)} variation(s))")
 
         for variation_idx, img_path in enumerate(image_paths, 1):
@@ -2355,7 +2485,7 @@ def _run_with_prompts_file(project_mgr, args):
         return shots
 
     # STEP 5: Video Rendering
-    valid_shots = [s for s in shots if s.get('image_path')]
+    valid_shots = _valid_shots_for_video_generation(project_id, project_mgr, shots)
 
     if not valid_shots:
         print("\n[ERROR] No images were successfully generated. Cannot proceed to video generation.")
@@ -2637,6 +2767,16 @@ Testing Options:
         type=str,
         default=None,
         help='Shots prompt agent to use (default: default, artistic, etc.)'
+    )
+
+    parser.add_argument(
+        '--video-generation-type',
+        type=str,
+        default=None,
+        choices=['t2v', 'i2v', 'r2v'],
+        help='Visual input strategy for a new project: t2v (text to video, no images), '
+             'i2v (image to video, today\'s default), r2v (reference to video: '
+             'character/background/prop reference sheets, no first-frame images)'
     )
 
     parser.add_argument(

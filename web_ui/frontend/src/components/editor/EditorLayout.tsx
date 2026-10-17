@@ -66,9 +66,12 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
 
       if (project.shots) {
         project.shots.forEach((shot: Shot, index: number) => {
-          const shotDuration = 5;
+          // Planned length for shots whose video hasn't been rendered yet
+          const plannedDuration = shot.duration && shot.duration > 0 ? shot.duration : 5;
 
           if (shot.video_path) {
+            // Actual rendered file length, falling back to the planned duration
+            const shotDuration = shot.video_duration || plannedDuration;
             newClips.push({
               id: `v-${shot.index}-${index}`,
               trackId: 'v1',
@@ -82,33 +85,82 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
             });
             currentVideoTime += shotDuration;
           } else if (shot.is_flfi2v) {
+            const meetingStart = currentVideoTime;
+            let flfiDuration = 0;
              if (shot.meeting_video_path) {
+                const meetDuration = shot.meeting_video_duration || plannedDuration;
                 newClips.push({
                   id: `v-meet-${shot.index}`,
                   trackId: 'v1',
                   type: 'video',
                   name: `Meeting - ${shot.character_name}`,
                   url: api.getAssetUrl(id, 'videos', shot.meeting_video_path.split(/[\\/]/).pop() || ''),
-                  startAt: currentVideoTime,
-                  duration: shotDuration,
+                  startAt: meetingStart,
+                  duration: meetDuration,
                   sourceStart: 0,
-                  sourceDuration: shotDuration
+                  sourceDuration: meetDuration
                 });
-                currentVideoTime += shotDuration;
+                flfiDuration = Math.max(flfiDuration, meetDuration);
+             } else {
+                newClips.push({
+                  id: `p-meet-${shot.index}`,
+                  trackId: 'v1',
+                  type: 'video',
+                  name: `Meeting - ${shot.character_name || shot.index} (not generated)`,
+                  url: '',
+                  startAt: meetingStart,
+                  duration: plannedDuration,
+                  sourceStart: 0,
+                  sourceDuration: plannedDuration,
+                  placeholder: true
+                });
+                flfiDuration = Math.max(flfiDuration, plannedDuration);
              }
              if (shot.departure_video_path) {
+                const depDuration = shot.departure_video_duration || plannedDuration;
                 newClips.push({
                   id: `v-dep-${shot.index}`,
                   trackId: 'v2',
                   type: 'video',
                   name: `Departure - ${shot.character_name}`,
                   url: api.getAssetUrl(id, 'videos', shot.departure_video_path.split(/[\\/]/).pop() || ''),
-                  startAt: currentVideoTime - shotDuration,
-                  duration: shotDuration,
+                  startAt: meetingStart,
+                  duration: depDuration,
                   sourceStart: 0,
-                  sourceDuration: shotDuration
+                  sourceDuration: depDuration
                 });
+                flfiDuration = Math.max(flfiDuration, depDuration);
+             } else {
+                newClips.push({
+                  id: `p-dep-${shot.index}`,
+                  trackId: 'v2',
+                  type: 'video',
+                  name: `Departure - ${shot.character_name || shot.index} (not generated)`,
+                  url: '',
+                  startAt: meetingStart,
+                  duration: plannedDuration,
+                  sourceStart: 0,
+                  sourceDuration: plannedDuration,
+                  placeholder: true
+                });
+                flfiDuration = Math.max(flfiDuration, plannedDuration);
              }
+             currentVideoTime += flfiDuration;
+          } else {
+            // No video yet — reserve the shot's planned length as empty timeline space
+            newClips.push({
+              id: `p-${shot.index}-${index}`,
+              trackId: 'v1',
+              type: 'video',
+              name: shot.character_name ? `${shot.character_name} - ${shot.index}` : `Shot ${shot.index}`,
+              url: '',
+              startAt: currentVideoTime,
+              duration: plannedDuration,
+              sourceStart: 0,
+              sourceDuration: plannedDuration,
+              placeholder: true
+            });
+            currentVideoTime += plannedDuration;
           }
         });
       }
@@ -1171,7 +1223,8 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
         version: '1.0',
         duration: duration,
         tracks: tracks,
-        clips: clips,
+        // Placeholder clips only reserve timeline space — they have no media to export
+        clips: clips.filter((c: any) => !c.placeholder),
         exportedAt: new Date().toISOString()
       };
 

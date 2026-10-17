@@ -55,7 +55,38 @@ def is_local_provider():
     return LLM_PROVIDER.lower() in local_providers
 
 
-def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_agent):
+def build_characters_block(characters):
+    """Prompt block describing the story's cast for shot planning.
+
+    Shot prompts must name characters consistently so reference images attach
+    to the right shots and identity stays stable across clips. Returns ''
+    when the input carries no characters (the CLI passes a bare scene list;
+    the web UI replan passes the full story).
+    """
+    entries = []
+    for char in characters or []:
+        if not isinstance(char, dict):
+            continue
+        name = (char.get('name') or '').strip()
+        if not name:
+            continue
+        desc = (char.get('image_prompt') or '').strip()
+        attire = (char.get('attire') or '').strip()
+        if attire and attire.lower() not in desc.lower():
+            desc = f"{desc} {attire}".strip()
+        entries.append(f"- {name}: {desc}" if desc else f"- {name}")
+    if not entries:
+        return ""
+    return (
+        "STORY CHARACTERS — refer to them by these exact names and keep each "
+        "character's appearance consistent with the description. For every shot, "
+        "also return a 'characters' field listing the names of the characters "
+        "visible in that shot (empty list or omitted when none appear):\n"
+        + "\n".join(entries) + "\n\n"
+    )
+
+
+def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_agent, characters_block=""):
     """Plan shots for a batch of scenes"""
     # Create scene graph for this batch
     batch_graph = json.dumps(scenes_batch, ensure_ascii=False)
@@ -63,7 +94,7 @@ def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instructi
     # Build batch-specific instruction
     batch_instruction = f"""
 BATCH PROCESSING: This is batch {batch_num} of {total_batches}
-{max_shots_instruction}
+{characters_block}{max_shots_instruction}
 
 IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batch.
 {SHOT_DURATION_INSTRUCTION}
@@ -134,6 +165,26 @@ _REQUIRED_VIDEO_PROMPT_FIELDS = (
     ("non_diegetic_music:", "non_diegetic_music"),
 )
 
+# Full-reference (r2v) prompts use the six-section structure instead
+_REQUIRED_REF_VIDEO_PROMPT_FIELDS = (
+    ("subject_definitions:", "subject_definitions"),
+    ("summary:", "summary"),
+    ("retention_analysis:", "retention_analysis"),
+    ("detailed_description:", "detailed_description"),
+    ("overall_soundscape:", "overall_soundscape"),
+    ("non_diegetic_music:", "non_diegetic_music"),
+)
+
+# T2V prompts are the I2VA format minus the first-frame instruction
+_REQUIRED_T2V_PROMPT_FIELDS = (
+    ("integrated_multimodal_description:", "integrated_multimodal_description"),
+    ("overall_soundscape:", "overall_soundscape"),
+    ("non_diegetic_music:", "non_diegetic_music"),
+)
+
+# R2V prompt character cap (official MiniMax H3 Ref2VA limit)
+R2V_PROMPT_CHAR_LIMIT = 7000
+
 
 def parse_video_prompt_cut_times(video_prompt):
     """Extract (shot_number, cut_time_seconds) pairs from a video_prompt.
@@ -151,7 +202,7 @@ def parse_video_prompt_cut_times(video_prompt):
     return cuts
 
 
-def validate_video_prompt(video_prompt, clip_duration=None):
+def validate_video_prompt(video_prompt, clip_duration=None, prompt_kind="i2v"):
     """Validate a MiniMax H3 video_prompt against the required structure.
 
     Args:
@@ -160,6 +211,9 @@ def validate_video_prompt(video_prompt, clip_duration=None):
             cut times must fit inside the clip with a safety margin (the H3
             frame snap can extend a clip slightly, and the final sub-shot
             needs room to play out).
+        prompt_kind: one of "i2v" (I2VA first-frame format, default), "r2v"
+            (six-section full-reference format), or "t2v" (T2VA, no image
+            instruction line).
 
     Returns:
         List of human-readable problems; empty list means the prompt is valid.
@@ -169,10 +223,22 @@ def validate_video_prompt(video_prompt, clip_duration=None):
         return ["video_prompt is empty"]
 
     text = str(video_prompt)
+    kind = (prompt_kind or "i2v").lower()
+    if kind == "r2v":
+        required_fields = _REQUIRED_REF_VIDEO_PROMPT_FIELDS
+    elif kind == "t2v":
+        required_fields = _REQUIRED_T2V_PROMPT_FIELDS
+    else:
+        required_fields = _REQUIRED_VIDEO_PROMPT_FIELDS
 
-    for needle, label in _REQUIRED_VIDEO_PROMPT_FIELDS:
+    for needle, label in required_fields:
         if needle not in text:
             problems.append(f"missing {label}")
+
+    if kind in ("r2v", "t2v") and len(text) > R2V_PROMPT_CHAR_LIMIT:
+        problems.append(
+            f"prompt exceeds the {R2V_PROMPT_CHAR_LIMIT}-character limit ({len(text)} chars)"
+        )
 
     # Sub-shot numbering must start at 1 and be sequential
     shot_numbers = [int(n) for n in re.findall(r"\[Shot\s*(\d+)\]", text)]
@@ -244,11 +310,22 @@ def validate_and_repair_shots(shots, shots_agent):
 
     ensure_shot_durations(shots)
 
+    # The prompt format follows the shots agent: r2v agents emit the
+    # six-section full-reference format, t2v agents the T2VA format
+    agent_name = (shots_agent or "").lower()
+    if "r2v" in agent_name:
+        prompt_kind = "r2v"
+    elif "t2v" in agent_name:
+        prompt_kind = "t2v"
+    else:
+        prompt_kind = "i2v"
+
     invalid = []
     for pos, shot in enumerate(shots):
         if not isinstance(shot, dict):
             continue
-        problems = validate_video_prompt(shot.get('video_prompt'), shot.get('duration'))
+        problems = validate_video_prompt(shot.get('video_prompt'), shot.get('duration'),
+                                         prompt_kind=prompt_kind)
         if problems:
             invalid.append((pos, shot, problems))
 
@@ -303,7 +380,8 @@ INVALID VIDEO PROMPTS:
             fixed_prompt = (repair.get('video_prompt') or '').strip()
             if not fixed_prompt:
                 continue
-            remaining = validate_video_prompt(fixed_prompt, target.get('duration'))
+            remaining = validate_video_prompt(fixed_prompt, target.get('duration'),
+                                              prompt_kind=prompt_kind)
             if remaining:
                 logger.warning(f"Shot {target.get('index', '?')}: repair attempt still invalid: {'; '.join(remaining)}")
                 continue
@@ -615,7 +693,12 @@ def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_sce
 
     # Calculate scene count
     parsed_graph = json.loads(scene_graph) if isinstance(scene_graph, str) else scene_graph
-    
+
+    # Story cast descriptions, when the input carries them — injected into every
+    # batch so prompts name characters and shots get a 'characters' field
+    characters_block = build_characters_block(
+        parsed_graph.get('characters')) if isinstance(parsed_graph, dict) else ""
+
     # Extract scenes list from story wrapper if necessary
     if isinstance(parsed_graph, dict) and "scenes" in parsed_graph:
         scenes = parsed_graph["scenes"]
@@ -782,6 +865,7 @@ CRITICAL SHOT REQUIREMENTS:
                 'batch_num': batch_num + 1,
                 'total_batches': total_batches,
                 'max_shots_instruction': batch_instruction,
+                'characters_block': characters_block,
                 'shots_agent': shots_agent,
                 'start_idx': start_idx,
                 'end_idx': end_idx
@@ -806,7 +890,8 @@ CRITICAL SHOT REQUIREMENTS:
                     batch_num=batch_data['batch_num'],
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
-                    shots_agent=batch_data['shots_agent']
+                    shots_agent=batch_data['shots_agent'],
+                    characters_block=batch_data.get('characters_block', "")
                 )
 
                 # Add batch number
@@ -863,7 +948,8 @@ CRITICAL SHOT REQUIREMENTS:
                     batch_num=batch_data['batch_num'],
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
-                    shots_agent=batch_data['shots_agent']
+                    shots_agent=batch_data['shots_agent'],
+                    characters_block=batch_data.get('characters_block', "")
                 )
 
                 # Add batch number and ensure scene_index is present

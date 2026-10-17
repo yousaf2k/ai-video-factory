@@ -97,6 +97,9 @@ function ClipView({ clip }: ClipViewProps) {
     width: `${clip.duration * zoom}px`,
     transform: transform ? CSS.Translate.toString(transform) : undefined,
     zIndex: isDragging ? 50 : isSelected ? 40 : 30,
+    ...(clip.placeholder
+      ? { backgroundImage: 'repeating-linear-gradient(45deg, rgba(148,163,184,0.18) 0, rgba(148,163,184,0.18) 8px, transparent 8px, transparent 16px)' }
+      : {}),
   };
 
   const handleTrimStart = (side: 'left' | 'right', e: React.PointerEvent) => {
@@ -152,15 +155,16 @@ function ClipView({ clip }: ClipViewProps) {
         setSelectedClipId(clip.id);
       }}
       className={`absolute top-1 bottom-1 rounded border text-[10px] font-medium overflow-visible group shadow select-none transition-all
-        ${clip.type === 'video' ? 'bg-indigo-600/80 border-indigo-400' : ''}
-        ${clip.type === 'audio' ? 'bg-emerald-600/80 border-emerald-400' : ''}
+        ${clip.placeholder ? 'bg-slate-800/70 border-dashed border-slate-500' : ''}
+        ${!clip.placeholder && clip.type === 'video' ? 'bg-indigo-600/80 border-indigo-400' : ''}
+        ${!clip.placeholder && clip.type === 'audio' ? 'bg-emerald-600/80 border-emerald-400' : ''}
         ${isSelected ? 'ring-1 ring-white border-white scale-[1.01]' : 'hover:opacity-90'}
         ${isDragging ? 'opacity-30 cursor-grabbing' : 'cursor-grab'}
       `}
     >
       {/* Clip content */}
-      <div className="px-2 py-0.5 truncate text-white drop-shadow-md pointer-events-none h-full relative">
-        {clip.name}
+      <div className={`px-2 py-0.5 truncate drop-shadow-md pointer-events-none h-full relative ${clip.placeholder ? 'text-slate-400 italic' : 'text-white'}`}>
+        {clip.placeholder ? `${clip.name} · empty` : clip.name}
 
         {isSelected && (
            <button

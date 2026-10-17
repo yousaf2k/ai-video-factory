@@ -48,6 +48,8 @@ class UpdateConfigRequest(BaseModel):
     frontend_bind_host: Optional[str] = None
     geminiweb_model: Optional[str] = None
     geminiweb_thinking: Optional[str] = None
+    flow_image_model: Optional[str] = None
+    flow_image_outputs: Optional[str] = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -137,6 +139,8 @@ async def get_config():
             "gemini_watermark_tool_video": getattr(config, 'GEMINI_WATERMARK_TOOL_VIDEO', ''),
             "geminiweb_model": getattr(config, 'GEMINIWEB_MODEL', '3.8 Flash'),
             "geminiweb_thinking": getattr(config, 'GEMINIWEB_THINKING', 'Low'),
+            "flow_image_model": getattr(config, 'FLOW_IMAGE_MODEL', 'Nano Banana 2.1'),
+            "flow_image_outputs": getattr(config, 'FLOW_IMAGE_OUTPUTS', 'x1'),
             "watermark_removal_method": getattr(config, 'WATERMARK_REMOVAL_METHOD', 'builtin'),
             "backend_host": getattr(config, 'BACKEND_HOST', '127.0.0.1'),
             "backend_port": getattr(config, 'BACKEND_PORT', 8000),
@@ -199,6 +203,10 @@ async def update_config(request: UpdateConfigRequest):
             updates["GEMINIWEB_MODEL"] = request.geminiweb_model
         if request.geminiweb_thinking is not None:
             updates["GEMINIWEB_THINKING"] = request.geminiweb_thinking
+        if request.flow_image_model is not None:
+            updates["FLOW_IMAGE_MODEL"] = request.flow_image_model
+        if request.flow_image_outputs is not None:
+            updates["FLOW_IMAGE_OUTPUTS"] = request.flow_image_outputs
         if request.watermark_removal_method is not None:
             updates["WATERMARK_REMOVAL_METHOD"] = request.watermark_removal_method
         if request.backend_host is not None:

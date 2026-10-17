@@ -321,11 +321,17 @@ Change: image generation resolves **only** the shot's `reference_asset_ids` — 
 and passes existing `image`-type assets as the reference list. There is no name-based character
 matching at generation time any more: character references are attached to the character's shots
 as project refs (`p/{project_id}/{media_dir}/{filename}`) by `ProjectManager.sync_character_asset_refs`,
-which runs when a reference is uploaded or AI-generated (and after a shots replan), appending the
-character ref after any refs the user chose manually (order = priority, first is primary). Synced
-refs are tracked per shot (`synced_character_asset_refs`), so regenerating a character image swaps
-the attached ref instead of accumulating old versions, and user-chosen refs are never touched.
-FLFI2V shots are skipped — they keep their own then/now resolution. Log which references were used
+which runs when a reference is uploaded or AI-generated (and after a shots replan). A shot is
+matched to characters explicitly (`characters` name list from r2v agents, else `character_name`);
+shots with no attribution are matched by character name in the prompt — full name
+case-insensitively, or a single capitalized significant word (so "rich shadow detail" does not
+attach The Shadow, and "Jamshed" matches Inspector Jamshed). Matched names are persisted on
+shot['characters'] when the shot carries no attribution, which the shot card shows next to the
+camera badge. Synced refs are tracked per shot
+(`synced_character_asset_refs`), so regenerating a character image swaps the attached ref instead
+of accumulating old versions; still-current refs keep their position (order = priority, first is
+primary) and other user-chosen refs are never touched. FLFI2V shots are skipped — they keep their
+own then/now resolution. Log which references were used
 and include them in the progress payload so the UI can show “N references used”.
 
 ### 6.2 Video generation

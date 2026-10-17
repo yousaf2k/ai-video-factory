@@ -27,6 +27,7 @@ import {
   Volume2,
   Paperclip,
   FolderInput,
+  User,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -103,6 +104,14 @@ export function ShotCard({
   aspectRatio = "16:9",
   projectAgent,
 }: ShotCardProps) {
+  // Characters referenced by this shot (r2v/planner `characters` list, falling
+  // back to the single `character_name` used by FLFI2V shots)
+  const shotCharacters = (shot.characters?.length
+    ? shot.characters
+    : shot.character_name
+      ? [shot.character_name]
+      : []
+  ).filter(Boolean);
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);
   const [viewMode, setViewMode] = useState<"image" | "video" | "soundfx">("image");
@@ -612,13 +621,13 @@ export function ShotCard({
       )}
     >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-y-1.5 mb-1.5">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2 min-w-0">
           {/* Drag Handle */}
           <button
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded hover:bg-muted/50"
+            className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded hover:bg-muted/50"
             title="Drag to reorder"
           >
             <GripVertical className="w-4 h-4" />
@@ -627,17 +636,25 @@ export function ShotCard({
             <Checkbox
               checked={selected}
               onCheckedChange={(checked) => onSelectChange?.(checked === true)}
-              className="mr-1"
+              className="mr-1 shrink-0"
             />
           )}
           {showIndex && (
-            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+            <span className="text-sm font-medium text-muted-foreground whitespace-nowrap shrink-0">
               {shot.index}
+            </span>
+          )}
+          {shot.camera && (
+            <span
+              className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase font-semibold tracking-wider max-w-[160px] truncate whitespace-nowrap min-w-0"
+              title={`Camera: ${shot.camera}`}
+            >
+              {shot.camera}
             </span>
           )}
           {shot.duration != null && (
             <span
-              className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-slate-500 text-white whitespace-nowrap"
+              className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-slate-500 text-white whitespace-nowrap shrink-0"
               title="Clip duration (seconds)"
             >
               {shot.duration}s
@@ -646,8 +663,64 @@ export function ShotCard({
 
         </div>
 
-        {/* Actions */}
-        <div className="flex flex-wrap items-center gap-1 bg-muted/30 p-1 rounded-md ml-auto">
+        {/* Media view toggles — rightmost on the info row */}
+        <div className="flex items-center gap-2.5 ml-auto shrink-0">
+            <button
+              onClick={() => setViewMode("image")}
+              className={cn(
+                "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
+                viewMode === "image"
+                  ? "bg-purple-500 text-white font-semibold"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              title={(shot.is_flfi2v ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated) : shot.image_generated)
+                ? "Image Generated - Click to view"
+                : "Image Not Generated - Click to view"}
+            >
+              <Image className="w-3 h-3" />
+              {(shot.is_flfi2v ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated) : shot.image_generated)
+                ? "✓"
+                : "○"}
+            </button>
+            <button
+              onClick={() => setViewMode("video")}
+              className={cn(
+                "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
+                viewMode === "video"
+                  ? "bg-purple-500 text-white font-semibold"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              title={(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)
+                ? "Video Rendered - Click to view"
+                : "Video Not Rendered - Click to view"}
+            >
+              <Video className="w-3 h-3" />
+              {(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)
+                ? "✓"
+                : "○"}
+            </button>
+
+            {shot.soundfx_generated && (
+              <button
+                onClick={() => setViewMode("soundfx")}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
+                  viewMode === "soundfx"
+                    ? "bg-purple-500 text-white font-semibold"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                title="Sound FX Video Rendered - Click to view"
+              >
+                <Volume2 className="w-3 h-3" />
+                "✓"
+              </button>
+            )}
+        </div>
+      </div>
+
+      {/* Action buttons row */}
+      <div className="flex justify-end mb-1.5">
+        <div className="flex flex-wrap items-center gap-1 bg-muted/30 p-1 rounded-md">
           {/* Hidden file input for image/video upload */}
           <input
             ref={fileInputRef}
@@ -876,9 +949,16 @@ export function ShotCard({
       {/* Status & Metadata */}
       <div className="flex flex-wrap items-center justify-between gap-y-1.5 mb-3 text-xs">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground truncate uppercase font-semibold tracking-wider">
-            {shot.camera}
-          </span>
+          {shotCharacters.length > 0 && shotCharacters.map((name) => (
+            <span
+              key={name}
+              className="inline-flex items-center gap-1 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium max-w-[140px]"
+              title="Characters in this shot"
+            >
+              <User className="w-3 h-3 shrink-0" />
+              <span className="truncate">{name}</span>
+            </span>
+          ))}
           {/* FLFI2V Mode Toggle Buttons - Image or Video */}
           {shot.is_flfi2v && viewMode === "image" && (
             <div className="flex gap-1 bg-muted/50 p-0.5 rounded-md">
@@ -923,59 +1003,6 @@ export function ShotCard({
                 Departure
               </button>
             </div>
-          )}
-        </div>
-
-        <div className="flex gap-2.5 ml-auto">
-          <button
-            onClick={() => setViewMode("image")}
-            className={cn(
-              "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
-              viewMode === "image"
-                ? "bg-purple-500 text-white font-semibold"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            title={(shot.is_flfi2v ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated) : shot.image_generated)
-              ? "Image Generated - Click to view"
-              : "Image Not Generated - Click to view"}
-          >
-            <Image className="w-3 h-3" />
-            {(shot.is_flfi2v ? (shot.then_image_generated || shot.now_image_generated || shot.image_generated) : shot.image_generated)
-              ? "✓"
-              : "○"}
-          </button>
-          <button
-            onClick={() => setViewMode("video")}
-            className={cn(
-              "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
-              viewMode === "video"
-                ? "bg-purple-500 text-white font-semibold"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-            title={(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)
-              ? "Video Rendered - Click to view"
-              : "Video Not Rendered - Click to view"}
-          >
-            <Video className="w-3 h-3" />
-            {(shot.is_flfi2v ? (shot.meeting_video_rendered || shot.departure_video_rendered || shot.video_rendered) : shot.video_rendered)
-              ? "✓"
-              : "○"}
-          </button>
-
-          {shot.soundfx_generated && (
-            <button
-              onClick={() => setViewMode("soundfx")}
-              className={cn(
-                "flex items-center gap-1 px-2 py-0.5 rounded transition-all hover:scale-105 active:scale-95",
-                viewMode === "soundfx"
-                  ? "bg-purple-500 text-white font-semibold"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              title="Sound FX Video Rendered - Click to view"
-            >
-              <Volume2 className="w-3 h-3" />
-              "✓"
-            </button>
           )}
         </div>
       </div>

@@ -4,6 +4,7 @@ Saves all outputs (story, shots, images) and tracks completion status
 """
 import json
 import os
+import re
 import time
 from datetime import datetime
 import contextlib
@@ -14,6 +15,27 @@ import config
 
 # Get logger for project management
 logger = get_logger(__name__)
+
+
+def _name_in_prompt(name, prompt, prompt_lower=None):
+    """True when the character name appears in the prompt.
+
+    Full-name matching is a case-insensitive substring. The single-word
+    fallback (e.g. 'Jamshed' for 'Inspector Jamshed') requires the word to be
+    capitalized in the prompt — proper noun — so 'rich shadow detail' does not
+    attach The Shadow to every moody-lit shot. Prompts written entirely in
+    lowercase fall back to a case-insensitive whole-word match."""
+    if prompt_lower is None:
+        prompt_lower = (prompt or "").lower()
+    name_lower = name.lower()
+    if name_lower in prompt_lower:
+        return True
+    words = [w for w in name_lower.split() if len(w) >= 4]
+    if not words or not prompt:
+        return False
+    if not any(c.isupper() for c in prompt):
+        return any(re.search(rf"\b{re.escape(w)}\b", prompt_lower) for w in words)
+    return any(re.search(rf"\b{w.capitalize()}\b", prompt) for w in words)
 
 
 class ProjectManager:
@@ -113,16 +135,26 @@ class ProjectManager:
         """
         Attach each character's reference image to that character's shots as a
         project-media asset reference (reference_asset_ids), so image generation
-        consumes asset references directly instead of matching characters by
-        name against shot prompts at generation time.
+        consumes asset references directly instead of resolving references from
+        character objects at generation time.
+
+        A shot is matched to characters explicitly (shot['characters'] name list,
+        else character_name). When the shot carries no character attribution, the
+        character names are matched against the shot's image_prompt — the same
+        matching the old generation-time lookup used, but done once at attach
+        time where the result is visible and editable per shot. Matched names
+        are persisted on shot['characters'] when the shot has none, so the UI
+        can show them and later syncs match explicitly.
 
         Only standard (non-FLFI2V) shots are touched — FLFI2V shots resolve
         then/now references from the character separately. Refs the sync
         attached earlier are tracked per shot (synced_character_asset_refs) and
         replaced on the next sync, so regenerating a character image swaps the
-        attached ref instead of accumulating old versions. Refs the user
-        attached manually are never touched. The character ref is appended
-        after user refs (order = priority, first is primary). Idempotent.
+        attached refs instead of accumulating old versions; a manually attached
+        ref that equals the character's current reference image is adopted into
+        that tracking, while other user-attached refs are never touched. The
+        character refs are appended after user refs (order = priority, first is
+        primary). Idempotent.
 
         Returns the number of shots updated.
         """
@@ -131,22 +163,39 @@ class ProjectManager:
         if not characters:
             return 0
 
-        # Character name -> asset ref for its reference image
-        name_to_ref = {}
-        all_names = set()
+        # lowercased name -> display name, and lowercased name -> asset ref
+        # (only for characters that actually have a usable reference image)
+        display_names = {}
+        refs_by_name = {}
         for char in characters:
             name = (char.get('name') or '').strip()
             if not name:
                 continue
-            all_names.add(name)
+            display_names[name.lower()] = name
             ref_path = char.get('character_reference_image_path')
-            if not ref_path:
-                continue
-            asset_ref = self._project_media_asset_ref(project_id, self.relativize_path(ref_path))
-            if asset_ref:
-                name_to_ref[name] = asset_ref
-        if not all_names:
+            if ref_path:
+                asset_ref = self._project_media_asset_ref(project_id, self.relativize_path(ref_path))
+                if asset_ref:
+                    refs_by_name[name.lower()] = asset_ref
+        if not display_names:
             return 0
+
+        def explicit_shot_names(shot):
+            names = [(n or '').strip().lower() for n in (shot.get('characters') or [])]
+            if not names:
+                cn = (shot.get('character_name') or '').strip().lower()
+                names = [cn] if cn else []
+            return [n for n in names if n in display_names]
+
+        def prompt_matched_names(shot):
+            if shot.get('characters') or (shot.get('character_name') or '').strip():
+                return []
+            prompt = shot.get('image_prompt') or ''
+            if not prompt:
+                return []
+            prompt_lower = prompt.lower()
+            return [lower for lower, name in display_names.items()
+                    if _name_in_prompt(name, prompt, prompt_lower)]
 
         updated = 0
 
@@ -155,19 +204,34 @@ class ProjectManager:
             for shot in shots:
                 if shot.get('is_flfi2v'):
                     continue
-                name = (shot.get('character_name') or '').strip()
-                if name not in all_names:
-                    continue
-                asset_ref = name_to_ref.get(name)
+                matched = explicit_shot_names(shot) or prompt_matched_names(shot)
+                prompt_matched = matched if not explicit_shot_names(shot) else []
+                matched_refs = []
+                for lower in matched:
+                    ref = refs_by_name.get(lower)
+                    if ref and ref not in matched_refs:
+                        matched_refs.append(ref)
+
+                # Persist discovered attribution (prompt matching) so the UI and
+                # later syncs can use it — never overwrite existing attribution
+                original_characters = shot.get('characters')
+                if prompt_matched and not original_characters:
+                    shot['characters'] = [display_names[lower] for lower in prompt_matched]
+
                 original_refs = shot.get('reference_asset_ids') or []
                 synced = shot.get('synced_character_asset_refs') or []
-                refs = [r for r in original_refs if r not in synced]
-                if asset_ref and asset_ref not in refs:
-                    refs.append(asset_ref)
-                if refs == original_refs:
+                # Drop only stale synced refs — still-current ones keep their
+                # position (re-appending would change which ref is primary)
+                stale = [r for r in synced if r not in matched_refs]
+                refs = [r for r in original_refs if r not in stale]
+                for ref in matched_refs:
+                    if ref not in refs:
+                        refs.append(ref)
+                if (refs == original_refs and synced == matched_refs
+                        and shot.get('characters') == original_characters):
                     continue
                 shot['reference_asset_ids'] = refs
-                shot['synced_character_asset_refs'] = [asset_ref] if asset_ref else []
+                shot['synced_character_asset_refs'] = matched_refs
                 updated += 1
 
         self.update_shots_safely(project_id, modify)
@@ -175,18 +239,126 @@ class ProjectManager:
             logger.info(f"Attached character asset references to {updated} shot(s) in project {project_id}")
         return updated
 
+    def sync_shot_video_refs(self, project_id: str) -> int:
+        """
+        Attach reference images to each shot of an r2v project for
+        reference-to-video generation, in priority order:
+
+            1. character sheets of shot['characters'] (fallback: character_name)
+            2. the owning scene's background sheet
+            3. prop sheets of shot['props']
+
+        Only runs when the project's video_generation_type is 'r2v' (in r2v
+        projects this supersedes sync_character_asset_refs, so the character
+        ref is never attached twice under two tracking keys). Refs attached by
+        earlier syncs are tracked per shot (synced_video_ref_asset_refs) and
+        replaced on the next sync, so regenerating a sheet swaps the attached
+        ref instead of accumulating old versions. User-attached refs are never
+        touched. Idempotent.
+
+        Returns the number of shots updated.
+        """
+        meta = self.load_project(project_id)
+        if (meta or {}).get('video_generation_type') != 'r2v':
+            return 0
+
+        story = self.get_story(project_id) or {}
+        characters = story.get('characters') or []
+        props = story.get('props') or []
+        scenes = story.get('scenes') or []
+
+        char_ref = {}
+        char_names = set()
+        for char in characters:
+            name = (char.get('name') or '').strip()
+            if not name:
+                continue
+            char_names.add(name)
+            path = char.get('character_reference_image_path')
+            if path:
+                ref = self._project_media_asset_ref(project_id, self.relativize_path(path))
+                if ref:
+                    char_ref[name] = ref
+
+        prop_ref = {}
+        prop_names = set()
+        for prop in props:
+            name = (prop.get('name') or '').strip()
+            if not name:
+                continue
+            prop_names.add(name)
+            path = prop.get('reference_image_path')
+            if path:
+                ref = self._project_media_asset_ref(project_id, self.relativize_path(path))
+                if ref:
+                    prop_ref[name] = ref
+
+        bg_ref = {}
+        for scene in scenes:
+            sid = scene.get('scene_id')
+            path = scene.get('background_image_path')
+            if sid is not None and path:
+                ref = self._project_media_asset_ref(project_id, self.relativize_path(path))
+                if ref:
+                    bg_ref[str(sid)] = ref
+
+        updated = 0
+
+        def modify(shots):
+            nonlocal updated
+            for shot in shots:
+                if shot.get('is_flfi2v'):
+                    continue
+
+                # Priority fill: characters -> background -> props (D2 order)
+                refs = []
+
+                shot_characters = shot.get('characters')
+                if not shot_characters:
+                    name = (shot.get('character_name') or '').strip()
+                    shot_characters = [name] if name else []
+                for name in shot_characters:
+                    name = (name or '').strip()
+                    if name in char_ref and char_ref[name] not in refs:
+                        refs.append(char_ref[name])
+
+                scene_bg = bg_ref.get(str(shot.get('scene_id')))
+                if scene_bg and scene_bg not in refs:
+                    refs.append(scene_bg)
+
+                for name in shot.get('props') or []:
+                    name = (name or '').strip()
+                    if name in prop_ref and prop_ref[name] not in refs:
+                        refs.append(prop_ref[name])
+
+                original_refs = shot.get('reference_asset_ids') or []
+                synced = shot.get('synced_video_ref_asset_refs') or []
+                # Keep user-attached refs (position preserved), drop stale synced ones
+                user_refs = [r for r in original_refs if r not in synced]
+                new_refs = user_refs + refs
+                if new_refs == original_refs:
+                    continue
+                shot['reference_asset_ids'] = new_refs
+                shot['synced_video_ref_asset_refs'] = refs
+                updated += 1
+
+        self.update_shots_safely(project_id, modify)
+        if updated:
+            logger.info(f"Synced r2v video reference attachments on {updated} shot(s) in project {project_id}")
+        return updated
+
     @staticmethod
     def _project_media_asset_ref(project_id: str, rel_path: str):
         """Convert 'output/projects/{pid}/{media_dir}/{filename}' into the
         'p/{pid}/{media_dir}/{filename}' asset reference, or None when the path
-        is not project media in an image directory."""
+        is not project media in a supported media dir."""
         p = (rel_path or '').replace('\\', '/')
         prefix = f"output/projects/{project_id}/"
         if not p.startswith(prefix):
             return None
         rest = p[len(prefix):]
         media_dir, _, filename = rest.partition('/')
-        if not filename or media_dir not in ("images", "references", "backgrounds"):
+        if not filename or media_dir not in ("images", "references", "backgrounds", "audio", "videos"):
             return None
         return f"p/{project_id}/{rest}"
 
@@ -329,7 +501,7 @@ class ProjectManager:
             return latest['meta']
         return None
 
-    def create_project(self, idea, project_id=None, story_agent="default", shots_agent="default", total_duration=None, aspect_ratio="16:9", prompt_mode="video"):
+    def create_project(self, idea, project_id=None, story_agent="default", shots_agent="default", total_duration=None, aspect_ratio="16:9", prompt_mode="video", video_generation_type=None):
         """Create a new project
 
         Args:
@@ -340,6 +512,9 @@ class ProjectManager:
             total_duration: Target video length in seconds
             aspect_ratio: Video aspect ratio ("16:9" or "9:16")
             prompt_mode: Default prompt style for video generation ("video" or "motion")
+            video_generation_type: Visual input strategy — "i2v" (image to video,
+                today's pipeline), "r2v" (reference to video) or "t2v" (text to video).
+                Defaults to "i2v".
         """
         if project_id is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -354,6 +529,10 @@ class ProjectManager:
         project_dir = os.path.join(self.projects_dir, project_id)
         os.makedirs(project_dir, exist_ok=True)
 
+        if video_generation_type not in ("t2v", "i2v", "r2v", None):
+            logger.warning(f"Unknown video_generation_type {video_generation_type!r}; defaulting to i2v")
+            video_generation_type = None
+
         meta = {
             'project_id': project_id,
             'timestamp': timestamp,
@@ -361,6 +540,7 @@ class ProjectManager:
             'story_agent': story_agent,
             'shots_agent': shots_agent,
             'prompt_mode': prompt_mode,
+            'video_generation_type': video_generation_type or 'i2v',
             'total_duration': total_duration,
             'aspect_ratio': aspect_ratio,
             'started_at': datetime.now().isoformat(),
@@ -451,6 +631,13 @@ class ProjectManager:
                 'batch_number': shot.get('batch_number', idx),
                 'reference_asset_ids': shot.get('reference_asset_ids', []),
                 'synced_character_asset_refs': shot.get('synced_character_asset_refs', []),
+                'synced_video_ref_asset_refs': shot.get('synced_video_ref_asset_refs', []),
+                # Character attribution from the shots agent (r2v agents emit
+                # 'characters'/'props'; the character sync falls back to
+                # character_name) — must survive replans or the syncs go blind
+                'character_name': shot.get('character_name'),
+                'characters': shot.get('characters'),
+                'props': shot.get('props'),
                 # Status fields
                 'image_generated': shot.get('image_generated', False),
                 'image_path': shot.get('image_path'),
