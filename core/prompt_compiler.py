@@ -221,7 +221,8 @@ def load_workflow(path, video_length_seconds=None, aspect_ratio=None, draft_low_
 
         return wf
 
-def compile_workflow(template, shot, video_length_seconds=None, workflow_config=None):
+def compile_workflow(template, shot, video_length_seconds=None, workflow_config=None,
+                     reference_images=None, reference_audios=None, reference_videos=None):
 
     wf = copy.deepcopy(template)
 
@@ -298,12 +299,15 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
             logger.warning(f"[DURATION] Could not set duration node '{duration_node_id}': {e}")
 
     # Determine the prompt input name of the motion prompt node
-    # (MiniMax H3 nodes use "prompt" instead of the usual "text")
+    # (MiniMax H3 nodes use "prompt" instead of the usual "text"; the R2V
+    # template's PrimitiveStringMultiline prompt node uses "value")
     prompt_input_name = "text"
     if motion_prompt_node_id and motion_prompt_node_id in wf:
         target_inputs = wf[motion_prompt_node_id].get("inputs", {})
         if "prompt" in target_inputs and "text" not in target_inputs:
             prompt_input_name = "prompt"
+        elif "value" in target_inputs and "text" not in target_inputs and "prompt" not in target_inputs:
+            prompt_input_name = "value"
 
     # Inject motion prompt (will be enhanced with trigger keywords below)
     # Resolve the effective prompt: per-shot override > DEFAULT_PROMPT_MODE,
@@ -479,8 +483,39 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
     elif motion_prompt_node_id and motion_prompt_node_id in wf and base_motion_prompt:
         wf[motion_prompt_node_id]["inputs"][prompt_input_name] = base_motion_prompt
 
+    # ==========================================
+    # REFERENCE-TO-VIDEO (R2V) REFERENCE SLOTS
+    # ==========================================
+    # Ordered reference images fill the [ref_N] slots; unfilled slots are
+    # simply not attached (their LoadImage node + link are pruned from the
+    # submission — the workflow/node handles omitted ref inputs).
+    is_ref2video = bool((workflow_config or {}).get("is_ref2video"))
+    ref_node_ids = (workflow_config or {}).get("reference_image_node_ids") or []
+
+    if is_ref2video and ref_node_ids:
+        from core.comfy_client import prepare_comfyui_input_image
+        r2v_gen_node_ids = [nid for nid, n in wf.items()
+                            if isinstance(n, dict) and n.get("class_type") == "MiniMaxH3ReferenceToVideo"]
+        attached = 0
+        for i, ref_path in enumerate(reference_images or []):
+            if i >= len(ref_node_ids):
+                logger.warning(f"[R2V] {len(ref_node_ids)} ref slots wired; dropping extra ref: {ref_path}")
+                break
+            wf[ref_node_ids[i]]["inputs"]["image"] = prepare_comfyui_input_image(ref_path)
+            attached += 1
+        for i in range(attached, len(ref_node_ids)):
+            for gen_nid in r2v_gen_node_ids:
+                wf[gen_nid].get("inputs", {}).pop(f"ref_images.ref_image_{i}", None)
+            wf.pop(ref_node_ids[i], None)
+        if reference_images:
+            logger.info(f"[R2V] Attached {attached} reference image(s) into {len(ref_node_ids)} wired slots")
+        if reference_audios or reference_videos:
+            logger.warning("[R2V] Audio/video reference inputs are not wired in this workflow yet - "
+                           "skipping (requires the updated MiniMax H3 node)")
+
     # Inject image path to LoadImage node if available
-    if "image_path" in shot and shot["image_path"]:
+    # (never for r2v — its LoadImage nodes are reference slots, not a first frame)
+    if not is_ref2video and "image_path" in shot and shot["image_path"]:
         image_path = shot["image_path"]
         # Copy to ComfyUI input folder if needed and resolve relative path for LoadImage node
         from core.comfy_client import prepare_comfyui_input_image

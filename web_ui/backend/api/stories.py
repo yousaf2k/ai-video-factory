@@ -531,6 +531,63 @@ async def generate_character_reference(
         )
 
 
+@router.post("/props/{prop_index}/generate-reference")
+async def generate_prop_reference(
+    project_id: str,
+    prop_index: int,
+    request: GenerateCharacterReferenceRequest
+):
+    """Generate reference sheet for a story prop (r2v projects).
+
+    Mirrors the character reference endpoint; prop_index indexes story.props.
+    """
+    try:
+        story = project_manager.get_story(project_id)
+        props = (story or {}).get('props') or []
+        if not (0 <= prop_index < len(props)):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Prop index {prop_index} not found (story has {len(props)} prop(s))"
+            )
+
+        from web_ui.backend.models.queue import QueueItem, QueueItemStatus, GenerationType
+        from web_ui.backend.services.queue_service import get_queue_service
+        from web_ui.backend.services.generation_service import get_generation_service
+
+        generation_service = get_generation_service()
+        generation_service._ensure_queue_processor_started()
+        item = QueueItem(
+            item_id="",
+            project_id=project_id,
+            character_index=prop_index,
+            generation_type=GenerationType.PROP_IMAGE,
+            prompt_override=getattr(request, 'prompt_override', None),
+            image_mode=getattr(request, 'image_mode', None),
+            image_workflow=getattr(request, 'image_workflow', None),
+            seed=getattr(request, 'seed', None),
+            gemini_mode=getattr(request, 'gemini_mode', None),
+            status=QueueItemStatus.QUEUED,
+            progress=0,
+            priority=40,
+        )
+        added = get_queue_service().add_items([item])
+        generation_service._wake_up_processor()
+
+        return {
+            "status": "queued",
+            "prop_index": prop_index,
+            "message": "Prop reference sheet generation added to queue"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error queueing prop reference generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to queue prop reference generation: {str(e)}"
+        )
+
+
 @router.post("/scenes/{scene_id}/upload-background")
 async def upload_scene_background(
     project_id: str,
@@ -677,13 +734,20 @@ async def generate_scene_background(project_id: str, scene_id: int, request: Bac
                 detail=f"Scene with scene_id {scene_id} not found"
             )
 
-        # Check if scene has set_prompt
+        # Check if scene has set_prompt. Reference-sheet (r2v) projects don't
+        # need one: the queue handler builds the background-sheet prompt from
+        # the scene location (background_sheet_prompt).
         set_prompt = scene.get('set_prompt')
         if not set_prompt:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Scene {scene_id} does not have a set_prompt for background generation"
-            )
+            vgt = generation_service._get_project_video_generation_type(project_id) or 'i2v'
+            if not (vgt == 'r2v' and scene.get('location')):
+                detail = (f"Scene {scene_id} does not have a set_prompt for background generation")
+                if vgt == 'r2v':
+                    detail += " (add a scene location to generate a reference-sheet background)"
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=detail
+                )
 
         # Add to background generation queue
         generation_service.add_background_to_queue(

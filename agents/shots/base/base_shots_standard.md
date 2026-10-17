@@ -14,13 +14,13 @@ Return a JSON list where each item contains:
 
 {{include:videoprompt/videoprompt_minimax_h3}}
 
-## Prompt Engineering Rules (Flux2.Dev)
+## Prompt Engineering Rules
 - Start with the core subject and action.
 - Use precise modifiers for textures, materials, and lighting.
 - Specify lens and camera hardware (from Camera Layer).
 - Optimization: "8K", "ultra HD", "photorealistic", "cinematic composition".
 
-## Motion Prompt Rules (Wan 2.2 I2V)
+## Motion Prompt Rules
 - **STRICT RULE**: NO photography technical terms (8K, lens, f-stop, Sony Venice).
 - Describe real-world physics and movement.
 - Focus on: [Subject Movement] + [Environmental/Atmospheric Effects] + [Camera Motion].

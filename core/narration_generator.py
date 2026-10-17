@@ -423,7 +423,7 @@ def _generate_with_comfyui(script, output_path, workflow_name, voice):
         return None
 
 
-def _generate_with_local_tts(script, output_path, voice):
+def _generate_with_local_tts(script, output_path, voice, max_retries=3):
     """
     Generate audio using local TTS (edge-tts fallback).
 
@@ -431,11 +431,15 @@ def _generate_with_local_tts(script, output_path, voice):
         script: Text to synthesize
         output_path: Output audio file path
         voice: Voice name
+        max_retries: Total synthesis attempts before giving up
 
     Returns:
         Path to generated audio or None
     """
     try:
+        import asyncio
+        import time
+
         import edge_tts
 
         # Default female voice
@@ -448,8 +452,20 @@ def _generate_with_local_tts(script, output_path, voice):
             communicate = edge_tts.Communicate(script, voice_name)
             await communicate.save(output_path)
 
-        import asyncio
-        asyncio.run(generate())
+        for attempt in range(1, max_retries + 1):
+            try:
+                asyncio.run(generate())
+                break
+            except Exception as e:
+                # A failed attempt can leave a partial file behind
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                if attempt == max_retries:
+                    raise
+                delay = 2 * attempt
+                logger.warning(f"edge-tts attempt {attempt}/{max_retries} failed: {e} (retrying in {delay}s)")
+                print(f"[WARN] Local TTS attempt {attempt}/{max_retries} failed, retrying in {delay}s")
+                time.sleep(delay)
 
         if os.path.exists(output_path):
             file_size = os.path.getsize(output_path)

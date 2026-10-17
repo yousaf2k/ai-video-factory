@@ -20,6 +20,7 @@ class GenerationType(str, Enum):
     SOUNDFX = "soundfx"
     THUMBNAIL = "thumbnail"
     CHARACTER_IMAGE = "character_image"
+    PROP_IMAGE = "prop_image"
 
 
 class QueueItemStatus(str, Enum):

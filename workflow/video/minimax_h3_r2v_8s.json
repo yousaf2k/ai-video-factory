@@ -257,6 +257,34 @@
       "ref_images.ref_image_1": [
         "139",
         0
+      ],
+      "ref_images.ref_image_2": [
+        "147",
+        0
+      ],
+      "ref_images.ref_image_3": [
+        "148",
+        0
+      ],
+      "ref_images.ref_image_4": [
+        "149",
+        0
+      ],
+      "ref_images.ref_image_5": [
+        "150",
+        0
+      ],
+      "ref_images.ref_image_6": [
+        "151",
+        0
+      ],
+      "ref_images.ref_image_7": [
+        "152",
+        0
+      ],
+      "ref_images.ref_image_8": [
+        "153",
+        0
       ]
     },
     "class_type": "MiniMaxH3ReferenceToVideo",
@@ -270,7 +298,7 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "Load Image"
+      "title": "[ref_0] Load Image (Reference)"
     }
   },
   "138": {
@@ -279,7 +307,7 @@
     },
     "class_type": "PrimitiveStringMultiline",
     "_meta": {
-      "title": "Input Text (Prompt)"
+      "title": "[prompt] Input Text (Prompt)"
     }
   },
   "139": {
@@ -288,7 +316,7 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "Load Image"
+      "title": "[ref_1] Load Image (Reference)"
     }
   },
   "141": {
@@ -342,7 +370,7 @@
   },
   "144": {
     "inputs": {
-      "value": 4
+      "value": 8
     },
     "class_type": "PrimitiveInt",
     "_meta": {
@@ -370,6 +398,69 @@
     "class_type": "PrimitiveBoolean",
     "_meta": {
       "title": "Boolean (Enable Lightning LoRA)"
+    }
+  },
+  "147": {
+    "inputs": {
+      "image": "red_superboy_on_city_roof.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "[ref_2] Load Image (Reference)"
+    }
+  },
+  "148": {
+    "inputs": {
+      "image": "red_superboy_on_city_roof.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "[ref_3] Load Image (Reference)"
+    }
+  },
+  "149": {
+    "inputs": {
+      "image": "red_superboy_on_city_roof.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "[ref_4] Load Image (Reference)"
+    }
+  },
+  "150": {
+    "inputs": {
+      "image": "red_superboy_on_city_roof.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "[ref_5] Load Image (Reference)"
+    }
+  },
+  "151": {
+    "inputs": {
+      "image": "red_superboy_on_city_roof.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "[ref_6] Load Image (Reference)"
+    }
+  },
+  "152": {
+    "inputs": {
+      "image": "red_superboy_on_city_roof.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "[ref_7] Load Image (Reference)"
+    }
+  },
+  "153": {
+    "inputs": {
+      "image": "red_superboy_on_city_roof.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "[ref_8] Load Image (Reference)"
     }
   }
 }

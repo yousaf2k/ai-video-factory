@@ -118,13 +118,36 @@ class GenerationService:
     def get_item_engine(item: QueueItem) -> str:
         """Resolve which engine will process this item"""
         import config
-        if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.THUMBNAIL, GenerationType.BACKGROUND, GenerationType.CHARACTER_IMAGE]:
+        if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.THUMBNAIL, GenerationType.BACKGROUND, GenerationType.CHARACTER_IMAGE, GenerationType.PROP_IMAGE]:
             return item.image_mode or getattr(config, 'IMAGE_GENERATION_MODE', 'comfyui')
         elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
             return item.video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
         elif item.generation_type == GenerationType.NARRATION:
             return getattr(config, 'TTS_METHOD', 'local')
         return 'other'
+
+    def _get_project_video_generation_type(self, project_id: str) -> str:
+        """Project's visual input strategy: 'i2v' (default), 'r2v' or 't2v'.
+
+        Cached per project (meta rarely changes; cache lives for the service
+        lifetime — invalidate by restarting the backend or clearing
+        self._vgt_cache after meta updates).
+        """
+        if not hasattr(self, '_vgt_cache'):
+            self._vgt_cache = {}
+        if project_id not in self._vgt_cache:
+            meta = self.project_manager.load_project(project_id) or {}
+            vgt = (meta.get('video_generation_type') or 'i2v').lower()
+            self._vgt_cache[project_id] = vgt if vgt in ('i2v', 'r2v', 't2v') else 'i2v'
+        return self._vgt_cache[project_id]
+
+    def invalidate_project_cache(self, project_id: str = None):
+        """Clear the video-generation-type cache (call after meta updates)."""
+        if hasattr(self, '_vgt_cache'):
+            if project_id:
+                self._vgt_cache.pop(project_id, None)
+            else:
+                self._vgt_cache.clear()
 
     def _get_relative_path(self, path: str) -> str:
         """Convert absolute path to relative format using ProjectManager utility"""
@@ -202,6 +225,8 @@ class GenerationService:
                         await self._process_image_generation(item)
                     elif item.generation_type == GenerationType.CHARACTER_IMAGE:
                         await self._process_character_generation(item)
+                    elif item.generation_type == GenerationType.PROP_IMAGE:
+                        await self._process_prop_generation(item)
                     elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
                         print(f"[DEBUG] routing to process_video_generation", flush=True)
                         await self._process_video_generation(item)
@@ -337,8 +362,11 @@ class GenerationService:
                                 
                                 if item.generation_type == GenerationType.VIDEO:
                                     if not shot.get('image_generated', False):
-                                        is_ready = False
-                                        skip_reason = "Base image not generated"
+                                        # r2v/t2v projects generate videos without
+                                        # first-frame images — no image dependency
+                                        if self._get_project_video_generation_type(item.project_id) not in ('r2v', 't2v'):
+                                            is_ready = False
+                                            skip_reason = "Base image not generated"
                                 elif item.generation_type in [GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
                                     if not (shot.get('now_image_generated', False) and shot.get('then_image_generated', False)):
                                         is_ready = False
@@ -580,9 +608,14 @@ class GenerationService:
             # Character references flow to shots as asset references — attach the
             # new image to the character's shots so generation picks it up from
             # reference_asset_ids instead of name matching.
+            # In r2v projects the r2v video-ref sync supersedes the character
+            # sync (it attaches characters + background + props together).
             if variant == "character":
                 try:
-                    self.project_manager.sync_character_asset_refs(item.project_id)
+                    if self._get_project_video_generation_type(item.project_id) == 'r2v':
+                        self.project_manager.sync_shot_video_refs(item.project_id)
+                    else:
+                        self.project_manager.sync_character_asset_refs(item.project_id)
                 except Exception as sync_err:
                     logger.warning(f"Could not sync character asset refs after generation: {sync_err}")
 
@@ -647,6 +680,8 @@ class GenerationService:
                     await self._process_image_generation(item)
                 elif item.generation_type == GenerationType.CHARACTER_IMAGE:
                     await self._process_character_generation(item)
+                elif item.generation_type == GenerationType.PROP_IMAGE:
+                    await self._process_prop_generation(item)
                 elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
                     await self._process_video_generation(item)
                 elif item.generation_type == GenerationType.NARRATION:
@@ -774,9 +809,13 @@ class GenerationService:
             
             if not scene:
                 raise ValueError(f"Scene {item.scene_id} not found in story")
-            
+
             set_prompt = scene.get('set_prompt')
-            
+            # r2v projects use the dedicated background-sheet prompt template
+            if self._get_project_video_generation_type(item.project_id) == 'r2v':
+                from core.sheet_generator import background_sheet_prompt
+                set_prompt = background_sheet_prompt(scene.get('location', ''), story.get('style', ''))
+
             # Call generate_scene_background with overrides from the queue item
             await self.generate_scene_background(
                 project_id=item.project_id,
@@ -789,10 +828,104 @@ class GenerationService:
                 image_mode=item.image_mode
             )
 
+            # r2v: refresh shot reference attachments with the new background
+            if self._get_project_video_generation_type(item.project_id) == 'r2v':
+                try:
+                    self.project_manager.sync_shot_video_refs(item.project_id)
+                except Exception as sync_err:
+                    logger.warning(f"Could not sync r2v video refs after background generation: {sync_err}")
+
             logger.info(f"Completed background generation for queue item {item.item_id}")
 
         except Exception as e:
             logger.error(f"Error processing background generation for {item.item_id}: {e}")
+            raise
+
+    async def _process_prop_generation(self, item: QueueItem):
+        """Process prop reference-sheet generation for a queue item (r2v projects).
+
+        item.character_index carries the prop index into story.props (mirrors
+        how character_index indexes story.characters for CHARACTER_IMAGE).
+        """
+        try:
+            story = self.project_manager.get_story(item.project_id)
+            props = story.get('props') or []
+            if item.character_index is None or not (0 <= item.character_index < len(props)):
+                raise ValueError(f"Invalid prop index {item.character_index}")
+
+            prop = props[item.character_index]
+            from core.sheet_generator import prop_sheet_prompt
+            prompt = item.prompt_override or prop_sheet_prompt(prop, story.get('style', ''))
+
+            queue_service = get_queue_service()
+            item.status = QueueItemStatus.ACTIVE
+            item.started_at = __import__('datetime').datetime.utcnow()
+            queue_service.update_item(item)
+
+            manager.broadcast_sync(item.project_id, {
+                "type": "progress", "project_id": item.project_id, "shot_index": None,
+                "generation_type": "prop_image", "progress": 0
+            })
+
+            references_dir = os.path.join(
+                self.project_manager.get_project_dir(item.project_id), "references")
+            os.makedirs(references_dir, exist_ok=True)
+
+            image_path = await asyncio.to_thread(
+                self._generate_single_image,
+                item.project_id,
+                {'image_prompt': prompt, 'index': item.character_index},
+                item.image_mode,
+                item.image_workflow,
+                item.seed,
+                prompt,
+                # Same workspace key as shots/characters/backgrounds so browser
+                # modes (geminiweb/flow) reuse the project's workspace even
+                # when the queue item itself carries no title.
+                item.project_title or self._gemini_chat_title(story, item.project_id),
+                None,   # image_variant
+                None,   # reference_images
+                GenerationType.PROP_IMAGE,
+                item.gemini_mode,
+                references_dir,
+                f"prop_{item.character_index:02d}_%03d.png"
+            )
+            if not image_path or not os.path.exists(image_path):
+                raise RuntimeError(f"Failed to generate prop sheet for prop {item.character_index}")
+
+            relative_path = self._get_relative_path(image_path)
+            prop_index = item.character_index
+
+            def apply_prop_ref(story_data):
+                props_now = story_data.get('props') or []
+                if 0 <= prop_index < len(props_now):
+                    props_now[prop_index]['reference_image_path'] = relative_path
+
+            self.project_manager.update_story_safely(item.project_id, apply_prop_ref)
+
+            # r2v: refresh shot reference attachments with the new prop sheet
+            if self._get_project_video_generation_type(item.project_id) == 'r2v':
+                try:
+                    self.project_manager.sync_shot_video_refs(item.project_id)
+                except Exception as sync_err:
+                    logger.warning(f"Could not sync r2v video refs after prop generation: {sync_err}")
+
+            item.status = QueueItemStatus.COMPLETED
+            item.completed_at = __import__('datetime').datetime.utcnow()
+            item.progress = 100
+            queue_service.update_item(item)
+
+            manager.broadcast_sync(item.project_id, {
+                "type": "completed", "project_id": item.project_id,
+                "generation_type": "prop_image",
+                "prop_index": item.character_index,
+                "prop_reference_image_path": relative_path
+            })
+            logger.info(f"Completed prop sheet generation for queue item {item.item_id}")
+
+        except Exception as e:
+            logger.error(f"Error processing prop generation for {item.item_id}: {e}")
+            self._mark_queue_item_failed(item.project_id, None, GenerationType.PROP_IMAGE, str(e))
             raise
 
     async def _process_soundfx_generation(self, item: QueueItem):
@@ -1259,6 +1392,53 @@ class GenerationService:
         shots = self.project_manager.get_shots(project_id)
         story = self.project_manager.get_story(project_id)
 
+        # r2v/t2v projects: no first-frame images. r2v queues its reference
+        # sheets first (characters -> backgrounds -> props) when sheets are
+        # missing; video items follow once references exist.
+        vgt = self._get_project_video_generation_type(project_id)
+        sheet_items = []
+        if vgt == 'r2v' and getattr(request, 'regenerate_images', False):
+            characters = (story or {}).get('characters') or []
+            scenes = (story or {}).get('scenes') or []
+            props = (story or {}).get('props') or []
+            project_title = self._gemini_chat_title(story, project_id)
+            for ci, char in enumerate(characters):
+                if not char.get('character_reference_image_path'):
+                    sheet_items.append(QueueItem(
+                        item_id="", project_id=project_id, character_index=ci,
+                        generation_type=GenerationType.CHARACTER_IMAGE,
+                        image_variant="character",
+                        image_mode=getattr(request, 'image_mode', None),
+                        image_workflow=getattr(request, 'image_workflow', None),
+                        seed=getattr(request, 'seed', None),
+                        gemini_mode=self._resolve_gemini_mode(request),
+                        priority=40, project_title=project_title,
+                        character_name=char.get('name')))
+            for scene in scenes:
+                if scene.get('scene_id') is not None and not scene.get('background_image_path'):
+                    item = QueueItem(
+                        item_id="", project_id=project_id,
+                        scene_id=scene.get('scene_id'),
+                        generation_type=GenerationType.BACKGROUND,
+                        prompt_override=scene.get('location'),
+                        image_mode=getattr(request, 'image_mode', None),
+                        image_workflow=getattr(request, 'image_workflow', None),
+                        seed=getattr(request, 'seed', None),
+                        gemini_mode=self._resolve_gemini_mode(request),
+                        priority=45, project_title=project_title)
+                    sheet_items.append(item)
+            for pi, prop in enumerate(props):
+                if prop.get('name') and not prop.get('reference_image_path'):
+                    sheet_items.append(QueueItem(
+                        item_id="", project_id=project_id, character_index=pi,
+                        generation_type=GenerationType.PROP_IMAGE,
+                        image_mode=getattr(request, 'image_mode', None),
+                        image_workflow=getattr(request, 'image_workflow', None),
+                        seed=getattr(request, 'seed', None),
+                        gemini_mode=self._resolve_gemini_mode(request),
+                        priority=50, project_title=project_title))
+        ref_mode = vgt in ('r2v', 't2v')
+
         # Resolve indices from IDs if provided for better stability during reordering
         final_indices = []
         request_shot_ids = getattr(request, 'shot_ids', None)
@@ -1304,8 +1484,9 @@ class GenerationService:
             skip_images = not force_images and shot.get('image_generated', False)
             skip_videos = not force_videos and shot.get('video_rendered', False)
 
-            # Create image queue items
-            if request.regenerate_images and not skip_images:
+            # Create image queue items (r2v/t2v projects generate no
+            # first-frame images — their reference sheets are queued above)
+            if request.regenerate_images and not skip_images and not ref_mode:
                 if shot.get('is_flfi2v') and story.get('project_type') == 2:
                     # Collect NOW and THEN separately for prioritization
                     now_item = self._create_queue_item(project_id, idx, GenerationType.NOW_IMAGE, shot, story, request=request)
@@ -1328,12 +1509,14 @@ class GenerationService:
                     video_items.append(video_item)
 
         # Assemble the final queue in the priority order:
-        # All NOW images globally first -> then THEN images -> Standard images -> All Videos
+        # All NOW images globally first -> then THEN images -> Standard images
+        # -> r2v reference sheets -> All Videos
         # This satisfies the user's explicit request: "queue all now images first then then images"
         queue_items = []
         queue_items.extend(now_images)
         queue_items.extend(then_images)
         queue_items.extend(standard_images)
+        queue_items.extend(sheet_items)
         queue_items.extend(video_items)
         queue_items.extend(other_items)
 
@@ -1689,7 +1872,7 @@ class GenerationService:
 
                     now_workflow = image_workflow
                     now_reference_to_use = []
-                    if actual_mode in ["geminiweb", "gemini"]:
+                    if actual_mode in ["geminiweb", "gemini", "flow"]:
                         if then_reference: now_reference_to_use.append(config.resolve_path(then_reference))
                         if now_reference: now_reference_to_use.append(config.resolve_path(now_reference))
                         if not now_reference_to_use: now_reference_to_use = None
@@ -1793,7 +1976,7 @@ class GenerationService:
                     if not is_actor_face and current_now:
                         then_reference_to_use.append(config.resolve_path(current_now))
 
-                    if actual_mode in ["geminiweb", "gemini"] and then_reference:
+                    if actual_mode in ["geminiweb", "gemini", "flow"] and then_reference:
                         then_reference_to_use.append(config.resolve_path(then_reference))
                         logger.info(f"Added character reference for THEN generation: {then_reference}")
 
@@ -1926,9 +2109,10 @@ class GenerationService:
                 return results.get('meeting') if isinstance(results, dict) else results
 
             # Standard documentary mode (existing code)
-            # Check if image exists
-            if not shot.get('image_generated', False) or not shot.get('image_path'):
-                raise ValueError(f"Shot {shot_index} has no image, cannot generate video")
+            # Check if image exists (r2v/t2v projects have no first-frame images)
+            if self._get_project_video_generation_type(project_id) not in ('r2v', 't2v'):
+                if not shot.get('image_generated', False) or not shot.get('image_path'):
+                    raise ValueError(f"Shot {shot_index} has no image, cannot generate video")
 
             # Check if already exists and not forcing
             if not force and shot.get('video_rendered', False):
@@ -2759,20 +2943,30 @@ class GenerationService:
 
             logger.info(f"Generating background for scene {scene_id} using prompt: {set_prompt[:60]}... (workflow: {actual_workflow}, mode: {image_mode})")
 
+            # Browser modes (geminiweb/flow) reuse the project's workspace via
+            # this title — backgrounds must land in the SAME workspace as the
+            # shots, so build it exactly like the shot path does.
+            try:
+                story = self.project_manager.get_story(project_id)
+            except Exception:
+                story = {}
+            background_title = self._gemini_chat_title(story, project_id)
+
             result_path = await asyncio.to_thread(
                 self._generate_single_image,
                 project_id,
                 {'image_prompt': set_prompt, 'index': scene_id},  # Use scene_id for indexing
                 image_mode,  # Use the passed provider mode
                 actual_workflow,
-                seed, # Pass direct seed down to inherit first-time logic from _generate_single_image
+                seed,  # Pass direct seed down to inherit first-time logic from _generate_single_image
                 set_prompt,  # Use set_prompt directly
-                None,  # No project title for backgrounds
+                background_title,
                 None,  # No variant
                 None,  # No reference image for backgrounds
                 GenerationType.BACKGROUND,
-                backgrounds_dir,
-                f"background_{scene_id:03d}_%03d.png"
+                None,  # gemini_mode
+                backgrounds_dir,  # output dir: project backgrounds/
+                f"background_{scene_id:03d}_%03d.png"  # filename pattern
             )
             if not result_path or not os.path.exists(result_path):
                 raise RuntimeError(f"Failed to generate background for scene {scene_id}")
@@ -3085,7 +3279,11 @@ class GenerationService:
                 })
 
             from core.image_generator import generate_image
-            
+
+            # Browser modes (geminiweb/flow) reuse the project's workspace via
+            # this title — same key as the shot path so thumbnails share it.
+            thumbnail_title = self._gemini_chat_title(story, project_id)
+
             result_path = await asyncio.to_thread(
                 generate_image,
                 prompt=prompt,
@@ -3094,7 +3292,8 @@ class GenerationService:
                 mode=item.image_mode,
                 workflow_name=item.image_workflow,
                 seed=item.seed,
-                step_progress_callback=on_step_progress
+                step_progress_callback=on_step_progress,
+                project_title=thumbnail_title
             )
             
             if not result_path:
@@ -3195,7 +3394,9 @@ class GenerationService:
         project_title: Optional[str] = None, image_variant: str = None,
         reference_images: Optional[List[str]] = None,
         generation_type: GenerationType = None,
-        gemini_mode: Optional[str] = None
+        gemini_mode: Optional[str] = None,
+        output_dir: Optional[str] = None,
+        filename_pattern: Optional[str] = None
     ) -> str:
         """Generate image for a single shot (synchronous)
 
@@ -3208,7 +3409,7 @@ class GenerationService:
 
         project_dir = self.project_manager.get_project_dir(project_id)
         images_dir = os.path.join(project_dir, "images")
-        actual_dir = images_dir
+        actual_dir = output_dir if output_dir else images_dir
         os.makedirs(actual_dir, exist_ok=True)
 
         shot_index = shot['index']
@@ -3221,8 +3422,10 @@ class GenerationService:
 
         # Generate versioned filename with optional variant suffix
         next_version = self._get_next_image_version(actual_dir, shot_index, image_variant, generation_type)
-        
-        if image_variant:
+
+        if filename_pattern:
+            image_filename = filename_pattern % next_version
+        elif image_variant:
             image_filename = f"shot_{shot_index:03d}_{image_variant}_{next_version:03d}.png"
         else:
             image_filename = f"shot_{shot_index:03d}_{next_version:03d}.png"
@@ -3322,6 +3525,33 @@ class GenerationService:
 
         # Load project metadata once (prompt mode + aspect ratio)
         project_meta = self.project_manager.load_project(project_id)
+
+        # r2v/t2v: compose the final prompt (voice-text embedding, <Picture>
+        # pruning against actually-attached refs) and resolve reference images
+        reference_images = None
+        _vgt = (project_meta.get('video_generation_type') or 'i2v').lower()
+        if _vgt in ('r2v', 't2v'):
+            if mode != 'comfyui':
+                raise RuntimeError(
+                    f"video_generation_type '{_vgt}' requires the ComfyUI engine "
+                    f"(VIDEO_GENERATION_MODE=comfyui)")
+            from core.r2v_composer import compose_video_prompt
+            attached = None
+            if _vgt == 'r2v':
+                from web_ui.backend.services.asset_service import get_asset_service
+                reference_images = (get_asset_service().collect_shot_image_refs(shot) or [])[:9]
+                attached = len(reference_images)
+                logger.info(f"[R2V] Shot {shot_index}: {attached} reference image(s) attached")
+            story = self.project_manager.get_story(project_id)
+            composed, composer_problems = compose_video_prompt(
+                shot, story,
+                attached_picture_count=attached,
+                r2v_six_sections=(_vgt == 'r2v'),
+            )
+            if composer_problems:
+                logger.warning(f"[COMPOSER] Shot {shot_index}: {'; '.join(composer_problems)}")
+            if composed:
+                shot['video_prompt'] = composed
 
         # Resolve which prompt to use:
         # per-request prompt_type > per-shot prompt_type > project prompt_mode > 'video'
@@ -3454,7 +3684,9 @@ class GenerationService:
 
             if not skip_submit:
                 template = load_workflow(workflow_path, video_length_seconds=shot_length, aspect_ratio=aspect_ratio, draft_low_res_video=draft_low_res_video, workflow_config=workflow_config, resolution=resolution)
-                wf = compile_workflow(template, shot, video_length_seconds=shot_length, workflow_config=workflow_config)
+                wf = compile_workflow(template, shot, video_length_seconds=shot_length,
+                                      workflow_config=workflow_config,
+                                      reference_images=reference_images)
 
                 # Submit to ComfyUI
                 result = submit(wf)

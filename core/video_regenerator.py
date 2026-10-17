@@ -115,9 +115,18 @@ def regenerate_videos(project_id, new_shot_length=None, force_regenerate_all=Fal
     frames_per_shot = int(shot_length * config.VIDEO_FPS) + 1  # Wan2.2 needs +1 frame
     print(f"[INFO] Frames per shot: {frames_per_shot} ({int(shot_length * config.VIDEO_FPS)}+1)")
 
-    # Check which shots have images
+    # Check which shots have images (r2v/t2v projects have none — every
+    # non-FLFI2V shot is renderable)
+    project_meta = project_mgr.load_project(project_id) or {}
+    video_gen_type = (project_meta.get('video_generation_type') or 'i2v').lower()
+    ref_mode = video_gen_type in ('r2v', 't2v')
+
     valid_shots = []
     for shot in shots:
+        if ref_mode:
+            if not shot.get('is_flfi2v'):
+                valid_shots.append(shot)
+            continue
         image_path = shot.get('image_path')
         if image_path:
             # Convert to absolute path if relative
@@ -203,9 +212,15 @@ def regenerate_videos(project_id, new_shot_length=None, force_regenerate_all=Fal
     for shot in shots_to_render:
         shot_idx = shot.get('index', 0)
 
-        # Print image name before video generation
-        image_path = shot.get('image_path', '')
-        print(f"\n[PROCESS] Shot {shot_idx}: Using image '{os.path.basename(image_path)}'")
+        if ref_mode:
+            # r2v/t2v: resolve refs + compose the final prompt before submission
+            from core.main import _prepare_ref_mode_shot
+            _prepare_ref_mode_shot(project_id, project_mgr, shot)
+            print(f"\n[PROCESS] Shot {shot_idx}: ({video_gen_type}: reference/prompt driven)")
+        else:
+            # Print image name before video generation
+            image_path = shot.get('image_path', '')
+            print(f"\n[PROCESS] Shot {shot_idx}: Using image '{os.path.basename(image_path)}'")
 
         print(f"[SUBMIT] Shot {shot_idx} ({shot_length}s)")
 
@@ -259,7 +274,10 @@ def regenerate_videos(project_id, new_shot_length=None, force_regenerate_all=Fal
                     failed_renders += 1
                     errors.append(f"Shot {shot_idx}: FlowWeb generation failed")
             else:
-                wf = compile_workflow(template, shot, video_length_seconds=shot_length)
+                wf = compile_workflow(
+                    template, shot, video_length_seconds=shot_length,
+                    reference_images=shot.get('video_reference_paths'),
+                )
                 result = submit(wf)
 
                 prompt_id = result.get('prompt_id')

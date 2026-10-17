@@ -9,6 +9,9 @@ export enum ProjectType {
   AsmrGlassCutting = 4
 }
 
+/** Visual input strategy for shot videos (project-level). */
+export type VideoGenerationType = "t2v" | "i2v" | "r2v";
+
 export interface MovieMetadata {
   year?: number;
   cast: string[];
@@ -77,6 +80,7 @@ export interface Project {
   poster_thumbnail_url_9_16?: string;
   poster_thumbnail_url_21_8?: string;
   aspect_ratio?: string;
+  video_generation_type?: VideoGenerationType;
   story?: Story;
   shots?: Shot[];
 }
@@ -146,6 +150,9 @@ export interface Shot {
   id?: string;
   index: number;
   duration?: number | null;
+  video_duration?: number | null;
+  meeting_video_duration?: number | null;
+  departure_video_duration?: number | null;
   image_prompt: string;
   motion_prompt: string;
   video_prompt?: string | null;
@@ -161,6 +168,7 @@ export interface Shot {
   video_paths?: string[];
   scene_id?: number | null;
   character_name?: string;
+  characters?: string[] | null;
   scene_name?: string;
   order_in_scene?: number;
   // FLFI2V mode fields
@@ -197,6 +205,7 @@ export interface CreateProjectRequest {
   total_duration?: number;
   prompts_file?: string;
   aspect_ratio?: "16:9" | "9:16" | "21:8";
+  video_generation_type?: VideoGenerationType;
 }
 
 export interface UpdateProjectRequest {
@@ -206,6 +215,7 @@ export interface UpdateProjectRequest {
   shots_agent?: string;
   prompt_mode?: "video" | "motion";
   aspect_ratio?: "16:9" | "9:16" | "21:8";
+  video_generation_type?: VideoGenerationType;
 }
 
 export interface GlobalConfig {
@@ -229,6 +239,8 @@ export interface GlobalConfig {
   geminiweb_default_mode?: string;
   geminiweb_model?: string;
   geminiweb_thinking?: string;
+  flow_image_model?: string;
+  flow_image_outputs?: string;
 }
 
 export interface UpdateGlobalConfigRequest {
@@ -251,6 +263,8 @@ export interface UpdateGlobalConfigRequest {
   geminiweb_default_mode?: string;
   geminiweb_model?: string;
   geminiweb_thinking?: string;
+  flow_image_model?: string;
+  flow_image_outputs?: string;
 }
 
 export interface UpdateStoryRequest {

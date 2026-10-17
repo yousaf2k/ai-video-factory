@@ -93,7 +93,7 @@ Idea → Story → Scene Graph → Shots → Images → Videos → Narration
 - **LLM layer** (`llm_engine.py`, `gemini_engine.py`): provider abstraction, text + JSON-structured outputs, selected via `LLM_PROVIDER`.
 - **Agent system** (`agent_loader.py`): modular prompt templates in `agents/` with `{{include:name}}` composition and `{USER_INPUT}` placeholder.
 - **Story pipeline** (`story_engine.py`, `scene_graph.py`, `shot_planner.py`): story → visual scenes → shots with camera movements, prompts, durations; scene duration validation and auto-correction.
-- **Generation layer** (`image_generator.py`, `comfyui_image_generator.py`, `geminiweb_image_generator.py`, `comfy_client.py`, `flowweb_video_generator.py`): Gemini API / ComfyUI (Flux, Krea2, HiDream, Z-Image) / GeminiWeb browser automation for images; Wan 2.2, MiniMax H3, LTX-2 via ComfyUI for video.
+- **Generation layer** (`image_generator.py`, `comfyui_image_generator.py`, `geminiweb_image_generator.py`, `flowweb_image_generator.py`, `comfy_client.py`, `flowweb_video_generator.py`): Gemini API / ComfyUI (Flux, Krea2, HiDream, Z-Image) / GeminiWeb + Google Flow browser automation for images; Wan 2.2, MiniMax H3, LTX-2 via ComfyUI for video.
 - **Workflow compiler** (`prompt_compiler.py`, `workflow_loader.py`): auto-discovers workflows from `workflow/`, supports API JSON and Workflow JSON, detects node IDs via title tags (`[prompt]`, `[image_in]`, `[video_out]`, …) or heuristics.
 - **Project management** (`project_manager.py`): atomic file-locking, crash recovery, thumbnails, selective regeneration; `video_regenerator.py` and `render_monitor.py` handle re-renders.
 - **Narration** (`narration_generator.py`): ElevenLabs, Edge-TTS, or ComfyUI voice workflows.
@@ -124,7 +124,7 @@ Key environment variables (`.env` at project root):
 GEMINI_API_KEY="..."               # Primary LLM key
 OPENAI_API_KEY="..."               # Optional
 LLM_PROVIDER="gemini"              # gemini, openai, zhipu, deepseek, qwen, kimi, ollama, lmstudio
-IMAGE_GENERATION_MODE="comfyui"    # comfyui, gemini, geminiweb
+IMAGE_GENERATION_MODE="comfyui"    # comfyui, gemini, geminiweb, flow
 VIDEO_GENERATION_MODE="comfyui"    # comfyui, geminiweb
 COMFY_URL="http://127.0.0.1:8188"
 COMFY_OUTPUT_DIR="E:/ComfyUI/Output"

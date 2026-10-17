@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { GEMINI_MODELS, GEMINI_THINKING } from "@/lib/geminiModes";
+import { FLOW_MODELS, FLOW_OUTPUTS, DEFAULT_FLOW_MODEL, DEFAULT_FLOW_OUTPUTS } from "@/lib/flowModes";
 
 export default function ConfigPage() {
   const router = useRouter();
@@ -45,6 +46,8 @@ export default function ConfigPage() {
     geminiweb_default_mode: "Fast",
     geminiweb_model: "3.8 Flash",
     geminiweb_thinking: "Low",
+    flow_image_model: DEFAULT_FLOW_MODEL,
+    flow_image_outputs: DEFAULT_FLOW_OUTPUTS,
   });
 
   useEffect(() => {
@@ -68,6 +71,8 @@ export default function ConfigPage() {
         geminiweb_default_mode: config.geminiweb_default_mode || "Fast",
         geminiweb_model: config.geminiweb_model || "3.8 Flash",
         geminiweb_thinking: config.geminiweb_thinking || "Low",
+        flow_image_model: config.flow_image_model || DEFAULT_FLOW_MODEL,
+        flow_image_outputs: config.flow_image_outputs || DEFAULT_FLOW_OUTPUTS,
       });
     }
   }, [config]);
@@ -188,6 +193,9 @@ export default function ConfigPage() {
                   <SelectItem value="geminiweb">
                     GeminiWeb - Gemini Web (Browser)
                   </SelectItem>
+                  <SelectItem value="flow">
+                    Flow - Google Flow (Browser)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -307,6 +315,72 @@ export default function ConfigPage() {
               </Select>
               <p className="text-[10px] text-muted-foreground mt-1">
                 Default extended-thinking level (Low = thinking off), as in the Gemini Web picker.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-border/30 pt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Flow Image Model (Default)
+              </label>
+              <Select
+                value={formData.flow_image_model}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, flow_image_model: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Flow Model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FLOW_MODELS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Default model for Google Flow (flow.google.com) image generation.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Flow Outputs per Prompt (Default)
+              </label>
+              <Select
+                value={formData.flow_image_outputs}
+                onValueChange={(val) =>
+                  setFormData({ ...formData, flow_image_outputs: val })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Outputs" />
+                </SelectTrigger>
+                <SelectContent>
+                  {FLOW_OUTPUTS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Outputs per prompt in Flow's settings popover.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Flow Agent Mode
+              </label>
+              <Select value="false" disabled>
+                <SelectTrigger>
+                  <SelectValue placeholder="Off" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="false">Off (default)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Agent mode stays off — the automation never toggles the Agent
+                button. Aspect ratio follows each project's aspect ratio setting.
               </p>
             </div>
           </div>

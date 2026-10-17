@@ -260,9 +260,42 @@ export function GenerationDialog({
                     <SelectItem value="geminiweb">
                       GeminiWeb - Gemini Web (Browser)
                     </SelectItem>
+                    <SelectItem value="flow">
+                      Flow - Google Flow (Browser)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {mode === "flow" && (
+                <div className="rounded-md border border-border/50 p-3 space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Model</span>
+                    <span className="font-medium">
+                      {globalConfig?.flow_image_model || "Nano Banana 2.1"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Outputs</span>
+                    <span className="font-medium">
+                      {globalConfig?.flow_image_outputs || "x1"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Agent Mode</span>
+                    <span className="font-medium">Off (default)</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Aspect Ratio</span>
+                    <span className="font-medium">Project setting</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pt-1">
+                    Runs on flow.google.com in your browser. Settings are only
+                    touched in Flow when they differ; defaults come from Global
+                    Configuration.
+                  </p>
+                </div>
+              )}
 
               {mode === "geminiweb" && (
                 <>

@@ -36,6 +36,9 @@ CONCURRENT_GENERATION_LIMITS = {
     "comfyui": int(os.getenv("CONCURRENT_COMFYUI_LIMIT", "1")),     # ComfyUI is VRAM heavy
     "gemini": int(os.getenv("CONCURRENT_GEMINI_LIMIT", "2")),       # Gemini API can handle more
     "geminiweb": int(os.getenv("CONCURRENT_GEMINIWEB_LIMIT", "1")), # Browser automation is heavy
+    # Flow image generation drives the same cloned browser profiles as
+    # GeminiWeb, so it shares the browser worker pool limit.
+    "flow": int(os.getenv("CONCURRENT_GEMINIWEB_LIMIT", "1")),
     "default": int(os.getenv("CONCURRENT_DEFAULT_LIMIT", "1"))      # Fallback for other engines
 }
 
@@ -1400,6 +1403,35 @@ GEMINIWEB_MODEL = os.getenv("GEMINIWEB_MODEL", _gm)
 GEMINIWEB_THINKING = os.getenv("GEMINIWEB_THINKING", _gt)
 # Legacy six-mode name kept for backward compatibility of stored configs.
 GEMINIWEB_DEFAULT_MODE = os.getenv("GEMINIWEB_DEFAULT_MODE", "Fast")
+
+
+# ==========================================
+# FLOWWEB (GOOGLE FLOW) IMAGE GENERATION
+# ==========================================
+# Browser-based image generation via https://flow.google.com/ (Google Flow).
+# Uses the same Playwright browser profile as GeminiWeb (shared Google login).
+FLOWWEB_URL = os.getenv("FLOWWEB_URL", "https://flow.google.com/")
+
+# Timeout for waiting for a Flow image generation (seconds)
+FLOWWEB_TIMEOUT = int(os.getenv("FLOWWEB_TIMEOUT", "300"))
+
+# Default Flow image model. Matches the Flow model picker exactly:
+# "Nano Banana Pro", "Nano Banana 2 Lite", "Nano Banana 2.1".
+# The automation only changes the model when the picker shows a different one.
+FLOW_IMAGE_MODEL = os.getenv("FLOW_IMAGE_MODEL", "Nano Banana 2.1")
+
+# Outputs per prompt: "x1" (default), "x2", "x3", "x4".
+FLOW_IMAGE_OUTPUTS = os.getenv("FLOW_IMAGE_OUTPUTS", "x1")
+
+# Agent mode stays OFF by default; the automation never toggles the Agent
+# button in Flow's prompt bar.
+FLOW_AGENT_MODE = os.getenv("FLOW_AGENT_MODE", "false").lower() == "true"
+
+# How many image generations may run in parallel inside ONE Flow project.
+# Flow's grid handles concurrent generations natively (that is what the x2-x4
+# outputs option does). Results are attributed to their prompt via the tile
+# label, so parallel prompts should be distinct.
+FLOW_PROJECT_CONCURRENCY = int(os.getenv("FLOW_PROJECT_CONCURRENCY", "2"))
 # ==========================================
 # Web UI Configuration
 # ==========================================

@@ -15,6 +15,60 @@ from web_ui.backend.models.project import (
     CreateProjectRequest, UpdateProjectRequest
 )
 import json
+import shutil
+import subprocess
+
+# Cache of probed media durations: {abs_path: (mtime, duration_seconds)}
+_media_duration_cache: Dict[str, Any] = {}
+
+
+def _resolve_project_media_path(project_dir: str, media_path: Optional[str]) -> Optional[str]:
+    """Resolve a stored media path (output/projects/... or bare filename) to an existing absolute file."""
+    if not media_path:
+        return None
+    candidates = []
+    try:
+        import config
+        candidates.append(config.resolve_path(media_path))
+    except Exception:
+        pass
+    normalized = media_path.replace('\\', '/')
+    if 'projects/' in normalized:
+        # e.g. output/projects/<id>/videos/file.mp4 -> <project_dir>/videos/file.mp4
+        tail = normalized.split('projects/', 1)[1].split('/', 1)
+        if len(tail) == 2:
+            candidates.append(os.path.join(project_dir, tail[1]))
+    candidates.append(os.path.join(project_dir, "videos", os.path.basename(media_path)))
+    candidates.append(os.path.join(project_dir, os.path.basename(media_path)))
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _probe_media_duration(path: str) -> Optional[float]:
+    """Actual media duration in seconds via ffprobe, cached by path + mtime."""
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return None
+    cached = _media_duration_cache.get(path)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return None
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "quiet", "-print_format", "json", "-show_format", path],
+            capture_output=True, timeout=30,
+        )
+        data = json.loads(result.stdout.decode("utf-8", errors="replace") or "{}")
+        duration = round(float(data["format"]["duration"]), 3)
+    except (OSError, ValueError, KeyError, subprocess.TimeoutExpired):
+        return None
+    _media_duration_cache[path] = (mtime, duration)
+    return duration
 
 
 class ProjectService:
@@ -83,6 +137,7 @@ class ProjectService:
 
         # Load shots if exist
         shots = self.project_manager.get_shots(project_id)
+        self._attach_media_durations(project_id, shots)
 
         # Auto-complete check
         if shots and not meta.get('completed', False):
@@ -108,6 +163,26 @@ class ProjectService:
             shots=shots
         )
 
+    def _attach_media_durations(self, project_id: str, shots: List[Dict[str, Any]]) -> None:
+        """Attach actual rendered-media durations (probed via ffprobe) to shot dicts.
+
+        Adds video_duration / meeting_video_duration / departure_video_duration;
+        the field is None when the file is missing or cannot be probed.
+        """
+        if not shots:
+            return
+        project_dir = self.project_manager.get_project_dir(project_id)
+        for shot in shots:
+            if not isinstance(shot, dict):
+                continue
+            for path_field, duration_field in (
+                ('video_path', 'video_duration'),
+                ('meeting_video_path', 'meeting_video_duration'),
+                ('departure_video_path', 'departure_video_duration'),
+            ):
+                resolved = _resolve_project_media_path(project_dir, shot.get(path_field))
+                shot[duration_field] = _probe_media_duration(resolved) if resolved else None
+
     def create_project(self, request: CreateProjectRequest) -> ProjectDetail:
         """Create a new project"""
         project_id, meta = self.project_manager.create_project(
@@ -117,7 +192,8 @@ class ProjectService:
             shots_agent=request.shots_agent,
             total_duration=request.total_duration,
             aspect_ratio=request.aspect_ratio,
-            prompt_mode=request.prompt_mode
+            prompt_mode=request.prompt_mode,
+            video_generation_type=request.video_generation_type
         )
 
         from web_ui.backend.models.story import ProjectType
@@ -323,6 +399,18 @@ class ProjectService:
 
         if request.prompt_mode is not None:
             meta['prompt_mode'] = request.prompt_mode
+
+        if request.video_generation_type is not None:
+            old_vgt = meta.get('video_generation_type', 'i2v')
+            meta['video_generation_type'] = request.video_generation_type
+            if old_vgt != request.video_generation_type:
+                # Invalidate the generation service's cached type so queue
+                # gating picks up the change immediately
+                try:
+                    from web_ui.backend.services.generation_service import get_generation_service
+                    get_generation_service().invalidate_project_cache(project_id)
+                except Exception:
+                    pass
 
         if request.aspect_ratio is not None:
             meta['aspect_ratio'] = request.aspect_ratio

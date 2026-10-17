@@ -16,6 +16,7 @@ export interface Clip {
   sourceStart: number; // offset within the source media in seconds
   sourceDuration: number; // total duration of the original media
   hidden?: boolean;
+  placeholder?: boolean; // reserved timeline space for a shot whose media isn't generated yet
 }
 
 export interface Track {
