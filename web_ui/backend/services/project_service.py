@@ -193,7 +193,8 @@ class ProjectService:
             total_duration=request.total_duration,
             aspect_ratio=request.aspect_ratio,
             prompt_mode=request.prompt_mode,
-            video_generation_type=request.video_generation_type
+            video_generation_type=request.video_generation_type,
+            max_shot_duration=request.max_shot_duration
         )
 
         from web_ui.backend.models.story import ProjectType
@@ -414,6 +415,9 @@ class ProjectService:
 
         if request.aspect_ratio is not None:
             meta['aspect_ratio'] = request.aspect_ratio
+
+        if request.max_shot_duration is not None:
+            meta['max_shot_duration'] = request.max_shot_duration
 
         if request.completed is not None:
             meta['completed'] = request.completed

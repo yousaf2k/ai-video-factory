@@ -28,6 +28,27 @@ Each shot generates a video of the specified length:
 - **Framerate**: 24 FPS (configurable in `config.py`)
 - **Frames per shot**: Length × FPS (e.g., 5s × 24fps = 120 frames)
 
+## Duration-Driven Shot Planning (Max Shot Duration)
+
+The shot planner no longer forces an exact shot count per scene (which pinned
+every clip to ~`shot_length` seconds). Scenes carry **duration budgets** and
+the LLM decides both the number of shots and each shot's individual length,
+constrained so the durations in a scene sum to approximately that scene's
+duration — the total video length is preserved either way.
+
+A per-project **max shot duration** caps what the planner may assign to any
+single shot:
+
+- **Web UI**: set when creating a project ("Max Shot Duration", 1-15s, default
+  5), or override it per replan in the project editor's "Re-plan Shots" dialog.
+- **CLI**: `--max-shot-duration 5`
+- Use `5` (or lower) for fixed-length Wan 2.2 renders; MiniMax H3 supports up
+  to 15 seconds per clip via its `[duration]` node.
+
+```bash
+python core/main.py --idea "..." --max-shot-duration 5
+```
+
 ## Usage
 
 ### Run Pipeline with Custom Length

@@ -449,6 +449,7 @@ class ApiClient {
     data: {
       max_shots?: number;
       shots_agent: string;
+      max_shot_duration?: number;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/projects/${projectId}/shots/replan`, data);

@@ -119,6 +119,7 @@ export default function ProjectEditPage() {
   const [selectedContext, setSelectedContext] = useState<string>("none");
   const [selectedSoundFX, setSelectedSoundFX] = useState<string>("none");
   const [maxShots, setMaxShots] = useState(0);
+  const [replanMaxShotDuration, setReplanMaxShotDuration] = useState<number>(5);
   // Component values last filled from the selected predefined agent's own
   // includes; null once the user builds a custom composition
   const [predefinedComposition, setPredefinedComposition] = useState<{
@@ -502,6 +503,13 @@ export default function ProjectEditPage() {
     }
   };
 
+  // Reflect the project's stored max shot duration cap in the replan form
+  useEffect(() => {
+    if (project?.max_shot_duration != null) {
+      setReplanMaxShotDuration(project.max_shot_duration);
+    }
+  }, [project?.max_shot_duration]);
+
   const handleReplanShots = async () => {
     try {
       // Send the predefined agent id when its components are untouched so its
@@ -530,6 +538,7 @@ export default function ProjectEditPage() {
       await replanShotsMutation.mutateAsync({
         max_shots: maxShots,
         shots_agent: finalAgent,
+        max_shot_duration: replanMaxShotDuration,
       });
       setShowReplanShotsModal(false);
       toast.success("Shots re-planned successfully.");
@@ -1087,17 +1096,35 @@ export default function ProjectEditPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Max Shots (0 = Auto)
-                </label>
-                <Input
-                  type="number"
-                  value={maxShots}
-                  onChange={(e) => setMaxShots(parseInt(e.target.value) || 0)}
-                  min="0"
-                  max="100"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Max Shots (0 = Auto)
+                  </label>
+                  <Input
+                    type="number"
+                    value={maxShots}
+                    onChange={(e) => setMaxShots(parseInt(e.target.value) || 0)}
+                    min="0"
+                    max="100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Max Shot Duration (sec)
+                  </label>
+                  <Input
+                    type="number"
+                    value={replanMaxShotDuration}
+                    onChange={(e) => setReplanMaxShotDuration(parseFloat(e.target.value) || 0)}
+                    min="1"
+                    max="15"
+                    step="1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Longest single clip (1-15s). Use 5 for Wan 2.2.
+                  </p>
+                </div>
               </div>
             </div>
 

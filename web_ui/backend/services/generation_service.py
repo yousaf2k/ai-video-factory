@@ -3117,7 +3117,8 @@ class GenerationService:
         self,
         project_id: str,
         max_shots: Optional[int] = None,
-        shots_agent: str = "default"
+        shots_agent: str = "default",
+        max_shot_duration: Optional[float] = None
     ) -> List[Dict[str, Any]]:
         """
         Re-plan shots from story
@@ -3126,6 +3127,8 @@ class GenerationService:
             project_id: Project identifier
             max_shots: Maximum shots to generate
             shots_agent: Shots agent to use
+            max_shot_duration: Cap on a single shot's duration in seconds;
+                falls back to the project's stored setting when omitted
 
         Returns:
             List of shot dictionaries
@@ -3159,6 +3162,12 @@ class GenerationService:
             # Type 3 is Movie (uses standard LLM planner)
             is_movie = (p_type == ProjectType.MOVIE or p_type == 3)
 
+            # Project-level cap on individual shot durations (set at creation,
+            # via project settings, or per replan request); None keeps the
+            # planner's full range
+            if max_shot_duration is None:
+                max_shot_duration = project_meta.get('max_shot_duration')
+
             if is_then_vs_now:
                 logger.info(f"Detected ThenVsNow project for {project_id}, using specialized shot generator")
                 from core.story_engine import generate_shots_from_then_vs_now_story
@@ -3170,7 +3179,8 @@ class GenerationService:
                     plan_shots,
                     story_json,
                     max_shots=max_shots,
-                    shots_agent=shots_agent
+                    shots_agent=shots_agent,
+                    max_shot_duration=max_shot_duration
                 )
             else:
                 # Run standard planner in thread pool to avoid blocking
@@ -3178,7 +3188,8 @@ class GenerationService:
                     plan_shots,
                     story_json,
                     max_shots=max_shots,
-                    shots_agent=shots_agent
+                    shots_agent=shots_agent,
+                    max_shot_duration=max_shot_duration
                 )
 
             # Save shots

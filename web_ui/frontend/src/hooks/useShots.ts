@@ -133,7 +133,7 @@ export function useReplanShots(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { max_shots?: number; shots_agent: string; }) =>
+    mutationFn: (data: { max_shots?: number; shots_agent: string; max_shot_duration?: number; }) =>
       api.replanShots(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
