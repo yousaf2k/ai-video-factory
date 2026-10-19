@@ -663,7 +663,7 @@ async def upload_shot_video(project_id: str, shot_id_or_index: str, variant: str
 async def replan_shots(project_id: str, request: ReplanShotsRequest):
     """Re-plan shots from story"""
     try:
-        shots = await generation_service.replan_shots(project_id, max_shots=request.max_shots, shots_agent=request.shots_agent)
+        shots = await generation_service.replan_shots(project_id, max_shots=request.max_shots, shots_agent=request.shots_agent, max_shot_duration=request.max_shot_duration)
         return {"status": "success", "shots": shots}
     except Exception as e:
         logger.error(f"Error: {e}")

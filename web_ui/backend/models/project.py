@@ -104,6 +104,7 @@ class CreateProjectRequest(BaseModel):
     prompt_mode: str = Field(default="video", description="Default prompt style for video generation: 'video' (timestamped H3 video_prompt) or 'motion' (motion_prompt)")
     video_generation_type: Optional[str] = Field(default=None, description="Visual input strategy setting (independent of project type): 't2v' (text to video), 'i2v' (image to video, default), 'r2v' (reference to video)")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
+    max_shot_duration: Optional[float] = Field(default=None, description="Max duration of a single shot in seconds (1-15). Leave unset for the planner default (15). Use e.g. 5 for fixed-length Wan 2.2 renders.")
     prompts_file: Optional[str] = Field(default=None, description="Path to a custom prompts file")
     aspect_ratio: str = Field(default="16:9", description="Video aspect ratio (16:9, 9:16, or 21:8)")
 
@@ -112,6 +113,19 @@ class CreateProjectRequest(BaseModel):
     def validate_aspect_ratio(cls, v):
         if v not in ["16:9", "9:16", "21:8"]:
             raise ValueError("aspect_ratio must be '16:9', '9:16', or '21:8'")
+        return v
+
+    @field_validator('max_shot_duration')
+    @classmethod
+    def validate_max_shot_duration(cls, v):
+        if v is None:
+            return v
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            raise ValueError("max_shot_duration must be a number")
+        if not (1 <= v <= 15):
+            raise ValueError("max_shot_duration must be between 1 and 15 seconds")
         return v
 
     @field_validator('video_generation_type')
@@ -145,6 +159,20 @@ class UpdateProjectRequest(BaseModel):
             raise ValueError("video_generation_type must be 't2v', 'i2v' or 'r2v'")
         return v
     aspect_ratio: Optional[str] = Field(default=None, description="Video aspect ratio (16:9, 9:16, or 21:8)")
+    max_shot_duration: Optional[float] = Field(default=None, description="Max duration of a single shot in seconds (1-15); applied only when provided")
+
+    @field_validator('max_shot_duration')
+    @classmethod
+    def validate_max_shot_duration(cls, v):
+        if v is None:
+            return v
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            raise ValueError("max_shot_duration must be a number")
+        if not (1 <= v <= 15):
+            raise ValueError("max_shot_duration must be between 1 and 15 seconds")
+        return v
 
     @field_validator('aspect_ratio')
     @classmethod

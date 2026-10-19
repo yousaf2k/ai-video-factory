@@ -6,6 +6,7 @@ from core.agent_loader import load_agent_prompt
 from core.logger_config import setup_agent_logger
 from core.log_decorators import log_agent_call
 import json
+import math
 import re
 from config import (DEFAULT_SHOTS_PER_SCENE, MIN_SHOTS_PER_SCENE, MAX_SHOTS_PER_SCENE,
                     SHOT_GENERATION_BATCH_SIZE, LLM_PROVIDER, MAX_PARALLEL_BATCH_THREADS,
@@ -30,13 +31,43 @@ VIDEO_PROMPT_TIMING_INSTRUCTION = (
 
 # Per-shot clip duration instruction: the LLM chooses each clip length so
 # pacing matches the action instead of a fixed default
-SHOT_DURATION_INSTRUCTION = (
-    f"PER-SHOT CLIP DURATION: Give every shot a \"duration\" field - the rendered clip length "
-    f"in seconds, between {MIN_SHOT_DURATION} and {MAX_SHOT_DURATION}. Choose it from the "
-    f"action's natural length: quick reactions or inserts 1-3s, standard beats 4-6s, complex "
-    f"multi-beat sequences 8-{MAX_SHOT_DURATION}s. The durations of the shots in each scene "
-    f"should sum to approximately that scene's duration."
-)
+
+def normalize_shot_duration_cap(max_shot_duration=None):
+    """Clamp a per-project max shot duration onto the supported range.
+
+    None (or an unusable value) means "no project-level cap" and yields
+    MAX_SHOT_DURATION; anything larger is clipped to it, anything below
+    MIN_SHOT_DURATION is raised to it.
+    """
+    if max_shot_duration is None:
+        return float(MAX_SHOT_DURATION)
+    try:
+        cap = float(max_shot_duration)
+    except (TypeError, ValueError):
+        return float(MAX_SHOT_DURATION)
+    return max(float(MIN_SHOT_DURATION), min(float(MAX_SHOT_DURATION), cap))
+
+
+def get_shot_duration_instruction(max_shot_duration=None):
+    """PER-SHOT CLIP DURATION instruction worded for the project's cap.
+
+    The duration bands scale with the cap so a 5s project (e.g. fixed-length
+    Wan 2.2 renders) never gets offered the 8-15s multi-beat band.
+    """
+    cap = normalize_shot_duration_cap(max_shot_duration)
+    bands = f"quick reactions or inserts 1-3s, standard beats 4-{cap:g}s"
+    if cap >= 8:
+        bands += f", complex multi-beat sequences 8-{cap:g}s"
+    return (
+        f"PER-SHOT CLIP DURATION: Give every shot a \"duration\" field - the rendered clip length "
+        f"in seconds, between {MIN_SHOT_DURATION} and {cap:g}. Choose it from the "
+        f"action's natural length: {bands}. The durations of the shots in each scene "
+        f"should sum to approximately that scene's duration. Never exceed {cap:g} seconds."
+    )
+
+
+# Default (uncapped) variant, kept for callers/importers that have no cap
+SHOT_DURATION_INSTRUCTION = get_shot_duration_instruction()
 
 # Multi-shot clips: longer clips should be split into timestamped sub-shots
 SUB_SHOT_INSTRUCTION = (
@@ -47,6 +78,64 @@ SUB_SHOT_INSTRUCTION = (
     "new information (subject, space, viewpoint or time); use camera motion for small "
     "framing changes."
 )
+
+
+def extract_scene_durations(scenes):
+    """Collect (scene_idx, seconds) for scenes that carry a duration field.
+
+    Supports both scene_length and scene_duration spellings; scenes without a
+    positive duration are skipped (the planner leaves their shot count free).
+    """
+    budgets = []
+    for i, scene in enumerate(scenes):
+        scene_len = scene.get("scene_length") or scene.get("scene_duration", 0)
+        try:
+            scene_len = float(scene_len or 0)
+        except (TypeError, ValueError):
+            scene_len = 0
+        if scene_len > 0:
+            budgets.append((i, scene_len))
+    return budgets
+
+
+def build_scene_duration_plan(budgets, max_shot_duration=None):
+    """Duration-driven shot planning instruction for scenes with durations.
+
+    Instead of dictating a shot count per scene (which pins every clip to
+    scene_length / count and forces ~5s shots), each scene gets a duration
+    budget: the LLM decides how many shots the action needs and their
+    individual lengths, constrained to the project's duration cap and the
+    sum-to-scene-duration rule that preserves the target total runtime.
+
+    Args:
+        budgets: (scene_idx, seconds) pairs, e.g. from extract_scene_durations.
+        max_shot_duration: Project-level cap applied to every shot.
+
+    Returns:
+        (instruction_text, max_shots_cap). max_shots_cap is a safety ceiling:
+        the most shots that could fit the budgets at MIN_SHOT_DURATION, so the
+        max_shots truncation can never clip a duration-valid plan.
+    """
+    cap = normalize_shot_duration_cap(max_shot_duration)
+    plan_text = "\n".join(f"  Scene {idx}: ~{scene_len:g}s total" for idx, scene_len in budgets)
+    total_seconds = sum(scene_len for _, scene_len in budgets)
+    safety_cap = sum(math.ceil(scene_len / MIN_SHOT_DURATION) for _, scene_len in budgets)
+
+    instruction = f"""
+SCENE SHOT PLANNING (duration budgets):
+Each scene below carries a target duration. For EVERY scene, YOU decide the number of shots and each shot's "duration":
+{plan_text}
+
+Total video: ~{total_seconds:g}s across {len(budgets)} scene(s)
+
+RULES:
+- Generate shots ONLY for the scenes listed above.
+- Each shot's "duration" must be between {MIN_SHOT_DURATION} and {cap:g} seconds.
+- The durations of a scene's shots must sum to approximately that scene's duration above.
+- Each scene MUST have at least one shot, and shots within a scene must use different camera angles (wide, close-up, detail, etc.).
+- Never add padding shots just to split time; prefer fewer, longer shots when the action supports them, and short inserts only when they add new information.
+"""
+    return instruction, safety_cap
 
 
 def is_local_provider():
@@ -86,8 +175,9 @@ def build_characters_block(characters):
     )
 
 
-def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_agent, characters_block=""):
+def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_agent, characters_block="", max_shot_duration=None):
     """Plan shots for a batch of scenes"""
+    duration_instruction = get_shot_duration_instruction(max_shot_duration)
     # Create scene graph for this batch
     batch_graph = json.dumps(scenes_batch, ensure_ascii=False)
 
@@ -97,7 +187,7 @@ BATCH PROCESSING: This is batch {batch_num} of {total_batches}
 {characters_block}{max_shots_instruction}
 
 IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batch.
-{SHOT_DURATION_INSTRUCTION}
+{duration_instruction}
 {SUB_SHOT_INSTRUCTION}
 {VIDEO_PROMPT_TIMING_INSTRUCTION}
 """
@@ -113,11 +203,12 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
         repair_batch_scene_ids(shots, scenes_batch, batch_num, total_batches)
 
         logger.info(f"Batch {batch_num}/{total_batches}: Generated {len(shots)} shots")
-        validate_and_repair_shots(shots, shots_agent)
+        validate_and_repair_shots(shots, shots_agent, max_shot_duration=max_shot_duration)
         return shots
 
     except (FileNotFoundError, ValueError):
         # Fall back to legacy prompt
+        cap = normalize_shot_duration_cap(max_shot_duration)
         print(f"[WARN] Shots agent '{shots_agent}' not found, using legacy prompt for batch {batch_num}")
         prompt = f"""
 Create cinematic shots for WAN 2.2.{batch_instruction}
@@ -126,7 +217,7 @@ Return JSON list (each shot):
 [
   {{
    "scene_id": 0,
-   "duration": 5,
+   "duration": {min(5.0, cap):g},
    "image_prompt":"",
    "motion_prompt":"",
    "video_prompt":"",
@@ -135,7 +226,7 @@ Return JSON list (each shot):
   }}
 ]
 
-The "duration" of each shot is its rendered clip length in seconds ({MIN_SHOT_DURATION}-{MAX_SHOT_DURATION}).
+The "duration" of each shot is its rendered clip length in seconds ({MIN_SHOT_DURATION}-{cap:g}).
 The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp; clips of 6 seconds or more should continue with [Shot 2], [Shot 3] sub-shots at strictly increasing cut times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
 
 SCENES:
@@ -145,7 +236,7 @@ SCENES:
         response = provider.ask(prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
         repair_batch_scene_ids(shots, scenes_batch, batch_num, total_batches)
-        validate_and_repair_shots(shots, shots_agent)
+        validate_and_repair_shots(shots, shots_agent, max_shot_duration=max_shot_duration)
         logger.info(f"Batch {batch_num}/{total_batches}: Generated {len(shots)} shots (legacy mode)")
         return shots
 
@@ -275,9 +366,11 @@ def validate_video_prompt(video_prompt, clip_duration=None, prompt_kind="i2v"):
     return problems
 
 
-def ensure_shot_durations(shots):
+def ensure_shot_durations(shots, max_duration=None):
     """Normalize each shot's duration: default missing values and clamp to the
-    configured range. Returns the number of shots whose duration was adjusted."""
+    configured range, honoring a project-level cap when given. Returns the
+    number of shots whose duration was adjusted."""
+    ceiling = normalize_shot_duration_cap(max_duration)
     adjusted = 0
     for shot in shots or []:
         if not isinstance(shot, dict):
@@ -288,16 +381,16 @@ def ensure_shot_durations(shots):
         except (TypeError, ValueError):
             duration = None
         if duration is None:
-            duration = float(DEFAULT_SHOT_LENGTH)
+            duration = min(float(DEFAULT_SHOT_LENGTH), ceiling)
             adjusted += 1
-        clamped = max(float(MIN_SHOT_DURATION), min(float(MAX_SHOT_DURATION), duration))
+        clamped = max(float(MIN_SHOT_DURATION), min(ceiling, duration))
         if clamped != duration:
             adjusted += 1
         shot['duration'] = clamped
     return adjusted
 
 
-def validate_and_repair_shots(shots, shots_agent):
+def validate_and_repair_shots(shots, shots_agent, max_shot_duration=None):
     """Validate video_prompts and re-ask the LLM once to fix broken ones.
 
     Structural problems (missing fields, non-sequential sub-shot numbers, cut
@@ -308,7 +401,7 @@ def validate_and_repair_shots(shots, shots_agent):
     if not isinstance(shots, list):
         return shots
 
-    ensure_shot_durations(shots)
+    ensure_shot_durations(shots, max_duration=max_shot_duration)
 
     # The prompt format follows the shots agent: r2v agents emit the
     # six-section full-reference format, t2v agents the T2VA format
@@ -351,7 +444,7 @@ def validate_and_repair_shots(shots, shots_agent):
             for pos, shot, problems in invalid
         ]
         repair_instruction = f"""
-{SHOT_DURATION_INSTRUCTION}
+{get_shot_duration_instruction(max_shot_duration)}
 {SUB_SHOT_INSTRUCTION}
 {VIDEO_PROMPT_TIMING_INSTRUCTION}
 
@@ -659,7 +752,7 @@ def extract_complete_objects(json_str):
 
 
 @log_agent_call
-def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_scene=None):
+def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_scene=None, max_shot_duration=None):
     """
     Plan cinematic shots for WAN 2.2 video generation.
 
@@ -716,56 +809,34 @@ def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_sce
     if shots_per_scene is None:
         shots_per_scene = DEFAULT_SHOTS_PER_SCENE
 
-    # Check if scenes have scene_length field for intelligent distribution
+    # Check if scenes have scene_length field for duration-driven planning
     has_scene_lengths = any("scene_length" in s or "scene_duration" in s for s in scenes)
 
     # Build enhanced shot instruction based on parameters
     max_shots_instruction = ""
     if has_scene_lengths:
-        # Use scene-based shot distribution
-        logger.info("Using scene-based shot distribution (scene_length detected)")
-        print(f"[INFO] Using scene-based shot distribution")
+        # Duration-driven planning: scenes carry duration budgets and the LLM
+        # decides the shot count per scene (durations-first) instead of being
+        # pinned to scene_length ÷ DEFAULT_SHOT_LENGTH exact counts, which
+        # forced every clip to ~5s
+        cap = normalize_shot_duration_cap(max_shot_duration)
+        logger.info("Using duration-driven scene planning (scene_length detected)")
+        print(f"[INFO] Using duration-driven scene planning (scene_length detected)")
 
-        scene_shot_plan = []
-        total_shots_from_durations = 0
+        scene_durations = extract_scene_durations(scenes)
+        max_shots_instruction, scene_plan_cap = build_scene_duration_plan(scene_durations, max_shot_duration)
 
-        for i, scene in enumerate(scenes):
-            # Support both scene_length and scene_duration field names
-            scene_len = scene.get("scene_length") or scene.get("scene_duration", 0)
-            if scene_len > 0:
-                shots_for_scene = max(MIN_SHOTS_PER_SCENE or 1, int(scene_len / DEFAULT_SHOT_LENGTH))
-                scene_shot_plan.append({
-                    'scene_idx': i,
-                    'shots': shots_for_scene,
-                    'duration': scene_len
-                })
-                total_shots_from_durations += shots_for_scene
-                logger.info(f"Scene {i}: {shots_for_scene} shots ({scene_len}s ÷ {DEFAULT_SHOT_LENGTH}s/shot)")
-                print(f"[INFO] Scene {i}: {shots_for_scene} shots ({scene_len}s ÷ {DEFAULT_SHOT_LENGTH}s/shot)")
+        for idx, scene_len in scene_durations:
+            logger.info(f"Scene {idx}: ~{scene_len:g}s budget (1-{cap:g}s per shot)")
+            print(f"[INFO] Scene {idx}: ~{scene_len:g}s budget (1-{cap:g}s per shot)")
 
         # Update max_shots if calculated from durations
         if max_shots is None:
-            max_shots = total_shots_from_durations
+            max_shots = scene_plan_cap
 
-        # Format scene shot plan for LLM instruction
-        scene_plan_text = "\n".join([
-            f"  Scene {s['scene_idx']}: {s['shots']} shots ({s['duration']}s)"
-            for s in scene_shot_plan
-        ])
-
-        max_shots_instruction = f"""
-SCENE-BASED SHOT DISTRIBUTION:
-Generate the following shots for each scene based on scene duration:
-{scene_plan_text}
-
-Total shots: {total_shots_from_durations} (~{total_shots_from_durations * DEFAULT_SHOT_LENGTH}s video)
-
-IMPORTANT:
-- Follow the exact shot count specified for each scene above
-- Each scene MUST have different camera angles (wide, close-up, detail, etc.)
-"""
-        logger.info(f"Total shots planned from scene durations: {total_shots_from_durations} (~{total_shots_from_durations * DEFAULT_SHOT_LENGTH}s video)")
-        print(f"[INFO] Total shots planned: {total_shots_from_durations} (~{total_shots_from_durations * DEFAULT_SHOT_LENGTH}s video)")
+        total_budget = sum(scene_len for _, scene_len in scene_durations)
+        logger.info(f"Total duration budget: ~{total_budget:g}s; safety shot cap {max_shots}")
+        print(f"[INFO] Total duration budget: ~{total_budget:g}s (shot cap {max_shots})")
 
     elif max_shots:
         # Calculate shots per scene from max_shots (even distribution)
@@ -814,24 +885,15 @@ IMPORTANT SHOT DISTRIBUTION:
             scenes_batch = scenes[start_idx:end_idx]
 
             if has_scene_lengths:
-                # Extract the subset of the scene_shot_plan for this batch
-                batch_plan = [p for p in scene_shot_plan if start_idx <= p['scene_idx'] < end_idx]
-                batch_max_total = sum(p['shots'] for p in batch_plan)
-                
-                # Format scene shot plan for LLM instruction
-                batch_scene_plan_text = "\n".join([
-                    f"  Scene {p['scene_idx']}: {p['shots']} shots ({p['duration']}s)"
-                    for p in batch_plan
-                ])
+                # Duration budgets for the scenes in this batch only
+                batch_budgets = [(idx, scene_len) for idx, scene_len in scene_durations
+                                 if start_idx <= idx < end_idx]
+                batch_plan_text, _ = build_scene_duration_plan(batch_budgets, max_shot_duration)
 
                 batch_instruction = f"""
 CRITICAL SHOT REQUIREMENTS FOR THIS BATCH:
-- You MUST generate exactly {batch_max_total} shots for this batch
 - This batch contains {len(scenes_batch)} scene(s)
-Generate the following exact number of shots for each scene based on its duration:
-{batch_scene_plan_text}
-
-IMPORTANT: Follow the exact shot count specified for each scene above.
+{batch_plan_text}
 """
             else:
                 # Adjust max_shots for this batch
@@ -891,7 +953,8 @@ CRITICAL SHOT REQUIREMENTS:
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
                     shots_agent=batch_data['shots_agent'],
-                    characters_block=batch_data.get('characters_block', "")
+                    characters_block=batch_data.get('characters_block', ""),
+                    max_shot_duration=max_shot_duration
                 )
 
                 # Add batch number
@@ -949,7 +1012,8 @@ CRITICAL SHOT REQUIREMENTS:
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
                     shots_agent=batch_data['shots_agent'],
-                    characters_block=batch_data.get('characters_block', "")
+                    characters_block=batch_data.get('characters_block', ""),
+                    max_shot_duration=max_shot_duration
                 )
 
                 # Add batch number and ensure scene_index is present
@@ -982,7 +1046,7 @@ CRITICAL SHOT REQUIREMENTS:
         return all_shots
 
     # Single batch processing (original logic)
-    user_input = f"{scene_graph_with_indices}{max_shots_instruction}{SHOT_DURATION_INSTRUCTION}{SUB_SHOT_INSTRUCTION}{VIDEO_PROMPT_TIMING_INSTRUCTION}"
+    user_input = f"{scene_graph_with_indices}{max_shots_instruction}{get_shot_duration_instruction(max_shot_duration)}{SUB_SHOT_INSTRUCTION}{VIDEO_PROMPT_TIMING_INSTRUCTION}"
 
     # Try to use agent prompts
     try:
@@ -994,7 +1058,7 @@ CRITICAL SHOT REQUIREMENTS:
         response = provider.ask(image_prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
 
-        validate_and_repair_shots(shots, shots_agent)
+        validate_and_repair_shots(shots, shots_agent, max_shot_duration=max_shot_duration)
 
         # Ensure shots is a list
         if isinstance(shots, dict):
@@ -1036,6 +1100,7 @@ CRITICAL SHOT REQUIREMENTS:
 
     except (FileNotFoundError, ValueError):
         # Fall back to legacy prompt if agent not found
+        cap = normalize_shot_duration_cap(max_shot_duration)
         print(f"[WARN] Shots agent '{shots_agent}' not found, using legacy prompt")
         prompt = f"""
 Create cinematic shots for WAN 2.2.{max_shots_instruction}
@@ -1044,7 +1109,7 @@ Return JSON list (each shot):
 [
   {{
    "scene_index": 0,
-   "duration": 5,
+   "duration": {min(5.0, cap):g},
    "image_prompt":"",
    "motion_prompt":"",
    "video_prompt":"",
@@ -1053,7 +1118,7 @@ Return JSON list (each shot):
   }}
 ]
 
-{SHOT_DURATION_INSTRUCTION}
+{get_shot_duration_instruction(max_shot_duration)}
 The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp; clips of 6 seconds or more should continue with [Shot 2], [Shot 3] sub-shots at strictly increasing cut times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
 
 SCENES:
@@ -1062,7 +1127,7 @@ SCENES:
         provider = get_provider()
         response = provider.ask(prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
-        validate_and_repair_shots(shots, shots_agent)
+        validate_and_repair_shots(shots, shots_agent, max_shot_duration=max_shot_duration)
 
         # Ensure shots is a list
         if isinstance(shots, dict):

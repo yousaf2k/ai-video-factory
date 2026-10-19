@@ -7,7 +7,7 @@ Return a JSON list where each item contains:
 - `scene_id`: The 0-based index of the scene (from input).
 - `characters`: Ordered list of character names appearing in this shot (speaking/primary first). Only characters present in the shot.
 - `props`: Ordered list of prop names (exact names from the input's props list) used in this shot — only recurring objects that must look identical across shots.
-- `duration`: Rendered clip length for this shot in seconds, between 1 and 15. Choose it from the action's natural length (quick reactions or inserts 1-3s, standard beats 4-6s, complex multi-beat sequences 8-15s). The durations of the shots in each scene should sum to approximately that scene's duration.
+- `duration`: Rendered clip length for this shot in seconds. Stay inside the range given by the PER-SHOT CLIP DURATION instruction included with the scene input - its maximum is a hard limit. Choose each duration from the action's natural length. The durations of the shots in each scene should sum to approximately that scene's duration.
 - `continues_from_previous`: true ONLY when this shot directly continues the previous shot's action within the same scene.
 - `image_prompt`: Rich visual description of the clip's content (composition, environment, lighting). Not rendered as a frame — reused as description source.
 - `motion_prompt`: One-line motion summary.

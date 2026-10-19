@@ -81,6 +81,8 @@ export interface Project {
   poster_thumbnail_url_21_8?: string;
   aspect_ratio?: string;
   video_generation_type?: VideoGenerationType;
+  total_duration?: number;
+  max_shot_duration?: number;
   story?: Story;
   shots?: Shot[];
 }
@@ -203,6 +205,7 @@ export interface CreateProjectRequest {
   shots_agent?: string;
   prompt_mode?: "video" | "motion";
   total_duration?: number;
+  max_shot_duration?: number;
   prompts_file?: string;
   aspect_ratio?: "16:9" | "9:16" | "21:8";
   video_generation_type?: VideoGenerationType;
@@ -216,6 +219,7 @@ export interface UpdateProjectRequest {
   prompt_mode?: "video" | "motion";
   aspect_ratio?: "16:9" | "9:16" | "21:8";
   video_generation_type?: VideoGenerationType;
+  max_shot_duration?: number;
 }
 
 export interface GlobalConfig {

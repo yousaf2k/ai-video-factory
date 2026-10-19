@@ -61,7 +61,8 @@ from core.image_generator import generate_image_gemini
 from core.project_manager import ProjectManager
 
 
-def plan_shots_with_cast(graph, story_json, max_shots=None, shots_agent="default", shots_per_scene=None):
+def plan_shots_with_cast(graph, story_json, max_shots=None, shots_agent="default", shots_per_scene=None,
+                         max_shot_duration=None):
     """
     plan_shots with the story's cast injected (scenes themselves unchanged from
     the scene graph), so shot prompts name the characters consistently and each
@@ -72,7 +73,8 @@ def plan_shots_with_cast(graph, story_json, max_shots=None, shots_agent="default
     except (TypeError, ValueError):
         story_data = {}
     payload = {'scenes': graph, 'characters': story_data.get('characters') or []}
-    return plan_shots(payload, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
+    return plan_shots(payload, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene,
+                      max_shot_duration=max_shot_duration)
 
 
 def generate_unique_video_filename(videos_dir, shot_idx):
@@ -1326,6 +1328,14 @@ def run_new_project(project_mgr, args=None):
         shot_length = config.DEFAULT_SHOT_LENGTH
         print(f"[INFO] Shot length: {shot_length}s (from config)")
 
+    # Per-project cap on individual shot durations for the shot planner
+    if getattr(args, 'max_shot_duration', None):
+        max_shot_duration = float(args.max_shot_duration)
+        print(f"[INFO] Max shot duration: {max_shot_duration:g}s (from command line)")
+    else:
+        max_shot_duration = None
+        print(f"[INFO] Max shot duration: {config.MAX_SHOT_DURATION}s (planner default)")
+
     total_length = None
     # Priority 1: CLI --total-length override
     if hasattr(args, 'total_length') and args.total_length:
@@ -1396,6 +1406,7 @@ def run_new_project(project_mgr, args=None):
     project_meta['video_config'] = {
         'total_length': total_length,
         'shot_length': shot_length,
+        'max_shot_duration': max_shot_duration,
         'fps': config.VIDEO_FPS,
         'shots_per_scene': shots_per_scene,
         'workflow': config.VIDEO_WORKFLOW, # Store the workflow name
@@ -1634,7 +1645,9 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
     elif not steps.get('shots', False):
         logger.info("STEP 4: Shot Planning")
         print("\nSTEP 4: Shot Planning")
-        shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
+        planner_max_duration = (project_meta.get('video_config') or {}).get('max_shot_duration')
+        shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_agent=shots_agent,
+                                     shots_per_scene=shots_per_scene, max_shot_duration=planner_max_duration)
         # Enhance motion prompts with trigger keywords for LoRA activation
         shots = enhance_motion_prompts_with_triggers(shots)
         project_mgr.save_shots(project_id, shots)
@@ -1944,7 +1957,9 @@ def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, ne
         elif current_step == 4:  # Shot Planning
             if not project_meta.get('steps', {}).get('shots', False):
                 print("\nSTEP 4: Shot Planning")
-                shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene)
+                planner_max_duration = (project_meta.get('video_config') or {}).get('max_shot_duration')
+                shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_agent=shots_agent,
+                                             shots_per_scene=shots_per_scene, max_shot_duration=planner_max_duration)
                 # Enhance motion prompts with trigger keywords for LoRA activation
                 shots = enhance_motion_prompts_with_triggers(shots)
                 project_mgr.save_shots(project_id, shots)
@@ -2676,6 +2691,15 @@ Testing Options:
         '--shot-length',
         type=float,
         help='Length per shot in seconds (default: from config.py)'
+    )
+
+    parser.add_argument(
+        '--max-shot-duration',
+        type=float,
+        default=None,
+        help=(f'Maximum clip length in seconds the shot planner may assign per shot, '
+              f'1-{config.MAX_SHOT_DURATION} (default: {config.MAX_SHOT_DURATION}, no project cap). '
+              f'Set to your video workflow\'s clip limit, e.g. 5 for fixed-length Wan 2.2 renders.')
     )
 
     parser.add_argument(

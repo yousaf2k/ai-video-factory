@@ -76,6 +76,7 @@ export default function ProjectsPage() {
     }
   }) || [];
   const [totalDuration, setTotalDuration] = useState(600);
+  const [maxShotDuration, setMaxShotDuration] = useState(5);
   const [promptsFile, setPromptsFile] = useState("");
   const [usePromptsFile, setUsePromptsFile] = useState(false);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<"16:9" | "9:16" | "21:8">("16:9");
@@ -118,6 +119,7 @@ export default function ProjectsPage() {
       story_agent: selectedStoryAgent === "choose" ? "default" : selectedStoryAgent,
       shots_agent: selectedShotsAgent,
       total_duration: totalDuration,
+      max_shot_duration: maxShotDuration,
       prompts_file: promptsFile.trim() || undefined,
       aspect_ratio: selectedAspectRatio,
       video_generation_type: videoGenerationType,
@@ -616,6 +618,36 @@ export default function ProjectsPage() {
                           {Math.floor(totalDuration / 60)}m {totalDuration % 60}s
                         </span>
                       </div>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="max-shot-duration"
+                        className="block text-sm font-medium mb-1.5"
+                      >
+                        Max Shot Duration
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <Input
+                          id="max-shot-duration"
+                          type="number"
+                          value={maxShotDuration}
+                          onChange={(e) =>
+                            setMaxShotDuration(parseFloat(e.target.value) || 0)
+                          }
+                          min="1"
+                          max="15"
+                          step="1"
+                          className="bg-background"
+                        />
+                        <span className="text-sm font-medium whitespace-nowrap bg-muted px-3 py-2 rounded-md border min-w-[5rem] text-center">
+                          sec / shot
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        Longest single clip the AI may plan (1-15s). Use 5 for Wan 2.2;
+                        MiniMax H3 supports up to 15.
+                      </p>
                     </div>
                   </div>
 

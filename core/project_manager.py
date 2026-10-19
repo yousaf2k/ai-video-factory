@@ -501,7 +501,7 @@ class ProjectManager:
             return latest['meta']
         return None
 
-    def create_project(self, idea, project_id=None, story_agent="default", shots_agent="default", total_duration=None, aspect_ratio="16:9", prompt_mode="video", video_generation_type=None):
+    def create_project(self, idea, project_id=None, story_agent="default", shots_agent="default", total_duration=None, aspect_ratio="16:9", prompt_mode="video", video_generation_type=None, max_shot_duration=None):
         """Create a new project
 
         Args:
@@ -515,6 +515,8 @@ class ProjectManager:
             video_generation_type: Visual input strategy — "i2v" (image to video,
                 today's pipeline), "r2v" (reference to video) or "t2v" (text to video).
                 Defaults to "i2v".
+            max_shot_duration: Optional cap on a single shot's planned duration in
+                seconds (1-15). None leaves the planner's default range in effect.
         """
         if project_id is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -542,6 +544,7 @@ class ProjectManager:
             'prompt_mode': prompt_mode,
             'video_generation_type': video_generation_type or 'i2v',
             'total_duration': total_duration,
+            'max_shot_duration': max_shot_duration,
             'aspect_ratio': aspect_ratio,
             'started_at': datetime.now().isoformat(),
             'completed': False,

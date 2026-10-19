@@ -1,7 +1,7 @@
 """
 Pydantic models for shot data
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 import uuid
 import config
@@ -162,6 +162,20 @@ class ReplanShotsRequest(BaseModel):
     """Request to re-plan shots from story"""
     max_shots: Optional[int] = Field(default=None, description="Maximum shots to generate")
     shots_agent: str = Field(default="default", description="Shots agent to use")
+    max_shot_duration: Optional[float] = Field(default=None, description="Max duration of a single shot in seconds (1-15); falls back to the project's setting when omitted")
+
+    @field_validator("max_shot_duration")
+    @classmethod
+    def validate_max_shot_duration(cls, v):
+        if v is None:
+            return v
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            raise ValueError("max_shot_duration must be a number")
+        if not (1 <= v <= 15):
+            raise ValueError("max_shot_duration must be between 1 and 15 seconds")
+        return v
 
 
 class SelectImageRequest(BaseModel):

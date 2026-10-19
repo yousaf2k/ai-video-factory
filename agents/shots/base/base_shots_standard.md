@@ -5,7 +5,7 @@ You are an expert AI image prompt engineer. Your task is to generate precise, hi
 ## Output Format (JSON)
 Return a JSON list where each item contains:
 - `scene_id`: The 0-based index of the scene (from input).
-- `duration`: Rendered clip length for this shot in seconds, between 1 and 15. Choose it from the action's natural length (quick reactions or inserts 1-3s, standard beats 4-6s, complex multi-beat sequences 8-15s). The durations of the shots in each scene should sum to approximately that scene's duration.
+- `duration`: Rendered clip length for this shot in seconds. Stay inside the range given by the PER-SHOT CLIP DURATION instruction included with the scene input - its maximum is a hard limit. Choose each duration from the action's natural length. The durations of the shots in each scene should sum to approximately that scene's duration.
 - `image_prompt`: High-fidelity prompt for Flux2.Dev.
 - `motion_prompt`: Immersive motion prompt for Wan 2.2.
 - `video_prompt`: Detailed timestamped video prompt in MiniMax H3 I2VA format (rules below). All timestamped cuts must fit inside this shot's `duration`.
