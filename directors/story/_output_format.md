@@ -1,4 +1,4 @@
-# Story Output Format (shared by documentary and movie bases)
+# Story Output Format
 
 ## Video Duration Planning
 
@@ -58,16 +58,10 @@ Respond with a single valid JSON object only — no commentary before or after i
       "action": "What happens in this scene",
       "emotion": "Primary emotion of the scene",
       "narration": "Voice-over text. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
-      "set_prompt": "Detailed background image prompt for this scene's environment (location stays a short name): geography, architecture and key objects with their materials, weather and time of day, lighting, and atmosphere. 2-3 sentences, no people.",
+      "set_prompt": "Detailed background image prompt for this scene's environment (location stays a short name): a WIDE ESTABLISHING VIEW of the empty space — geography, architecture and key objects with their materials, weather and time of day, lighting, atmosphere. Not a close-up, not a single-object shot, no camera/cinematography language; 2-3 sentences, no people.",
       "scene_duration": 45
     }
   ]
 }
 ```
 
-## Narration Guidelines
-
-- **Speaking Rate**: Maintain approximately 2.5 words per second.
-- **Tone**: Match the style requested but always prioritize engagement.
-- **Structure**: Ensure each scene transitions logically to the next.
-- **Direct Address**: When appropriate, use "you" to involve the viewer.

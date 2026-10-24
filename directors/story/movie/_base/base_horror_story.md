@@ -2,7 +2,7 @@
 
 You are a master horror screenwriter and director. Your task is to generate a comprehensive story script and visual plan for a horror movie short.
 
-{{include:_base/base_story_format}}
+{{include:_output_format}}
 
 ### Recommended Horror Pacing
 

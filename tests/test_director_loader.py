@@ -170,7 +170,7 @@ def test_load_prompt_segments_structure(loader):
     assert std["path"] == "story/documentary/_base/base_standard"
     # nested include inside the base file resolves as a child section
     child_names = [c["name"] for c in std["children"] if c["type"] == "include"]
-    assert "_base/base_story_format" in child_names
+    assert "_output_format" in child_names
 
     # the trailing text segment carries the user input placeholder
     assert data["segments"][-1]["type"] == "text"

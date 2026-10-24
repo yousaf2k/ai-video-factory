@@ -72,7 +72,7 @@ def test_background_base_text_falls_back_to_location():
 
 def test_story_schema_instructs_set_prompt():
     import os
-    path = os.path.join("directors", "story", "_base", "base_story_format.md")
+    path = os.path.join("directors", "story", "_output_format.md")
     with open(path, encoding="utf-8") as f:
         schema = f.read()
     assert '"set_prompt"' in schema

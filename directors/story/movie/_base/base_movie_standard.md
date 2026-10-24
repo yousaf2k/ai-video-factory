@@ -2,7 +2,7 @@
 
 You are a master storyteller, screenwriter, and film director. Your task is to generate a comprehensive story script and visual plan for a cinematic short film.
 
-{{include:_base/base_story_format}}
+{{include:_output_format}}
 
 ### Recommended Cinematic Pacing
 
