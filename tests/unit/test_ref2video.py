@@ -28,7 +28,7 @@ from core.r2v_composer import (
     validate_composed_prompt,
     R2V_PROMPT_CHAR_LIMIT,
 )
-from core.shot_planner import validate_video_prompt
+from core.shot_planner import validate_video_prompt, effective_shots_director
 
 
 def _r2v_template():
@@ -239,3 +239,26 @@ class TestValidatorVariants:
         long_prompt = R2V_PROMPT + " " + "x" * 7000
         problems = validate_video_prompt(long_prompt, prompt_kind="r2v")
         assert any("7000" in p for p in problems)
+
+
+class TestEffectiveShotsDirector:
+    def test_r2v_swaps_unset_and_standard_base(self):
+        assert effective_shots_director("default", "r2v") == "base/base_shots_r2v"
+        assert effective_shots_director(None, "r2v") == "base/base_shots_r2v"
+        assert effective_shots_director("base/base_shots_standard", "r2v") == "base/base_shots_r2v"
+
+    def test_r2v_keeps_packs_after_base(self):
+        assert (effective_shots_director(
+            "base/base_shots_standard, cameras/gopro, styles/ghibli", "r2v")
+            == "base/base_shots_r2v, cameras/gopro, styles/ghibli")
+
+    def test_t2v_uses_t2v_base(self):
+        assert effective_shots_director("default", "t2v") == "base/base_shots_t2v"
+
+    def test_i2v_and_unknown_types_untouched(self):
+        assert effective_shots_director("base/base_shots_standard", "i2v") == "base/base_shots_standard"
+        assert effective_shots_director("default", None) == "default"
+        assert effective_shots_director("default", "weird") == "default"
+
+    def test_explicit_ref_director_untouched(self):
+        assert effective_shots_director("base/base_shots_r2v", "r2v") == "base/base_shots_r2v"

@@ -32,6 +32,31 @@ VIDEO_PROMPT_TIMING_INSTRUCTION = (
 # Per-shot clip duration instruction: the LLM chooses each clip length so
 # pacing matches the action instead of a fixed default
 
+# r2v/t2v projects render from attached reference sheets instead of a
+# first-frame image, so their video prompts must come from the format-specific
+# base directors — an I2VA prompt has no subject_definitions, leaving
+# characters named but never described (their look only exists in
+# image_prompt, which r2v never renders).
+_STANDARD_SHOTS_BASE = "base/base_shots_standard"
+_REF_SHOTS_BASE_DIRECTORS = {"r2v": "base/base_shots_r2v", "t2v": "base/base_shots_t2v"}
+
+
+def effective_shots_director(shots_director, video_generation_type="i2v"):
+    """Resolve the shots director against a project's visual input strategy.
+
+    For r2v/t2v projects, replaces the unset default or the I2VA standard
+    base with the matching format-correct base while keeping any
+    camera/style/context packs appended after it; any other explicit
+    director is left untouched.
+    """
+    base = _REF_SHOTS_BASE_DIRECTORS.get((video_generation_type or "i2v").lower())
+    if not base:
+        return shots_director
+    parts = [p.strip() for p in str(shots_director or "").split(",") if p.strip()]
+    if not parts or parts[0] in ("default", _STANDARD_SHOTS_BASE):
+        parts = [base] + parts[1:]
+    return ", ".join(parts)
+
 def normalize_shot_duration_cap(max_shot_duration=None):
     """Clamp a per-project max shot duration onto the supported range.
 

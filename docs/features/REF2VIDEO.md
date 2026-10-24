@@ -51,8 +51,10 @@ Idea → Story → Scene Graph → Shots (r2v director)
   `overall_soundscape`, `non_diegetic_music`) — see the
   [Ref2VA guide](../guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_ref_en.md). Prompts are
   capped at 7000 characters (validated + LLM-repaired).
-- **Shots directors**: `base/base_shots_r2v` (r2v) and `base/base_shots_t2v` (t2v) — selected
-  automatically when `--video-generation-type` is given without an explicit director.
+- **Shots directors**: `base/base_shots_r2v` (r2v) and `base/base_shots_t2v` (t2v) — enforced
+  for r2v/t2v projects in both the CLI and the web UI: the unset default or the I2VA
+  `base/base_shots_standard` base is swapped for the format-correct one (camera/style/context
+  packs are kept); other explicit directors pass through unchanged.
 - **`<Picture N>` convention**: references attach characters-first, then the scene
   background, then props; the composer prunes citations for refs the 12-file/9-slot budget
   dropped and embeds each character's **voice text** verbatim so voices stay consistent

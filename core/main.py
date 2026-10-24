@@ -53,7 +53,7 @@ STEP_NAMES = {
 
 from core.story_engine import build_story, build_story_then_vs_now, build_story_asmr_glass_cutting
 from core.scene_graph import build_scene_graph
-from core.shot_planner import plan_shots
+from core.shot_planner import plan_shots, effective_shots_director
 from core.prompt_compiler import load_workflow, compile_workflow
 from core.comfy_client import submit, wait_for_prompt_completion
 from core.render_monitor import wait_until_idle
@@ -1231,6 +1231,9 @@ def _continue_existing_project(project_id, project_meta, project_mgr, args=None)
     director_config = project_meta.get('director_config') or project_meta.get('agent_config') or {}
     story_director = director_config.get('story', config.STORY_DIRECTOR)
     shots_director = director_config.get('shots', config.SHOTS_DIRECTOR)
+    # Guard against stored/unset I2VA directors on r2v/t2v projects
+    shots_director = effective_shots_director(
+        shots_director, project_meta.get('video_generation_type'))
 
     # Get narration config
     narration_config = project_meta.get('narration_config', {})
@@ -1442,13 +1445,12 @@ def run_new_project(project_mgr, args=None):
     story_director = getattr(args, 'story_director', None) or config.STORY_DIRECTOR
     shots_director = getattr(args, 'shots_director', None) or config.SHOTS_DIRECTOR
 
-    # r2v/t2v projects need their prompt-format directors; default when the user
-    # did not explicitly pick a shots director
-    _vgt_for_director = video_generation_type
-    if _vgt_for_director in ('r2v', 't2v') and not getattr(args, 'shots_director', None):
-        _default_ref_directors = {'r2v': 'base/base_shots_r2v', 't2v': 'base/base_shots_t2v'}
-        shots_director = _default_ref_directors[_vgt_for_director]
-        print(f"[INFO] video_generation_type '{_vgt_for_director}': defaulting shots director to {shots_director}")
+    # r2v/t2v projects need their prompt-format directors; swap the unset
+    # default or the I2VA standard base for the matching one (packs kept)
+    _resolved_shots_director = effective_shots_director(shots_director, video_generation_type)
+    if _resolved_shots_director != shots_director:
+        print(f"[INFO] video_generation_type '{video_generation_type}': shots director set to {_resolved_shots_director}")
+    shots_director = _resolved_shots_director
 
     # Get narration settings
     generate_narration = not getattr(args, 'no_narration', False) and config.GENERATE_NARRATION

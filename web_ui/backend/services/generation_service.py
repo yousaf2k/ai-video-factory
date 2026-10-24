@@ -26,7 +26,7 @@ else:
 
 from core.project_manager import ProjectManager
 from core.image_generator import generate_images_for_shots
-from core.shot_planner import plan_shots
+from core.shot_planner import plan_shots, effective_shots_director
 from core.logger_config import get_logger
 from web_ui.backend.websocket.manager import manager
 from web_ui.backend.models.story import ProjectType
@@ -3242,6 +3242,11 @@ class GenerationService:
             # planner's full range
             if max_shot_duration is None:
                 max_shot_duration = project_meta.get('max_shot_duration')
+
+            # r2v/t2v projects must be planned with their prompt-format
+            # directors; requests default to the standard I2VA director
+            shots_director = effective_shots_director(
+                shots_director, project_meta.get('video_generation_type'))
 
             if is_then_vs_now:
                 logger.info(f"Detected ThenVsNow project for {project_id}, using specialized shot generator")
