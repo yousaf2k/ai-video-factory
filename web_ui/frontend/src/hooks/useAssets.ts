@@ -251,6 +251,45 @@ export function useAssetText(ref: string | null, enabled: boolean = true) {
   });
 }
 
+/** A Templates asset with all {@Category\Title} references inlined. */
+export function useTemplateText(ref: string | null, enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['asset-template', ref],
+    queryFn: () => api.getTemplateText(ref!),
+    enabled: !!ref && enabled,
+    staleTime: 60000,
+  });
+}
+
+export function useUpdateAssetText() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ref, content }: { ref: string; content: string }) => api.updateAssetText(ref, content),
+    onSuccess: (_data, { ref }) => {
+      queryClient.invalidateQueries({ queryKey: ['asset-text', ref] });
+      queryClient.invalidateQueries({ queryKey: ['asset-entry'] });
+    },
+  });
+}
+
+export function useCreateAssetText() {
+  const invalidate = useInvalidateAssets();
+  return useMutation({
+    mutationFn: ({
+      cat,
+      title,
+      content,
+      library,
+    }: {
+      cat: string;
+      title: string;
+      content: string;
+      library?: string;
+    }) => api.createAssetText({ cat, title, content, library }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useGenerateOptions() {
   return useQuery({
     queryKey: ['asset-generate-options'],

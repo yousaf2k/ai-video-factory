@@ -514,7 +514,6 @@ class QueueService:
                     return True
             return False
 
-
     def requeue_item(self, item_id: str) -> bool:
         """
         Requeue a failed or cancelled item.
@@ -724,9 +723,9 @@ class QueueService:
                 stats[item.status.value] += 1
 
                 # Type counts
-                if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]:
+                if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.ASSET_IMAGE]:
                     type_counts['images'] += 1
-                elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
+                elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO, GenerationType.ASSET_VIDEO]:
                     type_counts['videos'] += 1
                 elif item.generation_type == GenerationType.NARRATION:
                     type_counts['narrations'] += 1

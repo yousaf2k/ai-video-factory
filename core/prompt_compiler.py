@@ -232,11 +232,13 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
         workflow_config = getattr(config, 'VIDEO_WORKFLOWS', {}).get(work_name, None)
 
     load_image_node_id = None
+    load_image_last_node_id = None
     motion_prompt_node_id = None
     wan_video_node_id = None
 
     if workflow_config:
         load_image_node_id = workflow_config.get('load_image_node_id') or workflow_config.get('load_image_first_node_id')
+        load_image_last_node_id = workflow_config.get('load_image_last_node_id')
         motion_prompt_node_id = workflow_config.get('motion_prompt_node_id')
         wan_video_node_id = workflow_config.get('wan_video_node_id')
 
@@ -534,6 +536,20 @@ def compile_workflow(template, shot, video_length_seconds=None, workflow_config=
                     break
             if not found:
                 logger.error("Could not find LoadImage node in workflow!")
+
+        # First-last-frame (FLF) workflows: fill the last-frame loader too.
+        # Standard shots carry a single frame, so an explicit last-frame image
+        # on the shot wins and otherwise the shot image is reused — leaving
+        # the template's placeholder filename in place would fail ComfyUI
+        # prompt validation.
+        if load_image_last_node_id and load_image_last_node_id in wf:
+            last_frame_image = shot.get("last_frame_image_path") or image_path
+            last_frame_for_comfy = prepare_comfyui_input_image(last_frame_image)
+            wf[load_image_last_node_id]["inputs"]["image"] = last_frame_for_comfy
+            if last_frame_image != image_path:
+                logger.info(f"[FLF] Last frame node '{load_image_last_node_id}': {last_frame_for_comfy}")
+            else:
+                logger.info(f"[FLF] No distinct last frame for shot {shot.get('index', '?')} - reusing first frame in node '{load_image_last_node_id}'")
 
     # Set video length in WanImageToVideo node if specified
     if video_length_seconds and wan_video_node_id and wan_video_node_id in wf:

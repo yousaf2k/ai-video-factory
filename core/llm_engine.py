@@ -10,6 +10,7 @@ import requests
 import config
 import os
 from core.comfy_client import http_session
+from core import llm_call_log
 
 # Get logger for provider operations
 logger = logging.getLogger(__name__)
@@ -70,12 +71,15 @@ class LLMProvider(ABC):
 
     def log_error(self, error: Exception, elapsed: float):
         """Log errors with full traceback"""
+        llm_call_log.fail_call(error, elapsed)
         logger.debug(f"{self.name} API Error: {str(error)}")
         logger.error(f"  Elapsed: {elapsed:.2f}s")
         logger.debug(f"  Traceback: {error.__traceback__}")
 
     def log_request_full(self, prompt: str, response_format: Optional[str]):
         """Log the full request content"""
+        llm_call_log.begin_call(self, prompt, response_format)
+
         from core.logger_config import setup_llm_io_logger
         io_logger = setup_llm_io_logger(self.__class__.__name__)
 
@@ -91,6 +95,8 @@ class LLMProvider(ABC):
 
     def log_response_full(self, response: str, elapsed: float):
         """Log the full response content"""
+        llm_call_log.complete_call(response, elapsed)
+
         from core.logger_config import setup_llm_io_logger
         io_logger = setup_llm_io_logger(self.__class__.__name__)
 

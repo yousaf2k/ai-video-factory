@@ -1,0 +1,36 @@
+{
+  "background_styles": [
+    {
+      "name": "Studio Ghibli",
+      "style": "Studio Ghibli Style, hand-painted anime background art, soft watercolor palette, whimsical detailed landscapes"
+    },
+    {
+      "name": "Cinematic Documentary",
+      "style": "ultra cinematic documentary with dramatic reenactments"
+    },
+    {
+      "name": "Pixar 3D Animation",
+      "style": "Pixar animation style, polished 3D render, vibrant colors, soft global illumination"
+    },
+    {
+      "name": "Dark Fantasy",
+      "style": "dark fantasy concept art, moody atmosphere, dramatic rim lighting, intricate weathered details"
+    },
+    {
+      "name": "Film Noir",
+      "style": "film noir, high contrast black and white, dramatic hard shadows, smoky atmosphere"
+    },
+    {
+      "name": "Watercolor Painting",
+      "style": "delicate watercolor painting, soft color washes, visible textured paper grain"
+    },
+    {
+      "name": "Photorealistic",
+      "style": "photorealistic, life-like live action shot on a DSLR camera with 35mm film and muted color tones"
+    },
+    {
+      "name": "Retro 80s VHS",
+      "style": "retro 1980s VHS aesthetic, analog grain, neon glow, faded chromatic colors"
+    }
+  ]
+}

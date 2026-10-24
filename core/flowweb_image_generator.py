@@ -133,11 +133,15 @@ def generate_image_flowweb(
             cmd.extend(["--outputs", outputs])
 
         logger.info(f"Launching FlowWeb subprocess (Worker {worker_id})")
+        # Ingredient attaches (asset reuse scan or upload + modal wait) can
+        # add a couple of minutes per reference image on top of generation.
+        n_refs = len(reference_image_path) if isinstance(reference_image_path, (list, tuple)) \
+            else (1 if reference_image_path else 0)
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=timeout + 180,  # buffer for navigation + settings + download
+            timeout=timeout + 180 + 150 * n_refs,
             cwd=os.path.dirname(os.path.dirname(__file__)),
         )
 
@@ -171,7 +175,7 @@ def generate_image_flowweb(
             return None
 
     except subprocess.TimeoutExpired:
-        logger.error(f"FlowWeb subprocess timed out after {timeout + 180}s")
+        logger.error(f"FlowWeb subprocess timed out after {timeout + 180 + 150 * n_refs}s")
         print("[FAIL] FlowWeb: Subprocess timed out")
         return None
     except Exception as e:

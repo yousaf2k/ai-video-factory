@@ -83,6 +83,7 @@ export interface Project {
   video_generation_type?: VideoGenerationType;
   total_duration?: number;
   max_shot_duration?: number;
+  project_type?: ProjectType; // from project metadata
   story?: Story;
   shots?: Shot[];
 }
@@ -103,6 +104,7 @@ export interface ProjectListItem {
   poster_thumbnail_url_9_16?: string;
   poster_thumbnail_url_21_8?: string;
   aspect_ratio?: string;
+  project_type?: ProjectType; // from project metadata (story.json only carries it for ThenVsNow/ASMR)
   story?: Story;
 }
 
@@ -378,7 +380,9 @@ export enum GenerationType {
   DEPARTURE_VIDEO = "departure_video",
   NARRATION = "narration",
   BACKGROUND = "background",
-  SOUNDFX = "soundfx"
+  SOUNDFX = "soundfx",
+  ASSET_IMAGE = "asset_image",
+  ASSET_VIDEO = "asset_video"
 }
 
 export enum QueueItemStatus {
@@ -408,6 +412,10 @@ export interface QueueItem {
   project_title?: string;
   scene_name?: string;
   shot_id?: string;
+  // Asset-library generations
+  output_path?: string;
+  asset_gen_id?: string;
+  asset_folder?: string;
 }
 
 export interface QueueStatistics {
@@ -495,8 +503,10 @@ export interface AssetGenerationStatus {
   message?: string | null;
   prompt: string;
   cat: string;
+  folder?: string | null; // Flow/GeminiWeb project name, e.g. "Assets Images Characters City"
   title?: string | null;
   library?: string | null;
+  mode?: string | null;
   workflow?: string | null;
   aspect_ratio?: string | null;
   seed?: number | null;
@@ -504,6 +514,7 @@ export interface AssetGenerationStatus {
   image_ref?: string | null;
   video_ref?: string | null;
   reference_refs: string[];
+  queue_item_id?: string | null; // shared QueueService item for image/video runs
   ref?: string | null; // asset ref once completed
   url?: string | null;
   thumb_url?: string | null;
@@ -519,6 +530,7 @@ export interface GenerateAssetRequest {
   cat?: string;
   title?: string;
   library?: string;
+  mode?: string; // image: comfyui | gemini | geminiweb | flow
   workflow?: string;
   aspect_ratio?: string;
   seed?: number;
@@ -526,6 +538,8 @@ export interface GenerateAssetRequest {
   image_ref?: string;
   video_ref?: string;
   reference_refs?: string[];
+  gemini_model?: string; // geminiweb: exact model picker value
+  gemini_thinking?: string; // geminiweb: thinking level
 }
 
 export interface GenerateWorkflowOption {
@@ -557,4 +571,33 @@ export interface ResolvedAssetRef {
   modified_at?: string | null;
   added_at?: string | null;
   media?: { width?: number; height?: number; duration_sec?: number } | null;
+}
+
+// ===== LLM call logs (Logs page) =====
+
+export interface LLMLogEntrySummary {
+  id: string;
+  timestamp: string;
+  provider: string;
+  model: string;
+  status: 'success' | 'error';
+  elapsed_sec: number;
+  prompt_chars: number;
+  output_chars: number;
+  prompt_preview: string;
+  response_format?: string | null;
+  error?: string | null;
+}
+
+export interface LLMLogEntryDetail extends LLMLogEntrySummary {
+  prompt: string;
+  output?: string | null;
+  error?: string | null;
+  thread?: string | null;
+}
+
+export interface LLMLogListResponse {
+  entries: LLMLogEntrySummary[];
+  total: number;
+  returned: number;
 }

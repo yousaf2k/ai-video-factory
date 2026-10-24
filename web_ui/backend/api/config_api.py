@@ -62,6 +62,14 @@ class UpdateWorkflowRequest(BaseModel):
     content: str
 
 
+@router.get("/styles")
+async def get_styles():
+    """Named generation styles (styles.json) for the UI dropdowns. The file is
+    re-read on every call, so edits apply without a backend restart."""
+    import config
+    return {"background_styles": config.load_background_styles()}
+
+
 @router.get("/agents")
 async def get_agents():
     """Get list of available agents for each stage"""

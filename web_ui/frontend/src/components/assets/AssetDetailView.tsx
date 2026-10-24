@@ -10,12 +10,14 @@ import {
   ExternalLink,
   Trash2,
   Loader2,
+  Pencil,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -23,7 +25,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useAssetEntry, useAssetText, useRenameAsset, useMoveAsset, useDeleteAsset, useAssetTree } from '@/hooks/useAssets';
+import {
+  useAssetEntry,
+  useAssetText,
+  useUpdateAssetText,
+  useRenameAsset,
+  useMoveAsset,
+  useDeleteAsset,
+  useAssetTree,
+} from '@/hooks/useAssets';
 import { formatBytes, flattenTree, TYPE_META } from './assetUtils';
 import type { AssetEntry, ResolvedAssetRef } from '@/types';
 
@@ -106,6 +116,7 @@ const TYPE_META_BY_TYPE: Record<string, { label: string; badge: string; icon: ty
   video: TYPE_META.v,
   audio: TYPE_META.a,
   music: TYPE_META.m,
+  text: TYPE_META.t,
 };
 
 function LibraryAssetDetail({
@@ -200,7 +211,7 @@ function LibraryAssetDetail({
             <audio src={detail.url} controls className="w-full" />
           </div>
         )}
-        {detail.letter === 'g' && <TextPreview assetRef={detail.ref} />}
+        {detail.type === 'text' && <TextPreview assetRef={detail.ref} />}
       </div>
 
       {/* Rename */}
@@ -295,15 +306,79 @@ function LibraryAssetDetail({
   );
 }
 
-/** Markdown/text preview for Guides assets (rendered from the file content). */
+/** Markdown/text preview for Guides/Templates assets, with inline editing. */
 function TextPreview({ assetRef }: { assetRef: string }) {
   const { data, isLoading } = useAssetText(assetRef);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const saveMutation = useUpdateAssetText();
+
   if (isLoading) {
     return <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />;
   }
+
+  const startEdit = () => {
+    setDraft(data?.content ?? '');
+    setEditing(true);
+  };
+
+  const save = () => {
+    saveMutation.mutate(
+      { ref: assetRef, content: draft },
+      {
+        onSuccess: () => {
+          setEditing(false);
+          toast.success('Text saved');
+        },
+        onError: (e) => toast.error(`Save failed: ${e instanceof Error ? e.message : 'unknown error'}`),
+      }
+    );
+  };
+
+  if (editing) {
+    const unchanged = draft === (data?.content ?? '');
+    return (
+      <div className="w-full space-y-2">
+        <Textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          spellCheck={false}
+          className="min-h-[35vh] font-mono text-xs leading-relaxed"
+        />
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => setEditing(false)} disabled={saveMutation.isPending}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={save} disabled={saveMutation.isPending || unchanged}>
+            {saveMutation.isPending ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                Saving…
+              </>
+            ) : (
+              'Save'
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full max-h-[45vh] overflow-auto rounded-md border bg-background p-4 text-sm [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:bg-muted [&_code]:px-1 [&_code]:rounded [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{data?.content ?? ''}</ReactMarkdown>
+    <div className="w-full relative group">
+      <button
+        type="button"
+        onClick={startEdit}
+        className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border bg-background/90 px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        title="Edit text"
+      >
+        <Pencil className="w-3 h-3" />
+        Edit
+      </button>
+      <div className="w-full max-h-[45vh] overflow-auto rounded-md border bg-background p-4 text-sm [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_h3]:font-semibold [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_code]:bg-muted [&_code]:px-1 [&_code]:rounded [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded [&_a]:text-primary [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{data?.content ?? ''}</ReactMarkdown>
+      </div>
     </div>
   );
 }

@@ -1382,9 +1382,9 @@ def run_new_project(project_mgr, args=None):
     if video_generation_type in ('r2v', 't2v') and not getattr(args, 'video_workflow', None):
         # r2v/t2v imply the MiniMax H3 r2v workflow (t2v = same workflow with
         # zero refs attached) unless the user explicitly overrode --video-workflow
-        if 'video_minimax_h3_r2v' in getattr(config, 'VIDEO_WORKFLOWS', {}):
-            config.VIDEO_WORKFLOW = 'video_minimax_h3_r2v'
-            print(f"[INFO] video_generation_type '{video_generation_type}': defaulting video workflow to video_minimax_h3_r2v")
+        if 'minimax_h3_r2v' in getattr(config, 'VIDEO_WORKFLOWS', {}):
+            config.VIDEO_WORKFLOW = 'minimax_h3_r2v'
+            print(f"[INFO] video_generation_type '{video_generation_type}': defaulting video workflow to minimax_h3_r2v")
     project_id, project_meta = project_mgr.create_project(idea, video_generation_type=video_generation_type)
 
     logger.info(f"Project created: {project_id}")

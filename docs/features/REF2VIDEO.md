@@ -25,7 +25,7 @@ branches on this field — never on the project-type enum.
 # CLI
 python core/main.py --idea "A baker opens his shop at dawn" \
   --video-generation-type r2v \
-  --video-workflow video_minimax_h3_r2v
+  --video-workflow minimax_h3_r2v
 
 # t2v: the simplest path — prompt in, video out
 python core/main.py --idea "A storm over the mountains" --video-generation-type t2v
@@ -61,7 +61,7 @@ Idea → Story → Scene Graph → Shots (r2v agent)
   The text voice is embedded in every shot prompt where the character appears; an audio
   voice additionally references a sample asset (timbre anchor — used by the pipeline once
   the node's audio inputs land).
-- **Workflow**: `workflow/video/video_minimax_h3_r2v.json` wires 9 tagged `[ref_0..8]`
+- **Workflow**: `workflow/video/minimax_h3_r2v.json` wires 9 tagged `[ref_0..8]`
   reference slots; unfilled slots are simply omitted from the submission. The `Ns` suffix
   in H3 workflow filenames = N sampling **steps** (speed/quality preset), never seconds.
 - r2v/t2v require the ComfyUI engine (`VIDEO_GENERATION_MODE=comfyui`).
@@ -87,8 +87,21 @@ Idea → Story → Scene Graph → Shots (r2v agent)
   — a standalone validated field; existing project types are untouched and any type can
   run any video generation type.
 - Batch generation for r2v queues **reference sheets first** (characters → backgrounds →
-  props) and generates **no** first-frame images; video items don't wait on images.
+  props); video items don't wait on images, and an explicit batch image request is honored
+  (parity with single-shot generation).
 - Single-shot video generation works without an image in r2v/t2v projects.
+- **Background styles**: `styles.json` (repo root) holds named `name`/`style` pairs served by
+  `GET /api/config/styles` (re-read per call — edits apply without a restart). The story tab's
+  scene-background manager and the r2v batch-images modal offer a style dropdown; the selected
+  style text is appended to the **end** of the background prompt at generation time
+  (`background_style` request/queue field, `apply_background_style()` helper).
+- **Background prompt comes from `set_prompt`**: the story agents' shared schema
+  (`agents/story/_base/base_story_format.md`) has the story LLM write a detailed environment
+  description into each scene's `set_prompt` (location stays a short setting name). Background
+  sheets build from `set_prompt` (`background_base_text()`; `location` is the fallback for
+  stories generated before the field existed). The per-scene sheet template and the batch
+  sheet queue both use it — batch items carry no `prompt_override`, which used to replace the
+  built prompt with the raw location.
 
 ## Regeneration
 

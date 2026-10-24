@@ -438,12 +438,19 @@ def _generate_with_local_tts(script, output_path, voice, max_retries=3):
     """
     try:
         import asyncio
+        import re
         import time
 
         import edge_tts
 
-        # Default female voice
-        voice_name = voice if voice.startswith("en-") else "en-US-AriaNeural"
+        # Pass through edge-tts locale voices in any language (e.g. "en-GB-SoniaNeural",
+        # "ur-PK-UzmaNeural"); a mismatched voice/language makes the service return no
+        # audio at all. Anything else (None, "default", ElevenLabs names) gets the default.
+        voice_name = (
+            voice
+            if voice and re.match(r"^[a-z]{2}-[A-Za-z]{2}-\w+Neural$", voice)
+            else "en-US-AriaNeural"
+        )
 
         logger.info(f"Using edge-tts with voice: {voice_name}")
         print(f"[INFO] Using edge-tts with voice: {voice_name}")
@@ -483,6 +490,12 @@ def _generate_with_local_tts(script, output_path, voice, max_retries=3):
         return None
     except Exception as e:
         print(f"[ERROR] Local TTS generation failed: {e}")
+        if "No audio was received" in str(e):
+            print(
+                "[HINT] The service returned no audio — usually the narration text language "
+                "doesn't match the selected voice (e.g. Urdu text with an English voice). "
+                "Pick a voice that matches the narration language."
+            )
         return None
 
 

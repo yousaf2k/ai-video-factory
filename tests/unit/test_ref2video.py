@@ -128,7 +128,7 @@ class TestCompileWorkflowR2V:
 class TestWorkflowDiscovery:
     def test_r2v_workflows_discovered(self):
         import config
-        wf = config.VIDEO_WORKFLOWS.get("video_minimax_h3_r2v")
+        wf = config.VIDEO_WORKFLOWS.get("minimax_h3_r2v")
         assert wf, "r2v workflow not discovered"
         assert wf.get("is_ref2video") is True
         ref_ids = wf.get("reference_image_node_ids") or []

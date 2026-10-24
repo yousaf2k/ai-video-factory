@@ -125,13 +125,27 @@ class ImportAssetRequest(BaseModel):
 
 
 class TextContent(BaseModel):
-    """Full text of a Guides (text-type) asset."""
+    """Full text of a Guides/Templates (text-type) asset."""
     ref: str
     id: str = ""
     title: str
     filename: str
     ext: str
     content: str
+
+
+class UpdateTextContentRequest(BaseModel):
+    """Overwrite a text asset's content (edit in place)."""
+    ref: str
+    content: str
+
+
+class CreateTextRequest(BaseModel):
+    """Create a new text asset (Guides/Templates)."""
+    cat: str  # "t/Image Prompts", "g", ...
+    title: str
+    content: str = ""
+    library: Optional[str] = None
 
 
 class GenerateAssetRequest(BaseModel):
@@ -141,6 +155,7 @@ class GenerateAssetRequest(BaseModel):
     cat: Optional[str] = None  # target category ("i", "i/Characters", ...); defaults to the kind's type root
     title: Optional[str] = None
     library: Optional[str] = None
+    mode: Optional[str] = None  # image generation mode: comfyui | gemini | geminiweb | flow (config default when None)
     workflow: Optional[str] = None  # workflow key; None = configured default
     aspect_ratio: Optional[str] = None  # image/video: "16:9", "9:16", ...
     seed: Optional[int] = None
@@ -148,6 +163,8 @@ class GenerateAssetRequest(BaseModel):
     image_ref: Optional[str] = None  # video: source image asset ref (required)
     video_ref: Optional[str] = None  # audio: source video asset ref (required)
     reference_refs: Optional[List[str]] = None  # image: extra reference image refs
+    gemini_model: Optional[str] = None  # geminiweb: exact model picker value (e.g. "3.8 Flash")
+    gemini_thinking: Optional[str] = None  # geminiweb: thinking level (Low | Medium | High)
 
 
 class GenerationStatus(BaseModel):
@@ -158,8 +175,10 @@ class GenerationStatus(BaseModel):
     message: Optional[str] = None
     prompt: str = ""
     cat: str = ""
+    folder: Optional[str] = None  # category folder path relative to library root; Flow/GeminiWeb project identity
     title: Optional[str] = None
     library: Optional[str] = None
+    mode: Optional[str] = None
     workflow: Optional[str] = None
     aspect_ratio: Optional[str] = None
     seed: Optional[int] = None
@@ -167,6 +186,7 @@ class GenerationStatus(BaseModel):
     image_ref: Optional[str] = None
     video_ref: Optional[str] = None
     reference_refs: List[str] = []
+    queue_item_id: Optional[str] = None  # shared QueueService item for image/video runs
     ref: Optional[str] = None  # asset ref once completed
     url: Optional[str] = None
     thumb_url: Optional[str] = None

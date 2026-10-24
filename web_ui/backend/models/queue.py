@@ -21,6 +21,8 @@ class GenerationType(str, Enum):
     THUMBNAIL = "thumbnail"
     CHARACTER_IMAGE = "character_image"
     PROP_IMAGE = "prop_image"
+    ASSET_IMAGE = "asset_image"
+    ASSET_VIDEO = "asset_video"
 
 
 class QueueItemStatus(str, Enum):
@@ -71,7 +73,16 @@ class QueueItem(BaseModel):
     gemini_mode: Optional[str] = Field(None, description="Gemini model mode (Fast/Thinking/Pro)")
     soundfx_workflow: Optional[str] = Field(None, description="Override Sound FX Workflow template")
     soundfx_prompt: Optional[str] = Field(None, description="Prompt override for sound FX generation")
+    background_style: Optional[str] = Field(None, description="Named-style text (styles.json) appended to the end of the background prompt")
     is_poster: bool = Field(default=False, description="Is this a poster-style generation?")
+
+    # Asset-library generations (ASSET_IMAGE / ASSET_VIDEO)
+    output_path: Optional[str] = Field(None, description="Absolute target file path for asset generations")
+    asset_gen_id: Optional[str] = Field(None, description="AssetGenerationService registry id for status mirroring")
+    asset_folder: Optional[str] = Field(None, description="Asset category folder path (e.g. 'Images/Characters') for display")
+    source_ref: Optional[str] = Field(None, description="Asset ref of the source media (video: first-frame image; audio: source video)")
+    reference_refs: Optional[List[str]] = Field(None, description="Asset refs of extra reference images")
+    duration_sec: Optional[float] = Field(None, description="Video clip length in seconds for asset videos")
 
     # Tracking for deep resume
     comfyui_prompt_id: Optional[str] = Field(None, description="ComfyUI prompt ID for resuming active tasks")

@@ -155,7 +155,7 @@ class BatchRegenerateRequest(BaseModel):
     gemini_thinking: Optional[str] = Field(default=None, description="Exact Gemini Web thinking level ('Low', 'Medium', 'High')")
     soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")
     soundfx_prompt: Optional[str] = Field(default=None, description="Prompt override for sound FX generation")
-
+    background_style: Optional[str] = Field(default=None, description="Named-style text (styles.json) appended to queued background-sheet prompts (r2v)")
 
 
 class ReplanShotsRequest(BaseModel):

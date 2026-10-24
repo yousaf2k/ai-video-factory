@@ -25,6 +25,8 @@ import type {
   AssetGenerationStatus,
   GenerateAssetRequest,
   GenerateOptions,
+  LLMLogListResponse,
+  LLMLogEntryDetail,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
@@ -375,6 +377,13 @@ class ApiClient {
     });
   }
 
+  async getBackgroundStyles(): Promise<Array<{ name: string; style: string }>> {
+    const response = await this.client.get<{ background_styles?: Array<{ name: string; style: string }> }>(
+      '/api/config/styles'
+    );
+    return response.data?.background_styles ?? [];
+  }
+
   async uploadShotImage(
     projectId: string,
     shotIdOrIndex: string | number,
@@ -438,6 +447,7 @@ class ApiClient {
       gemini_thinking?: string;
       soundfx_workflow?: string;
       soundfx_prompt?: string;
+      background_style?: string;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/projects/${projectId}/shots/batch-generate`, data);
@@ -726,6 +736,26 @@ class ApiClient {
     return response.data;
   }
 
+  async getTemplateText(ref: string): Promise<AssetTextContent> {
+    const response = await this.client.get<AssetTextContent>('/api/assets/template', { params: { ref } });
+    return response.data;
+  }
+
+  async updateAssetText(ref: string, content: string): Promise<AssetTextContent> {
+    const response = await this.client.put<AssetTextContent>('/api/assets/content', { ref, content });
+    return response.data;
+  }
+
+  async createAssetText(request: {
+    cat: string;
+    title: string;
+    content: string;
+    library?: string;
+  }): Promise<AssetEntry> {
+    const response = await this.client.post<AssetEntry>('/api/assets/text', request);
+    return response.data;
+  }
+
   async getGenerateOptions(): Promise<GenerateOptions> {
     const response = await this.client.get<GenerateOptions>('/api/assets/generate/options');
     return response.data;
@@ -748,6 +778,24 @@ class ApiClient {
 
   async cancelAssetGeneration(genId: string): Promise<AssetGenerationStatus> {
     const response = await this.client.delete<AssetGenerationStatus>(`/api/assets/generate/${genId}`);
+    return response.data;
+  }
+
+  // Logs
+  async listLLMLogs(limit = 200): Promise<LLMLogListResponse> {
+    const response = await this.client.get<LLMLogListResponse>('/api/logs/llm', {
+      params: { limit },
+    });
+    return response.data;
+  }
+
+  async getLLMLog(entryId: string): Promise<LLMLogEntryDetail> {
+    const response = await this.client.get<LLMLogEntryDetail>(`/api/logs/llm/${entryId}`);
+    return response.data;
+  }
+
+  async clearLLMLogs(): Promise<{ message: string }> {
+    const response = await this.client.delete<{ message: string }>('/api/logs/llm');
     return response.data;
   }
 

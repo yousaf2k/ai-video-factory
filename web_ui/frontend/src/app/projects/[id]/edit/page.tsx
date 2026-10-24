@@ -67,7 +67,9 @@ export default function ProjectEditPage() {
   
   // Filter story agents based on project type
   const filteredStoryAgents = agents?.story?.filter((agent: any) => {
-    const projectType = project?.story?.project_type;
+    // story.project_type is only stamped for ThenVsNow/ASMR — fall back to
+    // the metadata value saved at creation time.
+    const projectType = project?.story?.project_type ?? project?.project_type;
     if (projectType === ProjectType.ThenVsNow) {
       return agent.category === "then_vs_now";
     } else if (projectType === ProjectType.AsmrGlassCutting) {

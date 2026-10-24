@@ -4,7 +4,8 @@
  * Asset library browser: folder tree sidebar + Explorer-style grid,
  * search, type filter, upload, category management, multi-select bulk bar.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Search,
@@ -15,11 +16,15 @@ import {
   Trash2,
   FolderInput,
   Sparkles,
+  FilePlus,
   X,
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -46,16 +51,19 @@ import {
   useAssetTree,
   useAssets,
   useAssetSearch,
+  useAssetGenerations,
+  useCancelGeneration,
   useDeleteAsset,
   useCreateAssetCategory,
+  useCreateAssetText,
   useMoveAsset,
   useDeleteAssetCategory,
   useMoveAssetCategory,
   useRenameAssetCategory,
 } from '@/hooks/useAssets';
-import { breadcrumbParts, flattenTree } from './assetUtils';
+import { breadcrumbParts, flattenTree, humanizeCat, TYPE_META } from './assetUtils';
 import { extractError } from './AssetDetailView';
-import type { AssetEntry, AssetTreeNode } from '@/types';
+import type { AssetEntry, AssetGenerationStatus, AssetTreeNode } from '@/types';
 import { cn } from '@/lib/utils';
 
 const TYPE_FILTERS: { value: string; label: string }[] = [
@@ -64,7 +72,7 @@ const TYPE_FILTERS: { value: string; label: string }[] = [
   { value: 'video', label: 'Videos' },
   { value: 'audio', label: 'Audio' },
   { value: 'music', label: 'Music' },
-  { value: 'text', label: 'Guides' },
+  { value: 'text', label: 'Text (Guides/Templates)' },
 ];
 
 export default function AssetLibraryBrowser() {
@@ -86,6 +94,7 @@ export default function AssetLibraryBrowser() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [showUpload, setShowUpload] = useState(false);
   const [showGenerate, setShowGenerate] = useState(false);
+  const [showNewText, setShowNewText] = useState(false);
 
   useEffect(() => {
     const saved = libraryReady && localStorage.getItem('assets_last_cat');
@@ -114,6 +123,51 @@ export default function AssetLibraryBrowser() {
     [tree, currentCat, search]
   );
   const subfolders = search.trim() ? [] : currentNode?.children ?? [];
+
+  // --- in-flight generations --------------------------------------------------
+  // The generate dialog reports its start here and closes; the grid shows a
+  // placeholder card per active generation in the browsed category until the
+  // run settles (toast + list refresh). The generations query self-polls
+  // (3s) while any run is queued/running; starting one invalidates it.
+  const queryClient = useQueryClient();
+  const knownGenIds = useRef<Set<string>>(new Set());
+  const cancelGenMutation = useCancelGeneration();
+  const { data: generations } = useAssetGenerations();
+
+  const handleGenStarted = (gen: AssetGenerationStatus) => {
+    knownGenIds.current.add(gen.id);
+    queryClient.invalidateQueries({ queryKey: ['asset-generations'] });
+  };
+
+  useEffect(() => {
+    if (!generations) return;
+    for (const g of generations) {
+      if (!knownGenIds.current.has(g.id) || g.status === 'queued' || g.status === 'running') continue;
+      knownGenIds.current.delete(g.id);
+      if (g.status === 'completed') {
+        queryClient.invalidateQueries({ queryKey: ['assets'] });
+        queryClient.invalidateQueries({ queryKey: ['asset-tree'] });
+        queryClient.invalidateQueries({ queryKey: ['asset-search'] });
+        toast.success(`Generated "${g.title}" — saved to ${humanizeCat(g.cat)}`);
+      } else if (g.status === 'failed') {
+        toast.error(`Generation failed: ${(g.error || 'unknown error').slice(0, 300)}`);
+      } else {
+        toast.info(`Generation cancelled: ${g.title ?? g.id}`);
+      }
+    }
+  }, [generations, queryClient]);
+
+  const activeGens = useMemo(
+    () =>
+      search.trim()
+        ? []
+        : (generations ?? []).filter(
+            (g) =>
+              (g.status === 'queued' || g.status === 'running') &&
+              (g.cat === currentCat || (g.cat ?? '').startsWith(currentCat + '/'))
+          ),
+    [generations, currentCat, search]
+  );
 
   // --- selection --------------------------------------------------------------
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -368,6 +422,10 @@ export default function AssetLibraryBrowser() {
           <Sparkles className="w-4 h-4 mr-1.5 text-primary" />
           Generate
         </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowNewText(true)}>
+          <FilePlus className="w-4 h-4 mr-1.5" />
+          New Text
+        </Button>
         <Button variant="outline" size="sm" onClick={() => openNewCatDialog(currentCat)}>
           <FolderPlus className="w-4 h-4 mr-1.5" />
           New Category
@@ -441,7 +499,7 @@ export default function AssetLibraryBrowser() {
             <div className="flex items-center justify-center py-16 text-muted-foreground">
               <Loader2 className="w-6 h-6 animate-spin" />
             </div>
-          ) : entries.length === 0 && subfolders.length === 0 ? (
+          ) : entries.length === 0 && subfolders.length === 0 && activeGens.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Folder className="w-10 h-10 mx-auto mb-3 opacity-40" />
               <p className="text-sm">
@@ -472,6 +530,14 @@ export default function AssetLibraryBrowser() {
                   <span className="text-xs px-2 truncate w-full text-center">{node.name}</span>
                   {node.count > 0 && <span className="text-[10px]">{node.count} items</span>}
                 </button>
+              ))}
+              {activeGens.map((g) => (
+                <GeneratingAssetCard
+                  key={g.id}
+                  gen={g}
+                  canceling={cancelGenMutation.isPending}
+                  onCancel={() => cancelGenMutation.mutate(g.id)}
+                />
               ))}
               {entries.map((entry) => (
                 <AssetCard
@@ -520,6 +586,15 @@ export default function AssetLibraryBrowser() {
       <GenerateAssetDialog
         open={showGenerate}
         onOpenChange={setShowGenerate}
+        defaultCat={currentCat}
+        library={library}
+        onStarted={handleGenStarted}
+      />
+
+      {/* New text (Guides/Templates) dialog */}
+      <NewTextAssetDialog
+        open={showNewText}
+        onOpenChange={setShowNewText}
         defaultCat={currentCat}
         library={library}
       />
@@ -708,4 +783,184 @@ function categoryStats(node: AssetTreeNode): { assets: number; subcategories: nu
   };
   walk(node);
   return { assets, subcategories };
+}
+
+/** Create a new Guides/Templates text asset: category + title + content. */
+function NewTextAssetDialog({
+  open,
+  onOpenChange,
+  defaultCat,
+  library,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  defaultCat: string;
+  library?: string;
+}) {
+  const { data: tree = [] } = useAssetTree(library);
+  const createMutation = useCreateAssetText();
+  const [cat, setCat] = useState('t');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+
+  const isTextCat = (c: string) => c === 'g' || c === 't' || c.startsWith('g/') || c.startsWith('t/');
+  const catOptions = useMemo(
+    () => flattenTree(tree).filter((opt) => isTextCat(opt.value)),
+    [tree]
+  );
+
+  // Reset whenever the dialog opens; preselect the browsed text category
+  useEffect(() => {
+    if (!open) return;
+    setTitle('');
+    setContent('');
+    setCat(isTextCat(defaultCat) ? defaultCat : 't');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultCat]);
+
+  const submit = () => {
+    createMutation.mutate(
+      { cat, title: title.trim(), content, library },
+      {
+        onSuccess: (entry) => {
+          toast.success(`Created "${entry.title}" in ${humanizeCat(entry.cat)}`);
+          onOpenChange(false);
+        },
+        onError: (e) => toast.error(`Create failed: ${extractError(e)}`),
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FilePlus className="w-4 h-4 text-primary" />
+            New text asset
+          </DialogTitle>
+          <DialogDescription>
+            Create a Guide or Template text file. Templates use {'{placeholder}'} fields the
+            Generate dialog fills in.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Category</Label>
+              <Select value={cat} onValueChange={setCat}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Category…" />
+                </SelectTrigger>
+                <SelectContent className="max-h-56">
+                  {catOptions.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">No text categories yet</div>
+                  )}
+                  {catOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Title</Label>
+              <Input
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Cinematic shot"
+                onKeyDown={(e) => e.key === 'Enter' && title.trim() && submit()}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Content</Label>
+            <Textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              spellCheck={false}
+              placeholder={'Write the text. {placeholders} like {subject}; {Style:Ghibli|Pixar} becomes a dropdown; {@Styles\\Style} inlines another template.'}
+              className="min-h-[180px] font-mono text-xs leading-relaxed"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button size="sm" disabled={!title.trim() || createMutation.isPending} onClick={submit}>
+            {createMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                Creating…
+              </>
+            ) : (
+              'Create'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const GEN_KIND_LETTER: Record<string, string> = { image: 'i', video: 'v', audio: 'a' };
+
+/** In-grid placeholder for a running library generation: spinner, progress,
+ * prompt snippet and an inline cancel — the UI stays usable while it runs. */
+function GeneratingAssetCard({
+  gen,
+  onCancel,
+  canceling,
+}: {
+  gen: AssetGenerationStatus;
+  onCancel: () => void;
+  canceling: boolean;
+}) {
+  const meta = TYPE_META[GEN_KIND_LETTER[gen.kind]] ?? TYPE_META.i;
+  const Icon = meta.icon;
+  return (
+    <div className="relative border border-primary/40 rounded-lg overflow-hidden bg-card">
+      <div className="relative aspect-square bg-muted flex flex-col items-center justify-center gap-2 p-3">
+        <Icon className="w-8 h-8 text-muted-foreground/40" />
+        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+        <div className="w-full space-y-1">
+          <Progress value={gen.progress} />
+          <p className="text-[10px] text-center text-muted-foreground">
+            {gen.progress}% · {gen.status}
+          </p>
+        </div>
+        <span
+          className={cn(
+            'absolute top-1.5 left-1.5 text-[9px] px-1 py-0.5 rounded text-white font-semibold',
+            meta.badge
+          )}
+        >
+          {meta.label}
+        </span>
+        <button
+          className="absolute top-1.5 right-1.5 p-1 rounded bg-black/60 text-white hover:bg-red-600 disabled:opacity-50"
+          title="Cancel generation"
+          disabled={canceling}
+          onClick={(e) => {
+            e.stopPropagation();
+            onCancel();
+          }}
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <div className="p-2">
+        <p className="text-xs font-medium truncate">{gen.title || 'Generating…'}</p>
+        <p className="text-[10px] text-muted-foreground truncate" title={gen.prompt}>
+          {gen.prompt}
+        </p>
+      </div>
+    </div>
+  );
 }

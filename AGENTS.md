@@ -112,7 +112,7 @@ Idea → Story → Scene Graph → Shots → Images → Videos → Narration
 
 ### Asset Library
 
-Global asset library with nested categories (top-level category = asset type: `Images`/`Videos`/`Audio`/`Music`, aliased `i`/`v`/`a`/`m`). There is **no metadata JSON** — the filename is the metadata: `{id}-{Title}.{ext}` (8-char hex id). Assets attach to shots as references (`reference_asset_ids`), resolved either as library refs (`i/9f3ab21c`) or project-media refs (`p/{project_id}/{media_dir}/{filename}`). Library roots come from `ASSET_LIBRARY_DIRS` (default `output/Assets`). See `docs/ASSETS_FEATURE_PLAN.md`.
+Global asset library with nested categories (top-level category = asset type: `Images`/`Videos`/`Audio`/`Music`/`Guides`/`Templates`, aliased `i`/`v`/`a`/`m`/`g`/`t`). There is **no metadata JSON** — the filename is the metadata: `{id}-{Title}.{ext}` (8-char hex id). Assets attach to shots as references (`reference_asset_ids`), resolved either as library refs (`i/9f3ab21c`) or project-media refs (`p/{project_id}/{media_dir}/{filename}`). Templates (`t`) are text files with `{placeholder}` fields; the asset generate dialog fills them to build prompts. Library roots come from `ASSET_LIBRARY_DIRS` (default `output/Assets`). See `docs/ASSETS_FEATURE_PLAN.md`.
 
 ## Configuration System
 

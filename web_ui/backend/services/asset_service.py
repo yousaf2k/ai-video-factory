@@ -39,6 +39,13 @@ ASSET_ID_RE = re.compile(r"^[0-9a-f]{8}$")
 MAX_SEARCH_RESULTS = 200
 THUMB_WIDTH = 480
 
+# Template composition: {@Category\Title} references another Templates asset
+# (last segment = template title, preceding segments = category path under the
+# Templates root). Expansion is recursive and cycle-safe.
+TEMPLATE_REF_RE = re.compile(r"\{@([^{}\n]+?)\}")
+MAX_TEMPLATE_DEPTH = 8
+TEXT_EXTS = (".txt", ".md", ".markdown")
+
 # Project media dirs -> asset type (None = decide by file extension)
 PROJECT_MEDIA_DIRS = {
     "images": "image",
@@ -168,6 +175,17 @@ def _safe_list_files(directory: str) -> List[str]:
         return []
 
 
+def _type_of_letter(letter: str) -> str:
+    return config.ASSET_TYPES[letter]["type"]
+
+
+def _types_compatible(ext_letter: str, target_letter: str) -> bool:
+    """True when a file of ext_letter's type may stay in a target_letter
+    category. Text extensions (.txt/.md) fit both Guides (g) and Templates
+    (t), so the browsed category wins; anything else must match exactly."""
+    return _type_of_letter(ext_letter) == _type_of_letter(target_letter)
+
+
 class AssetService:
     """Scans and mutates the on-disk asset library. The disk is the source of
     truth; a per-directory cache keyed on the directory mtime just avoids
@@ -223,7 +241,7 @@ class AssetService:
         only when create=True."""
         parts = [p for p in (cat or "").split("/") if p]
         if not parts:
-            raise ValueError("Category must start with a type letter (i/v/a/m/g)")
+            raise ValueError(f"Category must start with a type letter ({'/'.join(config.ASSET_TYPES)})")
         letter = parts[0].lower()
         if letter not in config.ASSET_TYPES:
             raise ValueError(f"Unknown asset type letter: {letter}")
@@ -248,7 +266,7 @@ class AssetService:
     def _validate_cat(self, cat: str) -> str:
         parts = [p for p in (cat or "").split("/") if p]
         if not parts or parts[0].lower() not in config.ASSET_TYPES:
-            raise ValueError(f"Category must start with a type letter (i/v/a/m/g): {cat}")
+            raise ValueError(f"Category must start with a type letter ({'/'.join(config.ASSET_TYPES)}): {cat}")
         return "/".join([parts[0].lower()] + parts[1:])
 
     # ------------------------------------------------------------------
@@ -413,9 +431,10 @@ class AssetService:
 
     def upload(self, files: List[Tuple[str, Any]], cat: str, library_slug: Optional[str] = None) -> Dict[str, Any]:
         """files: list of (original_filename, binary file object). Returns saved
-        entries plus skipped files. Files whose extension doesn't match the
-        target category's type are auto-routed to the mirrored category under
-        the correct type folder."""
+        entries plus skipped files. Files whose type doesn't match the target
+        category's type are auto-routed to the mirrored category under the
+        correct type folder (text files stay in whichever text category —
+        Guides or Templates — is being browsed)."""
         cat = self._validate_cat(cat)
         library_path = self._library_path(library_slug)
         saved, skipped, rerouted = [], [], []
@@ -429,7 +448,7 @@ class AssetService:
                     skipped.append({"filename": original_name, "reason": f"Unsupported file type: {ext or 'none'}"})
                     continue
                 dest_letter, dest_dir, dest_segments = target_letter, target_dir, target_segments
-                if letter != target_letter:
+                if not _types_compatible(letter, target_letter):
                     mirrored = "/".join([letter] + target_segments)
                     dest_letter, dest_dir, dest_segments = self.resolve_category(library_path, mirrored, create=True)
                     rerouted.append({"filename": original_name, "to": mirrored})
@@ -477,7 +496,7 @@ class AssetService:
             self._ensure_type_folders(library_path)
             target_letter, target_dir, target_segments = self.resolve_category(library_path, cat, create=True)
             dest_letter, dest_dir, dest_segments = target_letter, target_dir, target_segments
-            if letter != target_letter:
+            if not _types_compatible(letter, target_letter):
                 mirrored = "/".join([letter] + target_segments)
                 dest_letter, dest_dir, dest_segments = self.resolve_category(library_path, mirrored, create=True)
                 rerouted.append({"filename": os.path.basename(src_path), "to": mirrored})
@@ -762,14 +781,105 @@ class AssetService:
         return thumb
 
     def read_text(self, ref: str) -> Dict[str, Any]:
-        """Full text content of a Guides (text-type) asset."""
+        """Full text content of a text-type asset (Guides g/…, Templates t/…)."""
         letter, _library_path, dir_abs, filename = self._locate(ref)
-        if letter != "g":
+        if config.ASSET_TYPES[letter]["type"] != "text":
             raise ValueError(f"Asset {ref} is not a text asset (type: {config.ASSET_TYPES[letter]['type']})")
         file_path = os.path.join(dir_abs, filename)
         parsed = parse_asset_filename(filename) or ("", os.path.splitext(filename)[0], os.path.splitext(filename)[1])
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
+        return {
+            "ref": ref,
+            "id": parsed[0],
+            "title": parsed[1],
+            "filename": filename,
+            "ext": parsed[2].lstrip("."),
+            "content": content,
+        }
+
+    def write_text(self, ref: str, content: str) -> Dict[str, Any]:
+        """Overwrite the content of a text-type asset (Guides, Templates).
+        Written via temp file + rename so a crash can't truncate the asset."""
+        letter, _library_path, dir_abs, filename = self._locate(ref)
+        if config.ASSET_TYPES[letter]["type"] != "text":
+            raise ValueError(f"Asset {ref} is not a text asset (type: {config.ASSET_TYPES[letter]['type']})")
+        file_path = os.path.join(dir_abs, filename)
+        tmp_path = file_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8", newline="") as f:
+            f.write(content or "")
+        os.replace(tmp_path, file_path)
+        with self._lock:
+            self._dir_cache.pop(dir_abs, None)
+        return self.read_text(ref)
+
+    def create_text(self, cat: str, title: str, content: str, library_slug: Optional[str] = None) -> Dict[str, Any]:
+        """Create a new text asset (.txt) under a Guides/Templates category."""
+        cat = self._validate_cat(cat)
+        letter = cat.split("/")[0]
+        if config.ASSET_TYPES[letter]["type"] != "text":
+            raise ValueError(f"Text assets must target a text category (g/… or t/…), got: {cat}")
+        raw_title = (title or "").strip()
+        if not raw_title:
+            raise ValueError("Title is required")
+        title = sanitize_title(raw_title)
+        with self._lock:
+            _letter, dir_abs, segments, filename, final_path = self.prepare_target(
+                cat, title, ".txt", library_slug
+            )
+            with open(final_path, "w", encoding="utf-8", newline="") as f:
+                f.write(content or "")
+            self._dir_cache.pop(dir_abs, None)
+            entry = self._entry(letter, dir_abs, segments, filename)
+        if not entry:
+            raise RuntimeError("Text asset created but could not be indexed — check the category")
+        return entry
+
+    def expand_template(self, ref: str, _chain: Optional[Set[str]] = None, _depth: int = 0) -> Dict[str, Any]:
+        """Read a Templates asset and inline every `{@Category\\Title}` reference
+        to another template, recursively, returning one composed template (same
+        shape as read_text). References resolve under the Templates root of the
+        referencing template's library; unresolvable or cyclic references stay
+        literal so the author can see and fix them."""
+        letter, library_path, dir_abs, filename = self._locate(ref)
+        if config.ASSET_TYPES[letter]["type"] != "text":
+            raise ValueError(f"Asset {ref} is not a text asset (type: {config.ASSET_TYPES[letter]['type']})")
+        parsed = parse_asset_filename(filename) or ("", os.path.splitext(filename)[0], os.path.splitext(filename)[1])
+        canon = f"{letter}/{parsed[0]}"
+        chain = _chain if _chain is not None else {canon}
+        with open(os.path.join(dir_abs, filename), "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+
+        if _depth < MAX_TEMPLATE_DEPTH:
+            def _inline(match: "re.Match[str]") -> str:
+                token = match.group(0)
+                segments = [s.strip() for s in re.split(r"[\\/]", match.group(1)) if s.strip()]
+                if not segments:
+                    return token
+                title = segments[-1]
+                cat = "/".join(["t"] + segments[:-1])
+                try:
+                    _l, child_dir, _seg = self.resolve_category(library_path, cat, create=False)
+                except Exception:
+                    return token
+                child_filename = None
+                child_id = ""
+                for fn in self._list_files(child_dir):
+                    p = parse_asset_filename(fn)
+                    if p and p[2].lower() in TEXT_EXTS and p[1].lower() == title.lower():
+                        child_filename, child_id = fn, p[0]
+                        break
+                if not child_filename:
+                    return token
+                child_canon = f"{_l}/{child_id}"
+                if child_canon in chain:
+                    logger.warning(f"Template reference cycle at {child_canon} (chain: {sorted(chain)})")
+                    return token
+                child = self.expand_template(child_canon, _chain=chain | {child_canon}, _depth=_depth + 1)
+                return child["content"]
+
+            content = TEMPLATE_REF_RE.sub(_inline, content)
+
         return {
             "ref": ref,
             "id": parsed[0],

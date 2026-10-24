@@ -244,7 +244,9 @@ export default function ProjectsPage() {
             const activeProjects = projects.filter((p) => !isArchived(p.started_at || p.timestamp));
 
             const groupedActiveProjects = activeProjects.reduce((acc, project) => {
-              const type = project.story?.project_type || ProjectType.Documentary;
+              // story.project_type is only stamped for ThenVsNow/ASMR — fall
+              // back to the metadata value saved at creation time.
+              const type = project.story?.project_type ?? project.project_type ?? ProjectType.Documentary;
               if (!acc[type]) acc[type] = [];
               acc[type].push(project);
               return acc;

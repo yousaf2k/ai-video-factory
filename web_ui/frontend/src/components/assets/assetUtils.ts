@@ -1,7 +1,7 @@
 /**
  * Shared helpers for asset library components
  */
-import { Image as ImageIcon, Film, Volume2, Music, FileText, type LucideIcon } from 'lucide-react';
+import { Image as ImageIcon, Film, Volume2, Music, FileText, LayoutTemplate, type LucideIcon } from 'lucide-react';
 
 export const LETTER_FOLDER: Record<string, string> = {
   i: 'Images',
@@ -9,6 +9,7 @@ export const LETTER_FOLDER: Record<string, string> = {
   a: 'Audio',
   m: 'Music',
   g: 'Guides',
+  t: 'Templates',
 };
 
 export const TYPE_META: Record<string, { label: string; badge: string; icon: LucideIcon }> = {
@@ -17,7 +18,18 @@ export const TYPE_META: Record<string, { label: string; badge: string; icon: Luc
   a: { label: 'SFX', badge: 'bg-amber-500', icon: Volume2 },
   m: { label: 'MUS', badge: 'bg-emerald-500', icon: Music },
   g: { label: 'MD', badge: 'bg-rose-500', icon: FileText },
+  t: { label: 'TPL', badge: 'bg-cyan-500', icon: LayoutTemplate },
 };
+
+/** "i/Characters" -> "Images/Characters" — type letters are internal
+ * aliases; user-facing text uses the folder names. */
+export function humanizeCat(cat: string | null | undefined): string {
+  if (!cat) return '';
+  const parts = cat.split('/').filter(Boolean);
+  if (parts.length === 0) return cat;
+  const [first, ...rest] = parts;
+  return [LETTER_FOLDER[first] ?? first, ...rest].join('/');
+}
 
 export function formatBytes(bytes: number): string {
   if (!bytes) return '0 B';

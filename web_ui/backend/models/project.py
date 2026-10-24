@@ -41,6 +41,23 @@ class ProjectMetadata(BaseModel):
     }
 
 
+def _infer_project_type(meta: dict) -> int:
+    """Project type for list items. Metadata is authoritative (written at
+    creation); older projects may lack it — infer from the story agent.
+    story.json's project_type only exists for ThenVsNow/ASMR."""
+    pt = meta.get('project_type')
+    if pt is not None:
+        return pt
+    agent = (meta.get('story_agent') or '').lower()
+    if agent.startswith('then_vs_now'):
+        return 2
+    if agent.startswith('asmr'):
+        return 4
+    if agent.startswith('movie'):
+        return 3
+    return 1  # documentary / default
+
+
 class ProjectListItem(BaseModel):
     """Project item for list view"""
     project_id: str
@@ -52,6 +69,7 @@ class ProjectListItem(BaseModel):
     images_generated: int
     videos_rendered: int
     thumbnail_url: Optional[str] = None
+    project_type: Optional[int] = None  # from metadata, inferred from story_agent when absent
     story: Optional[Dict[str, Any]] = None
 
     @classmethod
@@ -67,6 +85,7 @@ class ProjectListItem(BaseModel):
             images_generated=meta.get("stats", {}).get("images_generated", 0),
             videos_rendered=meta.get("stats", {}).get("videos_rendered", 0),
             thumbnail_url=meta.get("thumbnail_url"),
+            project_type=_infer_project_type(meta),
             story=story,
         )
 

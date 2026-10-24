@@ -7,8 +7,8 @@ generation as references.
 
 **v2 change:** there is **no metadata JSON**. The filename *is* the metadata:
 `{ID}-{Title}.{ext}` stored flat inside its category folder. Asset type is bound to the
-top-level category (`Images`/`Videos`/`Audio`/`Music`), addressed by one-letter aliases
-(`i`/`v`/`a`/`m`) in URLs.
+top-level category (`Images`/`Videos`/`Audio`/`Music`/`Guides`/`Templates`), addressed by
+one-letter aliases (`i`/`v`/`a`/`m`/`g`/`t`) in URLs.
 
 > Storage note: `.env` sets `OUTPUT_DIR="E:/output"`, so `output/Assets` resolves to
 > `E:/output/Assets` via `config.resolve_path()`. Relative `output/...` paths in any persisted
@@ -23,7 +23,7 @@ top-level category (`Images`/`Videos`/`Audio`/`Music`), addressed by one-letter 
 | 1 | Library root | `{OUTPUT_DIR}/Assets` (default library); more roots via `.env` `ASSET_LIBRARY_DIRS` (semicolon-separated) | Fits the existing `.env` / `config_api` settings mechanism; no extra settings JSON |
 | 2 | Categories | Nested subfolders, arbitrary depth. Top-level folder = asset type: `Images`, `Videos`, `Audio`, `Music` (extensible map). All asset files stored **flat in their category folder** — no per-asset folders | Folder rename = category rename; disk is the truth, nothing to sync |
 | 3 | Filename = metadata | `{id}-{title}{ext}`, e.g. `9f3ab21c-Rainy Neon Street.png`. `id` = 8-char uuid hex (globally unique); `title` = everything after the **first** `-` (may contain spaces/dashes); `title` unique within its folder (case-insensitive) | Split-on-first is unambiguous since ids are dash-free hex |
-| 4 | Type | Derived from top-level category: `Images→image`, `Videos→video`, `Audio→audio`, `Music→music`. Type letter aliases: `i`, `v`, `a`, `m` | One registry map in the backend; the "audio vs music" question resolves itself — the main category you upload into decides |
+| 4 | Type | Derived from top-level category: `Images→image`, `Videos→video`, `Audio→audio`, `Music→music`, `Guides/Templates→text`. Type letter aliases: `i`, `v`, `a`, `m`, `g`, `t` | One registry map in the backend; the "audio vs music" question resolves itself — the main category you upload into decides |
 | 5 | URL scheme | `GET /api/assets/{letter}/{category_path}/{id}` → file. Example: `/api/assets/i/characters/9f3ab21c` serves `E:/output/Assets/Images/characters/9f3ab21c-Rainy Neon Street.png`. Category segments match case-insensitively. `.../{id}/thumb` serves the cached thumbnail | Exactly the requested Explorer-style address; ids are stable even if the title is renamed |
 | 6 | References | Shot field `reference_asset_ids: string[]`, ordered — first = primary. Two ref shapes: **library** `"i/9f3ab21c"` (non-default libraries prefix the slug: `"stock/i/9f3ab21c"`) and **project media** `"p/{project_id}/images/shot_001_001.png"` | Self-describing; library refs survive title renames and category moves (id never changes); project refs resolve by direct path check against the other project's folder |
 | 7 | Serving | The URL *is* the address (§5 above); API list responses also include ready `url`/`thumb_url` fields. Do **not** route through `getMediaUrl()` (it only rewrites `output/projects/...`) | No frontend path-rewrite needed |
@@ -443,24 +443,89 @@ same code paths as project shot generation:
 
 | Kind | Target | Source | Engine |
 |---|---|---|---|
-| `image` | `Images/...` | prompt (+ optional reference image refs) | `core.image_generator.generate_image` (configured mode) |
+| `image` | `Images/...` | prompt (+ optional reference image refs) | `core.image_generator.generate_image` (per-request `mode`, config default when omitted) |
 | `video` | `Videos/...` | prompt + **required** `image_ref` (first frame) | ComfyUI i2v (`prompt_compiler` + `comfy_client`) or GeminiWeb per `VIDEO_GENERATION_MODE` |
 | `audio` | `Audio/...` | prompt + **required** `video_ref` | `SOUNDFX_WORKFLOWS` (MMAudio video→sound), ffmpeg-extracted to `.mp3` |
 
-Generations run as asyncio tasks tracked in memory; progress is polled.
+Generations run through the **shared QueueService** for images and videos (same queue as
+project shots: new `asset_image` / `asset_video` generation types, synthetic
+`__assets__` project group titled "Asset Library", per-engine concurrency limits,
+persistence, and cancel/requeue from the Queue UI). The asset service keeps an in-memory
+registry mirroring each run's status for the asset API and grid placeholders; the queue
+processor drives it via `mark_running` / `set_progress` / `finalize_success` /
+`finalize_failure`. Sound (MMAudio) still runs as a direct asyncio task.
+
+Reference images (like shot `reference_asset_ids`): image and video generations accept
+`reference_refs` — resolved to paths and passed to `generate_image(reference_images=…)`,
+or to `compile_workflow(reference_images=…)` for videos (fills the `[ref_N]` slots of
+r2v workflows; other video workflows ignore them). The generate dialog has a collapsible
+**References** row (image + video kinds) with a category browser and multi-select list. Browser modes
+(Flow / GeminiWeb) use the target category as the project/chat identity —
+`"Assets <TypeFolder> <subfolders>"` with spaces (e.g. `Assets Images Characters City`),
+computed by `asset_generation.asset_folder_name` — so every asset folder gets its own
+Flow workspace / GeminiWeb chat instead of sharing one default.
 
 Endpoints (registered before the file-serving catch-alls):
 
 | Method & path | Purpose |
 |---|---|
 | `GET /api/assets/generate/options` | workflows per kind (`IMAGE_WORKFLOWS`/`VIDEO_WORKFLOWS`/`SOUNDFX_WORKFLOWS` keys), video mode, aspect ratios |
-| `POST /api/assets/generate` | start a generation (kind, prompt, cat, title?, workflow?, aspect_ratio?, seed?, duration?, image_ref?, video_ref?, reference_refs?) |
+| `POST /api/assets/generate` | start a generation (kind, prompt, cat, title?, mode?, workflow?, aspect_ratio?, seed?, duration?, image_ref?, video_ref?, reference_refs?, gemini_model?, gemini_thinking?) |
 | `GET /api/assets/generate` | recent generations (newest first) |
 | `GET /api/assets/generate/{id}` | status: queued/running/completed/failed/cancelled + progress; completed returns `ref`/`url`/`thumb_url` |
 | `DELETE /api/assets/generate/{id}` | best-effort cancel (queued tasks only for real cancellation; running ComfyUI jobs finish unless interrupted globally) |
 
 Frontend: `GenerateAssetDialog.tsx` (kind picker, category pre-selected from the browsed
-folder, prompt, workflow/aspect/duration/seed fields, source-asset pickers, polled progress
-panel) behind a **Generate** (Sparkles) button in the `/assets` browser toolbar. Completion
-refreshes tree/list/search queries. Status lives only in memory — restarting the backend
-loses history of in-flight runs (completed assets stay on disk).
+folder, prompt, aspect/duration fields, source-asset pickers, polled progress panel) behind
+a **Generate** (Sparkles) button in the `/assets` browser toolbar. For images the dialog
+embeds the same shared `ImageGenerationOptions` component as the project shot
+`GenerationDialog` — Generation Mode (ComfyUI / Gemini / GeminiWeb / Flow), ComfyUI
+workflow + seed, GeminiWeb model + extended thinking — with choices persisted in
+localStorage under the `"assets"` key (`image_mode_assets`, …). Completion refreshes
+tree/list/search queries. Status lives only in memory — restarting the backend loses
+history of in-flight runs (completed assets stay on disk).
+
+### 10.3 Templates (prompt templates)
+
+`Templates` is a second text-type category (`t`, alongside Guides `g`) holding prompt
+templates: plain `.txt`/`.md` files with `{placeholder}` fields, e.g.
+
+```
+{subject} in {location}, {Style:Studio Ghibli|3D Pixar|Photorealistic} style, 35mm
+```
+
+Placeholder syntax: `{name}` renders a free-text input; `{Name:opt1|opt2|opt3}` renders a
+dropdown labeled `Name` with the pipe-separated choices (split on the first colon, so
+values may contain colons like `16:9`; options are trimmed, empties dropped). Dropdown
+fields default to their first option; free-text blanks stay literal. The special
+`{Name}` placeholder (any casing, with or without options) is never rendered as an input —
+it is filled from the dialog's mandatory **Title** field.
+
+Template references: `{@Category\Title}` (also `{@Category/Sub/Title}`) inlines another
+Templates asset — the last segment is the template title, preceding segments the category
+path under the Templates root. `GET /api/assets/template?ref=t/{id}` returns the fully
+composed template (`AssetService.expand_template`): references are inlined recursively
+before any placeholder rendering, with cycle detection (cyclic or unresolvable references
+stay literal). The generate dialog renders inputs/dropdowns from this composed text, so a
+referenced template's own placeholders and dropdowns become part of the form.
+
+- Backend: `config.ASSET_TYPES` gained `"t": {"folder": "Templates", "type": "text"}`;
+  `AssetService.read_text` accepts any text-type letter. Upload/import routing compares
+  **types**, not letters — a `.txt` uploaded while browsing `t/…` stays in Templates and
+  one uploaded while browsing `g/…` stays in Guides; non-text files still reroute to the
+  mirrored category under their own type folder.
+- Text create/edit: `POST /api/assets/text` (`cat`, `title`, `content`) creates a new
+  `.txt` asset under a `g`/`t` category (`AssetService.create_text`, unique title via
+  `prepare_target`); `PUT /api/assets/content` (`ref`, `content`) overwrites a text asset
+  atomically (`AssetService.write_text`, temp file + rename). UI: a **New Text** toolbar
+  button in `/assets` opens a category + title + content dialog, and the detail view's
+  text preview has an **Edit** button toggling to a monospace textarea with Save/Cancel.
+- Generate dialog (`GenerateAssetDialog`, all kinds — image/video/audio): a
+  *Prompt template* row lists the `t` subcategories and their files. Selecting one loads
+  its text (`GET /api/assets/content?ref=t/{id}`), scans for `{placeholder}` tokens
+  (deduped, first-appearance order) and renders a labeled input per placeholder plus a
+  live preview. Generate submits the filled text as the prompt — filled values replace
+  their tokens, blanks stay literal. "None — free prompt" restores the free-form
+  textarea.
+- Detail view renders template files like Guides (markdown preview); cards/badges use
+  the `TPL` meta (cyan, `LayoutTemplate` icon). Unit tests: `tests/unit/test_asset_templates.py`.
