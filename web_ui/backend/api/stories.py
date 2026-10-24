@@ -33,7 +33,7 @@ class GenerateCharacterReferenceRequest(BaseModel):
     gemini_thinking: Optional[str] = None
 from web_ui.backend.services.project_service import ProjectService
 from web_ui.backend.services.generation_service import get_generation_service
-from core.story_engine import build_story
+from core.story_engine import build_story, normalize_scene_ids
 from core.project_manager import ProjectManager
 
 logger = logging.getLogger(__name__)
@@ -248,6 +248,10 @@ async def update_story(project_id: str, request: UpdateStoryRequest):
                 duration = scene["scene_duration"]
                 if not isinstance(duration, int) or duration < 5:
                     raise ValueError(f"Invalid scene_duration: {duration}. Must be at least 5 seconds")
+
+        # Pin scene_ids to array positions (0-based) so shots, background
+        # sheets and the r2v reference sync stay keyed to the right scenes
+        normalize_scene_ids(story)
 
         # Save story
         story_json = json.dumps(story, ensure_ascii=False, indent=2)
