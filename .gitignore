@@ -45,3 +45,5 @@ startup_debug.txt
 .secrets_master_key
 
 tmp/
+# TypeScript incremental build cache
+web_ui/frontend/tsconfig.tsbuildinfo
