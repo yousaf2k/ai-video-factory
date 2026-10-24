@@ -7,13 +7,15 @@
  */
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLLMLogs, useLLMLogDetail } from '../../hooks/useLLMLogs';
 import { LLMLogEntrySummary } from '../../types';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog, useConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
   Check,
   Copy,
   Loader2,
@@ -38,7 +40,8 @@ const formatTime = (iso: string) => {
 const formatChars = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 export default function LogPage() {
-  const { entries, total, isLoading, error, refetch, clearLogs, isClearing } = useLLMLogs();
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const { entries, total, isLoading, error, refetch, clearLogs, isClearing } = useLLMLogs({ order: sortOrder });
   const { showDialog, dialogProps } = useConfirmDialog();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -54,7 +57,7 @@ export default function LogPage() {
   const topPercentRef = useRef(topPercent);
   topPercentRef.current = topPercent;
 
-  // Restore split position
+  // Restore split position and sort preference
   useEffect(() => {
     const saved = localStorage.getItem('log-split-percent');
     if (saved) {
@@ -63,24 +66,42 @@ export default function LogPage() {
         setTopPercent(v);
       }
     }
+    const savedOrder = localStorage.getItem('log-sort-order');
+    if (savedOrder === 'asc' || savedOrder === 'desc') {
+      setSortOrder(savedOrder);
+    }
   }, []);
+
+  const toggleSortOrder = () => {
+    setSortOrder((prev) => {
+      const next = prev === 'desc' ? 'asc' : 'desc';
+      localStorage.setItem('log-sort-order', next);
+      return next;
+    });
+  };
+
+  // Newest entry regardless of the current sort order (used for auto-select)
+  const newestEntry = useMemo(() => {
+    if (entries.length === 0) return null;
+    return sortOrder === 'desc' ? entries[0] : entries[entries.length - 1];
+  }, [entries, sortOrder]);
 
   // Auto-select the newest entry once the list loads
   useEffect(() => {
-    if (!selectedId && entries.length > 0) {
-      setSelectedId(entries[0].id);
+    if (!selectedId && newestEntry) {
+      setSelectedId(newestEntry.id);
     }
-  }, [entries, selectedId]);
+  }, [selectedId, newestEntry]);
 
   // Drop the selection if the selected entry no longer exists (e.g. after Clear)
   useEffect(() => {
     if (selectedId && entries.length > 0 && !entries.some((e) => e.id === selectedId)) {
-      setSelectedId(entries[0].id);
+      setSelectedId(newestEntry?.id ?? null);
     }
     if (selectedId && entries.length === 0) {
       setSelectedId(null);
     }
-  }, [entries, selectedId]);
+  }, [entries, selectedId, newestEntry]);
 
   // Draggable splitter
   const handleDragStart = (e: React.MouseEvent) => {
@@ -211,10 +232,21 @@ export default function LogPage() {
             {/* Column header */}
             <div className="sticky top-0 z-10 flex items-center gap-3 border-b bg-card/95 px-4 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground backdrop-blur">
               <span className="w-2 shrink-0" />
-              <span className="w-[88px] shrink-0">Time</span>
+              <button
+                onClick={toggleSortOrder}
+                className="flex w-[88px] shrink-0 items-center gap-1 uppercase tracking-wide transition-colors hover:text-foreground"
+                title={
+                  sortOrder === 'desc'
+                    ? 'Sorted newest first — click to sort oldest first'
+                    : 'Sorted oldest first — click to sort newest first'
+                }
+              >
+                Time
+                {sortOrder === 'desc' ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
+              </button>
               <span className="w-24 shrink-0">Provider</span>
               <span className="w-52 shrink-0">Model</span>
-              <span className="w-12 shrink-0 text-right">Time</span>
+              <span className="w-12 shrink-0 text-right">Dur</span>
               <span className="flex-1">Input Preview</span>
               <span className="w-14 shrink-0 text-right">Out</span>
             </div>

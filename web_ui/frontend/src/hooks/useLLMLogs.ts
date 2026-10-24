@@ -1,25 +1,29 @@
 /**
  * useLLMLogs hook - LLM call log list + per-entry detail for the Logs page
  */
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { toast } from 'sonner';
 
-const LIST_KEY = ['llm-logs'];
+const LIST_KEY_BASE = ['llm-logs'];
 
-export function useLLMLogs(options: { refetchIntervalMs?: number } = {}) {
+export function useLLMLogs(
+  options: { refetchIntervalMs?: number; order?: 'asc' | 'desc' } = {}
+) {
   const queryClient = useQueryClient();
+  const order = options.order ?? 'desc';
 
   const listQuery = useQuery({
-    queryKey: LIST_KEY,
-    queryFn: () => api.listLLMLogs(500),
+    queryKey: [...LIST_KEY_BASE, order],
+    queryFn: () => api.listLLMLogs(500, order),
     refetchInterval: options.refetchIntervalMs ?? 10000,
+    placeholderData: keepPreviousData, // keep the list visible while the other order loads
   });
 
   const clearMutation = useMutation({
     mutationFn: () => api.clearLLMLogs(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: LIST_KEY });
+      queryClient.invalidateQueries({ queryKey: LIST_KEY_BASE });
       toast.success('LLM call log cleared');
     },
     onError: () => {

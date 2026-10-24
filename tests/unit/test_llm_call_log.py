@@ -103,6 +103,19 @@ class TestLogService:
         assert entries[1].prompt_preview.startswith("xxx")
         assert len(entries[1].prompt_preview) == 300  # truncated preview
 
+    def test_list_ascending_returns_oldest_first(self, service):
+        _record_success("oldest", "a", 1.0)
+        _record_success("middle", "b", 1.0)
+        _record_success("newest", "c", 1.0)
+
+        entries, total = service.list_llm_logs(order="asc")
+        assert total == 3
+        assert [e.prompt_preview for e in entries] == ["oldest", "middle", "newest"]
+
+        entries, total = service.list_llm_logs(order="desc")
+        assert total == 3
+        assert [e.prompt_preview for e in entries] == ["newest", "middle", "oldest"]
+
     def test_get_detail_returns_full_bodies(self, service):
         _record_success("full prompt body", "full output body", 0.75)
         entries, _ = service.list_llm_logs()
@@ -133,6 +146,20 @@ class TestLogService:
         service.clear_llm_logs()
         entries, total = service.list_llm_logs()
         assert total == 0 and entries == []
+
+    def test_repeated_calls_keep_stable_order(self, service):
+        # Regression: list_llm_logs must not reverse the shared cache in place
+        # (that flipped the list order on every consecutive call).
+        _record_success("a-first", "1", 0.1)
+        _record_success("b-second", "2", 0.1)
+
+        first, _ = service.list_llm_logs()
+        second, _ = service.list_llm_logs()
+        assert [e.id for e in first] == [e.id for e in second]
+        assert [e.prompt_preview for e in first] == ["b-second", "a-first"]
+
+        again_desc, _ = service.list_llm_logs(order="desc")
+        assert [e.prompt_preview for e in again_desc] == ["b-second", "a-first"]
 
     def test_status_filter(self, service):
         _record_success("ok", "yes", 1.0)
