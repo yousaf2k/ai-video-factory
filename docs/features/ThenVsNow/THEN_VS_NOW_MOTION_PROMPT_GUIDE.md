@@ -491,7 +491,7 @@ Camera follows their movement with smooth tracking shot
 
 ## File Modified
 
-**File:** `agents/story/then_vs_now.md`
+**File:** `directors/story/then_vs_now.md`
 
 **Changes:**
 - Lines 58-59: Updated meeting_prompt and departure_prompt with new animation specifications
@@ -505,7 +505,7 @@ Camera follows their movement with smooth tracking shot
 
 ### In Story Generation
 
-When the ThenVsNow agent generates a story, it automatically creates motion prompts:
+When the ThenVsNow director generates a story, it automatically creates motion prompts:
 
 ```json
 {

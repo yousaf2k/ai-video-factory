@@ -1,14 +1,14 @@
-# Prehistoric POV Dinosaur Agents - Implementation Summary
+# Prehistoric POV Dinosaur Directors - Implementation Summary
 
 ## Implementation Complete ✅
 
-All components of the Prehistoric POV Dinosaur Agents have been successfully implemented.
+All components of the Prehistoric POV Dinosaur Directors have been successfully implemented.
 
 ## Files Created
 
-### 1. Story Agent
+### 1. Story Director
 
-**File**: `agents/story/prehistoric_pov.md` (~301 lines, 17.9 KB)
+**File**: `directors/story/prehistoric_pov.md` (~301 lines, 17.9 KB)
 
 **Purpose**: Generates first-person POV narratives with hands-visible storytelling
 
@@ -23,9 +23,9 @@ All components of the Prehistoric POV Dinosaur Agents have been successfully imp
 - Character types (time traveler, paleontologist, survivor)
 - Accurate time periods (Triassic, Jurassic, Cretaceous)
 
-### 2. Image Agent
+### 2. Image Director
 
-**File**: `agents/image/prehistoric_pov.md` (~276 lines, 25.1 KB)
+**File**: `directors/image/prehistoric_pov.md` (~276 lines, 25.1 KB)
 
 **Purpose**: Generates POV image prompts with hands visible in every shot
 
@@ -48,13 +48,13 @@ All components of the Prehistoric POV Dinosaur Agents have been successfully imp
 
 **File**: `docs/PREHISTORIC_POV_GUIDE.md` (~617 lines, 22.0 KB)
 
-**Purpose**: Comprehensive documentation for using POV agents
+**Purpose**: Comprehensive documentation for using POV directors
 
 **Sections**:
 
 - Overview and key features
 - POV vs. Traditional comparison
-- When to use each agent type
+- When to use each director type
 - Quick start guide
 - Storytelling tips for first-person narratives
 - Visual composition guidelines
@@ -70,11 +70,11 @@ All components of the Prehistoric POV Dinosaur Agents have been successfully imp
 
 **File**: `docs/PREHISTORIC_POV_QUICKSTART.md` (~120 lines)
 
-**Purpose**: Fast reference for getting started with POV agents
+**Purpose**: Fast reference for getting started with POV directors
 
 **Contents**:
 
-- What are POV agents
+- What are POV directors
 - Quick start commands
 - Key features overview
 - POV vs. Traditional comparison table
@@ -89,11 +89,11 @@ All components of the Prehistoric POV Dinosaur Agents have been successfully imp
 **Changes**:
 
 ```python
-# Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary, prehistoric_dinosaur, prehistoric_pov)
-STORY_AGENT = "prehistoric_dinosaur"
+# Story generation director (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary, prehistoric_dinosaur, prehistoric_pov)
+STORY_DIRECTOR = "prehistoric_dinosaur"
 
-# Image prompt agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
-SHOTS_AGENT = "prehistoric_dinosaur"
+# Image prompt director (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
+SHOTS_DIRECTOR = "prehistoric_dinosaur"
 ```
 
 ## Key Differences: POV vs. Traditional
@@ -115,21 +115,21 @@ SHOTS_AGENT = "prehistoric_dinosaur"
 ### Generate POV Story
 
 ```bash
-python core/main.py --story-agent prehistoric_pov --idea "Time traveler encounters T-Rex in Cretaceous forest"
+python core/main.py --story-director prehistoric_pov --idea "Time traveler encounters T-Rex in Cretaceous forest"
 ```
 
 ### Generate POV Images
 
 ```bash
-python core/main.py --image-agent prehistoric_pov --resume [project_id]
+python core/main.py --image-director prehistoric_pov --resume [project_id]
 ```
 
 ### Generate Full POV Video
 
 ```bash
 python core/main.py \
-  --story-agent prehistoric_pov \
-  --image-agent prehistoric_pov \
+  --story-director prehistoric_pov \
+  --image-director prehistoric_pov \
   --idea "Time traveler documents Triceratops herd, encounters danger"
 ```
 
@@ -137,7 +137,7 @@ python core/main.py \
 
 Despite POV format, cinematic quality is preserved:
 
-✅ **Camera**: Sony Venice 2 (same as traditional agents)
+✅ **Camera**: Sony Venice 2 (same as traditional directors)
 ✅ **Lenses**: Arri Signature Prime (16mm-85mm, wide angles for POV)
 ✅ **Resolution**: 8K resolution
 ✅ **Format**: 16:9 widescreen
@@ -167,36 +167,36 @@ Despite POV format, cinematic quality is preserved:
 
 ## Success Criteria - All Met ✅
 
-✅ Story agent generates first-person POV narratives with hands mentioned
-✅ Image agent includes "hands visible" in every prompt
+✅ Story director generates first-person POV narratives with hands mentioned
+✅ Image director includes "hands visible" in every prompt
 ✅ Sony Venice 2 + Arri Signature Prime quality maintained
 ✅ POV perspective clear and consistent (first-person language)
 ✅ Diegetic camera work (character filming)
 ✅ YouTube/Netflix optimization preserved
 ✅ Photorealistic dinosaur quality (Jurassic Park style)
 ✅ Documentation complete (full guide + quick start)
-✅ Configuration updated with new agents
+✅ Configuration updated with new directors
 
 ## Testing Recommended
 
 ### Test 1: Story Generation
 
 ```bash
-python core/main.py --story-agent prehistoric_pov --idea "T-Rex encounter"
+python core/main.py --story-director prehistoric_pov --idea "T-Rex encounter"
 # Check: First-person narration, hands mentioned, POV perspective
 ```
 
 ### Test 2: Image Generation
 
 ```bash
-python core/main.py --image-agent prehistoric_pov --resume [project_id]
+python core/main.py --image-director prehistoric_pov --resume [project_id]
 # Check: "hands visible" in prompts, "First person POV", Sony Venice 2
 ```
 
 ### Test 3: Compare POV vs Traditional
 
 ```bash
-# Generate same idea with both agents
+# Generate same idea with both directors
 # Compare output: POV should have hands, first-person language
 ```
 
@@ -204,8 +204,8 @@ python core/main.py --image-agent prehistoric_pov --resume [project_id]
 
 ```bash
 python core/main.py \
-  --story-agent prehistoric_pov \
-  --image-agent prehistoric_pov \
+  --story-director prehistoric_pov \
+  --image-director prehistoric_pov \
   --idea "Time traveler survives raptor encounter" \
   --render
 # Verify: Hands visible, POV perspective, cinematic quality
@@ -215,8 +215,8 @@ python core/main.py \
 
 | File                                 | Lines      | Size       |
 | ------------------------------------ | ---------- | ---------- |
-| `agents/story/prehistoric_pov.md`    | 301        | 17.9 KB    |
-| `agents/image/prehistoric_pov.md`    | 276        | 25.1 KB    |
+| `directors/story/prehistoric_pov.md`    | 301        | 17.9 KB    |
+| `directors/image/prehistoric_pov.md`    | 276        | 25.1 KB    |
 | `docs/PREHISTORIC_POV_GUIDE.md`      | 617        | 22.0 KB    |
 | `docs/PREHISTORIC_POV_QUICKSTART.md` | ~120       | ~4 KB      |
 | **Total**                            | **~1,314** | **~69 KB** |
@@ -225,9 +225,9 @@ python core/main.py \
 
 The implementation is complete and ready to use. Recommended workflow:
 
-1. **Test the agents** with simple ideas to verify output
+1. **Test the directors** with simple ideas to verify output
 2. **Create example videos** demonstrating POV effect
-3. **Compare** with traditional agents to showcase differences
+3. **Compare** with traditional directors to showcase differences
 4. **Document** user feedback and iterate if needed
 5. **Share** POV examples on YouTube to gauge audience response
 
@@ -252,7 +252,7 @@ The implementation is complete and ready to use. Recommended workflow:
 
 ## Summary
 
-The Prehistoric POV Dinosaur Agents are fully implemented and ready for use. They provide a fundamentally different documentary experience - immersive, first-person, hands-visible survival narratives that place viewers directly in the prehistoric world, while maintaining the same cinematic quality as traditional agents.
+The Prehistoric POV Dinosaur Directors are fully implemented and ready for use. They provide a fundamentally different documentary experience - immersive, first-person, hands-visible survival narratives that place viewers directly in the prehistoric world, while maintaining the same cinematic quality as traditional directors.
 
 **Use Case**: Create YouTube-optimized, Netflix-quality POV dinosaur documentaries that engage audiences through visceral first-person survival storytelling.
 

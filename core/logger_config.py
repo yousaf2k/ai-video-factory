@@ -142,15 +142,15 @@ def setup_api_logger(name):
     return logger
 
 
-def setup_agent_logger(name):
+def setup_director_logger(name):
     """
-    Get a specialized logger for agent operations.
+    Get a specialized logger for director operations.
 
     Args:
         name: Logger name
 
     Returns:
-        Configured logger for agent operations
+        Configured logger for director operations
     """
     logger = logging.getLogger(name)
 
@@ -162,12 +162,12 @@ def setup_agent_logger(name):
         max_bytes = getattr(config, 'LOG_MAX_BYTES', 10 * 1024 * 1024)
         backup_count = getattr(config, 'LOG_BACKUP_COUNT', 5)
 
-        # Agents log file handler
-        agent_log_path = os.path.join(log_dir, 'agents.log')
-        agent_handler = _setup_file_handler(
-            agent_log_path, max_bytes, backup_count, logging.DEBUG
+        # Directors log file handler
+        director_log_path = os.path.join(log_dir, 'directors.log')
+        director_handler = _setup_file_handler(
+            director_log_path, max_bytes, backup_count, logging.DEBUG
         )
-        logger.addHandler(agent_handler)
+        logger.addHandler(director_handler)
 
         # Also log to console (WARNING and above only)
         console_handler = logging.StreamHandler()
@@ -224,8 +224,8 @@ if __name__ == "__main__":
     api_logger = setup_api_logger('test_api')
     api_logger.debug("API call test")
 
-    # Test agent logger
-    agent_logger = setup_agent_logger('test_agent')
-    agent_logger.info("Agent operation test")
+    # Test director logger
+    director_logger = setup_director_logger('test_director')
+    director_logger.info("Director operation test")
 
     print("\nLogging configuration complete. Check the logs/ directory.")

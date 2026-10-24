@@ -16,11 +16,11 @@ All markdown documentation files have been moved from the project root to the `d
 - ✅ `MULTI_LLM_IMPLEMENTATION.md`
 - ✅ `MULTI_LLM_SUMMARY.md`
 
-### Agent Documentation
-- ✅ `NETFLIX_DOCUMENTARY_AGENT.md`
-- ✅ `YOUTUBE_AGENT_CHECKLIST.md`
-- ✅ `YOUTUBE_AGENT_IMPLEMENTATION_SUMMARY.md`
-- ✅ `YOUTUBE_AGENT_QUICK_START.md`
+### Director Documentation
+- ✅ `NETFLIX_DOCUMENTARY_DIRECTOR.md`
+- ✅ `YOUTUBE_DIRECTOR_CHECKLIST.md`
+- ✅ `YOUTUBE_DIRECTOR_IMPLEMENTATION_SUMMARY.md`
+- ✅ `YOUTUBE_DIRECTOR_QUICK_START.md`
 
 ### LLM Provider Documentation
 - ✅ `ZAI_VERIFICATION_SUCCESS.md`
@@ -35,12 +35,12 @@ All markdown documentation files have been moved from the project root to the `d
 
 ```
 ai_video_factory/
-├── agents/          # Agent prompts (story, image, video)
+├── directors/          # Director prompts (story, image, video)
 ├── core/             # Core engine modules
 ├── config.py          # Configuration settings
 ├── docs/             # ✨ NEW: Documentation
 │   ├── LLM Provider Setup
-│   ├── Agent Configuration
+│   ├── Director Configuration
 │   ├── API References
 │   └── Implementation Summaries
 ├── input/            # Example ideas

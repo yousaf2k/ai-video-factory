@@ -110,7 +110,7 @@ class UpdateStoryRequest(BaseModel):
 
 class RegenerateStoryRequest(BaseModel):
     """Request to regenerate story"""
-    agent: str = Field(default="default", description="New agent to use")
+    director: str = Field(default="default", description="New director to use")
 
 
 class GenerateSceneNarrationRequest(BaseModel):

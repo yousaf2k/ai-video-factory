@@ -9,9 +9,9 @@ A new feature that enables **intelligent shot distribution** based on scene impo
 
 ## Quick Start
 
-### 1. Use an Updated Agent
+### 1. Use an Updated Director
 
-Use one of these agents (already updated with VIDEO_LENGTH support):
+Use one of these directors (already updated with VIDEO_LENGTH support):
 - `documentary`
 - `netflix_documentary`
 - `youtube_documentary`
@@ -22,14 +22,14 @@ Use one of these agents (already updated with VIDEO_LENGTH support):
 ```bash
 python core/main.py \
   --idea "A 5-minute documentary about climate change" \
-  --story-agent documentary \
+  --story-director documentary \
   --auto
 ```
 
 The system will:
 1. Calculate target length from config (default: 600s)
-2. Pass target length to story agent
-3. Agent generates scene with `scene_duration` for each scene
+2. Pass target length to story director
+3. Director generates scene with `scene_duration` for each scene
 4. Shot planner calculates shots from duration
 5. More important scenes get more shots!
 
@@ -91,7 +91,7 @@ Total: 36 shots = 180 seconds (3 minutes)
 ✅ **Important scenes get more coverage** - Climax scenes can be longer with more shots
 ✅ **Pacing control** - Fast scenes can be short, slow scenes can be long
 ✅ **Better length control** - Total video length matches target more accurately
-✅ **Backward compatible** - Old agents still work (use even distribution)
+✅ **Backward compatible** - Old directors still work (use even distribution)
 
 ## Configuration
 
@@ -117,7 +117,7 @@ If scene durations don't sum to target length:
 
 **Example:**
 - Target: 300 seconds
-- Agent generates: 350 seconds (16.7% deviation)
+- Director generates: 350 seconds (16.7% deviation)
 
 **System response:**
 ```
@@ -129,23 +129,23 @@ The system **automatically adjusts** all scene durations proportionally to match
 
 ## Backward Compatibility
 
-**Old agents** (without scene_duration):
+**Old directors** (without scene_duration):
 - Work exactly as before
 - Use even distribution: max_shots ÷ scene_count
 - No errors, no issues
 
-**New agents** (with scene_duration):
+**New directors** (with scene_duration):
 - Use intelligent distribution based on scene duration
 - More nuanced video production
 - Better control over pacing
 
-## Updating Custom Agents
+## Updating Custom Directors
 
-To add VIDEO_LENGTH support to your custom agent:
+To add VIDEO_LENGTH support to your custom director:
 
-### Step 1: Add to Agent Template
+### Step 1: Add to Director Template
 
-Create/edit `agents/story/your_agent.md`:
+Create/edit `directors/story/your_director.md`:
 
 ```markdown
 ## Video Duration Planning
@@ -192,7 +192,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 
 ```bash
 python core/main.py \
-  --story-agent your_agent \
+  --story-director your_director \
   --total-length 300 \
   --auto
 ```
@@ -211,13 +211,13 @@ Check logs for:
 **Solution:** Adjust scene_duration in story JSON, or change DEFAULT_SHOT_LENGTH in config.py
 
 **Problem:** "Scene duration mismatch" warning
-**Solution:** Auto-correction will fix it. Adjust agent prompt to generate more accurate durations.
+**Solution:** Auto-correction will fix it. Adjust director prompt to generate more accurate durations.
 
-**Problem:** Agent not using scene duration
-**Solution:** Ensure agent template includes `{VIDEO_LENGTH}` placeholder and outputs `scene_duration` field
+**Problem:** Director not using scene duration
+**Solution:** Ensure director template includes `{VIDEO_LENGTH}` placeholder and outputs `scene_duration` field
 
-**Problem:** Old agent broken
-**Solution:** Old agents should still work. Check for typos or JSON parsing errors.
+**Problem:** Old director broken
+**Solution:** Old directors should still work. Check for typos or JSON parsing errors.
 
 ## Examples
 
@@ -226,13 +226,13 @@ Check logs for:
 ```bash
 python core/main.py \
   --idea "Penguin behavior" \
-  --story-agent documentary \
+  --story-director documentary \
   --total-length 180 \
   --auto
 ```
 
 Expected output:
-- Story agent generates scenes summing to 180s
+- Story director generates scenes summing to 180s
 - Shot planner: ~36 shots (180s ÷ 5s/shot)
 - Scene-based distribution
 
@@ -241,13 +241,13 @@ Expected output:
 ```bash
 python core/main.py \
   --idea "History of Rome" \
-  --story-agent netflix_documentary \
+  --story-director netflix_documentary \
   --total-length 600 \
   --auto
 ```
 
 Expected output:
-- Story agent generates scenes summing to 600s
+- Story director generates scenes summing to 600s
 - Shot planner: ~120 shots (600s ÷ 5s/shot)
 - Climax scenes get more shots than intro
 
@@ -256,13 +256,13 @@ Expected output:
 ```bash
 python core/main.py \
   --idea "Quick product demo" \
-  --story-agent documentary \
+  --story-director documentary \
   --total-length 90 \
   --auto
 ```
 
 Expected output:
-- Story agent generates scenes summing to 90s
+- Story director generates scenes summing to 90s
 - Shot planner: ~18 shots (90s ÷ 5s/shot)
 - Efficient use of short duration
 
@@ -278,14 +278,14 @@ Expected output:
 
 ## FAQ
 
-**Q: Do I need to update all my agents?**
-A: No. Old agents work as before. Update agents only if you want intelligent distribution.
+**Q: Do I need to update all my directors?**
+A: No. Old directors work as before. Update directors only if you want intelligent distribution.
 
 **Q: What if scene durations don't sum to target?**
 A: System auto-corrects proportionally. You'll see a warning in logs.
 
 **Q: Can I still use even distribution?**
-A: Yes. Use agents without scene_duration field, or remove {VIDEO_LENGTH} from agent template.
+A: Yes. Use directors without scene_duration field, or remove {VIDEO_LENGTH} from director template.
 
 **Q: How do I change shot length?**
 A: Edit `DEFAULT_SHOT_LENGTH` in config.py. Default is 5 seconds.
@@ -306,15 +306,15 @@ A: System falls back to even distribution (backward compatible).
 
 - [Full Implementation Guide](INTELLIGENT_STORY_GENERATION_IMPLEMENTATION.md) - Technical details
 - [Configuration Guide](../../../config.py) - All configuration options
-- [Agent Development](../../../agents) - Creating custom agents
+- [Director Development](../../../directors) - Creating custom directors
 
 ## Support
 
 If you encounter issues:
 1. Check logs for warnings/errors
-2. Verify agent template includes `{VIDEO_LENGTH}` placeholder
+2. Verify director template includes `{VIDEO_LENGTH}` placeholder
 3. Ensure story JSON has `scene_duration` field
-4. Try with `documentary` agent (known to work)
+4. Try with `documentary` director (known to work)
 5. Check configuration in `config.py`
 
 ---

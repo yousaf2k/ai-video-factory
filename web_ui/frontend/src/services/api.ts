@@ -11,9 +11,9 @@ import type {
   UpdateStoryRequest,
   Shot,
   UpdateShotRequest,
-  AgentsByType,
-  AgentTree,
-  AgentPreview,
+  DirectorsByType,
+  DirectorTree,
+  DirectorPreview,
   GlobalConfig,
   UpdateGlobalConfigRequest,
   AssetLibraryInfo,
@@ -143,9 +143,9 @@ class ApiClient {
     return response.data;
   }
 
-  async generateStory(projectId: string, agent: string = 'default'): Promise<Story> {
+  async generateStory(projectId: string, director: string = 'default'): Promise<Story> {
     const response = await this.client.post<Story>(`/api/projects/${projectId}/story/generate`, {
-      agent,
+      director,
     });
     return response.data;
   }
@@ -458,7 +458,7 @@ class ApiClient {
     projectId: string,
     data: {
       max_shots?: number;
-      shots_agent: string;
+      shots_director: string;
       max_shot_duration?: number;
     }
   ): Promise<any> {
@@ -486,13 +486,13 @@ class ApiClient {
   }
 
   // Config
-  async getAgents(): Promise<AgentsByType> {
-    const response = await this.client.get<AgentsByType>('/api/config/agents');
+  async getDirectors(): Promise<DirectorsByType> {
+    const response = await this.client.get<DirectorsByType>('/api/config/directors');
     return response.data;
   }
 
-  async getAgentTree(): Promise<AgentTree> {
-    const response = await this.client.get<AgentTree>('/api/config/agents/tree');
+  async getDirectorTree(): Promise<DirectorTree> {
+    const response = await this.client.get<DirectorTree>('/api/config/directors/tree');
     return response.data;
   }
 
@@ -506,32 +506,32 @@ class ApiClient {
     return response.data;
   }
 
-  async getAgentContent(agentType: string, agentId: string, raw: boolean = false): Promise<string> {
+  async getDirectorContent(directorType: string, directorId: string, raw: boolean = false): Promise<string> {
     const response = await this.client.get<{ content: string }>(
-      `/api/config/agents/${agentType}/${agentId}`,
+      `/api/config/directors/${directorType}/${directorId}`,
       { params: raw ? { raw: true } : undefined }
     );
     return response.data.content;
   }
 
-  async getAgentFileRaw(agentType: string, agentId: string): Promise<{ content: string; includes: string[] }> {
+  async getDirectorFileRaw(directorType: string, directorId: string): Promise<{ content: string; includes: string[] }> {
     const response = await this.client.get<{ content: string; includes: string[] }>(
-      `/api/config/agents/${agentType}/${agentId}`,
+      `/api/config/directors/${directorType}/${directorId}`,
       { params: { raw: true } }
     );
     return response.data;
   }
 
-  async getAgentPreview(agentType: string, agentId: string): Promise<AgentPreview> {
-    const response = await this.client.get<AgentPreview>(
-      `/api/config/agents/${agentType}/${agentId}`,
+  async getDirectorPreview(directorType: string, directorId: string): Promise<DirectorPreview> {
+    const response = await this.client.get<DirectorPreview>(
+      `/api/config/directors/${directorType}/${directorId}`,
       { params: { view: 'preview' } }
     );
     return response.data;
   }
 
-  async updateAgentContent(agentType: string, agentId: string, content: string): Promise<any> {
-    const response = await this.client.post(`/api/config/agents/${agentType}/${agentId}`, { content });
+  async updateDirectorContent(directorType: string, directorId: string, content: string): Promise<any> {
+    const response = await this.client.post(`/api/config/directors/${directorType}/${directorId}`, { content });
     return response.data;
   }
 

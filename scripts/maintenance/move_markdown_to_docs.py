@@ -20,7 +20,7 @@ def move_markdown_files():
     md_files = list(project_root.glob('*.md'))
 
     # Find all markdown files in subdirectories
-    for subdir in ['agents', 'input']:
+    for subdir in ['directors', 'input']:
         subdir_path = project_root / subdir
         if subdir_path.is_dir():
             md_files.extend(subdir_path.glob('*.md'))

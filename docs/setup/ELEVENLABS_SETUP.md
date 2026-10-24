@@ -64,7 +64,7 @@ python core/narration_generator.py --list-voices
 
 ```bash
 python core/main.py --idea "Nature documentary" \
-  --narration-agent professional \
+  --narration-director professional \
   --tts-method elevenlabs \
   --tts-voice "Rachel"
 ```

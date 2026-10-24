@@ -188,8 +188,8 @@ class ProjectService:
         project_id, meta = self.project_manager.create_project(
             idea=request.idea,
             project_id=request.project_id,
-            story_agent=request.story_agent,
-            shots_agent=request.shots_agent,
+            story_director=request.story_director,
+            shots_director=request.shots_director,
             total_duration=request.total_duration,
             aspect_ratio=request.aspect_ratio,
             prompt_mode=request.prompt_mode,
@@ -219,7 +219,7 @@ class ProjectService:
                 # Generate story with shots directly
                 story_json = build_story_then_vs_now(
                     movie_name=request.idea,
-                    agent_name=request.story_agent or "then_vs_now/then_vs_now",
+                    director_name=request.story_director or "then_vs_now/then_vs_now",
                     target_length=request.total_duration,
                     aspect_ratio=request.aspect_ratio
                 )
@@ -276,7 +276,7 @@ class ProjectService:
                 # Generate story with shots directly
                 story_json = build_story_asmr_glass_cutting(
                     idea=request.idea,
-                    agent_name=request.story_agent or "asmr/asmr_glass_cutting",
+                    director_name=request.story_director or "asmr/asmr_glass_cutting",
                     shot_duration=5,  # Default 5 seconds per shot
                     aspect_ratio=request.aspect_ratio
                 )
@@ -397,11 +397,13 @@ class ProjectService:
         if request.idea is not None:
             meta['idea'] = request.idea
 
-        if request.story_agent is not None:
-            meta['story_agent'] = request.story_agent
+        if request.story_director is not None:
+            meta['story_director'] = request.story_director
+            meta.pop('story_agent', None)  # legacy key from before the director rename
 
-        if request.shots_agent is not None:
-            meta['shots_agent'] = request.shots_agent
+        if request.shots_director is not None:
+            meta['shots_director'] = request.shots_director
+            meta.pop('shots_agent', None)  # legacy key from before the director rename
 
         if request.prompt_mode is not None:
             meta['prompt_mode'] = request.prompt_mode

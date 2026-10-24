@@ -27,7 +27,7 @@ import {
   useDeleteProject,
   useDuplicateProject,
 } from "@/hooks/useProjects";
-import { useAgents } from "@/hooks/useAgents";
+import { useDirectors } from "@/hooks/useDirectors";
 import { getMediaUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +47,7 @@ import { formatDistanceToNow } from "date-fns";
 export default function ProjectsPage() {
   const queryClient = useQueryClient();
   const { data: projects, isLoading, error } = useProjects();
-  const { data: agents } = useAgents();
+  const { data: directors } = useDirectors();
   const createProjectMutation = useCreateProject();
   const deleteProjectMutation = useDeleteProject();
   const duplicateProjectMutation = useDuplicateProject();
@@ -56,23 +56,23 @@ export default function ProjectsPage() {
   const [newIdea, setNewIdea] = useState("");
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
 
-  // Project type and Agent selection state
+  // Project type and Director selection state
   const [selectedProjectType, setSelectedProjectType] = useState<number>(ProjectType.Documentary);
   // Video generation type: standalone setting, independent of project type
   const [videoGenerationType, setVideoGenerationType] = useState<VideoGenerationType>("i2v");
-  const [selectedStoryAgent, setSelectedStoryAgent] = useState("choose");
-  const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
+  const [selectedStoryDirector, setSelectedStoryDirector] = useState("choose");
+  const [selectedShotsDirector, setSelectedShotsDirector] = useState("default");
 
-  // Filter Story Agents based on selected Project Type
-  const filteredStoryAgents = agents?.story?.filter((agent: any) => {
+  // Filter Story Directors based on selected Project Type
+  const filteredStoryDirectors = directors?.story?.filter((director: any) => {
     if ((selectedProjectType as number) === ProjectType.ThenVsNow) {
-      return agent.category === "then_vs_now";
+      return director.category === "then_vs_now";
     } else if ((selectedProjectType as number) === ProjectType.Movie) {
-      return agent.category === "movie";
+      return director.category === "movie";
     } else if ((selectedProjectType as number) === ProjectType.AsmrGlassCutting) {
-      return agent.category === "asmr" || agent.id.startsWith("asmr/");
+      return director.category === "asmr" || director.id.startsWith("asmr/");
     } else {
-      return agent.category === "documentary" || !agent.category;
+      return director.category === "documentary" || !director.category;
     }
   }) || [];
   const [totalDuration, setTotalDuration] = useState(600);
@@ -108,16 +108,16 @@ export default function ProjectsPage() {
       if (!newIdea.trim()) return;
     }
 
-    if (selectedStoryAgent === "choose" && !usePromptsFile) {
-      toast.error("Please select a story agent before creating the project.");
+    if (selectedStoryDirector === "choose" && !usePromptsFile) {
+      toast.error("Please select a story director before creating the project.");
       return;
     }
 
     const request: CreateProjectRequest = {
       idea: usePromptsFile ? `Prompts File: ${promptsFile}` : newIdea,
       project_type: selectedProjectType,
-      story_agent: selectedStoryAgent === "choose" ? "default" : selectedStoryAgent,
-      shots_agent: selectedShotsAgent,
+      story_director: selectedStoryDirector === "choose" ? "default" : selectedStoryDirector,
+      shots_director: selectedShotsDirector,
       total_duration: totalDuration,
       max_shot_duration: maxShotDuration,
       prompts_file: promptsFile.trim() || undefined,
@@ -132,7 +132,7 @@ export default function ProjectsPage() {
       try {
         // Automatically generate the initial story ONLY if not using a prompts file
         if (!request.prompts_file) {
-          await api.generateStory(project.project_id, request.story_agent);
+          await api.generateStory(project.project_id, request.story_director);
         }
       } catch (storyError) {
         console.error("Failed to generate initial story:", storyError);
@@ -462,7 +462,7 @@ export default function ProjectsPage() {
                       onValueChange={(val) => {
                         const typeVal = parseInt(val) as ProjectType;
                         setSelectedProjectType(typeVal);
-                        setSelectedStoryAgent("choose"); // Force selection
+                        setSelectedStoryDirector("choose"); // Force selection
                         if (typeVal !== ProjectType.Documentary) {
                           setUsePromptsFile(false);
                         }
@@ -489,12 +489,12 @@ export default function ProjectsPage() {
                       onValueChange={(val) => {
                         const vgt = val as VideoGenerationType;
                         setVideoGenerationType(vgt);
-                        // r2v/t2v need their prompt-format shots agents; keep a
-                        // manual agent choice unless it was one of the defaults
-                        if (vgt === "r2v") setSelectedShotsAgent("base/base_shots_r2v");
-                        else if (vgt === "t2v") setSelectedShotsAgent("base/base_shots_t2v");
-                        else if (["default", "base/base_shots_r2v", "base/base_shots_t2v"].includes(selectedShotsAgent))
-                          setSelectedShotsAgent("default");
+                        // r2v/t2v need their prompt-format shots directors; keep a
+                        // manual director choice unless it was one of the defaults
+                        if (vgt === "r2v") setSelectedShotsDirector("base/base_shots_r2v");
+                        else if (vgt === "t2v") setSelectedShotsDirector("base/base_shots_t2v");
+                        else if (["default", "base/base_shots_r2v", "base/base_shots_t2v"].includes(selectedShotsDirector))
+                          setSelectedShotsDirector("default");
                       }}
                     >
                       <SelectTrigger className="bg-background">
@@ -657,23 +657,23 @@ export default function ProjectsPage() {
 
                     <div>
                       <label className="block text-sm font-medium mb-1.5">
-                        Story Agent <span className="text-red-500">*</span>
+                        Story Director <span className="text-red-500">*</span>
                       </label>
                       <Select
-                        value={selectedStoryAgent}
-                        onValueChange={(val) => setSelectedStoryAgent(val)}
+                        value={selectedStoryDirector}
+                        onValueChange={(val) => setSelectedStoryDirector(val)}
                       >
                         <SelectTrigger className="bg-background">
-                          <SelectValue placeholder="Select Story Agent" />
+                          <SelectValue placeholder="Select Story Director" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="choose" disabled>-- Choose an Agent --</SelectItem>
-                          {!filteredStoryAgents.length && (
+                          <SelectItem value="choose" disabled>-- Choose an Director --</SelectItem>
+                          {!filteredStoryDirectors.length && (
                             <SelectItem value="default">Default</SelectItem>
                           )}
-                          {filteredStoryAgents.map((agent: any) => (
-                            <SelectItem key={agent.id} value={agent.id}>
-                              {agent.name}
+                          {filteredStoryDirectors.map((director: any) => (
+                            <SelectItem key={director.id} value={director.id}>
+                              {director.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -681,22 +681,22 @@ export default function ProjectsPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5">
-                        Shots Agent
+                        Shots Director
                       </label>
                       <Select
-                        value={selectedShotsAgent}
-                        onValueChange={(val) => setSelectedShotsAgent(val)}
+                        value={selectedShotsDirector}
+                        onValueChange={(val) => setSelectedShotsDirector(val)}
                       >
                         <SelectTrigger className="bg-background">
-                          <SelectValue placeholder="Select Shots Agent" />
+                          <SelectValue placeholder="Select Shots Director" />
                         </SelectTrigger>
                         <SelectContent>
-                          {!agents?.shots?.length && (
+                          {!directors?.shots?.length && (
                             <SelectItem value="default">Default</SelectItem>
                           )}
-                          {agents?.shots?.map((agent) => (
-                            <SelectItem key={agent.id} value={agent.id}>
-                              {agent.name}
+                          {directors?.shots?.map((director) => (
+                            <SelectItem key={director.id} value={director.id}>
+                              {director.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

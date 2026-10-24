@@ -14,14 +14,14 @@ AI Video Factory is an end-to-end pipeline that transforms text ideas into cinem
 # Generate a video from CLI
 python core/main.py --idea "A beautiful sunset over the ocean"
 
-# Run with specific story / shots agents
-python core/main.py --idea "Historical documentary" --story-agent netflix_documentary
+# Run with specific story / shots directors
+python core/main.py --idea "Historical documentary" --story-director netflix_documentary
 
 # Override workflows for a single run
 python core/main.py --idea "..." --video-workflow minimax_h3_i2v_8s --image-workflow krea2_reference
 
-# List available agents / projects / TTS voices
-python core/main.py --list-agents
+# List available directors / projects / TTS voices
+python core/main.py --list-directors
 python core/main.py --list-projects
 python core/main.py --list-voices
 
@@ -38,10 +38,10 @@ python regenerate.py --project project_XXXXXXXX --videos --failed-only
 ```bash
 # Generate ASMR glass cutting videos from natural language
 python core/main.py --idea "create videos of strawberry, apple, and tomato" \
-  --story-agent asmr/asmr_glass_cutting --shot-length 5
+  --story-director asmr/asmr_glass_cutting --shot-length 5
 
-# Category input (agent expands to 5-10 objects); custom shot duration
-python core/main.py --idea "tropical fruits" --story-agent asmr/asmr_glass_cutting --shot-length 8
+# Category input (director expands to 5-10 objects); custom shot duration
+python core/main.py --idea "tropical fruits" --story-director asmr/asmr_glass_cutting --shot-length 8
 ```
 
 ### Web UI
@@ -71,7 +71,7 @@ npm run lint      # Run linter
 
 ```bash
 python run_tests.py                      # Run all tests (offline unit tests)
-pytest tests/test_agent_loader.py -v     # Specific test file
+pytest tests/test_director_loader.py -v     # Specific test file
 pytest tests/ --cov=core --cov-report=html
 ```
 
@@ -91,7 +91,7 @@ Idea → Story → Scene Graph → Shots → Images → Videos → Narration
 ### Core Components (`core/`)
 
 - **LLM layer** (`llm_engine.py`, `gemini_engine.py`): provider abstraction, text + JSON-structured outputs, selected via `LLM_PROVIDER`.
-- **Agent system** (`agent_loader.py`): modular prompt templates in `agents/` with `{{include:name}}` composition and `{USER_INPUT}` placeholder.
+- **Director system** (`director_loader.py`): modular prompt templates in `directors/` with `{{include:name}}` composition and `{USER_INPUT}` placeholder.
 - **Story pipeline** (`story_engine.py`, `scene_graph.py`, `shot_planner.py`): story → visual scenes → shots with camera movements, prompts, durations; scene duration validation and auto-correction.
 - **Generation layer** (`image_generator.py`, `comfyui_image_generator.py`, `geminiweb_image_generator.py`, `flowweb_image_generator.py`, `comfy_client.py`, `flowweb_video_generator.py`): Gemini API / ComfyUI (Flux, Krea2, HiDream, Z-Image) / GeminiWeb + Google Flow browser automation for images; Wan 2.2, MiniMax H3, LTX-2 via ComfyUI for video.
 - **Workflow compiler** (`prompt_compiler.py`, `workflow_loader.py`): auto-discovers workflows from `workflow/`, supports API JSON and Workflow JSON, detects node IDs via title tags (`[prompt]`, `[image_in]`, `[video_out]`, …) or heuristics.
@@ -107,7 +107,7 @@ Idea → Story → Scene Graph → Shots → Images → Videos → Narration
 - `models/`: Pydantic schemas per domain (project, story, shot, queue, asset)
 
 **Frontend** (`web_ui/frontend/`) — Next.js 14 App Router, React Query, Radix UI + Tailwind CSS, Zustand, DnD Kit:
-- Feature components in `src/components/{feature}/` (agents, assets, characters, editor, queue, scenes, shots, …)
+- Feature components in `src/components/{feature}/` (directors, assets, characters, editor, queue, scenes, shots, …)
 - API client in `src/services/api.ts`
 
 ### Asset Library
@@ -133,16 +133,16 @@ ASSET_LIBRARY_DIRS="output/Assets" # semicolon-separated extra library roots
 
 Notable defaults: `IMAGE_WORKFLOW = "krea2_reference"`, `VIDEO_WORKFLOW = "wan22_workflow"`. Workflows are auto-discovered from `workflow/` on startup; supported image resolutions up to 2048, aspect ratios 1:1, 16:9, 9:16, 4:3, 3:4.
 
-## Agent Development
+## Director Development
 
-1. Create a `.md` file in the right category: `agents/story/…` or `agents/shots/…`
-2. Use `{USER_INPUT}` for dynamic content and `{{include:name}}` for composition — name has no `.md` extension and is resolved relative to the including file's directory, its sibling subdirectories, and the agent type root (e.g. `{{include:styles/style_shots_artistic}}`, `{{include:_base/base_movie_standard}}`)
-3. Reference via `--story-agent {name}` or `--shots-agent {name}` (subdirectory paths like `asmr/asmr_glass_cutting` work)
+1. Create a `.md` file in the right category: `directors/story/…` or `directors/shots/…`
+2. Use `{USER_INPUT}` for dynamic content and `{{include:name}}` for composition — name has no `.md` extension and is resolved relative to the including file's directory, its sibling subdirectories, and the director type root (e.g. `{{include:styles/style_shots_artistic}}`, `{{include:_base/base_movie_standard}}`)
+3. Reference via `--story-director {name}` or `--shots-director {name}` (subdirectory paths like `asmr/asmr_glass_cutting` work)
 
-Agent layout:
+Director layout:
 
 ```
-agents/
+directors/
 ├── story/
 │   ├── asmr/            # ASMR glass cutting
 │   ├── documentary/     # default, netflix/youtube documentary, historical, _base/_contexts/_styles
@@ -158,7 +158,7 @@ agents/
     └── videoprompt/     # videoprompt_minimax_h3 (MiniMax H3 prompt rules)
 ```
 
-Character references use a **unified schema**: a single `image_prompt` and `character_reference_image_path` per character; reference generation produces 8-view character sheets (4 full-body + 4 face close-ups). Shots agents may emit `soundfx_prompt`; blank soundfx falls back to generic sounds.
+Character references use a **unified schema**: a single `image_prompt` and `character_reference_image_path` per character; reference generation produces 8-view character sheets (4 full-body + 4 face close-ups). Shots directors may emit `soundfx_prompt`; blank soundfx falls back to generic sounds.
 
 ## Workflow Development
 
@@ -199,6 +199,6 @@ Camera LoRA system: up to 4 simultaneous camera types via the `LORA_NODES` array
 - `docs/setup/` — ComfyUI, Gemini, ElevenLabs, and local-LLM (Ollama/LM Studio) setup
 - `docs/guides/` — pipeline, camera LoRA, video length, regeneration, MiniMax H3 guides
 - `docs/features/` — Asset Library, Then Vs Now, ASMR Glass Cutting documentation
-- `docs/agents/` — guides for the built-in story/shots agents
+- `docs/directors/` — guides for the built-in story/shots directors
 - `docs/reference/` — API reference and security guide
 - `docs/development/` — historical plans, fixes, test reports, walkthroughs, archive

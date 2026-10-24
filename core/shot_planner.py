@@ -1,10 +1,10 @@
 """
-Shot Planner - Plan cinematic shots using LLM agents.
+Shot Planner - Plan cinematic shots using LLM directors.
 """
 from core.llm_engine import get_provider
-from core.agent_loader import load_agent_prompt
-from core.logger_config import setup_agent_logger
-from core.log_decorators import log_agent_call
+from core.director_loader import load_director_prompt
+from core.logger_config import setup_director_logger
+from core.log_decorators import log_director_call
 import json
 import math
 import re
@@ -17,8 +17,8 @@ import threading
 import uuid
 
 
-# Get logger for agent operations
-logger = setup_agent_logger(__name__)
+# Get logger for director operations
+logger = setup_director_logger(__name__)
 
 # Timing instruction appended to shot planning prompts so that timestamped
 # cuts in video_prompt stay within each shot's rendered clip duration
@@ -175,7 +175,7 @@ def build_characters_block(characters):
     )
 
 
-def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_agent, characters_block="", max_shot_duration=None):
+def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_director, characters_block="", max_shot_duration=None):
     """Plan shots for a batch of scenes"""
     duration_instruction = get_shot_duration_instruction(max_shot_duration)
     # Create scene graph for this batch
@@ -192,10 +192,10 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
 {VIDEO_PROMPT_TIMING_INSTRUCTION}
 """
 
-    # Try to use agent prompts
+    # Try to use director prompts
     try:
         user_input = f"{batch_graph}{batch_instruction}"
-        image_prompt = load_agent_prompt("shots", user_input, shots_agent)
+        image_prompt = load_director_prompt("shots", user_input, shots_director)
 
         provider = get_provider()
         response = provider.ask(image_prompt, response_format="application/json")
@@ -203,13 +203,13 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
         repair_batch_scene_ids(shots, scenes_batch, batch_num, total_batches)
 
         logger.info(f"Batch {batch_num}/{total_batches}: Generated {len(shots)} shots")
-        validate_and_repair_shots(shots, shots_agent, max_shot_duration=max_shot_duration)
+        validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration)
         return shots
 
     except (FileNotFoundError, ValueError):
         # Fall back to legacy prompt
         cap = normalize_shot_duration_cap(max_shot_duration)
-        print(f"[WARN] Shots agent '{shots_agent}' not found, using legacy prompt for batch {batch_num}")
+        print(f"[WARN] Shots director '{shots_director}' not found, using legacy prompt for batch {batch_num}")
         prompt = f"""
 Create cinematic shots for WAN 2.2.{batch_instruction}
 
@@ -236,7 +236,7 @@ SCENES:
         response = provider.ask(prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
         repair_batch_scene_ids(shots, scenes_batch, batch_num, total_batches)
-        validate_and_repair_shots(shots, shots_agent, max_shot_duration=max_shot_duration)
+        validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration)
         logger.info(f"Batch {batch_num}/{total_batches}: Generated {len(shots)} shots (legacy mode)")
         return shots
 
@@ -390,7 +390,7 @@ def ensure_shot_durations(shots, max_duration=None):
     return adjusted
 
 
-def validate_and_repair_shots(shots, shots_agent, max_shot_duration=None):
+def validate_and_repair_shots(shots, shots_director, max_shot_duration=None):
     """Validate video_prompts and re-ask the LLM once to fix broken ones.
 
     Structural problems (missing fields, non-sequential sub-shot numbers, cut
@@ -403,12 +403,12 @@ def validate_and_repair_shots(shots, shots_agent, max_shot_duration=None):
 
     ensure_shot_durations(shots, max_duration=max_shot_duration)
 
-    # The prompt format follows the shots agent: r2v agents emit the
-    # six-section full-reference format, t2v agents the T2VA format
-    agent_name = (shots_agent or "").lower()
-    if "r2v" in agent_name:
+    # The prompt format follows the shots director: r2v directors emit the
+    # six-section full-reference format, t2v directors the T2VA format
+    director_name = (shots_director or "").lower()
+    if "r2v" in director_name:
         prompt_kind = "r2v"
-    elif "t2v" in agent_name:
+    elif "t2v" in director_name:
         prompt_kind = "t2v"
     else:
         prompt_kind = "i2v"
@@ -751,15 +751,15 @@ def extract_complete_objects(json_str):
     return objects
 
 
-@log_agent_call
-def plan_shots(scene_graph, max_shots=None, shots_agent="default", shots_per_scene=None, max_shot_duration=None):
+@log_director_call
+def plan_shots(scene_graph, max_shots=None, shots_director="default", shots_per_scene=None, max_shot_duration=None):
     """
     Plan cinematic shots for WAN 2.2 video generation.
 
     Args:
         scene_graph: The scene graph JSON
         max_shots: Maximum number of shots to create (optional)
-        shots_agent: Name of shots prompt agent to use (default: "default")
+        shots_director: Name of shots prompt director to use (default: "default")
                     Available: default, artistic
         shots_per_scene: Target number of shots per scene (optional)
 
@@ -928,7 +928,7 @@ CRITICAL SHOT REQUIREMENTS:
                 'total_batches': total_batches,
                 'max_shots_instruction': batch_instruction,
                 'characters_block': characters_block,
-                'shots_agent': shots_agent,
+                'shots_director': shots_director,
                 'start_idx': start_idx,
                 'end_idx': end_idx
             })
@@ -952,7 +952,7 @@ CRITICAL SHOT REQUIREMENTS:
                     batch_num=batch_data['batch_num'],
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
-                    shots_agent=batch_data['shots_agent'],
+                    shots_director=batch_data['shots_director'],
                     characters_block=batch_data.get('characters_block', ""),
                     max_shot_duration=max_shot_duration
                 )
@@ -1011,7 +1011,7 @@ CRITICAL SHOT REQUIREMENTS:
                     batch_num=batch_data['batch_num'],
                     total_batches=batch_data['total_batches'],
                     max_shots_instruction=batch_data['max_shots_instruction'],
-                    shots_agent=batch_data['shots_agent'],
+                    shots_director=batch_data['shots_director'],
                     characters_block=batch_data.get('characters_block', ""),
                     max_shot_duration=max_shot_duration
                 )
@@ -1048,17 +1048,17 @@ CRITICAL SHOT REQUIREMENTS:
     # Single batch processing (original logic)
     user_input = f"{scene_graph_with_indices}{max_shots_instruction}{get_shot_duration_instruction(max_shot_duration)}{SUB_SHOT_INSTRUCTION}{VIDEO_PROMPT_TIMING_INSTRUCTION}"
 
-    # Try to use agent prompts
+    # Try to use director prompts
     try:
-        # Load shots agent prompt
-        image_prompt = load_agent_prompt("shots", user_input, shots_agent)
+        # Load shots director prompt
+        image_prompt = load_director_prompt("shots", user_input, shots_director)
 
         # Get the response
         provider = get_provider()
         response = provider.ask(image_prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
 
-        validate_and_repair_shots(shots, shots_agent, max_shot_duration=max_shot_duration)
+        validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration)
 
         # Ensure shots is a list
         if isinstance(shots, dict):
@@ -1099,9 +1099,9 @@ CRITICAL SHOT REQUIREMENTS:
         return shots
 
     except (FileNotFoundError, ValueError):
-        # Fall back to legacy prompt if agent not found
+        # Fall back to legacy prompt if director not found
         cap = normalize_shot_duration_cap(max_shot_duration)
-        print(f"[WARN] Shots agent '{shots_agent}' not found, using legacy prompt")
+        print(f"[WARN] Shots director '{shots_director}' not found, using legacy prompt")
         prompt = f"""
 Create cinematic shots for WAN 2.2.{max_shots_instruction}
 
@@ -1127,7 +1127,7 @@ SCENES:
         provider = get_provider()
         response = provider.ask(prompt, response_format="application/json")
         shots = extract_and_repair_json(response)
-        validate_and_repair_shots(shots, shots_agent, max_shot_duration=max_shot_duration)
+        validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration)
 
         # Ensure shots is a list
         if isinstance(shots, dict):

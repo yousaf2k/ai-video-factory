@@ -190,7 +190,7 @@ WEB_UI_CORS_ORIGINS = [                 # Allowed frontend origins
 
 ### Phase 6: Configuration
 - Config panel UI
-- Agent selector
+- Director selector
 - Export/download projects
 
 ## Development Notes

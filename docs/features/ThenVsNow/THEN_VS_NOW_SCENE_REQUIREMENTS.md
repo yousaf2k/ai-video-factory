@@ -1,6 +1,6 @@
-# ThenVsNow Agent: Enhanced Scene Detail Requirements
+# ThenVsNow Director: Enhanced Scene Detail Requirements
 
-> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › ThenVsNow Agent: Enhanced Scene Detail Requirements
+> 📚 [Docs Index](../../DOCS_INDEX.md) › Features › Then Vs Now › ThenVsNow Director: Enhanced Scene Detail Requirements
 **Date:** March 12, 2026
 **Status:** Updated
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-The ThenVsNow story agent has been enhanced with **7 mandatory scene detail requirements** to ensure ultra-realistic, production-accurate set recreations.
+The ThenVsNow story director has been enhanced with **7 mandatory scene detail requirements** to ensure ultra-realistic, production-accurate set recreations.
 
 ---
 
@@ -272,7 +272,7 @@ Hyper-realistic, 4K cinematic, behind-the-scenes realism.
 
 ### File Modified
 
-**File:** `agents/story/then_vs_now.md`
+**File:** `directors/story/then_vs_now.md`
 
 **Changes:**
 - Lines 97-149: Added 7 mandatory scene detail requirements

@@ -8,12 +8,12 @@ import { toast } from "sonner";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useProject, useUpdateProject } from "@/hooks/useProjects";
-import { useAgents } from "@/hooks/useAgents";
+import { useDirectors } from "@/hooks/useDirectors";
 import { api } from "@/services/api";
 import { Save, RefreshCw, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MultiAgentSelector } from "@/components/agents/MultiAgentSelector";
+import { MultiDirectorSelector } from "@/components/directors/MultiDirectorSelector";
 import {
   Select,
   SelectContent,
@@ -28,13 +28,13 @@ export default function ProjectSettingsPage() {
   const router = useRouter();
 
   const { data: project, isLoading, error } = useProject(projectId);
-  const { data: agents } = useAgents();
+  const { data: directors } = useDirectors();
   const updateProjectMutation = useUpdateProject(projectId);
 
   const [formData, setFormData] = useState({
     idea: "",
-    story_agent: "default",
-    shots_agent: "default",
+    story_director: "default",
+    shots_director: "default",
     prompt_mode: "video" as "video" | "motion",
   });
 
@@ -42,8 +42,8 @@ export default function ProjectSettingsPage() {
     if (project) {
       setFormData({
         idea: project.idea || "",
-        story_agent: project.story_agent || "default",
-        shots_agent: project.shots_agent || "default",
+        story_director: project.story_director || "default",
+        shots_director: project.shots_director || "default",
         prompt_mode: project.prompt_mode || "video",
       });
     }
@@ -115,30 +115,30 @@ export default function ProjectSettingsPage() {
           </div>
         </section>
 
-        {/* Agent Settings */}
+        {/* Director Settings */}
         <section className="space-y-4">
           <h2 className="text-xl font-semibold border-b pb-2">
-            Agent Configuration
+            Director Configuration
           </h2>
           <p className="text-sm text-muted-foreground">
-            Default agents to use for regeneration steps in this project.
+            Default directors to use for regeneration steps in this project.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <MultiAgentSelector
-                availableAgents={agents?.story || []}
-                selectedValue={formData.story_agent}
-                onChange={(val) => setFormData({ ...formData, story_agent: val })}
+              <MultiDirectorSelector
+                availableDirectors={directors?.story || []}
+                selectedValue={formData.story_director}
+                onChange={(val) => setFormData({ ...formData, story_director: val })}
                 label="Default Story Building Blocks"
               />
             </div>
 
             <div>
-              <MultiAgentSelector
-                availableAgents={agents?.shots || []}
-                selectedValue={formData.shots_agent}
-                onChange={(val) => setFormData({ ...formData, shots_agent: val })}
+              <MultiDirectorSelector
+                availableDirectors={directors?.shots || []}
+                selectedValue={formData.shots_director}
+                onChange={(val) => setFormData({ ...formData, shots_director: val })}
                 label="Default Shots Building Blocks"
               />
             </div>

@@ -32,13 +32,13 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 
 ---
 
-### Phase 2: ThenVsNow Story Agent ✅
+### Phase 2: ThenVsNow Story Director ✅
 
 **Files Modified:**
-- `agents/story/then_vs_now.md`
+- `directors/story/then_vs_now.md`
 
 **Changes:**
-- Complete agent prompt for generating ThenVsNow stories from movie names
+- Complete director prompt for generating ThenVsNow stories from movie names
 - CHARACTER IMAGE PROMPTS section with centered interview style specifications
 - 7 mandatory scene detail requirements:
   1. Exact Movie Scene Reference
@@ -74,7 +74,7 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 - `web_ui/backend/services/project_service.py`
 
 **Changes:**
-- ThenVsNow agent detection
+- ThenVsNow director detection
 - Special story generation flow for ThenVsNow projects
 - Direct shots.json creation (bypassing shot planner)
 - Automatic step completion marking
@@ -237,7 +237,7 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 ## Verification Steps
 
 ### ✅ Create a ThenVsNow Project
-1. Select "then_vs_now" story agent
+1. Select "then_vs_now" story director
 2. Enter a movie name (e.g., "The Godfather")
 3. Verify story.json has `project_type: 2`, characters array, movie metadata
 4. Verify shots.json has `is_flfi2v: true` for all shots
@@ -318,7 +318,7 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 
 ### Data Flow
 1. User enters movie name
-2. Story agent generates JSON with characters, scenes, metadata
+2. Story director generates JSON with characters, scenes, metadata
 3. Shots generated directly (2 per character: Meeting + Departure)
 4. Images generated with set prompts appended
 5. Videos generated using FLFI2V workflow with both images
@@ -330,7 +330,7 @@ The "Then Vs Now" feature with FLFI2V (First Last Frame Image to Video) support 
 
 ### New Files
 ```
-agents/story/then_vs_now.md
+directors/story/then_vs_now.md
 docs/guides/THEN_VS_NOW_QUICKSTART.md
 docs/guides/THEN_VS_NOW_SCENE_REQUIREMENTS.md
 docs/guides/VIEWING_FLFI2V_PROMPTS.md
@@ -373,7 +373,7 @@ All 12 phases of the implementation plan have been successfully completed. The f
 
 1. **Create a ThenVsNow Project:**
    - Navigate to Create Project page
-   - Select "then_vs_now" from Story Agent dropdown
+   - Select "then_vs_now" from Story Director dropdown
    - Enter a movie name (e.g., "The Godfather", "Titanic", "Back to the Future")
    - Set desired video length
    - Click "Create Project"

@@ -1,7 +1,7 @@
 """
 Unit tests for the FlowWeb (Google Flow, flow.google.com) image mode:
 
-- config defaults (URL, model, outputs, agent mode off, timeout)
+- config defaults (URL, model, outputs, director mode off, timeout)
 - subprocess pure helpers: text normalization, project registry round-trip,
   per-project lock acquire/release/stale-steal, selected-state heuristics
 - image_generator dispatch: mode='flow' routes to generate_image_flowweb and

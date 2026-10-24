@@ -4,7 +4,7 @@
 
 You correctly identified three major architectural issues in the current pipeline:
 
-1. **Static Narration Length**: The story agents (`agents/story/default.md` etc.) hardcode instructions to write "2-3 sentences" regardless of the `scene_duration`. A 15s scene and a 90s scene get the exact same amount of narration.
+1. **Static Narration Length**: The story directors (`directors/story/default.md` etc.) hardcode instructions to write "2-3 sentences" regardless of the `scene_duration`. A 15s scene and a 90s scene get the exact same amount of narration.
 2. **Narration in Shots vs Scenes**: Currently, `shot_planner.py` asks the LLM to put "narration" inside each shot, and `narration_generator.py` concats all shot narrations together. This is dangerous because an LLM might repeat the scene's narration for every shot in that scene, or poorly slice sentences across 5-second shots.
 3. **Missing Scene Reference**: Flat shot lists don't easily map back to the scene they originated from.
 
@@ -14,12 +14,12 @@ You correctly identified three major architectural issues in the current pipelin
 
 We should generate narration proportionally to `scene_duration`.
 
-- **Modify Story Prompts**: Update `agents/story/*.md` files to replace static "2-3 sentences" with dynamic instructions: "For the narration field, generate exactly enough text to fit the scene_duration. Since average reading speed is ~2.5 words per second, a 60-second scene needs about 150 words of voice-over script, while a 15-second scene needs about 35 words."
+- **Modify Story Prompts**: Update `directors/story/*.md` files to replace static "2-3 sentences" with dynamic instructions: "For the narration field, generate exactly enough text to fit the scene_duration. Since average reading speed is ~2.5 words per second, a 60-second scene needs about 150 words of voice-over script, while a 15-second scene needs about 35 words."
 
 ### Phase 2: Relocate Narration to the Right Place
 
 - **The Correct Place**: Narration belongs in the **Scene** (or the master Story), NOT broken up into individual 5-second shots. Splitting speech across 5-second shots causes awkward pauses and makes context-aware TTS fail.
-- **Update Shot Planner**: Remove `narration` from the expected JSON output in `shot_planner.py` and the `image` agent prompts.
+- **Update Shot Planner**: Remove `narration` from the expected JSON output in `shot_planner.py` and the `image` director prompts.
 - **Update Narration Generator**: Change `narration_generator.py` to read narration from `story.json`'s `scenes` list instead of `shots.json`. It should iterate over scenes, extracting their narration.
 - **Link Shots to Scenes**: Add a `scene_index` field to each generated shot so we know exactly which scene it belongs to. In `shot_planner.py`, we inject the parent `scene_index` into each shot generated for that scene.
 

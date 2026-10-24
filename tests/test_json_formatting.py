@@ -22,7 +22,7 @@ def test_story_json_formatting():
     print("\n1. Building story with target_length=180...")
     story_json = build_story(
         "A T-Rex hunting in the Cretaceous period",
-        agent_name='prehistoric_pov',
+        director_name='prehistoric_pov',
         target_length=180
     )
 
@@ -99,7 +99,7 @@ def test_story_json_formatting_no_target():
     print("\n1. Building story without target_length...")
     story_json = build_story(
         "A simple story about redwood trees",
-        agent_name='default'
+        director_name='default'
     )
 
     # Check formatting

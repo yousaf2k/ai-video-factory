@@ -19,7 +19,7 @@ Each character gets two video segments:
 
 1. Go to the Web UI
 2. Click "Create New Project"
-3. **Story Agent**: Select "then_vs_now"
+3. **Story Director**: Select "then_vs_now"
 4. **Idea**: Enter a movie name (e.g., "The Godfather", "Back to the Future")
 5. **Duration** (optional): Set target video length in seconds
 6. Click "Create Project"
@@ -110,7 +110,7 @@ Shots with the **FLFI2V** badge (purple-to-pink gradient) indicate:
 
 ### Input
 ```
-Story Agent: then_vs_now
+Story Director: then_vs_now
 Idea: The Godfather
 Duration: 300 seconds (5 minutes)
 ```
@@ -172,7 +172,7 @@ Total shots: 8 characters × 2 = 16 shots
 **Cause**: Shot wasn't generated with FLFI2V mode
 
 **Solution**:
-1. Check that story agent was "then_vs_now"
+1. Check that story director was "then_vs_now"
 2. Verify shots.json has `"is_flfi2v": true`
 3. Try recreating the project
 

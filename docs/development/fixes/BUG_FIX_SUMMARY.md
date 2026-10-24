@@ -2,7 +2,7 @@
 
 ## Overview
 
-Multiple bugs were encountered and fixed during the implementation and testing of the Prehistoric POV Dinosaur Agents. All issues have been resolved.
+Multiple bugs were encountered and fixed during the implementation and testing of the Prehistoric POV Dinosaur Directors. All issues have been resolved.
 
 ---
 
@@ -21,7 +21,7 @@ LLM returned JSON array of scenes directly instead of wrapping in `{"scenes": [.
 ### Fix
 - Updated `core/scene_graph.py` to handle both JSON formats
 - Added better error handling and logging
-- Updated story agents to specify correct JSON format
+- Updated story directors to specify correct JSON format
 
 ### Status
 ✅ **FIXED** - See `docs/SCENE_GRAPH_BUG_FIX.md`
@@ -59,15 +59,15 @@ Only 28 shots generated instead of expected 120 shots
 **Actual**: 28 shots total (5-7 shots per batch)
 
 ### Root Cause
-`prehistoric_pov.md` image agent was **missing the `{USER_INPUT}` placeholder**
+`prehistoric_pov.md` image director was **missing the `{USER_INPUT}` placeholder**
 
 This meant the batch instruction with shot requirements was never inserted into the prompt. The LLM never received the instruction to generate 24 shots, so it defaulted to 5-7 shots.
 
 **The flow**:
 1. `batch_instruction` created with "You MUST generate exactly 24 shots"
 2. `user_input = batch_graph + batch_instruction`
-3. `load_agent_prompt("image", user_input, "prehistoric_pov")` ← Should insert user_input
-4. **Problem**: Agent file has no `{USER_INPUT}` placeholder!
+3. `load_director_prompt("image", user_input, "prehistoric_pov")` ← Should insert user_input
+4. **Problem**: Director file has no `{USER_INPUT}` placeholder!
 5. **Result**: user_input discarded, LLM never sees shot requirements
 
 ### Fix
@@ -86,9 +86,9 @@ This meant the batch instruction with shot requirements was never inserted into 
 1. `core/scene_graph.py` - Fixed array handling, added logging
 2. `core/shot_planner.py` - Fixed config import, improved batch instructions
 
-### Agent Files
-3. `agents/story/prehistoric_pov.md` - Added JSON format specification
-4. `agents/story/prehistoric_dinosaur.md` - Added JSON format specification
+### Director Files
+3. `directors/story/prehistoric_pov.md` - Added JSON format specification
+4. `directors/story/prehistoric_dinosaur.md` - Added JSON format specification
 
 ### Documentation
 5. `docs/SCENE_GRAPH_BUG_FIX.md` - Bug #1 details
@@ -116,8 +116,8 @@ The pipeline should now work correctly. To test:
 ```bash
 # Create new project with fixed code
 python core/main.py \
-  --story-agent prehistoric_pov \
-  --image-agent prehistoric_pov \
+  --story-director prehistoric_pov \
+  --image-director prehistoric_pov \
   --idea "Time traveler encounters T-Rex in Cretaceous forest"
 ```
 

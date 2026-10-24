@@ -7,7 +7,7 @@
 
 ## Overview
 
-Add a new `ASMR_GLASS_CUTTING` project type that generates ASMR-style videos of glass sculpture fruits/vegetables being cut. Unlike standard projects that use separate story and shots agents, this follows the `THEN_VS_NOW` pattern where the story agent generates all shots directly in a single LLM call.
+Add a new `ASMR_GLASS_CUTTING` project type that generates ASMR-style videos of glass sculpture fruits/vegetables being cut. Unlike standard projects that use separate story and shots directors, this follows the `THEN_VS_NOW` pattern where the story director generates all shots directly in a single LLM call.
 
 ## Requirements
 
@@ -44,7 +44,7 @@ class ProjectType(str, Enum):
 ```python
 def build_story_asmr_glass_cutting(
     idea: str,
-    agent_name: str = "asmr/asmr_glass_cutting",
+    director_name: str = "asmr/asmr_glass_cutting",
     shot_duration: int = 5,
     aspect_ratio: str = "16:9"
 ) -> str:
@@ -53,7 +53,7 @@ def build_story_asmr_glass_cutting(
 
     Args:
         idea: Natural language description (e.g., "create videos of strawberry, apple, and tomato")
-        agent_name: Story agent to use
+        director_name: Story director to use
         shot_duration: Fixed duration for each shot in seconds
         aspect_ratio: Video aspect ratio
 
@@ -68,8 +68,8 @@ def build_story_asmr_glass_cutting(
 - Calculate total_duration = shot_count × shot_duration
 - Return standard story JSON format
 
-#### 3. Story Agent
-**File:** `agents/story/asmr/asmr_glass_cutting.md`
+#### 3. Story Director
+**File:** `directors/story/asmr/asmr_glass_cutting.md`
 
 **Structure:**
 - System prompt with 6 glass sculpture example prompts
@@ -108,7 +108,7 @@ User Input (Natural Language)
     ↓
 build_story_asmr_glass_cutting(idea)
     ↓
-load_agent_prompt("asmr/asmr_glass_cutting", idea)
+load_director_prompt("asmr/asmr_glass_cutting", idea)
     ↓
 LLM Single Call (extracts objects + generates prompts)
     ↓
@@ -132,7 +132,7 @@ Standard Pipeline (image/video generation)
 ```bash
 python core/main.py \
   --idea "create videos of strawberry, apple, and tomato" \
-  --story-agent asmr/asmr_glass_cutting \
+  --story-director asmr/asmr_glass_cutting \
   --project-type asmr_glass_cutting \
   --shot-duration 5
 ```
@@ -166,7 +166,7 @@ if project_type == ProjectType.ASMR_GLASS_CUTTING:
 - **Resolution:** Ultra 8K or 4K
 - **Frame:** Professional food ASMR style
 
-### Example Prompts (Include in Agent)
+### Example Prompts (Include in Director)
 1. Strawberry with embedded golden seeds
 2. Red apple with glass texture
 3. Green starfruit with black gloves
@@ -199,7 +199,7 @@ if len(story["shots"]) < 3:
     logger.warning(f"Only {len(story['shots'])} shots generated. Expected at least 3.")
 ```
 
-### Agent Prompt Safeguards
+### Director Prompt Safeguards
 - Include clear instructions for object extraction
 - Provide fallback to common objects if ambiguous
 - Require minimum 3 objects, maximum 10 objects
@@ -262,15 +262,15 @@ def test_full_pipeline_asmr():
 ```bash
 # Test specific objects
 python core/main.py --idea "create videos of strawberry, apple, and tomato" \
-  --story-agent asmr/asmr_glass_cutting --test-mode
+  --story-director asmr/asmr_glass_cutting --test-mode
 
 # Test category expansion
 python core/main.py --idea "tropical fruits" \
-  --story-agent asmr/asmr_glass_cutting --test-mode
+  --story-director asmr/asmr_glass_cutting --test-mode
 
 # Test duration calculation
 python core/main.py --idea "banana and orange" \
-  --story-agent asmr/asmr_glass_cutting --shot-duration 8 --test-mode
+  --story-director asmr/asmr_glass_cutting --shot-duration 8 --test-mode
 ```
 
 ## Implementation Checklist
@@ -278,11 +278,11 @@ python core/main.py --idea "banana and orange" \
 ### Core Files
 - [ ] Add `ASMR_GLASS_CUTTING` to `ProjectType` enum
 - [ ] Create `build_story_asmr_glass_cutting()` in `story_engine.py`
-- [ ] Create agent file `agents/story/asmr/asmr_glass_cutting.md`
+- [ ] Create director file `directors/story/asmr/asmr_glass_cutting.md`
 - [ ] Add CLI routing in `core/main.py`
 - [ ] Add API support in `web_ui/backend/api/projects.py`
 
-### Agent Development
+### Director Development
 - [ ] Write system prompt with 6 example prompts
 - [ ] Define JSON output schema
 - [ ] Add object extraction instructions
@@ -303,7 +303,7 @@ python core/main.py --idea "banana and orange" \
 ## Success Criteria
 
 ✅ User can provide natural language input
-✅ Agent extracts objects or expands categories
+✅ Director extracts objects or expands categories
 ✅ 5-10 shots generated for categories
 ✅ Fixed duration per shot (configurable)
 ✅ Glass sculpture style strictly followed

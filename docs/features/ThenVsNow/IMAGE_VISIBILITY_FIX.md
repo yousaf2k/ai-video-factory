@@ -237,7 +237,7 @@ print('✅ Frontend compatibility verified')
 1. **Create a ThenVsNow project:**
    ```bash
    # Via Web UI
-   - Story Agent: then_vs_now
+   - Story Director: then_vs_now
    - Idea: The Godfather
    ```
 

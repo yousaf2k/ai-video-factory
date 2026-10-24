@@ -12,7 +12,7 @@ Your codebase uses two main logging modules:
 
 ### Setup Functions Imported:
 - `get_logger()` - Standard logger
-- `setup_agent_logger()` - Agent-specific logger
+- `setup_director_logger()` - Director-specific logger
 - `setup_api_logger()` - API-specific logger
 - `setup_llm_io_logger()` - LLM input/output logger
 
@@ -27,17 +27,17 @@ logger = get_logger(__name__)
 
 #### core/shot_planner.py (typo: file is named shot_planner.py)
 ```python
-from core.logger_config import setup_agent_logger
-logger = setup_agent_logger(__name__)
+from core.logger_config import setup_director_logger
+logger = setup_director_logger(__name__)
 ```
-**Purpose**: Agent operation logging for shot planning
+**Purpose**: Director operation logging for shot planning
 
-#### core/agent_loader.py
+#### core/director_loader.py
 ```python
-from core.logger_config import setup_agent_logger
-logger = setup_agent_logger(__name__)
+from core.logger_config import setup_director_logger
+logger = setup_director_logger(__name__)
 ```
-**Purpose**: Agent loading operations
+**Purpose**: Director loading operations
 
 #### core/gemini_engine.py
 ```python
@@ -82,7 +82,7 @@ from core.logger_config import setup_llm_io_logger
 
 #### core/log_decorators.py
 ```python
-from core.logger_config import get_logger, setup_api_logger, setup_agent_logger
+from core.logger_config import get_logger, setup_api_logger, setup_director_logger
 ```
 **Purpose**: Decorators need access to logger setup functions
 
@@ -91,7 +91,7 @@ from core.logger_config import get_logger, setup_api_logger, setup_agent_logger
 ## 2. log_decorators.py Usage
 
 ### Decorators Available:
-- `@log_agent_call` - Logs agent function calls
+- `@log_director_call` - Logs director function calls
 - `@log_api_call` - Logs API function calls
 - `@log_errors` - Logs errors (though no active usage found)
 
@@ -99,19 +99,19 @@ from core.logger_config import get_logger, setup_api_logger, setup_agent_logger
 
 #### core/shot_planner.py
 ```python
-from core.log_decorators import log_agent_call
+from core.log_decorators import log_director_call
 
-@log_agent_call
+@log_director_call
 def plan_shots(scene_graph, max_shots=None, ...):
     """Plan cinematic shots..."""
 ```
 **Purpose**: Automatically logs shot planning operations (input params, results, timing)
 
-#### core/agent_loader.py
+#### core/director_loader.py
 ```python
-from core.log_decorators import log_agent_call
+from core.log_decorators import log_director_call
 ```
-**Purpose**: Ready for use on agent loading functions
+**Purpose**: Ready for use on director loading functions
 
 #### core/gemini_engine.py
 ```python
@@ -128,7 +128,7 @@ def ask(prompt: str, response_format: str = None) -> str:
 ## 3. Active Usage Summary
 
 ### Currently Active Decorators:
-1. **`@log_agent_call`** in:
+1. **`@log_director_call`** in:
    - `core/shot_planner.py:plan_shots()` - Logs shot planning operations
 
 2. **`@log_api_call`** in:
@@ -136,7 +136,7 @@ def ask(prompt: str, response_format: str = None) -> str:
 
 ### Currently Inactive/Available:
 - `@log_errors` decorator exists but no active usage found
-- `agent_loader.py` imports `@log_agent_call` but doesn't use it on functions yet
+- `director_loader.py` imports `@log_director_call` but doesn't use it on functions yet
 
 ---
 
@@ -145,18 +145,18 @@ def ask(prompt: str, response_format: str = None) -> str:
 ### Example 1: Shot Planning (core/shot_planner.py)
 ```python
 # Import decorator and logger setup
-from core.log_decorators import log_agent_call
-from core.logger_config import setup_agent_logger
+from core.log_decorators import log_director_call
+from core.logger_config import setup_director_logger
 
 # Setup logger for this module
-logger = setup_agent_logger(__name__)
+logger = setup_director_logger(__name__)
 
 # Decorated function - automatically logs:
 # - Function entry with parameters
 # - Function exit with results
 # - Execution time
 # - Any errors
-@log_agent_call
+@log_director_call
 def plan_shots(scene_graph, max_shots=None, ...):
     """Plan cinematic shots..."""
     # Function body logs via logger
@@ -194,14 +194,14 @@ def ask(prompt: str, response_format: str = None) -> str:
 - **Purpose**: General-purpose module logging
 - **Logs to**: `logs/app.log`
 
-### setup_agent_logger(__name__)
-- **Used in**: shot_planner.py, agent_loader.py
-- **Purpose**: Agent-specific operations (LLM agent calls)
-- **Logs to**: `logs/agents.log`
+### setup_director_logger(__name__)
+- **Used in**: shot_planner.py, director_loader.py
+- **Purpose**: Director-specific operations (LLM director calls)
+- **Logs to**: `logs/directors.log`
 - **Benefits**:
   - Structured JSON format
   - Request/response tracking
-  - Easier debugging of agent interactions
+  - Easier debugging of director interactions
 
 ### setup_api_logger(__name__)
 - **Imported in**: log_decorators.py
@@ -218,7 +218,7 @@ def ask(prompt: str, response_format: str = None) -> str:
 
 ## 6. What Gets Logged
 
-### With @log_agent_call decorator:
+### With @log_director_call decorator:
 - Function name called
 - Input parameters
 - Return value (if successful)
@@ -227,12 +227,12 @@ def ask(prompt: str, response_format: str = None) -> str:
 
 **Example log output**:
 ```
-[2025-01-15 10:30:45] [AGENT_CALL] plan_shots called with:
+[2025-01-15 10:30:45] [DIRECTOR_CALL] plan_shots called with:
   scene_graph: [...]
   max_shots: 20
-  image_agent: default
-  video_agent: default
-[2025-01-15 10:30:47] [AGENT_CALL] plan_shots completed in 2.3s
+  image_director: default
+  video_director: default
+[2025-01-15 10:30:47] [DIRECTOR_CALL] plan_shots completed in 2.3s
   Result: 20 shots generated
 ```
 
@@ -268,7 +268,7 @@ LOG_BACKUP_COUNT = 5
 
 ### Log Files Generated:
 - `logs/app.log` - General application logs
-- `logs/agents.log` - Agent operations (structured JSON)
+- `logs/directors.log` - Director operations (structured JSON)
 - `logs/api.log` - API calls
 - `logs/llm_io.log` - LLM input/output
 
@@ -298,7 +298,7 @@ All errors logged with full context for easier troubleshooting
 
 ## 9. Potential Improvements
 
-### 1. Add @log_agent_call to more functions
+### 1. Add @log_director_call to more functions
 Currently only used in:
 - `plan_shots()`
 
@@ -346,9 +346,9 @@ This suggests the file is `shot_planner.py` (with underscore).
 Your logging system is well-structured with:
 - ✅ **11 files** using logger_config.py
 - ✅ **3 files** using log_decorators.py
-- ✅ **2 decorators** actively used (@log_agent_call, @log_api_call)
-- ✅ **4 log types** (app, agents, api, llm_io)
-- ✅ **Automatic logging** for critical operations (API calls, agent calls)
+- ✅ **2 decorators** actively used (@log_director_call, @log_api_call)
+- ✅ **4 log types** (app, directors, api, llm_io)
+- ✅ **Automatic logging** for critical operations (API calls, director calls)
 
 The decorators provide automatic, structured logging without cluttering function code with manual logger calls.
 

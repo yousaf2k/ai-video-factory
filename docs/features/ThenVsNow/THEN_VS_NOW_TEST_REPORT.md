@@ -82,12 +82,12 @@ First shot:
 **Test:** Verify FLFI2V workflow is configured correctly
 
 **Checks:**
-- `THEN_VS_NOW_AGENTS` constant exists
+- `THEN_VS_NOW_DIRECTORS` constant exists
 - `wan22_flfi2v` workflow in `VIDEO_WORKFLOWS`
 - Correct node IDs configured
 
 **Results:**
-- ✅ `THEN_VS_NOW_AGENTS = ['then_vs_now']`
+- ✅ `THEN_VS_NOW_DIRECTORS = ['then_vs_now']`
 - ✅ `wan22_flfi2v` workflow found in `VIDEO_WORKFLOWS`
 - ✅ `workflow_path` points to correct file
 - ✅ `load_image_first_node_id: 128` (THEN image)
@@ -290,10 +290,10 @@ const imageUrl = shot.is_flfi2v
 
 ### 12. Project Service Test ✅
 
-**Test:** Verify project service detects ThenVsNow agent
+**Test:** Verify project service detects ThenVsNow director
 
 **Code Check:**
-- ✅ `create_project()` checks for `story_agent == "then_vs_now"`
+- ✅ `create_project()` checks for `story_director == "then_vs_now"`
 - ✅ Calls `build_story_then_vs_now()` for ThenVsNow projects
 - ✅ Bypasses shot planner for ThenVsNow projects
 - ✅ Marks story, scene_graph, shots steps complete
@@ -421,7 +421,7 @@ python -c "from web_ui.backend.services.generation_service import GenerationServ
 1. Start the web UI: `python web_ui/backend/main.py`
 2. Navigate to http://localhost:8000
 3. Create new project with:
-   - Story Agent: `then_vs_now`
+   - Story Director: `then_vs_now`
    - Idea: `The Godfather`
 4. Verify story generates with `project_type: 2`
 5. Verify shots have `is_flfi2v: true`

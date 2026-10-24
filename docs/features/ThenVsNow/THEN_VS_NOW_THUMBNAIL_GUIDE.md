@@ -392,7 +392,7 @@ Before finalizing a thumbnail prompt, verify:
 
 ## File Modified
 
-**File:** `agents/story/then_vs_now.md`
+**File:** `directors/story/then_vs_now.md`
 
 **Changes:**
 - Lines 31-32: Updated thumbnail prompts with new comprehensive format
@@ -405,7 +405,7 @@ Before finalizing a thumbnail prompt, verify:
 
 ### In Story Generation
 
-When the ThenVsNow agent generates a story, it will automatically create thumbnail prompts following these guidelines:
+When the ThenVsNow director generates a story, it will automatically create thumbnail prompts following these guidelines:
 
 ```json
 {

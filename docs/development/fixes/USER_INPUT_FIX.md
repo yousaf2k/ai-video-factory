@@ -21,7 +21,7 @@ Only 28 shots generated instead of 120 shots, despite clear batch instructions.
 
 ## Root Cause
 
-The `prehistoric_pov.md` image agent was **missing the `{USER_INPUT}` placeholder** at the end of the prompt file.
+The `prehistoric_pov.md` image director was **missing the `{USER_INPUT}` placeholder** at the end of the prompt file.
 
 ### How the Flow Works
 
@@ -47,17 +47,17 @@ user_input = f"{batch_graph}{batch_instruction}"
 # batch_instruction = Shot count requirements
 ```
 
-3. **Agent prompt loaded**:
+3. **Director prompt loaded**:
 ```python
-image_prompt = load_agent_prompt("image", user_input, "prehistoric_pov")
-# This loads the agent file and replaces {USER_INPUT} with user_input
+image_prompt = load_director_prompt("image", user_input, "prehistoric_pov")
+# This loads the director file and replaces {USER_INPUT} with user_input
 ```
 
-4. **Prompt sent to LLM**: The agent prompt + user_input (with shot requirements)
+4. **Prompt sent to LLM**: The director prompt + user_input (with shot requirements)
 
 ### The Problem
 
-The `prehistoric_pov.md` image agent file ended with:
+The `prehistoric_pov.md` image director file ended with:
 ```
 ## Remember
 - First-Person POV
@@ -122,7 +122,7 @@ You will receive scene descriptions with specific shot count requirements. Creat
 {USER_INPUT}
 ```
 
-### 3. Updated Other Image Agents (for consistency)
+### 3. Updated Other Image Directors (for consistency)
 
 - **default.md**: Updated shot distribution rules to emphasize "EXACTLY" following user input
 - **prehistoric_dinosaur.md**: Updated shot distribution rules for consistency
@@ -133,7 +133,7 @@ You will receive scene descriptions with specific shot count requirements. Creat
 
 **Prompt sent to LLM** (prehistoric_pov.md without {USER_INPUT}):
 ```
-[Full agent prompt about POV shots, hands, camera specs...]
+[Full director prompt about POV shots, hands, camera specs...]
 You are creating the most immersive, visceral prehistoric POV images ever generated...
 [END OF PROMPT - NO INSTRUCTION ABOUT SHOT COUNT!]
 ```
@@ -144,7 +144,7 @@ You are creating the most immersive, visceral prehistoric POV images ever genera
 
 **Prompt sent to LLM** (prehistoric_pov.md with {USER_INPUT}):
 ```
-[Full agent prompt about POV shots, hands, camera specs...]
+[Full director prompt about POV shots, hands, camera specs...]
 
 ## Shot Distribution Rules
 **CRITICAL**: Follow the shot count requirements specified in the user input EXACTLY.
@@ -174,9 +174,9 @@ IMPORTANT: Generate ONLY shots for these 1 scenes in this batch.
 
 ## Files Modified
 
-1. `agents/image/prehistoric_pov.md` - Added {USER_INPUT} placeholder and shot distribution rules
-2. `agents/image/default.md` - Updated shot distribution rules
-3. `agents/image/prehistoric_dinosaur.md` - Updated shot distribution rules
+1. `directors/image/prehistoric_pov.md` - Added {USER_INPUT} placeholder and shot distribution rules
+2. `directors/image/default.md` - Updated shot distribution rules
+3. `directors/image/prehistoric_dinosaur.md` - Updated shot distribution rules
 
 ## Expected Results After Fix
 
@@ -197,8 +197,8 @@ To test the fix:
 
 ```bash
 python core/main.py \
-  --story-agent prehistoric_pov \
-  --image-agent prehistoric_pov \
+  --story-director prehistoric_pov \
+  --image-director prehistoric_pov \
   --idea "Time traveler encounters T-Rex in Cretaceous forest"
 ```
 
@@ -209,41 +209,41 @@ python core/main.py \
 
 ## Technical Details
 
-### Agent Loader Flow
+### Director Loader Flow
 
-The `load_agent_prompt()` function in `agent_loader.py`:
+The `load_director_prompt()` function in `director_loader.py`:
 
 ```python
-def load_agent_prompt(agent_type: str, user_input: str, agent_name: str = "default") -> str:
-    loader = get_agent_loader()
-    return loader.format_prompt(agent_type, user_input, agent_name)
+def load_director_prompt(director_type: str, user_input: str, director_name: str = "default") -> str:
+    loader = get_director_loader()
+    return loader.format_prompt(director_type, user_input, director_name)
 
-def format_prompt(self, agent_type: str, user_input: str, agent_name: str = "default") -> str:
-    prompt = self.load_prompt(agent_type, agent_name)
+def format_prompt(self, director_type: str, user_input: str, director_name: str = "default") -> str:
+    prompt = self.load_prompt(director_type, director_name)
     return prompt.replace("{USER_INPUT}", user_input)  # ← Simple string replacement
 ```
 
 This function:
-1. Loads the agent prompt file (e.g., `prehistoric_pov.md`)
+1. Loads the director prompt file (e.g., `prehistoric_pov.md`)
 2. Replaces `{USER_INPUT}` with the provided user_input string
 3. Returns the complete prompt
 
-**If `{USER_INPUT}` is missing from the agent file**, the replacement does nothing, and the user_input (containing shot count requirements) is silently discarded!
+**If `{USER_INPUT}` is missing from the director file**, the replacement does nothing, and the user_input (containing shot count requirements) is silently discarded!
 
 ### Why This Bug Wasn't Caught Earlier
 
-1. Other image agents (default, time_traveler, artistic, etc.) had `{USER_INPUT}`
-2. Only `prehistoric_pov.md` was missing it (newly created agent)
-3. No validation to check if `{USER_INPUT}` exists in agent files
+1. Other image directors (default, time_traveler, artistic, etc.) had `{USER_INPUT}`
+2. Only `prehistoric_pov.md` was missing it (newly created director)
+3. No validation to check if `{USER_INPUT}` exists in director files
 4. No error if replacement doesn't find the placeholder
 
 ### Prevention
 
-For future agent files, ensure:
-1. ✅ All agent files have `{USER_INPUT}` at the end
+For future director files, ensure:
+1. ✅ All director files have `{USER_INPUT}` at the end
 2. ✅ Shot distribution rules explicitly state to follow user input requirements
 3. ✅ Use "CRITICAL" and "MUST" language for important requirements
-4. ✅ Test new agents with shot count requirements
+4. ✅ Test new directors with shot count requirements
 
 ## Status
 

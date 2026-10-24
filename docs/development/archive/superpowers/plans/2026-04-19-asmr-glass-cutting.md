@@ -4,7 +4,7 @@
 
 **Goal:** Add a new ASMR_GLASS_CUTTING project type that generates ASMR glass sculpture cutting videos directly from natural language input, following the existing THEN_VS_NOW pattern.
 
-**Architecture:** Reuse the THEN_VS_NOW direct-shot generation pattern where the story agent generates all shots in a single LLM call. Add ASMR_GLASS_CUTTING to ProjectType enum, create build_story_asmr_glass_cutting() function, and add natural language input handling with object extraction.
+**Architecture:** Reuse the THEN_VS_NOW direct-shot generation pattern where the story director generates all shots in a single LLM call. Add ASMR_GLASS_CUTTING to ProjectType enum, create build_story_asmr_glass_cutting() function, and add natural language input handling with object extraction.
 
 **Tech Stack:** Python, FastAPI, Pydantic, LLM providers (Gemini/OpenAI), existing story engine infrastructure
 
@@ -60,22 +60,22 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 
 ---
 
-## Task 2: Create ASMR Story Agent Prompt
+## Task 2: Create ASMR Story Director Prompt
 
 **Files:**
-- Create: `agents/story/asmr/asmr_glass_cutting.md`
+- Create: `directors/story/asmr/asmr_glass_cutting.md`
 
 - [ ] **Step 1: Create the asmr directory**
 
 ```bash
-mkdir -p agents/story/asmr
+mkdir -p directors/story/asmr
 ```
 
 Expected: Directory created successfully
 
-- [ ] **Step 2: Write the agent prompt file**
+- [ ] **Step 2: Write the director prompt file**
 
-Create `agents/story/asmr/asmr_glass_cutting.md` with this content:
+Create `directors/story/asmr/asmr_glass_cutting.md` with this content:
 
 ```markdown
 # ASMR Glass Sculpture Cutting Story Generator
@@ -191,32 +191,32 @@ Return ONLY valid JSON. No markdown, no explanations, no code blocks.
 {USER_INPUT}
 ```
 
-- [ ] **Step 3: Verify the agent file was created**
+- [ ] **Step 3: Verify the director file was created**
 
 ```bash
 # Verify file exists and has content
-ls -lh agents/story/asmr/asmr_glass_cutting.md
-wc -l agents/story/asmr/asmr_glass_cutting.md
+ls -lh directors/story/asmr/asmr_glass_cutting.md
+wc -l directors/story/asmr/asmr_glass_cutting.md
 ```
 
 Expected: File exists with 100+ lines
 
-- [ ] **Step 4: Test agent can be loaded**
+- [ ] **Step 4: Test director can be loaded**
 
 ```bash
-# Test the agent loader can find it
-python -c "from core.agent_loader import load_agent_prompt; print(load_agent_prompt('story', 'test input', 'asmr/asmr_glass_cutting')[:200])"
+# Test the director loader can find it
+python -c "from core.director_loader import load_director_prompt; print(load_director_prompt('story', 'test input', 'asmr/asmr_glass_cutting')[:200])"
 ```
 
-Expected: First 200 characters of the agent prompt printed
+Expected: First 200 characters of the director prompt printed
 
-- [ ] **Step 5: Commit the agent**
+- [ ] **Step 5: Commit the director**
 
 ```bash
-git add agents/story/asmr/asmr_glass_cutting.md
-git commit -m "feat: add ASMR glass cutting story agent
+git add directors/story/asmr/asmr_glass_cutting.md
+git commit -m "feat: add ASMR glass cutting story director
 
-Create comprehensive agent prompt for generating ASMR glass
+Create comprehensive director prompt for generating ASMR glass
 sculpture cutting videos. Includes 6 example prompts and
 detailed style guidelines.
 
@@ -328,19 +328,19 @@ Add this function to `core/story_engine.py` after the `build_story_then_vs_now` 
 ```python
 def build_story_asmr_glass_cutting(
     idea: str,
-    agent_name: str = "asmr/asmr_glass_cutting",
+    director_name: str = "asmr/asmr_glass_cutting",
     shot_duration: int = 5,
     aspect_ratio: str = "16:9"
 ) -> str:
     """
     Build an ASMR glass cutting story from natural language input.
     
-    The story agent generates all shots directly in a single LLM call,
+    The story director generates all shots directly in a single LLM call,
     following the THEN_VS_NOW pattern.
     
     Args:
         idea: Natural language description (e.g., "create videos of strawberry, apple, and tomato")
-        agent_name: Story agent to use (default: "asmr/asmr_glass_cutting")
+        director_name: Story director to use (default: "asmr/asmr_glass_cutting")
         shot_duration: Fixed duration for each shot in seconds (default: 5)
         aspect_ratio: Video aspect ratio (default: "16:9")
     
@@ -358,17 +358,17 @@ def build_story_asmr_glass_cutting(
     
     provider = get_provider()
     
-    # Load the ASMR agent prompt
-    # If agent_name doesn't contain a slash, assume it's in the asmr/ directory
-    final_agent_path = agent_name
-    if "/" not in agent_name:
-        final_agent_path = f"asmr/{agent_name}"
+    # Load the ASMR director prompt
+    # If director_name doesn't contain a slash, assume it's in the asmr/ directory
+    final_director_path = director_name
+    if "/" not in director_name:
+        final_director_path = f"asmr/{director_name}"
     
     try:
-        prompt = load_agent_prompt("story", idea, final_agent_path)
+        prompt = load_director_prompt("story", idea, final_director_path)
     except (FileNotFoundError, ValueError) as e:
-        logger.error(f"Failed to load ASMR agent: {e}")
-        raise ValueError(f"ASMR glass cutting agent not found: {final_agent_path}")
+        logger.error(f"Failed to load ASMR director: {e}")
+        raise ValueError(f"ASMR glass cutting director not found: {final_director_path}")
     
     # Generate story with shots
     logger.info(f"Generating ASMR glass cutting story for: {idea}")
@@ -499,35 +499,35 @@ Edit the story generation section (around line 1434) to add routing logic.
 
 **Find this section:**
 ```python
-        story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
+        story_json = build_story(idea, director_name=story_director, target_length=target_length)
         project_mgr.save_story(project_id, story_json)
 ```
 
 **Replace with:**
 ```python
         # Route to appropriate story builder based on project type
-        is_asmr = story_agent == "asmr_glass_cutting" or story_agent.startswith("asmr/")
-        is_then_vs_now = story_agent == "then_vs_now" or story_agent.startswith("then_vs_now/")
+        is_asmr = story_director == "asmr_glass_cutting" or story_director.startswith("asmr/")
+        is_then_vs_now = story_director == "then_vs_now" or story_director.startswith("then_vs_now/")
         
         if is_asmr:
-            logger.info(f"Using ASMR glass cutting story builder with agent: {story_agent}")
+            logger.info(f"Using ASMR glass cutting story builder with director: {story_director}")
             story_json = build_story_asmr_glass_cutting(
                 idea=idea,
-                agent_name=story_agent,
+                director_name=story_director,
                 shot_duration=args.shot_length if hasattr(args, 'shot_length') and args.shot_length else 5,
                 aspect_ratio=args.aspect_ratio if hasattr(args, 'aspect_ratio') else "16:9"
             )
         elif is_then_vs_now:
-            logger.info(f"Using ThenVsNow story builder with agent: {story_agent}")
+            logger.info(f"Using ThenVsNow story builder with director: {story_director}")
             story_json = build_story_then_vs_now(
                 movie_name=idea,
-                agent_name=story_agent,
+                director_name=story_director,
                 target_length=target_length,
                 aspect_ratio=args.aspect_ratio if hasattr(args, 'aspect_ratio') else "16:9"
             )
         else:
             # Standard story generation
-            story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
+            story_json = build_story(idea, director_name=story_director, target_length=target_length)
         
         project_mgr.save_story(project_id, story_json)
 ```
@@ -538,7 +538,7 @@ Find the second occurrence (around line 1693 in the _run_auto_mode function) and
 
 **Find this section:**
 ```python
-                story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
+                story_json = build_story(idea, director_name=story_director, target_length=target_length)
                 project_mgr.save_story(project_id, story_json)
 ```
 
@@ -548,16 +548,16 @@ Find the second occurrence (around line 1693 in the _run_auto_mode function) and
 
 ```bash
 # Verify the routing logic was added
-grep -A 15 "is_asmr = story_agent" core/main.py | head -20
+grep -A 15 "is_asmr = story_director" core/main.py | head -20
 ```
 
-Expected: See the routing logic checking for asmr agents
+Expected: See the routing logic checking for asmr directors
 
 - [ ] **Step 7: Test CLI with dry run**
 
 ```bash
-# Test that the CLI accepts the new agent
-python core/main.py --idea "test" --story-agent asmr/asmr_glass_cutting --step 2 2>&1 | head -20
+# Test that the CLI accepts the new director
+python core/main.py --idea "test" --story-director asmr/asmr_glass_cutting --step 2 2>&1 | head -20
 ```
 
 Expected: See log message about using ASMR glass cutting story builder
@@ -569,8 +569,8 @@ git add core/main.py
 git commit -m "feat: add CLI routing for ASMR glass cutting
 
 Route ASMR glass cutting requests to build_story_asmr_glass_cutting()
-function based on agent name prefix. Supports both 'asmr_glass_cutting'
-and 'asmr/asmr_glass_cutting' agent formats.
+function based on director name prefix. Supports both 'asmr_glass_cutting'
+and 'asmr/asmr_glass_cutting' director formats.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ```
@@ -616,15 +616,15 @@ from core.story_engine import build_story_asmr_glass_cutting
 Find this section (around line 220-234):
 
 ```python
-        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.agent == "then_vs_now" or request.agent.startswith("then_vs_now/")
+        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.director == "then_vs_now" or request.director.startswith("then_vs_now/")
 
         if is_then_vs_now:
             from core.story_engine import build_story_then_vs_now
             
-            logger.info(f"Regenerating ThenVsNow story with agent: {request.agent}")
+            logger.info(f"Regenerating ThenVsNow story with director: {request.director}")
             story_json = build_story_then_vs_now(
                 movie_name=idea,
-                agent_name=request.agent,
+                director_name=request.director,
                 target_length=target_length,
                 aspect_ratio=aspect_ratio
             )
@@ -635,14 +635,14 @@ Find this section (around line 220-234):
 **Add ASMR routing after the THEN_VS_NOW block:**
 
 ```python
-        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.agent == "then_vs_now" or request.agent.startswith("then_vs_now/")
-        is_asmr = meta.get('project_type') == ProjectType.ASMR_GLASS_CUTTING or request.agent == "asmr_glass_cutting" or request.agent.startswith("asmr/")
+        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.director == "then_vs_now" or request.director.startswith("then_vs_now/")
+        is_asmr = meta.get('project_type') == ProjectType.ASMR_GLASS_CUTTING or request.director == "asmr_glass_cutting" or request.director.startswith("asmr/")
 
         if is_asmr:
-            logger.info(f"Generating ASMR glass cutting story with agent: {request.agent}")
+            logger.info(f"Generating ASMR glass cutting story with director: {request.director}")
             story_json = build_story_asmr_glass_cutting(
                 idea=idea,
-                agent_name=request.agent,
+                director_name=request.director,
                 shot_duration=meta.get("shot_duration", 5),
                 aspect_ratio=aspect_ratio
             )
@@ -669,10 +669,10 @@ Find this section (around line 220-234):
         elif is_then_vs_now:
             from core.story_engine import build_story_then_vs_now
             
-            logger.info(f"Regenerating ThenVsNow story with agent: {request.agent}")
+            logger.info(f"Regenerating ThenVsNow story with director: {request.director}")
             story_json = build_story_then_vs_now(
                 movie_name=idea,
-                agent_name=request.agent,
+                director_name=request.director,
                 target_length=target_length,
                 aspect_ratio=aspect_ratio
             )
@@ -696,7 +696,7 @@ git add web_ui/backend/api/stories.py
 git commit -m "feat: add Web UI API routing for ASMR glass cutting
 
 Add API endpoint support for ASMR glass cutting project type.
-Routes requests with asmr/ agent prefix to the appropriate
+Routes requests with asmr/ director prefix to the appropriate
 story builder. Handles project metadata updates.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
@@ -715,7 +715,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 ```bash
 python core/main.py \
   --idea "create videos of strawberry, apple, and tomato" \
-  --story-agent asmr/asmr_glass_cutting \
+  --story-director asmr/asmr_glass_cutting \
   --shot-duration 5 \
   --step 2
 ```
@@ -731,7 +731,7 @@ Expected:
 ```bash
 python core/main.py \
   --idea "tropical fruits" \
-  --story-agent asmr/asmr_glass_cutting \
+  --story-director asmr/asmr_glass_cutting \
   --shot-duration 5 \
   --step 2
 ```
@@ -764,7 +764,7 @@ cd web_ui/backend && python main.py &
 curl -X POST http://localhost:8000/api/projects/<project_id>/story/regenerate \
   -H "Content-Type: application/json" \
   -d '{
-    "agent": "asmr/asmr_glass_cutting",
+    "director": "asmr/asmr_glass_cutting",
     "idea": "strawberry, banana, orange"
   }'
 ```
@@ -777,7 +777,7 @@ Expected: JSON response with story, shots, and meta
 # Test with empty input
 python core/main.py \
   --idea "" \
-  --story-agent asmr/asmr_glass_cutting \
+  --story-director asmr/asmr_glass_cutting \
   --step 2 2>&1 | grep -i "error"
 ```
 
@@ -814,7 +814,7 @@ cat > /tmp/asmr_test_results.md << 'EOF'
 
 ### API Tests  
 - [x] Story generation endpoint
-- [x] Agent routing: asmr/ prefix
+- [x] Director routing: asmr/ prefix
 - [x] Project metadata updates
 
 ### Output Validation
@@ -870,16 +870,16 @@ Find the "Development Commands" section in CLAUDE.md and add:
 ```bash
 # Generate ASMR glass cutting videos from natural language
 python core/main.py --idea "create videos of strawberry, apple, and tomato" \
-  --story-agent asmr/asmr_glass_cutting \
+  --story-director asmr/asmr_glass_cutting \
   --shot-duration 5
 
-# Generate from category (agent expands to 5-10 objects)
+# Generate from category (director expands to 5-10 objects)
 python core/main.py --idea "tropical fruits" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 
 # Custom shot duration
 python core/main.py --idea "red fruits" \
-  --story-agent asmr/asmr_glass_cutting \
+  --story-director asmr/asmr_glass_cutting \
   --shot-duration 8
 ```
 ```
@@ -898,7 +898,7 @@ The ASMR Glass Cutting project type generates cinematic ASMR videos of glass scu
 ## Features
 
 - **Natural Language Input**: Describe what you want in plain English
-- **Smart Object Extraction**: Agent extracts specific objects from your description
+- **Smart Object Extraction**: Director extracts specific objects from your description
 - **Category Expansion**: Say "red fruits" and get 5-10 specific fruits
 - **Glass Sculpture Style**: All prompts follow consistent glass sculpture aesthetics
 - **Single LLM Call**: Fast generation with one API call
@@ -911,7 +911,7 @@ The ASMR Glass Cutting project type generates cinematic ASMR videos of glass scu
 ```bash
 python core/main.py \
   --idea "create videos of strawberry, apple, and tomato" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 
 **Output**: 3 shots (one per object)
@@ -921,17 +921,17 @@ python core/main.py \
 ```bash
 python core/main.py \
   --idea "tropical fruits" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 
-**Output**: 5-10 shots (agent expands the category)
+**Output**: 5-10 shots (director expands the category)
 
 ### Mixed Input
 
 ```bash
 python core/main.py \
   --idea "make ASMR videos for summer fruits like watermelon and mango" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 
 **Output**: 5-10 shots including mentioned fruits
@@ -942,7 +942,7 @@ python core/main.py \
 |-----------|---------|-------------|
 | `--shot-duration` | 5 | Duration per shot in seconds |
 | `--aspect-ratio` | 16:9 | Video aspect ratio (16:9, 9:16, 1:1, etc.) |
-| `--story-agent` | asmr/asmr_glass_cutting | Agent to use for generation |
+| `--story-director` | asmr/asmr_glass_cutting | Director to use for generation |
 
 ## Input Tips
 
@@ -955,7 +955,7 @@ python core/main.py \
 ❌ **Avoid:**
 - Comma-separated lists without context: "strawberry, apple, tomato"
 - Too vague: "make some videos"
-- Non-food objects: "cut a car" (agent expects fruits/vegetables)
+- Non-food objects: "cut a car" (director expects fruits/vegetables)
 
 ## Output Structure
 
@@ -995,7 +995,7 @@ All generated prompts follow the glass sculpture style:
 ## Web UI Usage
 
 1. Create a new project
-2. Select agent: `asmr/asmr_glass_cutting`
+2. Select director: `asmr/asmr_glass_cutting`
 3. Enter your idea: "create videos of tropical fruits"
 4. Click "Generate Story"
 5. Review shots and proceed to image/video generation
@@ -1009,7 +1009,7 @@ All generated prompts follow the glass sculpture style:
 - **Solution**: This is normal for specific objects. Use category expansion for more shots
 
 **Problem**: Prompts don't mention glass
-- **Solution**: The agent should automatically use glass style. If not, check the agent prompt file
+- **Solution**: The director should automatically use glass style. If not, check the director prompt file
 
 **Problem**: Total duration seems wrong
 - **Solution**: total_duration = shot_count × shot_duration. Check both values
@@ -1020,7 +1020,7 @@ All generated prompts follow the glass sculpture style:
 ```bash
 python core/main.py \
   --idea "red fruits" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 Generates: Strawberry, Apple, Tomato, Cherry, Raspberry, Watermelon, etc.
 
@@ -1028,7 +1028,7 @@ Generates: Strawberry, Apple, Tomato, Cherry, Raspberry, Watermelon, etc.
 ```bash
 python core/main.py \
   --idea "tropical fruits" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 Generates: Mango, Pineapple, Papaya, Coconut, Guava, etc.
 
@@ -1036,7 +1036,7 @@ Generates: Mango, Pineapple, Papaya, Coconut, Guava, etc.
 ```bash
 python core/main.py \
   --idea "common salad vegetables" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 Generates: Tomato, Cucumber, Bell Pepper, Carrot, Lettuce, etc.
 ```
@@ -1100,9 +1100,9 @@ cat > /tmp/IMPLEMENTATION_SUMMARY.md << 'EOF'
 
 ✅ **Core Implementation**
 - Added ASMR_GLASS_CUTTING to ProjectType enum (value 4)
-- Created comprehensive story agent with 6 example prompts
+- Created comprehensive story director with 6 example prompts
 - Implemented build_story_asmr_glass_cutting() function
-- Added CLI routing for asmr/ agent prefix
+- Added CLI routing for asmr/ director prefix
 - Added Web UI API routing support
 
 ✅ **Testing**
@@ -1119,7 +1119,7 @@ cat > /tmp/IMPLEMENTATION_SUMMARY.md << 'EOF'
 ## Files Modified
 
 1. `web_ui/backend/models/story.py` - Added enum
-2. `agents/story/asmr/asmr_glass_cutting.md` - New agent
+2. `directors/story/asmr/asmr_glass_cutting.md` - New director
 3. `core/story_engine.py` - New function
 4. `core/main.py` - CLI routing
 5. `web_ui/backend/api/stories.py` - API routing
@@ -1133,18 +1133,18 @@ cat > /tmp/IMPLEMENTATION_SUMMARY.md << 'EOF'
 # Basic usage
 python core/main.py \
   --idea "create videos of strawberry, apple, and tomato" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 
 # Category expansion
 python core/main.py \
   --idea "tropical fruits" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 
 ## Success Criteria Met
 
 ✅ User can provide natural language input
-✅ Agent extracts objects or expands categories
+✅ Director extracts objects or expands categories
 ✅ 5-10 shots generated for categories
 ✅ Fixed duration per shot (configurable)
 ✅ Glass sculpture style strictly followed
@@ -1180,7 +1180,7 @@ git commit -m "feat: complete ASMR glass cutting implementation
 
 All tasks completed:
 - Project type enum added
-- Story agent created with examples
+- Story director created with examples
 - Core function implemented
 - CLI and API routing added
 - Comprehensive test suite
@@ -1231,13 +1231,13 @@ Expected: No critical issues
 
 ```bash
 # Test with very long input
-python core/main.py --idea "create videos of $(echo 'strawberry,' '{1..20}' | sed 's/ //g')" --story-agent asmr/asmr_glass_cutting --step 2
+python core/main.py --idea "create videos of $(echo 'strawberry,' '{1..20}' | sed 's/ //g')" --story-director asmr/asmr_glass_cutting --step 2
 
 # Test with unusual fruits
-python core/main.py --idea "create videos of dragonfruit and durian" --story-agent asmr/asmr_glass_cutting --step 2
+python core/main.py --idea "create videos of dragonfruit and durian" --story-director asmr/asmr_glass_cutting --step 2
 
 # Test with vegetables
-python core/main.py --idea "make videos of broccoli, cauliflower, and carrots" --story-agent asmr/asmr_glass_cutting --step 2
+python core/main.py --idea "make videos of broccoli, cauliflower, and carrots" --story-director asmr/asmr_glass_cutting --step 2
 ```
 
 Expected: Handles edge cases gracefully
@@ -1246,7 +1246,7 @@ Expected: Handles edge cases gracefully
 
 ```bash
 # Time a generation
-time python core/main.py --idea "red fruits" --story-agent asmr/asmr_glass_cutting --step 2
+time python core/main.py --idea "red fruits" --story-director asmr/asmr_glass_cutting --step 2
 ```
 
 Expected: Completes in reasonable time (< 30 seconds for LLM call)
@@ -1278,7 +1278,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 After completing all tasks, verify:
 
 - [x] **User can provide natural language input** ✓
-- [x] **Agent extracts objects or expands categories** ✓
+- [x] **Director extracts objects or expands categories** ✓
 - [x] **5-10 shots generated for categories** ✓
 - [x] **Fixed duration per shot (configurable)** ✓
 - [x] **Glass sculpture style strictly followed** ✓
@@ -1290,7 +1290,7 @@ After completing all tasks, verify:
 
 ## Notes for Implementation
 
-1. **Agent Prompt Quality**: The agent prompt includes 6 detailed examples. This is crucial for getting high-quality outputs.
+1. **Director Prompt Quality**: The director prompt includes 6 detailed examples. This is crucial for getting high-quality outputs.
 
 2. **Error Handling**: Comprehensive validation at each step prevents bad data from reaching the pipeline.
 

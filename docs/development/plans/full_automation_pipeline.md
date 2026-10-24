@@ -8,7 +8,7 @@ To achieve full automation of the AI video generation system, focusing on improv
 
 ### Phase 1: Dynamic Narration Length
 
-- **Problem**: Narration was statically constrained to `(2-3 sentences)` across 16 different story agents. This caused pacing issues where 60s or 75s scenes had dead air.
+- **Problem**: Narration was statically constrained to `(2-3 sentences)` across 16 different story directors. This caused pacing issues where 60s or 75s scenes had dead air.
 - **Solution**: Replaced hardcoded constraints with a dynamic instruction: `Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.`
 
 ### Phase 2: Scene-Level Narration & Shot Linking

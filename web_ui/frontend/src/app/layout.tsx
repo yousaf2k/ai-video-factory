@@ -40,8 +40,8 @@ export default function RootLayout({
                     Assets
                   </Link>
                   <QueueMenuLink />
-                  <Link href="/agents" className="text-sm font-medium hover:text-primary transition-colors">
-                    Agents
+                  <Link href="/directors" className="text-sm font-medium hover:text-primary transition-colors">
+                    Directors
                   </Link>
                   <EditorMenuLink />
                   <Link href="/workflows" className="text-sm font-medium hover:text-primary transition-colors">

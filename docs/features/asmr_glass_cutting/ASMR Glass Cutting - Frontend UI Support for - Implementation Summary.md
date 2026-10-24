@@ -20,8 +20,8 @@ export enum ProjectType {
 
 **Changes:**
 - Added ASMR Glass Cutting option to project type selector dropdown
-- Updated agent filtering logic to include `asmr` category agents
-- Filters agents: `agent.category === "asmr" || agent.id.startsWith("asmr/")`
+- Updated director filtering logic to include `asmr` category directors
+- Filters directors: `director.category === "asmr" || director.id.startsWith("asmr/")`
 
 **UI Component:**
 ```tsx
@@ -33,17 +33,17 @@ export enum ProjectType {
 </SelectContent>
 ```
 
-**Agent Filtering Logic:**
+**Director Filtering Logic:**
 ```typescript
-const filteredStoryAgents = agents?.story?.filter((agent: any) => {
+const filteredStoryDirectors = directors?.story?.filter((director: any) => {
   if ((selectedProjectType as number) === ProjectType.ThenVsNow) {
-    return agent.category === "then_vs_now";
+    return director.category === "then_vs_now";
   } else if ((selectedProjectType as number) === ProjectType.Movie) {
-    return agent.category === "movie";
+    return director.category === "movie";
   } else if ((selectedProjectType as number) === ProjectType.AsmrGlassCutting) {  // NEW
-    return agent.category === "asmr" || agent.id.startsWith("asmr/");
+    return director.category === "asmr" || director.id.startsWith("asmr/");
   } else {
-    return agent.category === "documentary" || !agent.category;
+    return director.category === "documentary" || !director.category;
   }
 }) || [];
 ```
@@ -52,21 +52,21 @@ const filteredStoryAgents = agents?.story?.filter((agent: any) => {
 **File:** `web_ui/frontend/src/app/projects/[id]/edit/page.tsx`
 
 **Changes:**
-- Added ASMR agent filtering to story regeneration dropdown
-- Ensures existing ASMR projects can regenerate stories with correct agents
+- Added ASMR director filtering to story regeneration dropdown
+- Ensures existing ASMR projects can regenerate stories with correct directors
 
-**Agent Filtering Logic:**
+**Director Filtering Logic:**
 ```typescript
-const filteredStoryAgents = agents?.story?.filter((agent: any) => {
+const filteredStoryDirectors = directors?.story?.filter((director: any) => {
   const projectType = project?.story?.project_type;
   if (projectType === ProjectType.ThenVsNow) {
-    return agent.category === "then_vs_now";
+    return director.category === "then_vs_now";
   } else if (projectType === ProjectType.AsmrGlassCutting) {  // NEW
-    return agent.category === "asmr" || agent.id.startsWith("asmr/");
+    return director.category === "asmr" || director.id.startsWith("asmr/");
   } else if (projectType === ProjectType.Movie) {
-    return agent.category === "movie";
+    return director.category === "movie";
   } else {
-    return agent.category === "documentary" || !agent.category;
+    return director.category === "documentary" || !director.category;
   }
 }) || [];
 ```
@@ -78,9 +78,9 @@ const filteredStoryAgents = agents?.story?.filter((agent: any) => {
 1. Navigate to `/projects`
 2. Click "New Project"
 3. In Project Type dropdown, select "ASMR Glass Cutting"
-4. Story Agent dropdown will show only ASMR agents:
+4. Story Director dropdown will show only ASMR directors:
    - `asmr/asmr_glass_cutting`
-   - Any other agents with `asmr` category
+   - Any other directors with `asmr` category
 5. Enter your idea (e.g., "create videos of tropical fruits")
 6. Configure other settings (aspect ratio, etc.)
 7. Create project
@@ -89,8 +89,8 @@ const filteredStoryAgents = agents?.story?.filter((agent: any) => {
 
 1. Open existing ASMR project
 2. Navigate to Edit tab
-3. Story Agent dropdown will filter to show only ASMR agents
-4. Select agent and regenerate story
+3. Story Director dropdown will filter to show only ASMR directors
+4. Select director and regenerate story
 
 ## Build Verification
 
@@ -98,20 +98,20 @@ const filteredStoryAgents = agents?.story?.filter((agent: any) => {
 ✅ TypeScript compilation passes
 ✅ All routes generated correctly
 ✅ Project type selector includes ASMR option
-✅ Agent filtering works for ASMR projects
+✅ Director filtering works for ASMR projects
 
 ## Commits
 
 1. `ceef0f5` feat: add AsmrGlassCutting to ProjectType enum
 2. `091a6ae` feat: add ASMR glass cutting to project type selector
-3. `16b7855` feat: add ASMR agent filtering to project edit page
+3. `16b7855` feat: add ASMR director filtering to project edit page
 
 ## Testing Checklist
 
 ✅ Project type enum updated
 ✅ Project creation form shows ASMR option
-✅ Agent filtering works for ASMR in create form
-✅ Project edit page filters agents for ASMR
+✅ Director filtering works for ASMR in create form
+✅ Project edit page filters directors for ASMR
 ✅ Frontend builds without errors
 ✅ TypeScript types are correct
 

@@ -14,7 +14,7 @@ docs/
 ├── setup/              # Backend & provider installation (ComfyUI, Gemini, TTS, local LLMs)
 ├── guides/             # How-to guides: pipeline, camera LoRA, video length, regeneration…
 ├── features/           # Feature documentation: Asset Library, Then Vs Now, ASMR Glass Cutting
-├── agents/             # Guides for the built-in LLM story/shots agents
+├── directors/             # Guides for the built-in LLM story/shots directors
 ├── reference/          # API reference & security guide
 └── development/        # Historical: plans, fixes, testing notes, walkthroughs, archive
 ```
@@ -85,16 +85,16 @@ docs/
 
 Key Then Vs Now docs: [Scene Requirements](features/ThenVsNow/THEN_VS_NOW_SCENE_REQUIREMENTS.md) · [How to Make Departure Videos](features/ThenVsNow/HOW_TO_MAKE_DEPARTURE_VIDEOS.md) · [FLFI2V Video Generation Logic](features/ThenVsNow/FLFI2V_VIDEO_GENERATION_LOGIC.md) · [Motion Prompt Guide](features/ThenVsNow/THEN_VS_NOW_MOTION_PROMPT_GUIDE.md) · [Thumbnail Guide](features/ThenVsNow/THEN_VS_NOW_THUMBNAIL_GUIDE.md) · [FLFI2V Implementation](features/ThenVsNow/THEN_VS_NOW_FLFI2V_IMPLEMENTATION.md)
 
-### Agent Guides (`agents/`)
+### Director Guides (`directors/`)
 
-The prompt templates themselves live in the [`agents/`](../agents/) directory — see [`AGENTS.md`](../AGENTS.md) for layout and authoring rules.
+The prompt templates themselves live in the [`directors/`](../directors/) directory — see [`AGENTS.md`](../AGENTS.md) for layout and authoring rules.
 
 | Document | Description |
 |----------|-------------|
-| [Netflix Documentary Agent](agents/NETFLIX_DOCUMENTARY_AGENT.md) / [Summary](agents/NETFLIX_AGENT_SUMMARY.md) | Netflix-style documentary agent |
-| [YouTube Agent Quick Start](agents/YOUTUBE_AGENT_QUICK_START.md) / [Checklist](agents/YOUTUBE_AGENT_CHECKLIST.md) | YouTube documentary agent |
-| [Prehistoric POV Quick Start](agents/PREHISTORIC_POV_QUICKSTART.md) / [Guide](agents/PREHISTORIC_POV_GUIDE.md) | Prehistoric POV agents |
-| [Selfie Vlogger Guide](agents/SELFIE_VLOGGER_GUIDE.md) | Selfie vlog agent |
+| [Netflix Documentary Director](directors/NETFLIX_DOCUMENTARY_DIRECTOR.md) / [Summary](directors/NETFLIX_DIRECTOR_SUMMARY.md) | Netflix-style documentary director |
+| [YouTube Director Quick Start](directors/YOUTUBE_DIRECTOR_QUICK_START.md) / [Checklist](directors/YOUTUBE_DIRECTOR_CHECKLIST.md) | YouTube documentary director |
+| [Prehistoric POV Quick Start](directors/PREHISTORIC_POV_QUICKSTART.md) / [Guide](directors/PREHISTORIC_POV_GUIDE.md) | Prehistoric POV directors |
+| [Selfie Vlogger Guide](directors/SELFIE_VLOGGER_GUIDE.md) | Selfie vlog director |
 
 ### Reference (`reference/`)
 
@@ -130,8 +130,8 @@ python core/main.py --idea "Your idea" --max-shots 5 --shot-length 8
 # Override workflows for a run
 python core/main.py --idea "Your idea" --video-workflow minimax_h3_i2v_8s --image-workflow krea2_reference
 
-# List agents / projects
-python core/main.py --list-agents
+# List directors / projects
+python core/main.py --list-directors
 python core/main.py --list-projects
 
 # Enable narration
@@ -183,7 +183,7 @@ Gemini API, ComfyUI (Flux 2, Krea 2 reference, HiDream, Z-Image Turbo), GeminiWe
 ## 🔄 Documentation Updates
 
 **Last Updated:** October 4, 2026
-**Version:** 5.1 (documentation reorganization: getting-started / setup / guides / features / agents / reference / development)
+**Version:** 5.1 (documentation reorganization: getting-started / setup / guides / features / directors / reference / development)
 
 ---
 **Happy Video Creating! 🎬**

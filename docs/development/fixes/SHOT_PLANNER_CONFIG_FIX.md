@@ -97,7 +97,7 @@ To test the fix:
 python core/main.py --resume project_20260226_112952
 
 # Or create a new project
-python core/main.py --story-agent prehistoric_pov --idea "T-Rex encounter"
+python core/main.py --story-director prehistoric_pov --idea "T-Rex encounter"
 ```
 
 ## Status

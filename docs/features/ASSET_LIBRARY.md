@@ -322,7 +322,7 @@ and passes existing `image`-type assets as the reference list. There is no name-
 matching at generation time any more: character references are attached to the character's shots
 as project refs (`p/{project_id}/{media_dir}/{filename}`) by `ProjectManager.sync_character_asset_refs`,
 which runs when a reference is uploaded or AI-generated (and after a shots replan). A shot is
-matched to characters explicitly (`characters` name list from r2v agents, else `character_name`);
+matched to characters explicitly (`characters` name list from r2v directors, else `character_name`);
 shots with no attribution are matched by character name in the prompt — full name
 case-insensitively, or a single capitalized significant word (so "rich shadow detail" does not
 attach The Shadow, and "Jamshed" matches Inspector Jamshed). Matched names are persisted on

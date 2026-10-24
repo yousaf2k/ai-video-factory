@@ -10,14 +10,14 @@ This document provides detailed API documentation for all modules in the AI Vide
 ### story_engine.py
 
 ```python
-build_story(idea: str, agent: str = "default") -> dict
+build_story(idea: str, director: str = "default") -> dict
 ```
 
 Builds a complete story from a video idea.
 
 **Parameters:**
 - `idea` (str): The video concept or idea
-- `agent` (str): Name of the agent template to use (default: "default")
+- `director` (str): Name of the director template to use (default: "default")
 
 **Returns:**
 - `dict`: Story object with keys:
@@ -41,14 +41,14 @@ print(story['title'])  # "Eternal Horizons"
 ### scene_graph.py
 
 ```python
-build_scene_graph(story: dict, agent: str = "default") -> list
+build_scene_graph(story: dict, director: str = "default") -> list
 ```
 
 Creates a visual scene breakdown from the story.
 
 **Parameters:**
 - `story` (dict): Story object from `build_story()`
-- `agent` (str): Name of the agent template to use
+- `director` (str): Name of the director template to use
 
 **Returns:**
 - `list`: List of scene objects, each with:
@@ -73,7 +73,7 @@ for scene in scenes:
 ### shot_planner.py
 
 ```python
-plan_shots(story: dict, scene_graph: list, agent: str = "default") -> list
+plan_shots(story: dict, scene_graph: list, director: str = "default") -> list
 ```
 
 Plans detailed shots with camera movements and prompts.
@@ -81,7 +81,7 @@ Plans detailed shots with camera movements and prompts.
 **Parameters:**
 - `story` (dict): Story object
 - `scene_graph` (list): Scene graph from `build_scene_graph()`
-- `agent` (str): Name of the agent template to use
+- `director` (str): Name of the director template to use
 
 **Returns:**
 - `list`: List of shot objects, each with:
@@ -414,7 +414,7 @@ info = sm.get_project_info(project_id)
 ### narration_generator.py
 
 ```python
-generate_narration(story: dict, shots: list, agent: str = "default") -> dict
+generate_narration(story: dict, shots: list, director: str = "default") -> dict
 ```
 
 Generate narration script from story and shots.
@@ -422,7 +422,7 @@ Generate narration script from story and shots.
 **Parameters:**
 - `story` (dict): Story object
 - `shots` (list): List of shot objects
-- `agent` (str): Agent template to use
+- `director` (str): Director template to use
 
 **Returns:**
 - `dict`: Narration object with:
@@ -573,9 +573,9 @@ python core/main.py [OPTIONS]
 - `--step N`: Start from step (2-7)
 - `--max-shots N`: Limit number of shots
 - `--shot-length SECONDS`: Video length per shot
-- `--story-agent NAME`: Story agent template
-- `--image-agent NAME`: Image prompt agent
-- `--video-agent NAME`: Video motion agent
+- `--story-director NAME`: Story director template
+- `--image-director NAME`: Image prompt director
+- `--video-director NAME`: Video motion director
 - `--generate-narration`: Enable narration
 - `--tts-method METHOD`: TTS method (local/comfyui/elevenlabs)
 - `--tts-voice VOICE`: TTS voice name
@@ -586,7 +586,7 @@ python core/main.py \
   --idea "A sunset over the ocean" \
   --max-shots 5 \
   --shot-length 6 \
-  --video-agent cinematic \
+  --video-director cinematic \
   --generate-narration \
   --tts-voice en-US-AriaNeural
 ```

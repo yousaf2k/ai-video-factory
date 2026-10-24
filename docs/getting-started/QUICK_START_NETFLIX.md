@@ -1,6 +1,6 @@
-# Quick Start: Netflix Documentary Agent
+# Quick Start: Netflix Documentary Director
 
-> 📚 [Docs Index](../DOCS_INDEX.md) › Getting Started › Quick Start: Netflix Documentary Agent
+> 📚 [Docs Index](../DOCS_INDEX.md) › Getting Started › Quick Start: Netflix Documentary Director
 ## 🎬 Generate Your First Netflix-Style Documentary
 
 ### Step 1: Choose Your Idea
@@ -22,13 +22,13 @@ echo "An amateur astronomer receives a mysterious signal from deep space. When i
 
 ```bash
 # With example ideas
-python core/main.py --story-agent netflix_documentary --idea-file "input/examples/netflix_style_ideas.md"
+python core/main.py --story-director netflix_documentary --idea-file "input/examples/netflix_style_ideas.md"
 
 # With your own idea
-python core/main.py --story-agent netflix_documentary --idea-file my_mystery.txt
+python core/main.py --story-director netflix_documentary --idea-file my_mystery.txt
 
 # Or inline
-python core/main.py --story-agent netflix_documentary --idea "A small town where five people vanished overnight without trace"
+python core/main.py --story-director netflix_documentary --idea "A small town where five people vanished overnight without trace"
 ```
 
 ### Step 3: Review Generated Story
@@ -117,21 +117,21 @@ Expect cinematic scenes with:
 
 ## 📚 Full Documentation
 
-- `NETFLIX_DOCUMENTARY_AGENT.md` - Comprehensive guide
-- `NETFLIX_AGENT_SUMMARY.md` - Implementation details
+- `NETFLIX_DOCUMENTARY_DIRECTOR.md` - Comprehensive guide
+- `NETFLIX_DIRECTOR_SUMMARY.md` - Implementation details
 - `input/examples/netflix_style_ideas.md` - 15+ example ideas
 
 ## 🚀 Quick Commands
 
 ```bash
-# List all story agents
-python -c "from core.agent_loader import AgentLoader; print(AgentLoader().list_agents('story'))"
+# List all story directors
+python -c "from core.director_loader import DirectorLoader; print(DirectorLoader().list_directors('story'))"
 
-# Verify Netflix agent works
-python -c "from core.agent_loader import load_agent_prompt; print(load_agent_prompt('story', 'test', 'netflix_documentary')[:200])"
+# Verify Netflix director works
+python -c "from core.director_loader import load_director_prompt; print(load_director_prompt('story', 'test', 'netflix_documentary')[:200])"
 
 # Generate with example idea
-python core/main.py --story-agent netflix_documentary --idea "A mysterious signal from deep space"
+python core/main.py --story-director netflix_documentary --idea "A mysterious signal from deep space"
 ```
 
 ## ✨ Tips
