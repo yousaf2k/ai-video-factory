@@ -46,7 +46,7 @@ import {
   useUploadShotVideo,
   useGenerateSoundFX,
 } from "@/hooks/useShots";
-import { useAgents, useConfig } from "@/hooks/useAgents";
+import { useDirectors, useConfig } from "@/hooks/useDirectors";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import { cn, getMediaUrl } from "@/lib/utils";
@@ -82,7 +82,7 @@ interface ShotCardProps {
   viewModeOverride?: "image" | "video" | null;
   scenes?: any[];
   aspectRatio?: string;
-  projectAgent?: string;
+  projectDirector?: string;
 }
 
 export function ShotCard({
@@ -102,7 +102,7 @@ export function ShotCard({
   viewModeOverride,
   scenes,
   aspectRatio = "16:9",
-  projectAgent,
+  projectDirector,
 }: ShotCardProps) {
   // Characters referenced by this shot (r2v/planner `characters` list, falling
   // back to the single `character_name` used by FLFI2V shots)

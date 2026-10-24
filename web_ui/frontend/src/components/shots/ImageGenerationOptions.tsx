@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { useConfig } from "@/hooks/useAgents";
+import { useConfig } from "@/hooks/useDirectors";
 import {
   GEMINI_MODELS,
   GEMINI_THINKING,
@@ -180,7 +180,7 @@ export function ImageGenerationOptions({
               </span>
             </div>
             <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Agent Mode</span>
+              <span className="text-muted-foreground">Director Mode</span>
               <span className="font-medium">Off (default)</span>
             </div>
           </div>

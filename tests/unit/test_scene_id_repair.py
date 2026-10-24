@@ -104,7 +104,7 @@ class TestPlanShotsBatchSceneRepair:
             batch_num=2,
             total_batches=3,
             max_shots_instruction="Generate 9 shots.",
-            shots_agent="default",
+            shots_director="default",
         )
 
         assert len(shots) == 9

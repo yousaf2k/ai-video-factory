@@ -15,7 +15,7 @@ This document summarizes the implementation of the "Then Vs Now" feature, a new 
 
 - **Movie-based Input**: Users enter a movie name instead of a story idea
 - **FLFI2V Mode**: First Last Frame Image to Video - each shot has two images and two videos
-- **Direct Shot Generation**: Story agent generates complete shot structure (no separate scene agent)
+- **Direct Shot Generation**: Story director generates complete shot structure (no separate scene director)
 - **Set Prompt Integration**: Movie set backgrounds are appended to character image prompts
 - **Dual Video Segments**: Meeting and Departure videos per character
 - **YouTube Metadata**: SEO-optimized titles, keywords, and chapters
@@ -69,13 +69,13 @@ Each FLFI2V shot contains:
 - Extended `Scene` model with `set_prompt`
 - Extended `Shot` model with FLFI2V fields
 
-### Phase 2: ThenVsNow Story Agent ✅
+### Phase 2: ThenVsNow Story Director ✅
 
 **Files Modified:**
-- `agents/story/then_vs_now.md`
+- `directors/story/then_vs_now.md`
 
 **Changes:**
-- Enhanced agent to generate complete shot structure
+- Enhanced director to generate complete shot structure
 - Added project_type: 2 to output
 - Generate shots directly (Meeting + Departure per character)
 - Include YouTube metadata with SEO-optimized titles
@@ -100,7 +100,7 @@ Each FLFI2V shot contains:
 - `web_ui/backend/services/project_service.py`
 
 **Changes:**
-- Updated `create_project()` to detect `then_vs_now` agent
+- Updated `create_project()` to detect `then_vs_now` director
 - Special flow that calls `build_story_then_vs_now()`
 - Extracts shots from story (already generated)
 - Saves story.json and shots.json directly (bypasses shot planner)
@@ -118,7 +118,7 @@ Each FLFI2V shot contains:
   - load_image_last_node_id: "151" (NOW image)
   - motion_prompt_node_id: "93"
   - wan_video_node_id: "150"
-- Added `THEN_VS_NOW_AGENTS = ["then_vs_now"]`
+- Added `THEN_VS_NOW_DIRECTORS = ["then_vs_now"]`
 
 ### Phase 6: Image Generation Service ✅
 
@@ -225,14 +225,14 @@ core/
 ### Services
 ```
 web_ui/backend/services/
-├── project_service.py # ThenVsNow agent detection
+├── project_service.py # ThenVsNow director detection
 └── generation_service.py # FLFI2V image/video generation
 ```
 
-### Agents
+### Directors
 ```
-agents/story/
-└── then_vs_now.md    # Enhanced agent with shot generation
+directors/story/
+└── then_vs_now.md    # Enhanced director with shot generation
 ```
 
 ### Frontend
@@ -248,7 +248,7 @@ web_ui/frontend/src/
 
 ### Creating a ThenVsNow Project
 
-1. **Select Agent**: Choose "then_vs_now" as the story agent
+1. **Select Director**: Choose "then_vs_now" as the story director
 2. **Enter Movie Name**: Provide a movie name (e.g., "The Godfather")
 3. **Optional Duration**: Set target video length in seconds
 
@@ -258,7 +258,7 @@ web_ui/frontend/src/
 POST /api/projects
 {
     "idea": "The Godfather",
-    "story_agent": "then_vs_now",
+    "story_director": "then_vs_now",
     "total_duration": 300
 }
 ```
@@ -343,7 +343,7 @@ POST /api/projects/{project_id}/shots/{shot_index}/regenerate-video
 ## Verification Steps
 
 ### 1. Create ThenVsNow Project
-- [ ] Select "then_vs_now" story agent
+- [ ] Select "then_vs_now" story director
 - [ ] Enter a movie name (e.g., "The Godfather")
 - [ ] Verify story.json has project_type: 2
 - [ ] Verify story.json has characters array
@@ -435,10 +435,10 @@ This creates a transformation effect from THEN to NOW in the generated video.
 
 The FLFI2V workflow must be present in the workflow directory for video generation to work.
 
-### Agent File
-- `agents/story/then_vs_now.md`
+### Director File
+- `directors/story/then_vs_now.md`
 
-The ThenVsNow story agent must be present for story generation.
+The ThenVsNow story director must be present for story generation.
 
 ---
 

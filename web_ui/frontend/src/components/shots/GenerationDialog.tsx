@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { useConfig } from "@/hooks/useAgents";
+import { useConfig } from "@/hooks/useDirectors";
 import {
   GEMINI_MODELS,
   GEMINI_THINKING,

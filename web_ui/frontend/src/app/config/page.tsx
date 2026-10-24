@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { useConfig, useUpdateConfig } from "@/hooks/useAgents";
+import { useConfig, useUpdateConfig } from "@/hooks/useDirectors";
 import { Save, RefreshCw, ArrowLeft, Globe, ShieldCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -368,7 +368,7 @@ export default function ConfigPage() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">
-                Flow Agent Mode
+                Flow Director Mode
               </label>
               <Select value="false" disabled>
                 <SelectTrigger>
@@ -379,7 +379,7 @@ export default function ConfigPage() {
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-muted-foreground mt-1">
-                Agent mode stays off — the automation never toggles the Agent
+                Director mode stays off — the automation never toggles the Director
                 button. Aspect ratio follows each project's aspect ratio setting.
               </p>
             </div>

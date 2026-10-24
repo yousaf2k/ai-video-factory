@@ -41,19 +41,36 @@ class ProjectMetadata(BaseModel):
     }
 
 
+_LEGACY_DIRECTOR_KEYS = {
+    'story_agent': 'story_director',
+    'shots_agent': 'shots_director',
+    'agent_config': 'director_config',
+}
+
+
+def _normalize_director_keys(meta: dict) -> dict:
+    """Copy legacy pre-rename director keys to their new names when the new
+    key is absent, so projects created before the rename still expose
+    story_director / shots_director / director_config."""
+    for old, new in _LEGACY_DIRECTOR_KEYS.items():
+        if new not in meta and old in meta:
+            meta[new] = meta[old]
+    return meta
+
+
 def _infer_project_type(meta: dict) -> int:
     """Project type for list items. Metadata is authoritative (written at
-    creation); older projects may lack it — infer from the story agent.
+    creation); older projects may lack it — infer from the story director.
     story.json's project_type only exists for ThenVsNow/ASMR."""
     pt = meta.get('project_type')
     if pt is not None:
         return pt
-    agent = (meta.get('story_agent') or '').lower()
-    if agent.startswith('then_vs_now'):
+    director = (meta.get('story_director') or meta.get('story_agent') or '').lower()
+    if director.startswith('then_vs_now'):
         return 2
-    if agent.startswith('asmr'):
+    if director.startswith('asmr'):
         return 4
-    if agent.startswith('movie'):
+    if director.startswith('movie'):
         return 3
     return 1  # documentary / default
 
@@ -69,12 +86,13 @@ class ProjectListItem(BaseModel):
     images_generated: int
     videos_rendered: int
     thumbnail_url: Optional[str] = None
-    project_type: Optional[int] = None  # from metadata, inferred from story_agent when absent
+    project_type: Optional[int] = None  # from metadata, inferred from story_director when absent
     story: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_metadata(cls, meta: dict, story: dict = None) -> "ProjectListItem":
         """Create from ProjectManager metadata dict"""
+        meta = _normalize_director_keys(meta)
         return cls(
             project_id=meta.get("project_id", ""),
             timestamp=meta.get("timestamp", ""),
@@ -104,6 +122,7 @@ class ProjectDetail(ProjectMetadata):
         """Create from ProjectManager data"""
         # Filter meta to only include fields in the model if Pydantic is strict
         # But with extra="allow", this should work
+        meta = _normalize_director_keys(meta)
         return cls(
             **meta,
             story=story,
@@ -118,8 +137,8 @@ class CreateProjectRequest(BaseModel):
     idea: str = Field(..., description="Video idea/prompt", min_length=1)
     project_id: Optional[str] = Field(default=None, description="Optional custom project ID")
     project_type: ProjectType = Field(default=ProjectType.DOCUMENTARY, description="Project Type (1=Documentary, 2=ThenVsNow, 3=Movie, 4=ASMR)")
-    story_agent: str = Field(default="default", description="Story generation agent")
-    shots_agent: str = Field(default="default", description="Shots prompt agent")
+    story_director: str = Field(default="default", description="Story generation director")
+    shots_director: str = Field(default="default", description="Shots prompt director")
     prompt_mode: str = Field(default="video", description="Default prompt style for video generation: 'video' (timestamped H3 video_prompt) or 'motion' (motion_prompt)")
     video_generation_type: Optional[str] = Field(default=None, description="Visual input strategy setting (independent of project type): 't2v' (text to video), 'i2v' (image to video, default), 'r2v' (reference to video)")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
@@ -159,8 +178,8 @@ class UpdateProjectRequest(BaseModel):
     """Request to update project metadata"""
     idea: Optional[str] = None
     completed: Optional[bool] = None
-    story_agent: Optional[str] = None
-    shots_agent: Optional[str] = None
+    story_director: Optional[str] = None
+    shots_director: Optional[str] = None
     prompt_mode: Optional[str] = Field(default=None, description="Default prompt style: 'video' or 'motion'")
     video_generation_type: Optional[str] = Field(default=None, description="Visual input strategy: 't2v', 'i2v' or 'r2v'")
 

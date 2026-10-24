@@ -161,7 +161,7 @@ class BatchRegenerateRequest(BaseModel):
 class ReplanShotsRequest(BaseModel):
     """Request to re-plan shots from story"""
     max_shots: Optional[int] = Field(default=None, description="Maximum shots to generate")
-    shots_agent: str = Field(default="default", description="Shots agent to use")
+    shots_director: str = Field(default="default", description="Shots director to use")
     max_shot_duration: Optional[float] = Field(default=None, description="Max duration of a single shot in seconds (1-15); falls back to the project's setting when omitted")
 
     @field_validator("max_shot_duration")

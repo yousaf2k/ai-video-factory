@@ -12,7 +12,7 @@ import logging
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 
-from core.agent_loader import list_agents, get_agent_loader
+from core.director_loader import list_directors, get_director_loader
 from core.workflow_loader import get_workflow_loader
 from core.config_utils import update_env_config
 import asyncio
@@ -52,8 +52,8 @@ class UpdateConfigRequest(BaseModel):
     flow_image_outputs: Optional[str] = None
 
 
-class UpdateAgentRequest(BaseModel):
-    """Request to update an agent prompt file"""
+class UpdateDirectorRequest(BaseModel):
+    """Request to update an director prompt file"""
     content: str
 
 
@@ -70,50 +70,50 @@ async def get_styles():
     return {"background_styles": config.load_background_styles()}
 
 
-@router.get("/agents")
-async def get_agents():
-    """Get list of available agents for each stage"""
+@router.get("/directors")
+async def get_directors():
+    """Get list of available directors for each stage"""
     try:
-        # List all agents
-        all_agents = list_agents()
+        # List all directors
+        all_directors = list_directors()
 
         # Group by type
-        agents_by_type = {
+        directors_by_type = {
             "story": [],
             "shots": [],
         }
 
-        for agent_info in all_agents:
-            agent_type = agent_info.get("type", "unknown")
-            agent_id = agent_info.get("id", "unknown")
-            agent_name = agent_info.get("name", agent_id)
+        for director_info in all_directors:
+            director_type = director_info.get("type", "unknown")
+            director_id = director_info.get("id", "unknown")
+            director_name = director_info.get("name", director_id)
 
             category = None
-            if "/" in agent_id:
-                category, name = agent_id.split("/", 1)
-                agent_name = name.replace('_', ' ').title()
+            if "/" in director_id:
+                category, name = director_id.split("/", 1)
+                director_name = name.replace('_', ' ').title()
 
-            if agent_type in agents_by_type:
+            if director_type in directors_by_type:
                 item = {
-                    "id": agent_id,
-                    "name": agent_name,
-                    "type": agent_type
+                    "id": director_id,
+                    "name": director_name,
+                    "type": director_type
                 }
                 if category:
                     item["category"] = category
-                agents_by_type[agent_type].append(item)
+                directors_by_type[director_type].append(item)
 
         # Sort alphabetically by name
-        for agent_type in agents_by_type:
-            agents_by_type[agent_type].sort(key=lambda x: x["name"])
+        for director_type in directors_by_type:
+            directors_by_type[director_type].sort(key=lambda x: x["name"])
 
-        return agents_by_type
+        return directors_by_type
 
     except Exception as e:
-        logger.error(f"Error listing agents: {e}")
+        logger.error(f"Error listing directors: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to list agents: {str(e)}"
+            detail=f"Failed to list directors: {str(e)}"
         )
 
 
@@ -131,8 +131,8 @@ async def get_config():
             "video_generation_mode": getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui'),
             "video_workflow": getattr(config, 'VIDEO_WORKFLOW', 'wan22'),
             "soundfx_workflow": getattr(config, 'SOUNDFX_WORKFLOW', 'mmaudio'),
-            "default_story_agent": getattr(config, 'DEFAULT_STORY_AGENT', 'default'),
-            "default_shots_agent": getattr(config, 'DEFAULT_SHOTS_AGENT', 'default'),
+            "default_story_director": getattr(config, 'DEFAULT_STORY_DIRECTOR', 'default'),
+            "default_shots_director": getattr(config, 'DEFAULT_SHOTS_DIRECTOR', 'default'),
             "comfy_url": getattr(config, 'COMFY_URL', 'http://127.0.0.1:8188'),
             "target_video_length": getattr(config, 'TARGET_VIDEO_LENGTH', None),
             "default_max_shots": getattr(config, 'DEFAULT_MAX_SHOTS', 0),
@@ -253,23 +253,23 @@ async def update_config(request: UpdateConfigRequest):
         )
 
 
-@router.get("/agents/tree")
-async def get_agents_tree():
-    """Get full agent file tree grouped by type and category, including base/component files"""
+@router.get("/directors/tree")
+async def get_directors_tree():
+    """Get full director file tree grouped by type and category, including base/component files"""
     try:
-        loader = get_agent_loader()
-        return loader.list_agent_tree()
+        loader = get_director_loader()
+        return loader.list_director_tree()
     except Exception as e:
-        logger.error(f"Error listing agent tree: {e}")
+        logger.error(f"Error listing director tree: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to list agent tree: {str(e)}"
+            detail=f"Failed to list director tree: {str(e)}"
         )
 
 
-@router.get("/agents/{agent_type}/{agent_id:path}")
-async def get_agent_content(agent_type: str, agent_id: str, raw: bool = False, view: Optional[str] = None):
-    """Get content of an agent prompt file.
+@router.get("/directors/{director_type}/{director_id:path}")
+async def get_director_content(director_type: str, director_id: str, raw: bool = False, view: Optional[str] = None):
+    """Get content of an director prompt file.
 
     raw=true returns the file content as-is (keeps {{include:...}} directives),
     along with the list of included files. Default returns the include-expanded
@@ -280,35 +280,35 @@ async def get_agent_content(agent_type: str, agent_id: str, raw: bool = False, v
     collapsible section.
     """
     try:
-        loader = get_agent_loader()
+        loader = get_director_loader()
         if view == "preview":
-            return loader.load_prompt_segments(agent_type, agent_id)
+            return loader.load_prompt_segments(director_type, director_id)
         if raw:
-            content = loader.load_prompt_raw(agent_type, agent_id)
+            content = loader.load_prompt_raw(director_type, director_id)
             includes = re.findall(r'\{\{include:(.+?)\}\}', content)
             return {"content": content, "raw": True, "includes": [i.strip() for i in includes]}
-        content = loader.load_prompt(agent_type, agent_id)
+        content = loader.load_prompt(director_type, director_id)
         return {"content": content}
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Agent not found")
+        raise HTTPException(status_code=404, detail="Director not found")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error loading agent content: {e}")
+        logger.error(f"Error loading director content: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/agents/{agent_type}/{agent_id:path}")
-async def update_agent_content(agent_type: str, agent_id: str, request: UpdateAgentRequest):
-    """Update content of an agent prompt file"""
+@router.post("/directors/{director_type}/{director_id:path}")
+async def update_director_content(director_type: str, director_id: str, request: UpdateDirectorRequest):
+    """Update content of an director prompt file"""
     try:
-        loader = get_agent_loader()
-        loader.save_prompt(agent_type, agent_id, request.content)
-        return {"status": "success", "message": f"Agent {agent_id} updated"}
+        loader = get_director_loader()
+        loader.save_prompt(director_type, director_id, request.content)
+        return {"status": "success", "message": f"Director {director_id} updated"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Error updating agent content: {e}")
+        logger.error(f"Error updating director content: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -43,7 +43,7 @@ IMPORTANT SHOT DISTRIBUTION:
 """
 ```
 
-### 4. Image Agent Prompt (agents/image/default.md)
+### 4. Image Director Prompt (directors/image/default.md)
 Added comprehensive shot generation guidelines:
 
 **New Section: Shot Generation Guidelines**
@@ -73,7 +73,7 @@ Example for 4-scene story:
 - Scene 4 (ending): 4 shots (wide, medium, close-up, detail)
 - **Total: 20 shots**
 
-### 5. Video Agent Prompt (agents/video/default.md)
+### 5. Video Director Prompt (directors/video/default.md)
 Added shot variety guidance (optional enhancement):
 
 **New Section: Shot Types to Include**
@@ -178,8 +178,8 @@ Verify:
 1. `config.py` - Added shot configuration constants
 2. `core/main.py` - Added --shots-per-scene argument, updated function signatures
 3. `core/shot_planner.py` - Enhanced shot planning logic with per-scene calculation
-4. `agents/image/default.md` - Added shot generation guidelines and distribution rules
-5. `agents/video/default.md` - Added shot variety guidance
+4. `directors/image/default.md` - Added shot generation guidelines and distribution rules
+5. `directors/video/default.md` - Added shot variety guidance
 
 ## Technical Notes
 - All syntax validated with `python -m py_compile`
@@ -192,8 +192,8 @@ Verify:
 - ✅ Configuration constants added and accessible
 - ✅ Command-line argument functional
 - ✅ Shot planner logic enhanced with scene counting
-- ✅ Image agent prompt updated with guidelines
-- ✅ Video agent prompt enhanced (optional)
+- ✅ Image director prompt updated with guidelines
+- ✅ Video director prompt enhanced (optional)
 - ✅ No syntax errors
 - ✅ Backward compatibility maintained
 - ✅ Help text updated with examples
@@ -211,4 +211,4 @@ This implementation transforms the shot generation from a weak, unpredictable pr
 - Configurable defaults
 - Flexible command-line control
 - Backward compatibility
-- Enhanced agent prompts for better LLM guidance
+- Enhanced director prompts for better LLM guidance

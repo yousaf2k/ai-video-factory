@@ -415,7 +415,7 @@ output_path = Path("ComfyUI") / "output" / subfolder / filename
 def build_scene_graph(story_json):  # ❌ No return type
 
 # story_engine.py:9
-def build_story(idea, agent_name="default"):  # ❌ No return type
+def build_story(idea, director_name="default"):  # ❌ No return type
 
 # shot_planner.py:16
 def plan_shots(scene_graph, max_shots=None, ...):  # ❌ Partial type hints
@@ -427,7 +427,7 @@ from typing import List, Dict, Any, Optional
 import json
 
 def build_scene_graph(story_json: str | Dict) -> List[Dict[str, Any]]:
-def build_story(idea: str, agent_name: str = "default") -> str:
+def build_story(idea: str, director_name: str = "default") -> str:
 def plan_shots(scene_graph: str | Dict, max_shots: int | None, ...) -> List[Dict]:
 ```
 
@@ -821,7 +821,7 @@ from core.logger_config import get_logger
 logger = get_logger(__name__)
 
 # ✅ GOOD: Decorator-based logging
-@log_agent_call
+@log_director_call
 def plan_shots(...):
 ```
 

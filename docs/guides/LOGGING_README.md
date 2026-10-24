@@ -3,7 +3,7 @@
 > 📚 [Docs Index](../DOCS_INDEX.md) › Guides › Logging Documentation
 ## Overview
 
-The AI Video Factory now includes comprehensive logging infrastructure using Python's built-in `logging` module. This provides persistent error tracking, API call auditing, and agent operation monitoring.
+The AI Video Factory now includes comprehensive logging infrastructure using Python's built-in `logging` module. This provides persistent error tracking, API call auditing, and director operation monitoring.
 
 ## Log Files
 
@@ -12,7 +12,7 @@ All log files are stored in the `logs/` directory:
 - **app.log** - General application logs (INFO level and above)
 - **errors.log** - Error-only logs (ERROR level and above)
 - **api_calls.log** - Gemini API calls (DEBUG level)
-- **agents.log** - Agent operations (DEBUG level)
+- **directors.log** - Director operations (DEBUG level)
 
 ### Log Format
 
@@ -101,17 +101,17 @@ def api_function(param1, param2):
     return result
 ```
 
-#### @log_agent_call
+#### @log_director_call
 
-Logs agent operations with parameters and results:
+Logs director operations with parameters and results:
 
 ```python
-from core.log_decorators import log_agent_call
+from core.log_decorators import log_director_call
 
-@log_agent_call
-def load_agent_prompt(agent_type, agent_name):
+@log_director_call
+def load_director_prompt(director_type, director_name):
     # Automatically logs:
-    # - Agent type and name
+    # - Director type and name
     # - Prompt length
     # - File path
     # - Execution status
@@ -144,8 +144,8 @@ def risky_operation(value):
 ✅ **core/log_decorators.py** - Decorators for automatic logging
 ✅ **config.py** - Logging configuration section
 ✅ **core/gemini_engine.py** - API calls with @log_api_call
-✅ **core/agent_loader.py** - Agent operations with @log_agent_call
-✅ **core/shot_planner.py** - Shot planning with @log_agent_call
+✅ **core/director_loader.py** - Director operations with @log_director_call
+✅ **core/shot_planner.py** - Shot planning with @log_director_call
 ✅ **core/image_generator.py** - Image generation logging
 ✅ **core/narration_generator.py** - TTS operations logging
 ✅ **core/comfy_client.py** - ComfyUI API interactions logging
@@ -161,10 +161,10 @@ def risky_operation(value):
 - Response preview (truncated to 200 chars)
 - All errors with full traceback
 
-#### Agent Operations (agents.log)
-- Agent type (story, narration, image, video)
-- Agent name (default, dramatic, documentary, etc.)
-- File paths for agent prompts
+#### Director Operations (directors.log)
+- Director type (story, narration, image, video)
+- Director name (default, dramatic, documentary, etc.)
+- File paths for director prompts
 - Prompt/response lengths
 - Loading status
 
@@ -196,18 +196,18 @@ ls -la logs/
 # View log files
 cat logs/app.log
 cat logs/api_calls.log
-cat logs/agents.log
+cat logs/directors.log
 cat logs/errors.log
 ```
 
 ### Test with Actual Operations
 
 ```bash
-# Test story generation (logs to api_calls.log and agents.log)
+# Test story generation (logs to api_calls.log and directors.log)
 python -c "from core.story_engine import build_story; print(build_story('A cat dancing'))"
 
-# Test agent loading (logs to agents.log)
-python -c "from core.agent_loader import AgentLoader; AgentLoader().list_agents('story')"
+# Test director loading (logs to directors.log)
+python -c "from core.director_loader import DirectorLoader; DirectorLoader().list_directors('story')"
 ```
 
 ## Troubleshooting
@@ -237,7 +237,7 @@ python -c "from core.agent_loader import AgentLoader; AgentLoader().list_agents(
    - INFO: General information (step completion, status updates)
    - WARNING: Warnings that don't stop execution (fallbacks, missing files)
    - ERROR: Errors that affect functionality (exceptions, failures)
-3. **Use decorators for consistency** - @log_api_call, @log_agent_call, @log_errors
+3. **Use decorators for consistency** - @log_api_call, @log_director_call, @log_errors
 4. **Keep user-facing print()** - Console output for user interaction remains as print()
 5. **Don't log sensitive data** - API keys, passwords, personal information
 

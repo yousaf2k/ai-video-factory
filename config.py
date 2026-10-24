@@ -664,8 +664,8 @@ if "default" not in VIDEO_WORKFLOWS:
         _first_key = list(VIDEO_WORKFLOWS.keys())[0]
         VIDEO_WORKFLOWS["default"] = VIDEO_WORKFLOWS[_first_key]
 
-# Helper constant for ThenVsNow agents
-THEN_VS_NOW_AGENTS = ["then_vs_now"]
+# Helper constant for ThenVsNow directors
+THEN_VS_NOW_DIRECTORS = ["then_vs_now"]
 
 # Legacy single workflow settings (deprecated, use VIDEO_WORKFLOWS instead)
 # Node IDs are resolved per workflow via VIDEO_WORKFLOWS discovery (title tags
@@ -1144,17 +1144,17 @@ AUTO_STEP_MODE = True  # True = auto, False = manual
 
 
 # ==========================================
-# AGENT CONFIGURATION
+# DIRECTOR CONFIGURATION
 # ==========================================
-# Default agents to use for each step
-# Agent files are stored in agents/{type}/{name}.md
-# Available agents depend on files in the agents folder
+# Default directors to use for each step
+# Director files are stored in directors/{type}/{name}.md
+# Available directors depend on files in the directors folder
 
-# Story generation agent (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary, prehistoric_dinosaur, prehistoric_pov)
-STORY_AGENT = "default"
+# Story generation director (default, dramatic, documentary, time_traveler, netflix_documentary, youtube_documentary, prehistoric_dinosaur, prehistoric_pov)
+STORY_DIRECTOR = "default"
 
-# Shots agent (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
-SHOTS_AGENT = "default"
+# Shots director (default, artistic, time_traveler, prehistoric_dinosaur, prehistoric_pov)
+SHOTS_DIRECTOR = "default"
 
 # Default prompt style for video generation when a shot/project doesn't specify one:
 #   "video"  - detailed timestamped MiniMax H3 video_prompt (falls back to motion_prompt
@@ -1452,7 +1452,7 @@ FLOW_IMAGE_MODEL = os.getenv("FLOW_IMAGE_MODEL", "Nano Banana 2.1")
 # Outputs per prompt: "x1" (default), "x2", "x3", "x4".
 FLOW_IMAGE_OUTPUTS = os.getenv("FLOW_IMAGE_OUTPUTS", "x1")
 
-# Agent mode stays OFF by default; the automation never toggles the Agent
+# Director mode stays OFF by default; the automation never toggles the Director
 # button in Flow's prompt bar.
 FLOW_AGENT_MODE = os.getenv("FLOW_AGENT_MODE", "false").lower() == "true"
 

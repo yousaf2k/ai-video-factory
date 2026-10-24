@@ -4,7 +4,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { ShotCard } from "./ShotCard";
 import { Shot, Scene } from "@/types";
-import { useAgents, useConfig } from "@/hooks/useAgents";
+import { useDirectors, useConfig } from "@/hooks/useDirectors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import {
@@ -71,10 +71,10 @@ interface ShotGridProps {
   projectId: string;
   scenes?: Scene[];
   aspectRatio?: string;
-  projectAgent?: string;
+  projectDirector?: string;
 }
 
-export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", projectAgent }: ShotGridProps) {
+export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", projectDirector }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<
     "image" | "video" | "both" | "narration" | null
@@ -194,13 +194,13 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [batchDeparturePrompt, setBatchDeparturePrompt] = usePersistedState<string>(`batch_departure_prompt_${projectId}`, DEFAULT_DEPARTURE_PROMPT);
 
   // Batch Then Override states
-  const isAgentOverrideDefault = projectAgent === "then_vs_now_closeup" || projectAgent === "then_vs_now";
-  const [batchUseThenOverride, setBatchUseThenOverride] = usePersistedState<boolean>(`batch_use_then_override_${projectId}`, isAgentOverrideDefault);
+  const isDirectorOverrideDefault = projectDirector === "then_vs_now_closeup" || projectDirector === "then_vs_now";
+  const [batchUseThenOverride, setBatchUseThenOverride] = usePersistedState<boolean>(`batch_use_then_override_${projectId}`, isDirectorOverrideDefault);
   const DEFAULT_THEN_PROMPT = "Remove only the person standing on the right side of this reference image. No change in background set or environment, no side angle, no profile view, no tilt. Make the left person looking directly into camera in center of the frame with happy, cheerful smiling expressions. Do NOT remove or change any background crew members, equipment, or props. ";
-  const [batchThenPrompt, setBatchThenPrompt] = usePersistedState<string>(`batch_then_prompt_${projectId}`, isAgentOverrideDefault ? DEFAULT_THEN_PROMPT : "");
+  const [batchThenPrompt, setBatchThenPrompt] = usePersistedState<string>(`batch_then_prompt_${projectId}`, isDirectorOverrideDefault ? DEFAULT_THEN_PROMPT : "");
 
 
-  const { data: agents } = useAgents();
+  const { data: directors } = useDirectors();
   const { data: globalConfig } = useConfig();
 
   // Drag and drop sensors
@@ -1547,7 +1547,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Agent Mode</span>
+                        <span className="text-muted-foreground">Director Mode</span>
                         <span className="font-medium">Off (default)</span>
                       </div>
                       <p className="text-[10px] text-muted-foreground pt-1">

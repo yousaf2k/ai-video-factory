@@ -22,8 +22,8 @@ collect_ignore = [
     "test_asmr_engine.py",
     "test_json_formatting.py",
     "test_multi_scene.py",
-    "test_video_length_agents.py",
-    "test_pov_agents.py",
+    "test_video_length_directors.py",
+    "test_pov_directors.py",
     # Live ComfyUI / Gemini Flow / browser automation
     "test_dl.py",
     "test_flow.py",

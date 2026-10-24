@@ -10,7 +10,7 @@ Supports:
 import os
 import json
 from pathlib import Path
-from core.agent_loader import load_agent_prompt
+from core.director_loader import load_director_prompt
 from core.comfy_client import submit, wait_for_prompt_completion
 from core.logger_config import get_logger
 import config
@@ -20,7 +20,7 @@ import config
 logger = get_logger(__name__)
 
 
-def generate_narration_script(story_json, shots, total_duration=None, agent_name="default"):
+def generate_narration_script(story_json, shots, total_duration=None, director_name="default"):
     """
     Generate a narration script from story and shots.
 
@@ -31,7 +31,7 @@ def generate_narration_script(story_json, shots, total_duration=None, agent_name
         story_json: The story JSON
         shots: List of shot dictionaries
         total_duration: Total video duration in seconds (optional)
-        agent_name: Name of the narration agent to use
+        director_name: Name of the narration director to use
 
     Returns:
         Dictionary with narration script and timing
@@ -573,7 +573,7 @@ def generate_scene_narration(project_id, scene_id, text, tts_method=None, tts_wo
         }
 
 
-def generate_narration_for_project(project_id, story_json, total_duration, agent_name="default",
+def generate_narration_for_project(project_id, story_json, total_duration, director_name="default",
                                    tts_method="local", tts_workflow="default", voice="default",
                                    use_comfyui=False):
     """

@@ -18,7 +18,7 @@ KeyError: 'scenes'
 
 ## Root Cause
 
-The LLM (when using the prehistoric_pov agent) was returning a JSON **array of scenes directly**, instead of wrapping them in a JSON object with a `scenes` key:
+The LLM (when using the prehistoric_pov director) was returning a JSON **array of scenes directly**, instead of wrapping them in a JSON object with a `scenes` key:
 
 **Expected format**:
 ```json
@@ -95,9 +95,9 @@ for i, s in enumerate(scenes):
 - Added validation to skip invalid scenes
 - Added info log to show how many scenes were processed
 
-### 3. Updated Story Agents
+### 3. Updated Story Directors
 
-Updated both `agents/story/prehistoric_pov.md` and `agents/story/prehistoric_dinosaur.md` to explicitly specify the correct JSON output format:
+Updated both `directors/story/prehistoric_pov.md` and `directors/story/prehistoric_dinosaur.md` to explicitly specify the correct JSON output format:
 
 ```json
 {
@@ -128,8 +128,8 @@ print(f'✓ Built scene graph with {len(graph)} scenes')
 ## Files Modified
 
 1. `core/scene_graph.py` - Fixed array handling, added logging and error handling
-2. `agents/story/prehistoric_pov.md` - Added explicit JSON format specification
-3. `agents/story/prehistoric_dinosaur.md` - Added explicit JSON format specification
+2. `directors/story/prehistoric_pov.md` - Added explicit JSON format specification
+3. `directors/story/prehistoric_dinosaur.md` - Added explicit JSON format specification
 
 ## Backward Compatibility
 
@@ -147,8 +147,8 @@ To test the fix:
 # Test with existing project
 python core/main.py --resume project_20260226_112952
 
-# Or generate new content with POV agents
-python core/main.py --story-agent prehistoric_pov --idea "Time traveler encounters T-Rex"
+# Or generate new content with POV directors
+python core/main.py --story-director prehistoric_pov --idea "Time traveler encounters T-Rex"
 ```
 
 ## Status

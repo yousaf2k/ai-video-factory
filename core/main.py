@@ -61,7 +61,7 @@ from core.image_generator import generate_image_gemini
 from core.project_manager import ProjectManager
 
 
-def plan_shots_with_cast(graph, story_json, max_shots=None, shots_agent="default", shots_per_scene=None,
+def plan_shots_with_cast(graph, story_json, max_shots=None, shots_director="default", shots_per_scene=None,
                          max_shot_duration=None):
     """
     plan_shots with the story's cast injected (scenes themselves unchanged from
@@ -73,7 +73,7 @@ def plan_shots_with_cast(graph, story_json, max_shots=None, shots_agent="default
     except (TypeError, ValueError):
         story_data = {}
     payload = {'scenes': graph, 'characters': story_data.get('characters') or []}
-    return plan_shots(payload, max_shots=max_shots, shots_agent=shots_agent, shots_per_scene=shots_per_scene,
+    return plan_shots(payload, max_shots=max_shots, shots_director=shots_director, shots_per_scene=shots_per_scene,
                       max_shot_duration=max_shot_duration)
 
 
@@ -186,10 +186,10 @@ def print_configuration_summary():
     print(f"  TTS Method: {config.TTS_METHOD}")
     print(f"  TTS Voice: {config.TTS_VOICE}")
 
-    # Agents
-    print("\n[Agents]")
-    print(f"  Story Agent: {config.STORY_AGENT}")
-    print(f"  Shots Agent: {config.SHOTS_AGENT}")
+    # Directors
+    print("\n[Directors]")
+    print(f"  Story Director: {config.STORY_DIRECTOR}")
+    print(f"  Shots Director: {config.SHOTS_DIRECTOR}")
 
     print("\n" + "="*70)
 
@@ -1227,10 +1227,10 @@ def _continue_existing_project(project_id, project_meta, project_mgr, args=None)
     else:
         max_shots = None
 
-    # Get agent config from project
-    agent_config = project_meta.get('agent_config', {})
-    story_agent = agent_config.get('story', config.STORY_AGENT)
-    shots_agent = agent_config.get('shots', config.SHOTS_AGENT)
+    # Get director config from project
+    director_config = project_meta.get('director_config') or project_meta.get('agent_config') or {}
+    story_director = director_config.get('story', config.STORY_DIRECTOR)
+    shots_director = director_config.get('shots', config.SHOTS_DIRECTOR)
 
     # Get narration config
     narration_config = project_meta.get('narration_config', {})
@@ -1242,8 +1242,8 @@ def _continue_existing_project(project_id, project_meta, project_mgr, args=None)
     # Update config with project values for display
     config.IMAGE_GENERATION_MODE = image_mode
     config.IMAGES_PER_SHOT = images_per_shot
-    config.STORY_AGENT = story_agent
-    config.SHOTS_AGENT = shots_agent
+    config.STORY_DIRECTOR = story_director
+    config.SHOTS_DIRECTOR = shots_director
     config.GENERATE_NARRATION = generate_narration
     config.TTS_METHOD = tts_method
     config.TTS_VOICE = tts_voice
@@ -1252,18 +1252,18 @@ def _continue_existing_project(project_id, project_meta, project_mgr, args=None)
     print_configuration_summary()
 
     print(f"[INFO] Image generation: {image_mode}")
-    print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
+    print(f"[INFO] Using directors - Story: {story_director}, Shots: {shots_director}")
 
     # Execute workflow based on mode
     if auto_mode:
         _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
-                      story_agent=story_agent, shots_agent=shots_agent,
+                      story_director=story_director, shots_director=shots_director,
                       generate_narration=generate_narration,
                       tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                       images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
     else:
         _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
-                        story_agent=story_agent, shots_agent=shots_agent,
+                        story_director=story_director, shots_director=shots_director,
                         generate_narration=generate_narration,
                         tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                         images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
@@ -1438,17 +1438,17 @@ def run_new_project(project_mgr, args=None):
         'continue_on_partial_failure': config.CONTINUE_ON_PARTIAL_IMAGE_FAILURE
     }
 
-    # Get agent selection from args or config
-    story_agent = getattr(args, 'story_agent', None) or config.STORY_AGENT
-    shots_agent = getattr(args, 'shots_agent', None) or config.SHOTS_AGENT
+    # Get director selection from args or config
+    story_director = getattr(args, 'story_director', None) or config.STORY_DIRECTOR
+    shots_director = getattr(args, 'shots_director', None) or config.SHOTS_DIRECTOR
 
-    # r2v/t2v projects need their prompt-format agents; default when the user
-    # did not explicitly pick a shots agent
-    _vgt_for_agent = video_generation_type
-    if _vgt_for_agent in ('r2v', 't2v') and not getattr(args, 'shots_agent', None):
-        _default_ref_agents = {'r2v': 'base/base_shots_r2v', 't2v': 'base/base_shots_t2v'}
-        shots_agent = _default_ref_agents[_vgt_for_agent]
-        print(f"[INFO] video_generation_type '{_vgt_for_agent}': defaulting shots agent to {shots_agent}")
+    # r2v/t2v projects need their prompt-format directors; default when the user
+    # did not explicitly pick a shots director
+    _vgt_for_director = video_generation_type
+    if _vgt_for_director in ('r2v', 't2v') and not getattr(args, 'shots_director', None):
+        _default_ref_directors = {'r2v': 'base/base_shots_r2v', 't2v': 'base/base_shots_t2v'}
+        shots_director = _default_ref_directors[_vgt_for_director]
+        print(f"[INFO] video_generation_type '{_vgt_for_director}': defaulting shots director to {shots_director}")
 
     # Get narration settings
     generate_narration = not getattr(args, 'no_narration', False) and config.GENERATE_NARRATION
@@ -1456,10 +1456,11 @@ def run_new_project(project_mgr, args=None):
     tts_workflow = getattr(args, 'tts_workflow', None) or config.TTS_WORKFLOW_PATH
     tts_voice = getattr(args, 'tts_voice', None) or config.TTS_VOICE
 
-    # Store agent config in project
-    project_meta['agent_config'] = {
-        'story': story_agent,
-        'shots': shots_agent
+    # Store director config in project
+    project_meta.pop('agent_config', None)
+    project_meta['director_config'] = {
+        'story': story_director,
+        'shots': shots_director
     }
 
     # Store narration config in project
@@ -1473,7 +1474,7 @@ def run_new_project(project_mgr, args=None):
     project_mgr._save_meta(project_id, project_meta)
 
     print(f"[INFO] Created project: {project_id}")
-    print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
+    print(f"[INFO] Using directors - Story: {story_director}, Shots: {shots_director}")
     print(f"[INFO] Image generation: {images_per_shot} image(s) per shot")
     if generate_narration:
         print(f"[INFO] Narration enabled - TTS: {tts_method}, Voice: {tts_voice}")
@@ -1490,21 +1491,21 @@ def run_new_project(project_mgr, args=None):
     if auto_mode:
         # Original auto mode - execute all remaining steps
         _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
-                      story_agent=story_agent, shots_agent=shots_agent,
+                      story_director=story_director, shots_director=shots_director,
                       generate_narration=generate_narration,
                       tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                       images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
     else:
         # New manual mode - step by step with prompts
         _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
-                        story_agent=story_agent, shots_agent=shots_agent,
+                        story_director=story_director, shots_director=shots_director,
                         generate_narration=generate_narration,
                         tts_method=tts_method, tts_workflow=tts_workflow, tts_voice=tts_voice,
                         images_per_shot=images_per_shot, shots_per_scene=shots_per_scene)
 
 
 def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length,
-                   story_agent=None, shots_agent=None,
+                   story_director=None, shots_director=None,
                    generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
                    images_per_shot=1, shots_per_scene=None):
     """Execute all remaining steps automatically"""
@@ -1512,10 +1513,10 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
     # Get current progress
     steps = project_meta.get('steps', {})
 
-    # Get agent names from project metadata or args
-    agent_config = project_meta.get('agent_config', {})
-    story_agent = story_agent or agent_config.get('story', config.STORY_AGENT)
-    shots_agent = shots_agent or agent_config.get('shots', config.SHOTS_AGENT)
+    # Get director names from project metadata or args
+    director_config = project_meta.get('director_config') or project_meta.get('agent_config') or {}
+    story_director = story_director or director_config.get('story', config.STORY_DIRECTOR)
+    shots_director = shots_director or director_config.get('shots', config.SHOTS_DIRECTOR)
 
     # Get narration config
     narration_config = project_meta.get('narration_config', {})
@@ -1528,7 +1529,7 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
     image_config = project_meta.get('image_config', {})
     images_per_shot = images_per_shot or image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
 
-    print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
+    print(f"[INFO] Using directors - Story: {story_director}, Shots: {shots_director}")
     print(f"[INFO] Generating {images_per_shot} image(s) per shot")
 
     story_json = None
@@ -1552,28 +1553,28 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
         print("\nSTEP 2: Story Generation")
 
         # Route to appropriate story builder based on project type
-        is_asmr = story_agent == "asmr_glass_cutting" or story_agent.startswith("asmr/")
-        is_then_vs_now = story_agent == "then_vs_now" or story_agent.startswith("then_vs_now/")
+        is_asmr = story_director == "asmr_glass_cutting" or story_director.startswith("asmr/")
+        is_then_vs_now = story_director == "then_vs_now" or story_director.startswith("then_vs_now/")
 
         if is_asmr:
-            logger.info(f"Using ASMR glass cutting story builder with agent: {story_agent}")
+            logger.info(f"Using ASMR glass cutting story builder with director: {story_director}")
             story_json = build_story_asmr_glass_cutting(
                 idea=idea,
-                agent_name=story_agent,
+                director_name=story_director,
                 shot_duration=shot_length if shot_length else 5,
                 aspect_ratio="16:9"
             )
         elif is_then_vs_now:
-            logger.info(f"Using ThenVsNow story builder with agent: {story_agent}")
+            logger.info(f"Using ThenVsNow story builder with director: {story_director}")
             story_json = build_story_then_vs_now(
                 movie_name=idea,
-                agent_name=story_agent,
+                director_name=story_director,
                 target_length=target_length,
                 aspect_ratio=args.aspect_ratio if hasattr(args, 'aspect_ratio') else "16:9"
             )
         else:
             # Standard story generation
-            story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
+            story_json = build_story(idea, director_name=story_director, target_length=target_length)
 
         project_mgr.save_story(project_id, story_json)
     else:
@@ -1646,7 +1647,7 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
         logger.info("STEP 4: Shot Planning")
         print("\nSTEP 4: Shot Planning")
         planner_max_duration = (project_meta.get('video_config') or {}).get('max_shot_duration')
-        shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_agent=shots_agent,
+        shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_director=shots_director,
                                      shots_per_scene=shots_per_scene, max_shot_duration=planner_max_duration)
         # Enhance motion prompts with trigger keywords for LoRA activation
         shots = enhance_motion_prompts_with_triggers(shots)
@@ -1860,7 +1861,7 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
 
 
 def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, negative_prompt, max_shots, shot_length, start_step,
-                     story_agent=None, shots_agent=None,
+                     story_director=None, shots_director=None,
                      generate_narration=False, tts_method=None, tts_workflow=None, tts_voice=None,
                      images_per_shot=1, shots_per_scene=None):
     """Execute workflow step by step with user prompts"""
@@ -1868,10 +1869,10 @@ def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, ne
     story_json = None
     graph = None
 
-    # Get agent names from project metadata or args
-    agent_config = project_meta.get('agent_config', {})
-    story_agent = story_agent or agent_config.get('story', config.STORY_AGENT)
-    shots_agent = shots_agent or agent_config.get('shots', config.SHOTS_AGENT)
+    # Get director names from project metadata or args
+    director_config = project_meta.get('director_config') or project_meta.get('agent_config') or {}
+    story_director = story_director or director_config.get('story', config.STORY_DIRECTOR)
+    shots_director = shots_director or director_config.get('shots', config.SHOTS_DIRECTOR)
 
     # Get narration config
     narration_config = project_meta.get('narration_config', {})
@@ -1884,7 +1885,7 @@ def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, ne
     image_config = project_meta.get('image_config', {})
     images_per_shot = images_per_shot or image_config.get('images_per_shot', config.IMAGES_PER_SHOT)
 
-    print(f"[INFO] Using agents - Story: {story_agent}, Shots: {shots_agent}")
+    print(f"[INFO] Using directors - Story: {story_director}, Shots: {shots_director}")
     print(f"[INFO] Generating {images_per_shot} image(s) per shot")
 
     # Calculate target video length for story generation
@@ -1909,28 +1910,28 @@ def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, ne
                 print("\nSTEP 2: Story Generation")
 
                 # Route to appropriate story builder based on project type
-                is_asmr = story_agent == "asmr_glass_cutting" or story_agent.startswith("asmr/")
-                is_then_vs_now = story_agent == "then_vs_now" or story_agent.startswith("then_vs_now/")
+                is_asmr = story_director == "asmr_glass_cutting" or story_director.startswith("asmr/")
+                is_then_vs_now = story_director == "then_vs_now" or story_director.startswith("then_vs_now/")
 
                 if is_asmr:
-                    logger.info(f"Using ASMR glass cutting story builder with agent: {story_agent}")
+                    logger.info(f"Using ASMR glass cutting story builder with director: {story_director}")
                     story_json = build_story_asmr_glass_cutting(
                         idea=idea,
-                        agent_name=story_agent,
+                        director_name=story_director,
                         shot_duration=args.shot_length if hasattr(args, 'shot_length') and args.shot_length else 5,
                         aspect_ratio=args.aspect_ratio if hasattr(args, 'aspect_ratio') else "16:9"
                     )
                 elif is_then_vs_now:
-                    logger.info(f"Using ThenVsNow story builder with agent: {story_agent}")
+                    logger.info(f"Using ThenVsNow story builder with director: {story_director}")
                     story_json = build_story_then_vs_now(
                         movie_name=idea,
-                        agent_name=story_agent,
+                        director_name=story_director,
                         target_length=target_length,
                         aspect_ratio=args.aspect_ratio if hasattr(args, 'aspect_ratio') else "16:9"
                     )
                 else:
                     # Standard story generation
-                    story_json = build_story(idea, agent_name=story_agent, target_length=target_length)
+                    story_json = build_story(idea, director_name=story_director, target_length=target_length)
 
                 project_mgr.save_story(project_id, story_json)
             else:
@@ -1958,7 +1959,7 @@ def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, ne
             if not project_meta.get('steps', {}).get('shots', False):
                 print("\nSTEP 4: Shot Planning")
                 planner_max_duration = (project_meta.get('video_config') or {}).get('max_shot_duration')
-                shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_agent=shots_agent,
+                shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_director=shots_director,
                                              shots_per_scene=shots_per_scene, max_shot_duration=planner_max_duration)
                 # Enhance motion prompts with trigger keywords for LoRA activation
                 shots = enhance_motion_prompts_with_triggers(shots)
@@ -2550,11 +2551,11 @@ Examples:
   # Generate 4 variations for quick testing
   python core/main.py --idea "Test" --max-shots 2 --images-per-shot 4 --no-narration
 
-  # Use specific agents for different steps
-  python core/main.py --idea "Dramatic space epic" --story-agent dramatic --shots-agent artistic
+  # Use specific directors for different steps
+  python core/main.py --idea "Dramatic space epic" --story-director dramatic --shots-director artistic
 
   # Generate video with narration using ElevenLabs
-  python core/main.py --idea "Nature documentary" --story-agent documentary --tts-method elevenlabs --tts-voice "Rachel"
+  python core/main.py --idea "Nature documentary" --story-director documentary --tts-method elevenlabs --tts-voice "Rachel"
 
   # List available ElevenLabs voices
   python core/main.py --list-voices
@@ -2565,8 +2566,8 @@ Examples:
   # Use ComfyUI TTS workflow for narration
   python core/main.py --idea "Explainer video" --tts-method comfyui --tts-workflow workflow/tts_workflow.json
 
-  # List all available agents
-  python core/main.py --list-agents
+  # List all available directors
+  python core/main.py --list-directors
 
   # Use idea from file (default)
   python core/main.py
@@ -2621,7 +2622,7 @@ Workflow Steps:
   6. Video Rendering (videos)
   7. Narration TTS (narration)
 
-Available Agents:
+Available Directors:
   Story: default, dramatic, documentary
   Shots: default, artistic
 
@@ -2646,7 +2647,7 @@ Testing Options:
   --no-resume           : Skip resume prompt, start new project
 
   Use --list-voices to see ElevenLabs voices
-  Use --list-agents to see all available agents
+  Use --list-directors to see all available directors
         """
     )
 
@@ -2780,17 +2781,17 @@ Testing Options:
     )
 
     parser.add_argument(
-        '--story-agent',
+        '--story-director',
         type=str,
         default=None,
-        help='Story agent to use (default: dramatic, documentary, etc.)'
+        help='Story director to use (default: dramatic, documentary, etc.)'
     )
 
     parser.add_argument(
-        '--shots-agent',
+        '--shots-director',
         type=str,
         default=None,
-        help='Shots prompt agent to use (default: default, artistic, etc.)'
+        help='Shots prompt director to use (default: default, artistic, etc.)'
     )
 
     parser.add_argument(
@@ -2835,9 +2836,9 @@ Testing Options:
     )
 
     parser.add_argument(
-        '--list-agents',
+        '--list-directors',
         action='store_true',
-        help='List all available agents and exit'
+        help='List all available directors and exit'
     )
 
     parser.add_argument(
@@ -2871,11 +2872,11 @@ Testing Options:
 
     args = parser.parse_args()
 
-    # Handle --list-agents
-    if args.list_agents:
-        from core.agent_loader import AgentLoader
-        loader = AgentLoader()
-        loader.print_all_agents()
+    # Handle --list-directors
+    if args.list_directors:
+        from core.director_loader import DirectorLoader
+        loader = DirectorLoader()
+        loader.print_all_directors()
         return
 
     # Handle --list-voices
@@ -3046,8 +3047,8 @@ async def run_auto_mode(project_id: str, idea: str, resume_from: str = None,
             self.shot_length = None
             self.total_length = None
             self.images_per_shot = None
-            self.story_agent = None
-            self.shots_agent = None
+            self.story_director = None
+            self.shots_director = None
             self.no_narration = False
             self.tts_method = None
             self.tts_workflow = None
@@ -3179,8 +3180,8 @@ async def run_auto_mode(project_id: str, idea: str, resume_from: str = None,
             negative_prompt=args.negative_prompt or config.DEFAULT_NEGATIVE_PROMPT,
             max_shots=args.max_shots if args.max_shots is not None else config.calculate_max_shots_from_config(),
             shot_length=args.shot_length or config.DEFAULT_SHOT_LENGTH,
-            story_agent=args.story_agent,
-            shots_agent=args.shots_agent,
+            story_director=args.story_director,
+            shots_director=args.shots_director,
             generate_narration=not args.no_narration,
             tts_method=args.tts_method,
             tts_workflow=args.tts_workflow,

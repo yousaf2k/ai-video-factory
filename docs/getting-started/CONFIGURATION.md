@@ -193,22 +193,22 @@ CAMERA_LORA_MAPPING = {
 
 **See Also:** [Camera LoRA Guide](../guides/CAMERA_LORA_GUIDE.md)
 
-### 6. Agent Configuration
+### 6. Director Configuration
 
 ```python
-# Story generation agent
-STORY_AGENT = "default"
+# Story generation director
+STORY_DIRECTOR = "default"
 
-# Shots agent (for image and motion prompts)
-SHOTS_AGENT = "default"
+# Shots director (for image and motion prompts)
+SHOTS_DIRECTOR = "default"
 
-# Narration agent
-NARRATION_AGENT = "default"
+# Narration director
+NARRATION_DIRECTOR = "default"
 ```
 
-**Agents** are prompt templates stored in `agents/{type}/{name}.txt`
+**Directors** are prompt templates stored in `directors/{type}/{name}.txt`
 
-Available agents depend on files in the agents folder.
+Available directors depend on files in the directors folder.
 
 ### 7. Narration/TTS Configuration
 

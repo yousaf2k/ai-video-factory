@@ -65,8 +65,8 @@ export interface Project {
   project_id: string;
   timestamp: string;
   idea: string;
-  story_agent?: string;
-  shots_agent?: string;
+  story_director?: string;
+  shots_director?: string;
   prompt_mode?: "video" | "motion";
   started_at: string;
   completed: boolean;
@@ -203,8 +203,8 @@ export interface CreateProjectRequest {
   idea: string;
   project_id?: string;
   project_type: ProjectType;
-  story_agent?: string;
-  shots_agent?: string;
+  story_director?: string;
+  shots_director?: string;
   prompt_mode?: "video" | "motion";
   total_duration?: number;
   max_shot_duration?: number;
@@ -216,8 +216,8 @@ export interface CreateProjectRequest {
 export interface UpdateProjectRequest {
   idea?: string;
   completed?: boolean;
-  story_agent?: string;
-  shots_agent?: string;
+  story_director?: string;
+  shots_director?: string;
   prompt_mode?: "video" | "motion";
   aspect_ratio?: "16:9" | "9:16" | "21:8";
   video_generation_type?: VideoGenerationType;
@@ -229,8 +229,8 @@ export interface GlobalConfig {
   image_generation_mode: string;
   video_generation_mode: string;
   video_workflow: string;
-  default_story_agent: string;
-  default_shots_agent: string;
+  default_story_director: string;
+  default_shots_director: string;
   comfy_url: string;
   target_video_length?: number;
   default_max_shots?: number;
@@ -314,60 +314,60 @@ export interface GenerationStatus {
   eta?: number;
 }
 
-export interface Agent {
+export interface Director {
   id: string;
   name: string;
   type: string;
 }
 
-export interface AgentsByType {
-  story: Agent[];
-  shots: Agent[];
-  narration: Agent[];
+export interface DirectorsByType {
+  story: Director[];
+  shots: Director[];
+  narration: Director[];
 }
 
-// Agents editor: hierarchical tree of agent files
-export interface AgentFileRef {
+// Directors editor: hierarchical tree of director files
+export interface DirectorFileRef {
   id: string;        // e.g. "documentary/default" or "documentary/_base/base_standard"
   name: string;      // file name without .md
-  is_base: boolean;  // base/component file (included by agents, not runnable itself)
+  is_base: boolean;  // base/component file (included by directors, not runnable itself)
   group?: string;    // subdir group, e.g. "_base" | "_contexts" | "_styles" | "base"
 }
 
-export interface AgentCategory {
+export interface DirectorCategory {
   id: string;        // e.g. "documentary", "_root" (flat files), "base"
   name: string;
   is_base: boolean;  // whole category is a base/component collection
-  agents: AgentFileRef[];
-  base_files: AgentFileRef[];
+  directors: DirectorFileRef[];
+  base_files: DirectorFileRef[];
 }
 
-export type AgentTree = {
-  story: AgentCategory[];
-  shots: AgentCategory[];
+export type DirectorTree = {
+  story: DirectorCategory[];
+  shots: DirectorCategory[];
 };
 
-// Agents editor: preview segments (raw file split around resolved {{include:...}} directives)
-export interface AgentTextSegment {
+// Directors editor: preview segments (raw file split around resolved {{include:...}} directives)
+export interface DirectorTextSegment {
   type: "text";
   content: string;
 }
 
-export interface AgentIncludeSegment {
+export interface DirectorIncludeSegment {
   type: "include";
   name: string;        // include name as written, e.g. "_base/base_standard"
-  path: string | null; // resolved agents-relative path without .md; null when not found
+  path: string | null; // resolved directors-relative path without .md; null when not found
   found: boolean;
   circular: boolean;
-  children: AgentSegment[];
+  children: DirectorSegment[];
 }
 
-export type AgentSegment = AgentTextSegment | AgentIncludeSegment;
+export type DirectorSegment = DirectorTextSegment | DirectorIncludeSegment;
 
-export interface AgentPreview {
+export interface DirectorPreview {
   content: string;   // raw file content (with include directives)
   expanded: string;  // fully include-expanded prompt as sent to the LLM
-  segments: AgentSegment[];
+  segments: DirectorSegment[];
 }
 
 // Queue types

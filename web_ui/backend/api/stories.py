@@ -276,7 +276,7 @@ async def update_story(project_id: str, request: UpdateStoryRequest):
 
 @router.post("/generate")
 async def generate_story(project_id: str, request: RegenerateStoryRequest):
-    """Generate story with new agent"""
+    """Generate story with new director"""
     try:
         # Load project
         meta = project_manager.load_project(project_id)
@@ -297,14 +297,14 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
         # Import ASMR story builder
         from core.story_engine import build_story_asmr_glass_cutting
 
-        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.agent == "then_vs_now" or request.agent.startswith("then_vs_now/")
-        is_asmr = meta.get('project_type') == ProjectType.ASMR_GLASS_CUTTING or request.agent == "asmr_glass_cutting" or request.agent.startswith("asmr/")
+        is_then_vs_now = meta.get('project_type') == ProjectType.THEN_VS_NOW or request.director == "then_vs_now" or request.director.startswith("then_vs_now/")
+        is_asmr = meta.get('project_type') == ProjectType.ASMR_GLASS_CUTTING or request.director == "asmr_glass_cutting" or request.director.startswith("asmr/")
 
         if is_asmr:
-            logger.info(f"Generating ASMR glass cutting story with agent: {request.agent}")
+            logger.info(f"Generating ASMR glass cutting story with director: {request.director}")
             story_json = build_story_asmr_glass_cutting(
                 idea=idea,
-                agent_name=request.agent,
+                director_name=request.director,
                 shot_duration=meta.get("shot_duration", 5),
                 aspect_ratio=aspect_ratio
             )
@@ -332,10 +332,10 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
         elif is_then_vs_now:
             from core.story_engine import build_story_then_vs_now
 
-            logger.info(f"Regenerating ThenVsNow story with agent: {request.agent}")
+            logger.info(f"Regenerating ThenVsNow story with director: {request.director}")
             story_json = build_story_then_vs_now(
                 movie_name=idea,
-                agent_name=request.agent,
+                director_name=request.director,
                 target_length=target_length,
                 aspect_ratio=aspect_ratio
             )
@@ -359,7 +359,7 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
             logger.info(f"ThenVsNow story regenerated with {len(shots)} shots")
             return project_service.get_project(project_id)
         else:
-            story_json = build_story(idea, request.agent, target_length, aspect_ratio)
+            story_json = build_story(idea, request.director, target_length, aspect_ratio)
             # The dedicated ThenVsNow/ASMR builders stamp project_type into the
             # story themselves; the generic (documentary/movie) path doesn't —
             # stamp it from project metadata so clients can group by type.

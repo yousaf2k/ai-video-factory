@@ -1,14 +1,14 @@
 """Shared prompt composer for reference-to-video (r2v) and text-to-video (t2v).
 
-Everything applied to the shots agent's raw output lives here exactly once and
+Everything applied to the shots director's raw output lives here exactly once and
 is called by both the CLI flow (core/main.py) and the backend video path, so
 the logic never forks:
 
 - voice-text embedding (D13): every character bound to a text voice must have
-  that text appear VERBATIM in the prompt; when the agent's prose lost it, a
+  that text appear VERBATIM in the prompt; when the director's prose lost it, a
   deterministic voice-note line is inserted into subject_definitions
   (idempotent — never duplicated).
-- <Picture N> label pruning (D3): the agent numbers pictures in attachment
+- <Picture N> label pruning (D3): the director numbers pictures in attachment
   convention order (characters -> background -> props). When the slot budget
   dropped trailing refs, citations beyond the attached count are stripped so
   the prompt never references a picture that isn't wired.
@@ -79,7 +79,7 @@ def _insert_into_subject_definitions(prompt: str, lines) -> str:
 def prune_picture_labels(prompt: str, attached_picture_count):
     """Strip <Picture N> citations for pictures beyond the attached count.
 
-    The agent numbers citations in attachment-convention order, so citations
+    The director numbers citations in attachment-convention order, so citations
     1..attached stay and any higher number is a ref the slot budget dropped.
     The citation is removed while keeping the sentence readable; the subject
     definition itself stays (text-only subject).
@@ -106,7 +106,7 @@ def append_audio_definitions(prompt: str, audio_attachments):
     """Append <Audio N> voice-timbre definition lines to subject_definitions.
 
     audio_attachments: list of dicts {name: character name, speaker: '(S1)'-style
-    id or None}. The agent's own citation prose (if any) is left untouched.
+    id or None}. The director's own citation prose (if any) is left untouched.
     """
     if not audio_attachments:
         return prompt

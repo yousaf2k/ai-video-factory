@@ -14,7 +14,7 @@ The function displays:
 - **Image Generation Configuration**: Mode, workflow, images per shot, aspect ratio, resolution, dimensions
 - **Video Generation Configuration**: Shot length, max shots, FPS, target length
 - **Workflow Mode**: Auto step mode, narration generation, TTS settings
-- **Agents**: Story, image, video, and narration agents
+- **Directors**: Story, image, video, and narration directors
 
 ### 2. Integration Point
 **Location:** `core/main.py` (line 1820)
@@ -77,11 +77,11 @@ CONFIGURATION SUMMARY
   TTS Method: local
   TTS Voice: en-US-AriaNeural
 
-[Agents]
-  Story Agent: default
-  Image Agent: default
-  Video Agent: default
-  Narration Agent: default
+[Directors]
+  Story Director: default
+  Image Director: default
+  Video Director: default
+  Narration Director: default
 
 ======================================================================
 ```
@@ -114,5 +114,5 @@ It will display before starting the workflow, giving users visibility into:
 - Which LLM provider is active
 - What image/video settings will be used
 - Which API keys are configured
-- Agent selections for each step
+- Director selections for each step
 - Whether narration is enabled

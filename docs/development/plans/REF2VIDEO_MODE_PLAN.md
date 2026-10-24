@@ -71,7 +71,7 @@ Key properties:
 | R2V ComfyUI workflow (2 wired ref slots, prompt node, duration math, Lightning-LoRA switch, audio decode) | `workflow/video/video_minimax_h3_r2v.json`, `video_minimax_h3_r2v_8s.json` | ✅ present — **we modify these in place to our requirements** (D5); currently not pipeline-ready (see §4) |
 | Workflow registered in `VIDEO_WORKFLOWS` | `config.py` dynamic discovery | ⚠️ detected as FLFI2V-style (`load_image_first/last_node_id`), no `motion_prompt_node_id` |
 | Full-reference prompt format guide | `docs/guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_ref_en.md` | ✅ |
-| I2VA shots agent (dialogue, cuts, camera, soundscape rules) | `agents/shots/videoprompt/videoprompt_minimax_h3.md` | ✅ — basis for the R2V agent |
+| I2VA shots director (dialogue, cuts, camera, soundscape rules) | `directors/shots/videoprompt/videoprompt_minimax_h3.md` | ✅ — basis for the R2V director |
 | Character sheet generation (single 8-view image, `images/` dir, queue type `CHARACTER_IMAGE`) | `web_ui/backend/services/generation_service.py:476-619` | ⚠️ backend-only — port to `core/` (D6) |
 | Scene background generation (`backgrounds/` dir, `scene.background_image_path`) | `generation_service.py:762-796`, `:2714-2823` | ⚠️ latent bug — `_generate_single_image` called with 11 positional args vs 10-param signature (`:2762-2776`); fix first |
 | Asset-reference system (`p/{pid}/{media_dir}/{file}`), `collect_shot_image_refs` | `web_ui/backend/services/asset_service.py:786-870` | ✅ |
@@ -124,7 +124,7 @@ and the sheets of props used in that shot** — bounded by the workflow's wired 
 
 - Shot schema gains `characters: ["Name A", "Name B"]` (ordered: primary/speaking character
   first) and `props: ["Car", "Revolver"]` (ordered by visual prominence in the shot). Today
-  shots only have `character_name` (singular) — the new R2V shots agent emits the lists;
+  shots only have `character_name` (singular) — the new R2V shots director emits the lists;
   `character_name` stays for back-compat (= first entry of `characters`).
 - **Slot budget & priority** — reference demand now exceeds slots, so attachment is a
   priority fill. Default order (config `REF2VIDEO_REF_PRIORITY`, default
@@ -135,9 +135,9 @@ and the sheets of props used in that shot** — bounded by the workflow's wired 
   Stop when slots are full; the label renumbering post-processor (D3) keeps the prompt
   consistent with what was attached. **Unattached subjects are never dropped from the
   prompt** — they stay in `subject_definitions` as text-only descriptions (appearance prose
-  from story.json), just without a `<Picture N>` citation; the agent instructions must
+  from story.json), just without a `<Picture N>` citation; the director instructions must
   define subjects independently of whether a picture citation survives.
-- The R2V shots agent may override the default fill per shot with an optional explicit
+- The R2V shots director may override the default fill per shot with an optional explicit
   `reference_subjects: ["background", "Car", "Name A"]` field for shots where the default
   order is wrong (e.g. a car chase where the car outranks the background). Everything still
   passes through renumbering + slot cap.
@@ -153,7 +153,7 @@ and the sheets of props used in that shot** — bounded by the workflow's wired 
 
 ### D3 — `<Picture N>` label alignment
 
-The agent writes the prompt with a **documented label convention** (characters in listed
+The director writes the prompt with a **documented label convention** (characters in listed
 order, then background); a small post-processor renumbers labels when refs were dropped or
 reordered so the prompt always matches what is actually wired. Labels are per-prompt local,
 so renumbering is safe. This runs in the same place prompts are finalized (core, before
@@ -169,8 +169,8 @@ so renumbering is safe. This runs in the same place prompts are finalized (core,
   UI. Multi-angle "environment sheet" (4-view, like character sheets) is a later
   enhancement.
 - Prerequisite: fix the `_generate_single_image` signature bug (§2).
-- Prompt template lives in `agents/story/_base/` or a new `agents/contexts` include so story
-  agents can compose it (`{{include:...}}`).
+- Prompt template lives in `directors/story/_base/` or a new `directors/contexts` include so story
+  directors can compose it (`{{include:...}}`).
 
 ### D5 — Workflow authoring & compiler/loader integration
 
@@ -236,7 +236,7 @@ wrappers. This also fixes the `_generate_single_image` arg bug in the one shared
 
 Generation order for r2v projects:
 
-1. story → scene graph → shots plan (R2V shots agent)
+1. story → scene graph → shots plan (R2V shots director)
 2. character sheets for all characters (skip if present — idempotent)
 3. background sheet per scene + prop sheets for story `props` (skip if present)
 4. **new**: `sync_shot_video_refs(project_id)` in `project_manager.py`:
@@ -262,9 +262,9 @@ Generation order for r2v projects:
 depends on the video workflow:
 
 - **MiniMax H3** (native audio): shots use the T2VA-format `video_prompt` from the t2v
-  agent (D7 — no image instruction line, base guide §2.1); composer voice-text injection
+  director (D7 — no image instruction line, base guide §2.1); composer voice-text injection
   (D13) still applies.
-- **Any other t2v workflow** (e.g. Wan t2v — no native audio): no special agent; the
+- **Any other t2v workflow** (e.g. Wan t2v — no native audio): no special director; the
   standard shot planner output is used and the effective prompt **defaults to
   image_prompt + motion_prompt combined** — with no generated image, the image
   description has to travel in the text (same semantics as `APPEND_IMAGE_TO_MOTION_PROMPT`).
@@ -284,16 +284,16 @@ Image-stage skip points and gates to touch:
   `is_ref2video`** (D5); `regenerate_shot_video` (`:1930-1931`) drops the "no image" hard
   error for the same cases.
 
-### D7 — The R2V shots agent
+### D7 — The R2V shots director
 
-New `agents/shots/videoprompt/videoprompt_minimax_h3_r2v.md` (composable via
+New `directors/shots/videoprompt/videoprompt_minimax_h3_r2v.md` (composable via
 `{{include:...}}` with existing style/context packs):
 
 - Six-section full-reference output (guide §1): `subject_definitions` (one `<Subject N>` per
   character + one per environment, citing `<Picture N>`; dialogue voices described with
   stable attributes), `summary` (`[reference generation]` prefix), `retention_analysis`,
   `detailed_description` (style sentence(s) **before** `[Shot 1]`; no first-frame anchor
-  line; sub-shot/cut/camera rules inherited from the I2VA agent; dialogue `<d>` rules
+  line; sub-shot/cut/camera rules inherited from the I2VA director; dialogue `<d>` rules
   unchanged), `overall_soundscape`, `non_diegetic_music`.
 - Emits per shot: `video_prompt` (the six sections), `characters` (ordered), `props`
   (ordered, exact names from story.json `props`), optional `reference_subjects` override
@@ -301,17 +301,17 @@ New `agents/shots/videoprompt/videoprompt_minimax_h3_r2v.md` (composable via
   continues the previous shot's action within a scene), `duration`, `camera` (kept for
   close-up expression heuristic + future use; H3 workflows don't use camera LoRAs),
   optional `soundfx_prompt` (used only when post-SFX layer is enabled).
-- Speaker voice prose: the agent writes voice descriptions for **unbound** characters only;
+- Speaker voice prose: the director writes voice descriptions for **unbound** characters only;
   the composer overwrites/injects the character's voice text verbatim (D13), so the
-  agent instructions note that its voice wording may be replaced — no need for the LLM to
+  director instructions note that its voice wording may be replaced — no need for the LLM to
   repeat it perfectly.
 - **The composer is a named core module** (`core/r2v_composer.py`): everything applied to
-  the agent's raw output — voice-text injection (D13), `<Picture N>`/`<Audio N>` label
+  the director's raw output — voice-text injection (D13), `<Picture N>`/`<Audio N>` label
   renumbering against the actually-attached refs (D3), text-only subject fallbacks, and
   `<Audio N>` definition insertion — lives there exactly once, called by both the CLI flow
   and the backend video path, so the logic never forks between them.
-- **T2V sibling agent** (`videoprompt_minimax_h3_t2v`) for t2v projects **on MiniMax H3**
-  (non-H3 t2v needs no special agent — the combined-prompt default covers it, D6): the
+- **T2V sibling director** (`videoprompt_minimax_h3_t2v`) for t2v projects **on MiniMax H3**
+  (non-H3 t2v needs no special director — the combined-prompt default covers it, D6): the
   same rules minus everything reference-related — T2VA has no image instruction line, no
   `subject_definitions`, and no labels; it begins directly with the three core fields
   (base guide §2.1), and subjects get full prose descriptions in every shot since nothing
@@ -371,7 +371,7 @@ prompt's task prefix to `[reference generation + video continuation]` with
 - Scope: within a scene only (cross-scene continuations would smear location changes);
   **off by default — used only where required**. Config
   `REF2VIDEO_CONTINUITY_MODE = "off" | "auto"`; in `auto` mode a tail ref is attached
-  **only to shots that directly continue their predecessor** — the R2V agent marks them
+  **only to shots that directly continue their predecessor** — the R2V director marks them
   `continues_from_previous: true` (D7), users can toggle per shot in the UI, and
   scene-opening/standalone beats never get one.
 - Cost: serialization is bounded by the mechanism itself — only chains of consecutive
@@ -473,10 +473,10 @@ TTS selection later — out of scope for v1 (§8).
 Recurring objects that must look identical across shots: vehicles (car, bike), weapons
 (gun, knife), electronics (computer, phone), home/locations-as-objects, wearables (watch,
 jewelry), standalone outfits/armor. Today **nothing in the schema tracks props** — story
-agents emit only `characters` (with `attire` folded into the character) and scenes/shots
+directors emit only `characters` (with `attire` folded into the character) and scenes/shots
 carry free-text descriptions.
 
-**Story schema** — extend `base_story_format.md` (and the R2V story-agent guidance) with an
+**Story schema** — extend `base_story_format.md` (and the R2V story-director guidance) with an
 optional story-level array mirroring `characters`:
 
 ```json
@@ -492,9 +492,9 @@ optional story-level array mirroring `characters`:
 
 - `owner` (optional) links a prop to a character ("John's car"); the R2V prompt composer uses
   it to phrase `subject_definitions` ("<Subject 4> is John's car from <Picture 3>…").
-- Agents that don't emit `props` simply produce none — everything downstream is a no-op
+- Directors that don't emit `props` simply produce none — everything downstream is a no-op
   (same backward-compatibility rule as `characters`).
-- **Wearables rule for agents**: a character's *default* clothing stays inside the character
+- **Wearables rule for directors**: a character's *default* clothing stays inside the character
   `image_prompt`/`attire` (it's part of identity); only standalone/outfit-changing items
   (armor, uniforms worn by many, transformation suits) become props.
 
@@ -512,7 +512,7 @@ optional story-level array mirroring `characters`:
   mirroring `CharacterReferenceUpload`.
 - Manual upload path (like characters) writes `reference_image_path` directly.
 
-**Shot wiring** — the R2V shots agent lists prop names per shot (`props: [...]`, exact names
+**Shot wiring** — the R2V shots director lists prop names per shot (`props: [...]`, exact names
 from story.json). `sync_shot_video_refs` (D6) attaches prop refs after characters/background
 per the D2 priority fill, tracked in the same `synced_video_ref_asset_refs` set so
 regenerating a prop sheet swaps refs instead of accumulating.
@@ -542,7 +542,7 @@ Prop continuity across shots rides on the same sheet + identical wording in ever
   Manual attachment via the shot's `reference_asset_ids` always wins.
 - **Cost control**: +1 image generation per character, only when the user asks; the D2
   priority fill means it costs no extra slots vs the standard sheet (v1 replacement rule).
-- The R2V agent prompt format is unchanged — the composer just cites the expression sheet as
+- The R2V director prompt format is unchanged — the composer just cites the expression sheet as
   the `<Picture N>` behind the character's `<Subject N>`; `subject_definitions` wording is
   identical either way ("the young woman in <Picture 1>"), so prompts stay stable whether
   the standard or expression sheet is attached.
@@ -632,7 +632,7 @@ tests for injection (no live ComfyUI needed).
 (character/background/prop sheets; fixes the `_generate_single_image` arg bug in the one
 shared place, D6); shot `characters` **and `props`** fields (planner passthrough +
 validator); story schema `props` array + `characters[].voice` (text/audio voice ID, D13)
-(base_story_format + agents); `sync_shot_video_refs` in `project_manager` (D2 priority fill
+(base_story_format + directors); `sync_shot_video_refs` in `project_manager` (D2 priority fill
 incl. props, D11 close-up expression swap, the `video_ref_asset_ids` split, `audio`/`videos`
 in `_project_media_asset_ref`); image-stage skip in the CLI flow incl. the
 `video_regenerator.py` gates; new `ProjectType` members + `meta.video_generation_type`
@@ -641,7 +641,7 @@ in `_project_media_asset_ref`); image-stage skip in the CLI flow incl. the
 (`_queue_processor_loop`, `regenerate_shot_video`, `run_batch_generation` — keyed on
 `is_ref2video`, D5); `GenerationType.PROP_IMAGE` processor (D10).
 
-**Phase 3 — prompts & composer**: `videoprompt_minimax_h3_r2v` agent + the
+**Phase 3 — prompts & composer**: `videoprompt_minimax_h3_r2v` director + the
 `videoprompt_minimax_h3_t2v` sibling (D7) + r2v background-sheet prompt include + prop
 reference-sheet prompt template; the shared composer `core/r2v_composer.py` (D7 —
 voice-text injection D13, `<Picture N>`/`<Audio N>` renumbering D3, text-only subject
@@ -752,7 +752,7 @@ gains in `subject_definitions`: `<Audio 1> is the voice-timbre reference for <Su
   Post-audio layering reuses existing export mixing.
 - No multi-view environment sheets (later enhancement, D4) and no multi-view prop sheets in
   v1 (single hero image per prop; grid variant deferred via `PROP_SHEET_VIEWS`, D10).
-- No automatic prop *discovery* in v1 — props exist only where a story agent (or the user,
+- No automatic prop *discovery* in v1 — props exist only where a story director (or the user,
   via the props manager) defines them; an LLM prop-extraction pass over existing projects is
   a possible follow-up.
 - Character voices (D13) serve ref2video prompt/clip needs in v1; wiring them into standard

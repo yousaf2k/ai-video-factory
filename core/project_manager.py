@@ -501,14 +501,14 @@ class ProjectManager:
             return latest['meta']
         return None
 
-    def create_project(self, idea, project_id=None, story_agent="default", shots_agent="default", total_duration=None, aspect_ratio="16:9", prompt_mode="video", video_generation_type=None, max_shot_duration=None):
+    def create_project(self, idea, project_id=None, story_director="default", shots_director="default", total_duration=None, aspect_ratio="16:9", prompt_mode="video", video_generation_type=None, max_shot_duration=None):
         """Create a new project
 
         Args:
             idea: The video idea/prompt
             project_id: Optional project ID. If not provided, generates timestamp-based ID
-            story_agent: Story generation agent
-            shots_agent: Shots prompt agent
+            story_director: Story generation director
+            shots_director: Shots prompt director
             total_duration: Target video length in seconds
             aspect_ratio: Video aspect ratio ("16:9" or "9:16")
             prompt_mode: Default prompt style for video generation ("video" or "motion")
@@ -539,8 +539,8 @@ class ProjectManager:
             'project_id': project_id,
             'timestamp': timestamp,
             'idea': idea,
-            'story_agent': story_agent,
-            'shots_agent': shots_agent,
+            'story_director': story_director,
+            'shots_director': shots_director,
             'prompt_mode': prompt_mode,
             'video_generation_type': video_generation_type or 'i2v',
             'total_duration': total_duration,
@@ -635,7 +635,7 @@ class ProjectManager:
                 'reference_asset_ids': shot.get('reference_asset_ids', []),
                 'synced_character_asset_refs': shot.get('synced_character_asset_refs', []),
                 'synced_video_ref_asset_refs': shot.get('synced_video_ref_asset_refs', []),
-                # Character attribution from the shots agent (r2v agents emit
+                # Character attribution from the shots director (r2v directors emit
                 # 'characters'/'props'; the character sync falls back to
                 # character_name) — must survive replans or the syncs go blind
                 'character_name': shot.get('character_name'),

@@ -34,7 +34,7 @@ python core/main.py --idea "A storm over the mountains" --video-generation-type 
 ## r2v Pipeline
 
 ```
-Idea → Story → Scene Graph → Shots (r2v agent)
+Idea → Story → Scene Graph → Shots (r2v director)
                           ↓
    Character sheets (8-view)  +  Scene backgrounds  +  Prop sheets   (once each, idempotent)
                           ↓
@@ -51,8 +51,8 @@ Idea → Story → Scene Graph → Shots (r2v agent)
   `overall_soundscape`, `non_diegetic_music`) — see the
   [Ref2VA guide](../guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_ref_en.md). Prompts are
   capped at 7000 characters (validated + LLM-repaired).
-- **Shots agents**: `base/base_shots_r2v` (r2v) and `base/base_shots_t2v` (t2v) — selected
-  automatically when `--video-generation-type` is given without an explicit agent.
+- **Shots directors**: `base/base_shots_r2v` (r2v) and `base/base_shots_t2v` (t2v) — selected
+  automatically when `--video-generation-type` is given without an explicit director.
 - **`<Picture N>` convention**: references attach characters-first, then the scene
   background, then props; the composer prunes citations for refs the 12-file/9-slot budget
   dropped and embeds each character's **voice text** verbatim so voices stay consistent
@@ -95,8 +95,8 @@ Idea → Story → Scene Graph → Shots (r2v agent)
   scene-background manager and the r2v batch-images modal offer a style dropdown; the selected
   style text is appended to the **end** of the background prompt at generation time
   (`background_style` request/queue field, `apply_background_style()` helper).
-- **Background prompt comes from `set_prompt`**: the story agents' shared schema
-  (`agents/story/_base/base_story_format.md`) has the story LLM write a detailed environment
+- **Background prompt comes from `set_prompt`**: the story directors' shared schema
+  (`directors/story/_base/base_story_format.md`) has the story LLM write a detailed environment
   description into each scene's `set_prompt` (location stays a short setting name). Background
   sheets build from `set_prompt` (`background_base_text()`; `location` is the fallback for
   stories generated before the field existed). The per-scene sheet template and the batch

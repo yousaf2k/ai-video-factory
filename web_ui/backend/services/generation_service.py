@@ -378,8 +378,8 @@ class GenerationService:
                                         is_ready = False
                                         skip_reason = "THEN or NOW images not generated"
                                 elif item.generation_type == GenerationType.THEN_IMAGE:
-                                    # DECISION: For 'Then vs now Actor Face' agent, we don't require NOW image first
-                                    is_actor_face = self._is_actor_face_agent(item.project_id)
+                                    # DECISION: For 'Then vs now Actor Face' director, we don't require NOW image first
+                                    is_actor_face = self._is_actor_face_director(item.project_id)
                                     
                                     if not is_actor_face and not shot.get('now_image_generated', False):
                                         is_ready = False
@@ -1121,8 +1121,8 @@ class GenerationService:
         if request:
             prompt_override = getattr(request, 'prompt_override', None)
             if not prompt_override and generation_type == GenerationType.DEPARTURE_VIDEO:
-                # NEW: Don't override departure prompt for 'Then vs now Actor Face' agent
-                if not self._is_actor_face_agent(project_id):
+                # NEW: Don't override departure prompt for 'Then vs now Actor Face' director
+                if not self._is_actor_face_director(project_id):
                     prompt_override = getattr(request, 'departure_prompt_override', None)
             if not prompt_override and generation_type == GenerationType.THEN_IMAGE:
                 prompt_override = getattr(request, 'then_prompt_override', None)
@@ -1993,8 +1993,8 @@ class GenerationService:
         if image_variant in ["then", "both"]:
             if not shot_to_use.get('then_image_generated') or force:
                 try:
-                    # DECISION: For 'Then vs now Actor Face' agent, we don't require or use NOW image
-                    is_actor_face = self._is_actor_face_agent(project_id)
+                    # DECISION: For 'Then vs now Actor Face' director, we don't require or use NOW image
+                    is_actor_face = self._is_actor_face_director(project_id)
                     current_now = shot_to_use.get('now_image_path')
                     
                     if not is_actor_face and not current_now:
@@ -2040,7 +2040,7 @@ class GenerationService:
 
                     then_workflow = image_workflow
 
-                    # For Actor Face agent, we don't use 'now' as reference
+                    # For Actor Face director, we don't use 'now' as reference
                     then_reference_to_use = []
                     if not is_actor_face and current_now:
                         then_reference_to_use.append(config.resolve_path(current_now))
@@ -3192,7 +3192,7 @@ class GenerationService:
         self,
         project_id: str,
         max_shots: Optional[int] = None,
-        shots_agent: str = "default",
+        shots_director: str = "default",
         max_shot_duration: Optional[float] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -3201,7 +3201,7 @@ class GenerationService:
         Args:
             project_id: Project identifier
             max_shots: Maximum shots to generate
-            shots_agent: Shots agent to use
+            shots_director: Shots director to use
             max_shot_duration: Cap on a single shot's duration in seconds;
                 falls back to the project's stored setting when omitted
 
@@ -3254,7 +3254,7 @@ class GenerationService:
                     plan_shots,
                     story_json,
                     max_shots=max_shots,
-                    shots_agent=shots_agent,
+                    shots_director=shots_director,
                     max_shot_duration=max_shot_duration
                 )
             else:
@@ -3263,7 +3263,7 @@ class GenerationService:
                     plan_shots,
                     story_json,
                     max_shots=max_shots,
-                    shots_agent=shots_agent,
+                    shots_director=shots_director,
                     max_shot_duration=max_shot_duration
                 )
 
@@ -4070,15 +4070,15 @@ class GenerationService:
             raise RuntimeError(f"FLFI2V video source file not found: {source_path}")
 
 
-    def _is_actor_face_agent(self, project_id: str) -> bool:
-        """Check if project uses the 'Then vs now Actor Face' agent"""
+    def _is_actor_face_director(self, project_id: str) -> bool:
+        """Check if project uses the 'Then vs now Actor Face' director"""
         try:
             meta = self.project_manager.get_project(project_id)
-            agent = meta.get('story_agent', '')
-            # Match against the exact agent name (likely includes the path)
-            return "then_vs_now/then_vs_now_actor_faces" in agent
+            director = meta.get('story_director') or meta.get('story_agent', '')
+            # Match against the exact director name (likely includes the path)
+            return "then_vs_now/then_vs_now_actor_faces" in director
         except Exception as e:
-            logger.error(f"Error checking agent for project {project_id}: {e}")
+            logger.error(f"Error checking director for project {project_id}: {e}")
             return False
 
 

@@ -7,7 +7,7 @@ This document summarizes the implementation of intelligent story generation with
 ## Overview
 
 **What Changed:**
-- Story agents can now specify `scene_duration` (in seconds) for each scene
+- Story directors can now specify `scene_duration` (in seconds) for each scene
 - Shot planner calculates shots per scene from scene duration: `shots = scene_duration ÷ shot_length`
 - Target video length is passed to story generation via `{VIDEO_LENGTH}` placeholder
 - Scene durations are validated and auto-corrected if they don't match target length
@@ -17,7 +17,7 @@ This document summarizes the implementation of intelligent story generation with
 - Faster-paced scenes can be shorter with fewer shots
 - Slower-paced scenes can be longer with more detail
 - Better control over final video length
-- Backward compatible - agents without scene_duration still work
+- Backward compatible - directors without scene_duration still work
 
 ## Files Modified
 
@@ -31,19 +31,19 @@ This document summarizes the implementation of intelligent story generation with
 ### 2. `core/story_engine.py`
 **Changes:**
 - Added `target_length` parameter to `build_story()` function
-- Injects `{VIDEO_LENGTH}` context into agent prompts
+- Injects `{VIDEO_LENGTH}` context into director prompts
 - Added `validate_and_adjust_scene_durations()` function
 - Auto-corrects scene durations if outside tolerance
 
 **Key Functions:**
-- `build_story(idea, agent_name="default", target_length=None)` - now accepts target_length
+- `build_story(idea, director_name="default", target_length=None)` - now accepts target_length
 - `validate_and_adjust_scene_durations(story, target_length, tolerance=0.15)` - validates and adjusts scene durations
 
 **Example Usage:**
 ```python
 story = build_story(
     "Climate change documentary",
-    agent_name="documentary",
+    director_name="documentary",
     target_length=300  # 5-minute video
 )
 ```
@@ -91,21 +91,21 @@ elif shot_length and max_shots:
     target_length = max_shots * shot_length
 ```
 
-### 5. Agent Templates Updated
+### 5. Director Templates Updated
 **Files Modified:**
-- `agents/story/documentary.md`
-- `agents/story/netflix_documentary.md`
-- `agents/story/youtube_documentary.md`
-- `agents/story/prehistoric_dinosaur.md`
+- `directors/story/documentary.md`
+- `directors/story/netflix_documentary.md`
+- `directors/story/youtube_documentary.md`
+- `directors/story/prehistoric_dinosaur.md`
 
-**Changes to Each Agent:**
+**Changes to Each Director:**
 - Added `{VIDEO_LENGTH}` placeholder in instructions
 - Added `scene_duration` field to JSON output format
 - Added scene duration allocation rules and examples
 - Added minimum scene duration (15 seconds)
 - Added recommended durations by scene type
 
-**Example Agent Structure:**
+**Example Director Structure:**
 ```markdown
 ## Video Duration Planning
 
@@ -132,7 +132,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 1. Scene duration is **OPTIONAL** in story JSON
 2. If `scene_length` or `scene_duration` is present → use intelligent distribution
 3. If missing → fall back to even distribution (current behavior)
-4. Agents without `{VIDEO_LENGTH}` placeholder still work normally
+4. Directors without `{VIDEO_LENGTH}` placeholder still work normally
 
 **Fallback Logic:**
 ```python
@@ -167,7 +167,7 @@ else:
 from core.story_engine import build_story
 import json
 
-story = build_story('Climate change', agent_name='documentary', target_length=300)
+story = build_story('Climate change', director_name='documentary', target_length=300)
 data = json.loads(story)
 
 # Check for scene_duration
@@ -205,7 +205,7 @@ print(f'Total shots: {len(shots)}')
 ```bash
 python core/main.py \
   --idea "A 3-minute documentary about penguins" \
-  --story-agent documentary \
+  --story-director documentary \
   --total-length 180 \
   --auto
 ```
@@ -221,9 +221,9 @@ python core/main.py \
 
 ### Test 4: Backward Compatibility
 ```bash
-# Use agent WITHOUT scene_duration support
+# Use director WITHOUT scene_duration support
 python core/main.py \
-  --story-agent dramatic \
+  --story-director dramatic \
   --max-shots 24 \
   --auto
 ```
@@ -293,17 +293,17 @@ python core/main.py \
 **Choice:** scene_length is OPTIONAL with intelligent fallback
 
 **Rationale:**
-- Existing agents/stories without scene_length still work
-- New agents opt-in by adding scene_length to output
+- Existing directors/stories without scene_length still work
+- New directors opt-in by adding scene_length to output
 - Gradual migration - no breaking changes
 
 ### Decision 3: Context Passing Method
-**Choice:** {VIDEO_LENGTH} placeholder in agent prompts
+**Choice:** {VIDEO_LENGTH} placeholder in director prompts
 
 **Rationale:**
 - No API changes (build_story() signature backward compatible)
-- Flexible - each agent can use context differently
-- Agent-specific - some agents may ignore length
+- Flexible - each director can use context differently
+- Director-specific - some directors may ignore length
 - Template-based injection
 
 ### Decision 4: Validation Strategy
@@ -319,23 +319,23 @@ python core/main.py \
 
 ✅ Story generation accepts target_length parameter
 ✅ Video length context injected via {VIDEO_LENGTH} placeholder
-✅ Story agents generate scene_duration field (in seconds)
+✅ Story directors generate scene_duration field (in seconds)
 ✅ Scene durations validated (within 15% tolerance)
 ✅ Auto-correction works when durations don't match target
 ✅ Shot planner uses scene_length to calculate shots per scene
 ✅ Fallback to even distribution when scene_length missing
-✅ Backward compatible (old agents work unchanged)
+✅ Backward compatible (old directors work unchanged)
 ✅ Pipeline integration passes target_length correctly
 ✅ Logs show scene-based shot distribution
 
 ## Next Steps (Optional Enhancements)
 
-1. **Add VIDEO_LENGTH support to more agents:**
-   - `agents/story/time_traveler.md`
-   - `agents/story/prehistoric_pov.md`
+1. **Add VIDEO_LENGTH support to more directors:**
+   - `directors/story/time_traveler.md`
+   - `directors/story/prehistoric_pov.md`
    - Custom user agents
 
-2. **Image agent updates (optional):**
+2. **Image director updates (optional):**
    - Add scene duration awareness to image generation
    - Adjust pacing based on scene duration
 
@@ -347,13 +347,13 @@ python core/main.py \
 4. **Documentation:**
    - Update user guide with new feature
    - Add examples showing before/after comparison
-   - Create tutorial for custom agent creation
+   - Create tutorial for custom director creation
 
-## Migration Guide for Custom Agents
+## Migration Guide for Custom Directors
 
-To add VIDEO_LENGTH support to a custom story agent:
+To add VIDEO_LENGTH support to a custom story director:
 
-1. **Add to agent template:**
+1. **Add to director template:**
 ```markdown
 ## Video Duration Planning
 
@@ -388,7 +388,7 @@ You MUST assign a `scene_duration` (in seconds) to each scene.
 3. **Test:**
 ```bash
 python core/main.py \
-  --story-agent your_custom_agent \
+  --story-director your_custom_director \
   --total-length 300 \
   --auto
 ```
@@ -401,11 +401,11 @@ python core/main.py \
 **Issue:** Shot count is too high/low
 **Solution:** Adjust scene_duration values in story, or modify DEFAULT_SHOT_LENGTH in config.py
 
-**Issue:** Old agents not using scene duration
-**Solution:** This is expected. Old agents use even distribution. Update agent template to add VIDEO_LENGTH support.
+**Issue:** Old directors not using scene duration
+**Solution:** This is expected. Old directors use even distribution. Update director template to add VIDEO_LENGTH support.
 
 **Issue:** Validation errors on story generation
-**Solution:** Ensure agent includes `{VIDEO_LENGTH}` placeholder and outputs `scene_duration` field in JSON
+**Solution:** Ensure director includes `{VIDEO_LENGTH}` placeholder and outputs `scene_duration` field in JSON
 
 ## Related Files
 
@@ -413,7 +413,7 @@ python core/main.py \
 - `core/story_engine.py` - Story generation with target_length support
 - `core/shot_planner.py` - Scene-based shot distribution
 - `core/main.py` - Pipeline integration
-- `agents/story/*.md` - Agent templates with VIDEO_LENGTH support
+- `directors/story/*.md` - Director templates with VIDEO_LENGTH support
 
 ## Version History
 
@@ -422,4 +422,4 @@ python core/main.py \
   - Updated story_engine.py with target_length parameter
   - Enhanced shot_planner.py with scene-based distribution
   - Integrated pipeline changes in main.py
-  - Updated 4 priority agents with VIDEO_LENGTH support
+  - Updated 4 priority directors with VIDEO_LENGTH support

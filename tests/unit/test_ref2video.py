@@ -192,7 +192,7 @@ class TestComposer:
         assert missing == []  # already verbatim in the prompt
         twice, _ = embed_voice_texts(once, [("Baker", voice_text)])
         assert twice == once
-        # a voice the agent lost gets injected into subject_definitions
+        # a voice the director lost gets injected into subject_definitions
         injected, missing2 = embed_voice_texts(R2V_PROMPT, [("Baker", "A husky deep elderly male voice")])
         assert missing2 == ["Baker"]  # was missing -> injected
         assert "The voice of Baker: A husky deep elderly male voice." in injected

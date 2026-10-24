@@ -8,7 +8,7 @@ The ASMR Glass Cutting project type generates cinematic ASMR videos of glass scu
 ## Features
 
 - **Natural Language Input**: Describe what you want in plain English
-- **Smart Object Extraction**: Agent extracts specific objects from your description
+- **Smart Object Extraction**: Director extracts specific objects from your description
 - **Category Expansion**: Say "red fruits" and get 5-10 specific fruits
 - **Glass Sculpture Style**: All prompts follow consistent glass sculpture aesthetics
 - **Single LLM Call**: Fast generation with one API call
@@ -21,7 +21,7 @@ The ASMR Glass Cutting project type generates cinematic ASMR videos of glass scu
 ```bash
 python core/main.py \
   --idea "create videos of strawberry, apple, and tomato" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 
 **Output**: 3 shots (one per object)
@@ -31,17 +31,17 @@ python core/main.py \
 ```bash
 python core/main.py \
   --idea "tropical fruits" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 
-**Output**: 5-10 shots (agent expands the category)
+**Output**: 5-10 shots (director expands the category)
 
 ### Mixed Input
 
 ```bash
 python core/main.py \
   --idea "make ASMR videos for summer fruits like watermelon and mango" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 
 **Output**: 5-10 shots including mentioned fruits
@@ -52,7 +52,7 @@ python core/main.py \
 |-----------|---------|-------------|
 | `--shot-length` | 5 | Duration per shot in seconds |
 | `--aspect-ratio` | 16:9 | Video aspect ratio (16:9, 9:16, 1:1, etc.) |
-| `--story-agent` | asmr/asmr_glass_cutting | Agent to use for generation |
+| `--story-director` | asmr/asmr_glass_cutting | Director to use for generation |
 
 ## Input Tips
 
@@ -65,7 +65,7 @@ python core/main.py \
 ❌ **Avoid:**
 - Comma-separated lists without context: "strawberry, apple, tomato"
 - Too vague: "make some videos"
-- Non-food objects: "cut a car" (agent expects fruits/vegetables)
+- Non-food objects: "cut a car" (director expects fruits/vegetables)
 
 ## Output Structure
 
@@ -105,7 +105,7 @@ All generated prompts follow the glass sculpture style:
 ## Web UI Usage
 
 1. Create a new project
-2. Select agent: `asmr/asmr_glass_cutting`
+2. Select director: `asmr/asmr_glass_cutting`
 3. Enter your idea: "create videos of tropical fruits"
 4. Click "Generate Story"
 5. Review shots and proceed to image/video generation
@@ -119,7 +119,7 @@ All generated prompts follow the glass sculpture style:
 - **Solution**: This is normal for specific objects. Use category expansion for more shots
 
 **Problem**: Prompts don't mention glass
-- **Solution**: The agent should automatically use glass style. If not, check the agent prompt file
+- **Solution**: The director should automatically use glass style. If not, check the director prompt file
 
 **Problem**: Total duration seems wrong
 - **Solution**: total_duration = shot_count × shot_duration. Check both values
@@ -130,7 +130,7 @@ All generated prompts follow the glass sculpture style:
 ```bash
 python core/main.py \
   --idea "red fruits" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 Generates: Strawberry, Apple, Tomato, Cherry, Raspberry, Watermelon, etc.
 
@@ -138,7 +138,7 @@ Generates: Strawberry, Apple, Tomato, Cherry, Raspberry, Watermelon, etc.
 ```bash
 python core/main.py \
   --idea "tropical fruits" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 Generates: Mango, Pineapple, Papaya, Coconut, Guava, etc.
 
@@ -146,7 +146,7 @@ Generates: Mango, Pineapple, Papaya, Coconut, Guava, etc.
 ```bash
 python core/main.py \
   --idea "common salad vegetables" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 Generates: Tomato, Cucumber, Bell Pepper, Carrot, Lettuce, etc.
 

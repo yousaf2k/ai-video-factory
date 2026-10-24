@@ -93,7 +93,7 @@ pydantic>=2.5.0
 **API Endpoints:**
 - ✅ `GET /api/projects/{id}/story` - Get story JSON
 - ✅ `PUT /api/projects/{id}/story` - Update story
-- ✅ `POST /api/projects/{id}/story/regenerate` - Regenerate story with new agent
+- ✅ `POST /api/projects/{id}/story/regenerate` - Regenerate story with new director
 
 ## 🚧 Pending Features
 
@@ -137,11 +137,11 @@ pydantic>=2.5.0
 **Planned Files:**
 - ⏳ `web_ui/backend/api/config.py` - Config endpoints
 - ⏳ `web_ui/frontend/src/components/config/ConfigPanel.tsx`
-- ⏳ `web_ui/frontend/src/components/config/AgentSelector.tsx`
+- ⏳ `web_ui/frontend/src/components/config/DirectorSelector.tsx`
 
 **Planned Features:**
 - ⏳ Edit all config.py settings
-- ⏳ Agent selector per stage
+- ⏳ Director selector per stage
 - ⏳ Export/download projects
 - ⏳ Error handling & toasts
 - ⏳ Loading states

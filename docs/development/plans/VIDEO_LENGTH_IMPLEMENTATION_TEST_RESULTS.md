@@ -4,15 +4,15 @@
 
 **Date**: 2026-02-26
 **Status**: ✅ ALL TESTS PASSED
-**Total Agents Tested**: 18
+**Total Directors Tested**: 18
 **Success Rate**: 100%
 
 ## Test Coverage
 
 ### Standard Test (300-second target)
-All 18 agents were tested with a standard 5-minute (300 seconds) video target:
+All 18 directors were tested with a standard 5-minute (300 seconds) video target:
 
-| # | Agent | Scenes | Total Duration | Diff | Status |
+| # | Director | Scenes | Total Duration | Diff | Status |
 |---|-------|--------|----------------|------|--------|
 | 1 | documentary | 6 | 300s | +0s (0.0%) | ✅ PASS |
 | 2 | netflix_documentary | 8 | 300s | +0s (0.0%) | ✅ PASS |
@@ -35,7 +35,7 @@ All 18 agents were tested with a standard 5-minute (300 seconds) video target:
 
 ### Extended Tests (Different Video Lengths)
 
-| Agent | Target Length | Scenes | Total | Status |
+| Director | Target Length | Scenes | Total | Status |
 |-------|---------------|--------|-------|--------|
 | default | 60s (1 min) | 4 | 60s | ✅ PASS |
 | dramatic | 600s (10 min) | 7 | 600s | ✅ PASS |
@@ -44,42 +44,42 @@ All 18 agents were tested with a standard 5-minute (300 seconds) video target:
 ## Key Findings
 
 ### 1. Perfect Duration Matching
-Most agents (15/18) achieved **perfect duration matching** with 0% error when targeting 300 seconds.
+Most directors (15/18) achieved **perfect duration matching** with 0% error when targeting 300 seconds.
 
 ### 2. Tolerance Compliance
-All agents stayed within the **±15% tolerance** range, which is handled by the auto-correction system in `shot_planner.py`.
+All directors stayed within the **±15% tolerance** range, which is handled by the auto-correction system in `shot_planner.py`.
 
 ### 3. Scene Duration Distribution
-Agents showed intelligent scene duration allocation:
+Directors showed intelligent scene duration allocation:
 - **Short videos (60s)**: 4 scenes, averaging 15s each
 - **Medium videos (180s)**: 5 scenes, averaging 36s each
 - **Standard videos (300s)**: 5-8 scenes, averaging 37-60s each
 - **Long videos (600s)**: 7 scenes, averaging 85s each
 
 ### 4. Scene Duration Field Compliance
-All 18 agents successfully:
+All 18 directors successfully:
 - ✅ Included `scene_duration` field in every scene
 - ✅ Used integer values (seconds)
 - ✅ Respected minimum 15-second duration (with 1 noted exception for short 60s video)
 
-### 5. Agent-Specific Behavior
+### 5. Director-Specific Behavior
 
-**Documentary Agents** (documentary, netflix_documentary, youtube_documentary):
+**Documentary Directors** (documentary, netflix_documentary, youtube_documentary):
 - Already had VIDEO_LENGTH support
 - Perfect duration matching
 - Scene count varies by documentary style
 
-**Time Travel Agents** (time_traveler, roman_kingdom, indus_valley, greek_*):
+**Time Travel Directors** (time_traveler, roman_kingdom, indus_valley, greek_*):
 - Consistent 5-6 scene structure
 - Excellent duration matching
 - Historical context maintained
 
-**Character-Driven Agents** (dramatic, prehistoric_pov, selfie_vlogger):
+**Character-Driven Directors** (dramatic, prehistoric_pov, selfie_vlogger):
 - Varied scene counts (5-7)
 - Good emotional pacing through duration allocation
 - POV-specific duration patterns
 
-**Specialized Agents** (futuristic, plague_of_athens, indus_valley_civilization):
+**Specialized Directors** (futuristic, plague_of_athens, indus_valley_civilization):
 - Context-appropriate scene durations
 - Documentary-style pacing for historical content
 - Narrative-driven allocation
@@ -87,26 +87,26 @@ All 18 agents successfully:
 ## Implementation Quality
 
 ### ✅ Strengths
-1. **100% Success Rate**: All agents work correctly
-2. **Consistent Structure**: All agents follow the same implementation pattern
+1. **100% Success Rate**: All directors work correctly
+2. **Consistent Structure**: All directors follow the same implementation pattern
 3. **Intelligent Allocation**: Scene durations match narrative needs
 4. **Backward Compatible**: Works with and without `target_length` parameter
 5. **Tolerance Handling**: Auto-correction system manages edge cases
 
 ### ⚠️ Minor Notes
 1. **Short Video Edge Case**: 60-second target resulted in one 10-second scene (below 15s minimum recommendation, but functional)
-2. **Tolerance Usage**: 2 agents (youtube_documentary, prehistoric_pov, greek_archaic) hit the 15% tolerance boundary, which is acceptable given the auto-correction system
+2. **Tolerance Usage**: 2 directors (youtube_documentary, prehistoric_pov, greek_archaic) hit the 15% tolerance boundary, which is acceptable given the auto-correction system
 
 ## Verification Commands
 
-To verify VIDEO_LENGTH support for any agent:
+To verify VIDEO_LENGTH support for any director:
 
 ```python
 from core.story_engine import build_story
 import json
 
 # Test with 300-second target
-story = build_story('Test idea', agent_name='default', target_length=300)
+story = build_story('Test idea', director_name='default', target_length=300)
 data = json.loads(story)
 
 # Check for scene_duration
@@ -120,19 +120,19 @@ print(f'Total duration: {total}s (target: 300s)')
 
 ## Conclusion
 
-The VIDEO_LENGTH support implementation is **fully functional** across all 18 story agents. The intelligent shot calculation feature is now completely integrated, enabling users to create videos with precise control over scene distribution and timing.
+The VIDEO_LENGTH support implementation is **fully functional** across all 18 story directors. The intelligent shot calculation feature is now completely integrated, enabling users to create videos with precise control over scene distribution and timing.
 
 ### Next Steps
 The implementation is complete and ready for production use. Users can now:
 - Specify exact video lengths with `target_length` parameter
 - Get intelligent scene duration allocation based on scene importance
 - Rely on auto-correction for any minor duration mismatches
-- Use any of the 18 story agents with consistent VIDEO_LENGTH behavior
+- Use any of the 18 story directors with consistent VIDEO_LENGTH behavior
 
 ---
 
 **Implementation completed**: 2026-02-26
-**Files modified**: 14 story agent files
+**Files modified**: 14 story director files
 **Lines added**: ~420 lines (Video Duration Planning sections)
 **Tests run**: 21 test cases (18 standard + 3 extended)
 **Tests passed**: 21/21 (100%)

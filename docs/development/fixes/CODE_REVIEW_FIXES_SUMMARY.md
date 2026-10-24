@@ -159,7 +159,7 @@ prompt_id = result.get("prompt_id")  # ✅
 
 **Before**:
 ```python
-def plan_shots(scene_graph, max_shots=None, image_agent="default", video_agent="default"):
+def plan_shots(scene_graph, max_shots=None, image_director="default", video_director="default"):
     """
     Plan cinematic shots...
 
@@ -176,7 +176,7 @@ def plan_shots(scene_graph, max_shots=None, image_agent="default", video_agent="
 ```python
 from config import DEFAULT_SHOTS_PER_SCENE, MIN_SHOTS_PER_SCENE, MAX_SHOTS_PER_SCENE
 
-def plan_shots(scene_graph, max_shots=None, image_agent="default", video_agent="default", shots_per_scene=None):
+def plan_shots(scene_graph, max_shots=None, image_director="default", video_director="default", shots_per_scene=None):
     """
     Plan cinematic shots...
 

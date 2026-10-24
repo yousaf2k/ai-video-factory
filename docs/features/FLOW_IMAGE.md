@@ -27,7 +27,7 @@ Web UI and applied in Flow before every generation:
 | Aspect ratio | follows each project's aspect ratio | `16:9` | `16:9`, `4:3`, `1:1`, `3:4`, `9:16` supported; only clicked when it differs |
 | Model | Global Config → *Flow Image Model* | **Nano Banana 2.1** | `Nano Banana Pro`, `Nano Banana 2 Lite`, `Nano Banana 2.1`; only changed when the picker shows a different model |
 | Outputs per prompt | Global Config → *Flow Outputs* | **x1** | `x1`–`x4`; only clicked when it differs |
-| Agent mode | shown as fixed "Off (default)" | **Off** | **never toggled** by the automation |
+| Director mode | shown as fixed "Off (default)" | **Off** | **never toggled** by the automation |
 
 Time-saving rule: every setting is read first — if Flow already shows the requested value, the
 automation skips the click ("already selected → don't change").
@@ -107,7 +107,7 @@ Failures save diagnostic screenshots next to the target image path
 FLOWWEB_URL=https://flow.google.com/
 FLOW_IMAGE_MODEL=Nano Banana 2.1   # Nano Banana Pro | Nano Banana 2 Lite | Nano Banana 2.1
 FLOW_IMAGE_OUTPUTS=x1              # x1 | x2 | x3 | x4
-FLOW_AGENT_MODE=false              # stays off; automation never toggles Agent
+FLOW_AGENT_MODE=false              # stays off; automation never toggles Director
 FLOWWEB_TIMEOUT=300                # seconds to wait for a generation
 FLOW_PROJECT_CONCURRENCY=2         # parallel generations inside ONE Flow project
 ```

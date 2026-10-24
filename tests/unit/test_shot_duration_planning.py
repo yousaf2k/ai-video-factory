@@ -142,7 +142,7 @@ class TestBackendRequestValidation:
 
     def test_replan_request_validates_cap(self):
         from web_ui.backend.models.shot import ReplanShotsRequest
-        assert ReplanShotsRequest(shots_agent="default").max_shot_duration is None
-        assert ReplanShotsRequest(shots_agent="default", max_shot_duration=8).max_shot_duration == 8.0
+        assert ReplanShotsRequest(shots_director="default").max_shot_duration is None
+        assert ReplanShotsRequest(shots_director="default", max_shot_duration=8).max_shot_duration == 8.0
         with pytest.raises(Exception):
-            ReplanShotsRequest(shots_agent="default", max_shot_duration=20)
+            ReplanShotsRequest(shots_director="default", max_shot_duration=20)

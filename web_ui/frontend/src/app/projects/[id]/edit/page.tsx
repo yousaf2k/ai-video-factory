@@ -17,7 +17,7 @@ import { Image as ImageIcon, Video as VideoIcon } from "lucide-react";
 import { useProject } from "@/hooks/useProjects";
 import { useUpdateStory, useGenerateStory } from "@/hooks/useStory";
 import { useShots, useReplanShots } from "@/hooks/useShots";
-import { useAgents, useAgentTree } from "@/hooks/useAgents";
+import { useDirectors, useDirectorTree } from "@/hooks/useDirectors";
 import { SceneList } from "@/components/scenes/SceneList";
 import { ShotGrid } from "@/components/shots/ShotGrid";
 import { Scene, Story, Shot, ProjectType, Character } from "@/types";
@@ -29,7 +29,7 @@ import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play, Ar
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MultiAgentSelector } from "@/components/agents/MultiAgentSelector";
+import { MultiDirectorSelector } from "@/components/directors/MultiDirectorSelector";
 import {
   Select,
   SelectContent,
@@ -46,15 +46,15 @@ export default function ProjectEditPage() {
   const projectId = params.id as string;
   const { data: project, isLoading, error } = useProject(projectId);
   const { data: shots } = useShots(projectId);
-  const { data: agents } = useAgents();
-  const { data: agentTree } = useAgentTree();
+  const { data: directors } = useDirectors();
+  const { data: directorTree } = useDirectorTree();
   const queryClient = useQueryClient();
 
   // Component libraries (cameras/styles/contexts/soundfx) for the custom
-  // shots-agent composer. These live in the agent tree, not the flat
-  // runnable-agents list.
+  // shots-director composer. These live in the director tree, not the flat
+  // runnable-directors list.
   const shotComponents = useMemo(() => {
-    const cats = agentTree?.shots ?? [];
+    const cats = directorTree?.shots ?? [];
     const byCat = (id: string) =>
       (cats.find((c: any) => c.id === id)?.base_files ?? []) as any[];
     return {
@@ -63,21 +63,21 @@ export default function ProjectEditPage() {
       contexts: byCat("contexts"),
       soundfx: byCat("soundfx"),
     };
-  }, [agentTree]);
+  }, [directorTree]);
   
-  // Filter story agents based on project type
-  const filteredStoryAgents = agents?.story?.filter((agent: any) => {
+  // Filter story directors based on project type
+  const filteredStoryDirectors = directors?.story?.filter((director: any) => {
     // story.project_type is only stamped for ThenVsNow/ASMR — fall back to
     // the metadata value saved at creation time.
     const projectType = project?.story?.project_type ?? project?.project_type;
     if (projectType === ProjectType.ThenVsNow) {
-      return agent.category === "then_vs_now";
+      return director.category === "then_vs_now";
     } else if (projectType === ProjectType.AsmrGlassCutting) {
-      return agent.category === "asmr" || agent.id.startsWith("asmr/");
+      return director.category === "asmr" || director.id.startsWith("asmr/");
     } else if (projectType === ProjectType.Movie) {
-      return agent.category === "movie";
+      return director.category === "movie";
     } else {
-      return agent.category === "documentary" || !agent.category;
+      return director.category === "documentary" || !director.category;
     }
   }) || [];
 
@@ -113,16 +113,16 @@ export default function ProjectEditPage() {
   const [showReplanShotsModal, setShowReplanShotsModal] = useState(false);
 
   // Selection states
-  const [selectedStoryAgent, setSelectedStoryAgent] = useState("default");
-  const [selectedShotsAgent, setSelectedShotsAgent] = useState("default");
-  const [shotsAgentMode, setShotsAgentMode] = useState<"predefined" | "custom">("predefined");
+  const [selectedStoryDirector, setSelectedStoryDirector] = useState("default");
+  const [selectedShotsDirector, setSelectedShotsDirector] = useState("default");
+  const [shotsDirectorMode, setShotsDirectorMode] = useState<"predefined" | "custom">("predefined");
   const [selectedCamera, setSelectedCamera] = useState<string>("none");
   const [selectedStyle, setSelectedStyle] = useState<string>("none");
   const [selectedContext, setSelectedContext] = useState<string>("none");
   const [selectedSoundFX, setSelectedSoundFX] = useState<string>("none");
   const [maxShots, setMaxShots] = useState(0);
   const [replanMaxShotDuration, setReplanMaxShotDuration] = useState<number>(5);
-  // Component values last filled from the selected predefined agent's own
+  // Component values last filled from the selected predefined director's own
   // includes; null once the user builds a custom composition
   const [predefinedComposition, setPredefinedComposition] = useState<{
     camera: string;
@@ -148,20 +148,20 @@ export default function ProjectEditPage() {
       .catch(console.error);
   }, []);
 
-  // Pre-fill the Re-plan Shots dialog from the project's saved shots agent
+  // Pre-fill the Re-plan Shots dialog from the project's saved shots director
   // (the value chosen at project creation / in project settings)
-  const shotsAgentInitialized = useRef(false);
+  const shotsDirectorInitialized = useRef(false);
   useEffect(() => {
-    if (!project || !agents || !agentTree || shotsAgentInitialized.current) return;
-    shotsAgentInitialized.current = true;
+    if (!project || !directors || !directorTree || shotsDirectorInitialized.current) return;
+    shotsDirectorInitialized.current = true;
 
-    const saved = (project.shots_agent ?? "").trim();
+    const saved = (project.shots_director ?? "").trim();
     if (!saved || saved === "default") return;
 
     if (saved.includes(",")) {
       // Custom composition saved by this dialog: base + category-prefixed ids
-      const known = new Set<string>((agents.shots ?? []).map((a: any) => a.id));
-      (agentTree.shots ?? []).forEach((c: any) =>
+      const known = new Set<string>((directors.shots ?? []).map((a: any) => a.id));
+      (directorTree.shots ?? []).forEach((c: any) =>
         (c.base_files ?? []).forEach((f: any) => known.add(f.id))
       );
       const byPrefix = (prefix: string) => {
@@ -171,24 +171,24 @@ export default function ProjectEditPage() {
           .find((p) => p.startsWith(`${prefix}/`) && known.has(p));
         return part ?? "none";
       };
-      setShotsAgentMode("custom");
+      setShotsDirectorMode("custom");
       setSelectedCamera(byPrefix("cameras"));
       setSelectedStyle(byPrefix("styles"));
       setSelectedContext(byPrefix("contexts"));
       setSelectedSoundFX(byPrefix("soundfx"));
-    } else if ((agents.shots ?? []).some((a: any) => !a.category && a.id === saved)) {
-      setSelectedShotsAgent(saved);
-      setShotsAgentMode("predefined");
+    } else if ((directors.shots ?? []).some((a: any) => !a.category && a.id === saved)) {
+      setSelectedShotsDirector(saved);
+      setShotsDirectorMode("predefined");
     }
     // Unknown saved values fall back to the dialog defaults
-  }, [project, agents, agentTree]);
+  }, [project, directors, directorTree]);
 
-  // Fill the component dropdowns from the selected predefined agent's includes
+  // Fill the component dropdowns from the selected predefined director's includes
   useEffect(() => {
-    if (shotsAgentMode !== "predefined" || !selectedShotsAgent) return;
+    if (shotsDirectorMode !== "predefined" || !selectedShotsDirector) return;
     let cancelled = false;
     api
-      .getAgentFileRaw("shots", selectedShotsAgent)
+      .getDirectorFileRaw("shots", selectedShotsDirector)
       .then((raw) => {
         if (cancelled) return;
         const includes = (raw.includes ?? []).map((i: string) => i.trim());
@@ -213,7 +213,7 @@ export default function ProjectEditPage() {
     return () => {
       cancelled = true;
     };
-  }, [shotsAgentMode, selectedShotsAgent, shotComponents]);
+  }, [shotsDirectorMode, selectedShotsDirector, shotComponents]);
 
   const handleUpdateScene = async (index: number, updatedScene: Scene) => {
     if (!story || !story.scenes) {
@@ -496,7 +496,7 @@ export default function ProjectEditPage() {
 
   const handleRegenStory = async () => {
     try {
-      await generateStoryMutation.mutateAsync(selectedStoryAgent);
+      await generateStoryMutation.mutateAsync(selectedStoryDirector);
       setShowRegenStoryModal(false);
       toast.success("Story regenerated successfully.");
     } catch (error) {
@@ -514,19 +514,19 @@ export default function ProjectEditPage() {
 
   const handleReplanShots = async () => {
     try {
-      // Send the predefined agent id when its components are untouched so its
+      // Send the predefined director id when its components are untouched so its
       // full include set (possibly several contexts/styles) is preserved;
       // send an explicit composition once the dropdowns are overridden.
       const untouched =
-        shotsAgentMode === "predefined" &&
+        shotsDirectorMode === "predefined" &&
         predefinedComposition !== null &&
         selectedCamera === predefinedComposition.camera &&
         selectedStyle === predefinedComposition.style &&
         selectedContext === predefinedComposition.context &&
         selectedSoundFX === predefinedComposition.soundfx;
 
-      const finalAgent = untouched
-        ? selectedShotsAgent
+      const finalDirector = untouched
+        ? selectedShotsDirector
         : [
             "base/base_shots_standard",
             selectedCamera === "none" ? "" : selectedCamera,
@@ -539,7 +539,7 @@ export default function ProjectEditPage() {
 
       await replanShotsMutation.mutateAsync({
         max_shots: maxShots,
-        shots_agent: finalAgent,
+        shots_director: finalDirector,
         max_shot_duration: replanMaxShotDuration,
       });
       setShowReplanShotsModal(false);
@@ -839,7 +839,7 @@ export default function ProjectEditPage() {
               <button
                 onClick={() => setShowRegenStoryModal(true)}
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-blue-500/20 rounded-md hover:bg-blue-500/10 transition-colors text-blue-500 shadow-sm"
-                title="Generate entire story using an AI agent"
+                title="Generate entire story using an AI director"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Generate Story
@@ -912,7 +912,7 @@ export default function ProjectEditPage() {
               projectId={projectId}
               scenes={project?.story?.scenes}
               aspectRatio={project?.aspect_ratio || "16:9"}
-              projectAgent={project?.story_agent}
+              projectDirector={project?.story_director}
             />
           </div>
 
@@ -947,10 +947,10 @@ export default function ProjectEditPage() {
             </p>
 
             <div className="space-y-4">
-              <MultiAgentSelector
-                availableAgents={filteredStoryAgents}
-                selectedValue={selectedStoryAgent}
-                onChange={setSelectedStoryAgent}
+              <MultiDirectorSelector
+                availableDirectors={filteredStoryDirectors}
+                selectedValue={selectedStoryDirector}
+                onChange={setSelectedStoryDirector}
                 label="Select Story Building Blocks"
               />
             </div>
@@ -1001,36 +1001,36 @@ export default function ProjectEditPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Predefined Agent</label>
+                  <label className="block text-sm font-medium mb-1">Predefined Director</label>
                   <Select
-                    value={shotsAgentMode === "custom" ? "custom" : selectedShotsAgent}
+                    value={shotsDirectorMode === "custom" ? "custom" : selectedShotsDirector}
                     onValueChange={(val) => {
                       // Clear components immediately; the fetch effect below
-                      // refills them from the selected agent's includes
+                      // refills them from the selected director's includes
                       setPredefinedComposition(null);
                       setSelectedCamera("none");
                       setSelectedStyle("none");
                       setSelectedContext("none");
                       setSelectedSoundFX("none");
                       if (val === "custom") {
-                        setShotsAgentMode("custom");
+                        setShotsDirectorMode("custom");
                       } else {
-                        setShotsAgentMode("predefined");
-                        setSelectedShotsAgent(val);
+                        setShotsDirectorMode("predefined");
+                        setSelectedShotsDirector(val);
                       }
                     }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select predefined agent" />
+                      <SelectValue placeholder="Select predefined director" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="custom">Custom (Build your own)</SelectItem>
-                      {agents?.shots
+                      {directors?.shots
                         ?.filter((a: any) => !a.category && a.id === "default")
                         .map((a: any) => (
                           <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                         ))}
-                      {agents?.shots
+                      {directors?.shots
                         ?.filter((a: any) => !a.category && a.id !== "default")
                         .sort((a: any, b: any) => a.name.localeCompare(b.name))
                         .map((a: any) => (
@@ -1042,12 +1042,12 @@ export default function ProjectEditPage() {
 
                 <div className="p-4 border rounded-md bg-muted/30">
                   <p className="text-xs text-muted-foreground mb-3">
-                    Components of the selected agent. Change any of them to build
+                    Components of the selected director. Change any of them to build
                     a custom composition — applied when you re-plan.
                   </p>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Camera Agent</label>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Camera Director</label>
                       <Select value={selectedCamera} onValueChange={setSelectedCamera}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select camera..." /></SelectTrigger>
                         <SelectContent>
@@ -1059,7 +1059,7 @@ export default function ProjectEditPage() {
                       </Select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Style Agent</label>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Style Director</label>
                       <Select value={selectedStyle} onValueChange={setSelectedStyle}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select style..." /></SelectTrigger>
                         <SelectContent>
@@ -1071,7 +1071,7 @@ export default function ProjectEditPage() {
                       </Select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Context Agent</label>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Context Director</label>
                       <Select value={selectedContext} onValueChange={setSelectedContext}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select context..." /></SelectTrigger>
                         <SelectContent>
@@ -1083,7 +1083,7 @@ export default function ProjectEditPage() {
                       </Select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Sound FX Agent</label>
+                      <label className="block text-xs font-medium mb-1 text-muted-foreground">Sound FX Director</label>
                       <Select value={selectedSoundFX} onValueChange={setSelectedSoundFX}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select soundfx..." /></SelectTrigger>
                         <SelectContent>

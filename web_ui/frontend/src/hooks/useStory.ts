@@ -25,7 +25,7 @@ export function useGenerateStory(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (agent: string = 'default') => api.generateStory(projectId, agent),
+    mutationFn: (director: string = 'default') => api.generateStory(projectId, director),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },

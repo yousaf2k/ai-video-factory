@@ -246,7 +246,7 @@ on movie set
 
 ## File Modified
 
-**File:** `agents/story/then_vs_now.md`
+**File:** `directors/story/then_vs_now.md`
 
 **Changes:**
 - Lines 53-60: Character prompts (now_prompt updated)

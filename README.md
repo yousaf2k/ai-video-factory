@@ -62,7 +62,7 @@ ai_video_factory/
 ├── web_ui/            # Web application
 │   ├── backend/       # FastAPI backend (api/, services/, models/) and WebSocket progress
 │   └── frontend/      # React/Next.js frontend
-├── agents/            # Multi-category LLM agent prompts (story/, shots/)
+├── directors/            # Multi-category LLM director prompts (story/, shots/)
 ├── workflow/          # ComfyUI JSON templates (image/, video/, soundfx/, voice/)
 ├── docs/              # Comprehensive guides, setup checklists, and API reference
 ├── tests/             # Automated test suite (unit + integration)
@@ -71,14 +71,14 @@ ai_video_factory/
 └── AGENTS.md          # Canonical instructions for AI coding agents
 ```
 
-### AI Agents Folder
+### AI Directors Folder
 
-This folder contains system prompts for LLM agents used in different stages of video generation. The system uses a modular approach, combining base rules, context-specific data, and stylistic guidelines.
+This folder contains system prompts for LLM directors used in different stages of video generation. The system uses a modular approach, combining base rules, context-specific data, and stylistic guidelines.
 
-#### Agent Categories
+#### Director Categories
 
 ```bash
-agents/
+directors/
 ├── story/             # Narrative generation
 │   ├── asmr/          # ASMR glass cutting project type
 │   ├── documentary/   # Realistic, historical, and educational (with _base/_contexts/_styles)
@@ -94,21 +94,21 @@ agents/
     └── videoprompt/   # Video-model-specific prompt rules (e.g. MiniMax H3)
 ```
 
-#### Available Story Agents
+#### Available Story Directors
 
 - **Documentary**: `default`, `netflix_documentary`, `youtube_documentary`, `youtube_news`, `time_traveler`, plus historical packs (`greek_*`, `roman_kingdom`, `indus_valley`, `plague_of_athens`, `persian_empire`, `prehistoric_*`).
 - **Movie**: `action`, `horror`, `comedy`, `cyberpunk`, `drama`, `fantasy`, `mystery`, `romance`, `scifi`, `thriller`, `western`.
 - **Specialized**: `asmr/asmr_glass_cutting`, `then_vs_now` ⭐, `selfie_vlogger`.
 
-#### How to Create a Custom Agent
+#### How to Create a Custom Director
 
-1. **Select a category** (e.g., `agents/story/documentary/`)
-2. **Create a new `.md` file** (e.g., `my_special_agent.md`)
+1. **Select a category** (e.g., `directors/story/documentary/`)
+2. **Create a new `.md` file** (e.g., `my_special_director.md`)
 3. **Write the system prompt** using the `{USER_INPUT}` placeholder for the dynamic prompt.
-4. **Leverage Modularity**: You can include base files and contexts using the `{{include:name}}` directive, e.g. `{{include:base_standard}}` (handled by `AgentLoader`; name has no `.md` extension).
+4. **Leverage Modularity**: You can include base files and contexts using the `{{include:name}}` directive, e.g. `{{include:base_standard}}` (handled by `DirectorLoader`; name has no `.md` extension).
 
 ```bash
-python core/main.py --story-agent my_special_agent
+python core/main.py --story-director my_special_director
 ```
 
 ## Advanced Usage

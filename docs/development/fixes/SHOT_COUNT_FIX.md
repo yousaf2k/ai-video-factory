@@ -127,8 +127,8 @@ To test the fix:
 ```bash
 # Create a new project with the fixed code
 python core/main.py \
-  --story-agent prehistoric_pov \
-  --image-agent prehistoric_pov \
+  --story-director prehistoric_pov \
+  --image-director prehistoric_pov \
   --idea "Time traveler encounters dinosaurs in Cretaceous forest"
 ```
 

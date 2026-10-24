@@ -1,9 +1,9 @@
 """
-Story Engine - Generate cinematic stories from ideas using LLM agents.
+Story Engine - Generate cinematic stories from ideas using LLM directors.
 """
 from core.llm_engine import get_provider
-from core.agent_loader import load_agent_prompt
-from core.logger_config import setup_agent_logger
+from core.director_loader import load_director_prompt
+from core.logger_config import setup_director_logger
 from web_ui.backend.models.story import ProjectType
 import config
 import json
@@ -12,7 +12,7 @@ import uuid
 
 
 # Get logger for story engine operations
-logger = setup_agent_logger(__name__)
+logger = setup_director_logger(__name__)
 
 
 def parse_llm_json(text):
@@ -123,18 +123,18 @@ def validate_and_adjust_scene_durations(story, target_length, tolerance=0.15):
     return False, actual_total, difference, adjusted_story
 
 
-def build_story(idea, agent_name="default", target_length=None, aspect_ratio="16:9"):
+def build_story(idea, director_name="default", target_length=None, aspect_ratio="16:9"):
     """
-    Build a cinematic story from an idea using the specified agent.
+    Build a cinematic story from an idea using the specified director.
     Performs a two-pass generation:
     1. Generates a master script (story.json base)
     2. Breaks the master script down into detailed scenes.
 
     Args:
         idea: The video idea/concept
-        agent_name: Name of story agent to use (default: "default")
+        director_name: Name of story director to use (default: "default")
         target_length: Target video length in seconds (optional).
-                      Injected via {VIDEO_LENGTH} placeholder in agent prompts.
+                      Injected via {VIDEO_LENGTH} placeholder in director prompts.
         aspect_ratio: Video aspect ratio (default: "16:9")
 
     Returns:
@@ -144,7 +144,7 @@ def build_story(idea, agent_name="default", target_length=None, aspect_ratio="16
 
     # Pass 1: Generate Master Script
     try:
-        master_prompt = load_agent_prompt("story", idea, "system/master_script")
+        master_prompt = load_director_prompt("story", idea, "system/master_script")
         if target_length:
             master_prompt = master_prompt.replace("{VIDEO_LENGTH}", str(int(target_length)))
             word_count = int(target_length * 2.5)
@@ -152,8 +152,8 @@ def build_story(idea, agent_name="default", target_length=None, aspect_ratio="16
             logger.info(f"Master script requested: {int(target_length)}s (~{word_count} words)")
             print(f"[INFO] Master script requested: {int(target_length)}s (~{word_count} words)")
     except (FileNotFoundError, ValueError):
-        logger.error("Master script agent (master_script.md) not found.")
-        print("[WARN] Master script agent not found. Generating basic story instead.")
+        logger.error("Master script director (master_script.md) not found.")
+        print("[WARN] Master script director not found. Generating basic story instead.")
         master_prompt = f"Write a full voice-over script for this idea: {idea}\n\nReturn JSON:\n{{\n 'title': '',\n 'style': '',\n 'master_script': ''\n}}"
 
     print("\n[STORY] Pass 1: Generating Master Script...")
@@ -177,17 +177,17 @@ def build_story(idea, agent_name="default", target_length=None, aspect_ratio="16
     scene_idea = f"IDEA: {idea}\n\nMASTER SCRIPT TO BREAK DOWN INTO SCENES:\n{master_script}"
     
     try:
-        # Try to use agent prompt
-        prompt = load_agent_prompt("story", scene_idea, agent_name)
+        # Try to use director prompt
+        prompt = load_director_prompt("story", scene_idea, director_name)
 
-        # Inject video length context if agent supports it
+        # Inject video length context if director supports it
         if target_length and "{VIDEO_LENGTH}" in prompt:
             prompt = prompt.replace("{VIDEO_LENGTH}", str(int(target_length)))
             logger.info(f"Video length context injected into scene gen: {int(target_length)}s")
 
     except (FileNotFoundError, ValueError):
-        # Fall back to legacy prompt if agent not found
-        print(f"[WARN] Story agent '{agent_name}' not found, using legacy prompt")
+        # Fall back to legacy prompt if director not found
+        print(f"[WARN] Story director '{director_name}' not found, using legacy prompt")
         prompt = f"""
 Expand into cinematic narrative.
 
@@ -259,7 +259,7 @@ Return JSON:
     return story_json_str
 
 
-def build_story_then_vs_now(movie_name: str, agent_name: str = "then_vs_now/then_vs_now", target_length: int = None, aspect_ratio: str = "16:9") -> str:
+def build_story_then_vs_now(movie_name: str, director_name: str = "then_vs_now/then_vs_now", target_length: int = None, aspect_ratio: str = "16:9") -> str:
     """
     Build a ThenVsNow story from a movie name.
     Generates both story and shots directly (bypasses shot planner).
@@ -274,13 +274,13 @@ def build_story_then_vs_now(movie_name: str, agent_name: str = "then_vs_now/then
     """
     provider = get_provider()
 
-    # Load the then_vs_now agent
-    # If agent_name doesn't already contain a slash, prepend 'then_vs_now/'
-    final_agent_path = agent_name
-    if "/" not in agent_name:
-        final_agent_path = f"then_vs_now/{agent_name}"
+    # Load the then_vs_now director
+    # If director_name doesn't already contain a slash, prepend 'then_vs_now/'
+    final_director_path = director_name
+    if "/" not in director_name:
+        final_director_path = f"then_vs_now/{director_name}"
         
-    prompt = load_agent_prompt("story", movie_name, final_agent_path)
+    prompt = load_director_prompt("story", movie_name, final_director_path)
     if target_length:
         prompt = prompt.replace("{VIDEO_LENGTH}", str(int(target_length)))
 
@@ -323,19 +323,19 @@ def build_story_then_vs_now(movie_name: str, agent_name: str = "then_vs_now/then
 
 def build_story_asmr_glass_cutting(
     idea: str,
-    agent_name: str = "asmr/asmr_glass_cutting",
+    director_name: str = "asmr/asmr_glass_cutting",
     shot_duration: int = 5,
     aspect_ratio: str = "16:9"
 ) -> str:
     """
     Build an ASMR glass cutting story from natural language input.
 
-    The story agent generates all shots directly in a single LLM call,
+    The story director generates all shots directly in a single LLM call,
     following the THEN_VS_NOW pattern.
 
     Args:
         idea: Natural language description (e.g., "create videos of strawberry, apple, and tomato")
-        agent_name: Story agent to use (default: "asmr/asmr_glass_cutting")
+        director_name: Story director to use (default: "asmr/asmr_glass_cutting")
         shot_duration: Fixed duration for each shot in seconds (default: 5)
         aspect_ratio: Video aspect ratio (default: "16:9")
 
@@ -353,17 +353,17 @@ def build_story_asmr_glass_cutting(
 
     provider = get_provider()
 
-    # Load the ASMR agent prompt
-    # If agent_name doesn't contain a slash, assume it's in the asmr/ directory
-    final_agent_path = agent_name
-    if "/" not in agent_name:
-        final_agent_path = f"asmr/{agent_name}"
+    # Load the ASMR director prompt
+    # If director_name doesn't contain a slash, assume it's in the asmr/ directory
+    final_director_path = director_name
+    if "/" not in director_name:
+        final_director_path = f"asmr/{director_name}"
 
     try:
-        prompt = load_agent_prompt("story", idea, final_agent_path)
+        prompt = load_director_prompt("story", idea, final_director_path)
     except (FileNotFoundError, ValueError) as e:
-        logger.error(f"Failed to load ASMR agent: {e}")
-        raise ValueError(f"ASMR glass cutting agent not found: {final_agent_path}")
+        logger.error(f"Failed to load ASMR director: {e}")
+        raise ValueError(f"ASMR glass cutting director not found: {final_director_path}")
 
     # Generate story with shots
     logger.info(f"Generating ASMR glass cutting story for: {idea}")

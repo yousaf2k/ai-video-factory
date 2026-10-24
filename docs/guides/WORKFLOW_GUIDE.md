@@ -52,7 +52,7 @@ python core/main.py
 **Input:** Idea
 **Output:** Structured story with character descriptions, setting, and narrative arc
 **Module:** `core/story_engine.py`
-**Agent:** `agents/story/{STORY_AGENT}.txt`
+**Director:** `directors/story/{STORY_DIRECTOR}.txt`
 
 The story is expanded into a full narrative including:
 
@@ -70,7 +70,7 @@ The story is expanded into a full narrative including:
 **Input:** Story
 **Output:** Visual scene breakdown with characters, locations, and visual elements
 **Module:** `core/scene_graph.py`
-**Agent:** `agents/scene_graph/default.txt`
+**Director:** `directors/scene_graph/default.txt`
 
 The scene graph organizes the story into visual scenes:
 
@@ -88,7 +88,7 @@ The scene graph organizes the story into visual scenes:
 **Input:** Story + Scene Graph
 **Output:** Detailed shot list with camera movements and prompts
 **Module:** `core/shot_planner.py`
-**Agent:** `agents/shots/{SHOTS_AGENT}.txt`
+**Director:** `directors/shots/{SHOTS_DIRECTOR}.txt`
 
 Shots are planned with complete specifications:
 
@@ -272,16 +272,16 @@ python regenerate.py --project project_20260210_174844 --shots 1,2,3
 
 ## Customization
 
-### Custom Agents
+### Custom Directors
 
-Create custom prompt templates in `agents/`:
+Create custom prompt templates in `directors/`:
 
 ```bash
-# Create custom story agent
-echo "Your custom story prompt..." > agents/story/cinematic.txt
+# Create custom story director
+echo "Your custom story prompt..." > directors/story/cinematic.txt
 
-# Use custom agent
-python core/main.py --story-agent cinematic
+# Use custom director
+python core/main.py --story-director cinematic
 ```
 
 ### Custom Workflows
@@ -327,8 +327,8 @@ python core/main.py --project project_20260210_174844
 # Start from specific step
 python core/main.py --project project_20260210_174844 --step 4
 
-# Use custom agents
-python core/main.py --story-agent dramatic --shots-agent artistic
+# Use custom directors
+python core/main.py --story-director dramatic --shots-director artistic
 
 # Enable narration
 python core/main.py --generate-narration --tts-voice en-GB-SoniaNeural

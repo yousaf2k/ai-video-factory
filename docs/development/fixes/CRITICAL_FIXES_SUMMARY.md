@@ -96,7 +96,7 @@ logger.debug(f"  Model: {self.model} ")
 
 ### LOW PRIORITY:
 1. Add unit tests
-2. Document agent prompt formats
+2. Document director prompt formats
 3. Create configuration documentation
 
 ---

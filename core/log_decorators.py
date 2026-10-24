@@ -7,7 +7,7 @@ import time
 import logging
 import traceback
 from inspect import signature
-from core.logger_config import get_logger, setup_api_logger, setup_agent_logger
+from core.logger_config import get_logger, setup_api_logger, setup_director_logger
 
 
 def log_api_call(func):
@@ -65,36 +65,36 @@ def log_api_call(func):
     return wrapper
 
 
-def log_agent_call(func):
+def log_director_call(func):
     """
-    Decorator to log agent operations with parameters and results.
+    Decorator to log director operations with parameters and results.
 
-    Logs to agents.log with:
-    - Agent type and name
+    Logs to directors.log with:
+    - Director type and name
     - File path
     - Prompt/response length
     - Execution status
 
     Usage:
-        @log_agent_call
-        def load_prompt(agent_type: str, agent_name: str) -> str:
+        @log_director_call
+        def load_prompt(director_type: str, director_name: str) -> str:
             ...
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        # Get agent logger for this function
-        logger = setup_agent_logger(func.__module__)
+        # Get director logger for this function
+        logger = setup_director_logger(func.__module__)
 
         # Get function signature for parameter names
         sig = signature(func)
         bound_args = sig.bind(*args, **kwargs)
         bound_args.apply_defaults()
 
-        # Log agent operation
-        logger.info(f"AGENT: {func.__name__}()")
+        # Log director operation
+        logger.info(f"DIRECTOR: {func.__name__}()")
 
         # Log key parameters
-        for key in ['agent_type', 'agent_name', 'file_path', 'prompt']:
+        for key in ['director_type', 'director_name', 'file_path', 'prompt']:
             if key in bound_args.arguments:
                 value = bound_args.arguments[key]
                 if key == 'prompt':
@@ -211,19 +211,19 @@ if __name__ == "__main__":
     except:
         pass
 
-    # Test @log_agent_call
-    @log_agent_call
-    def test_agent_call(agent_type, agent_name="default"):
-        """Simulated agent call"""
+    # Test @log_director_call
+    @log_director_call
+    def test_director_call(director_type, director_name="default"):
+        """Simulated director call"""
         time.sleep(0.1)
-        if agent_type == "invalid":
-            raise FileNotFoundError("Agent not found")
-        return f"Loaded {agent_type}/{agent_name}"
+        if director_type == "invalid":
+            raise FileNotFoundError("Director not found")
+        return f"Loaded {director_type}/{director_name}"
 
-    print("\n=== Testing @log_agent_call decorator ===")
-    test_agent_call("story", "default")
+    print("\n=== Testing @log_director_call decorator ===")
+    test_director_call("story", "default")
     try:
-        test_agent_call("invalid", "missing")
+        test_director_call("invalid", "missing")
     except:
         pass
 

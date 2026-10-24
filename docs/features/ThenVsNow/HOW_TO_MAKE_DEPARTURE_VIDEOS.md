@@ -20,7 +20,7 @@ Departure videos are the second video segment for each character in a ThenVsNow 
 
 Before making departure videos, you need:
 
-1. ✅ **A ThenVsNow project** with the `then_vs_now` story agent
+1. ✅ **A ThenVsNow project** with the `then_vs_now` story director
 2. ✅ **THEN images generated** for all characters (younger versions)
 3. ✅ **NOW images generated** for all characters (older versions with selfie composition)
 4. ✅ **Meeting video prompts** defined in story/shots data
@@ -226,7 +226,7 @@ Last Frame: Scene Image
 
 ## Departure Video Prompt Template
 
-The system uses this template for departure video prompts (defined in `agents/story/then_vs_now.md`):
+The system uses this template for departure video prompts (defined in `directors/story/then_vs_now.md`):
 
 ```
 TRANSITION: Both characters (THEN and NOW versions) walk together to the right

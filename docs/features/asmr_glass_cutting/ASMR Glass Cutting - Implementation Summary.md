@@ -5,9 +5,9 @@
 
 ✅ **Core Implementation**
 - Added ASMR_GLASS_CUTTING to ProjectType enum (value 4)
-- Created comprehensive story agent with 6 example prompts
+- Created comprehensive story director with 6 example prompts
 - Implemented build_story_asmr_glass_cutting() function
-- Added CLI routing for asmr/ agent prefix
+- Added CLI routing for asmr/ director prefix
 - Added Web UI API routing support
 
 ✅ **Testing**
@@ -24,7 +24,7 @@
 ## Files Modified
 
 1. `web_ui/backend/models/story.py` - Added enum
-2. `agents/story/asmr/asmr_glass_cutting.md` - New agent
+2. `directors/story/asmr/asmr_glass_cutting.md` - New director
 3. `core/story_engine.py` - New function
 4. `core/main.py` - CLI routing
 5. `web_ui/backend/api/stories.py` - API routing
@@ -38,18 +38,18 @@
 # Basic usage
 python core/main.py \
   --idea "create videos of strawberry, apple, and tomato" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 
 # Category expansion
 python core/main.py \
   --idea "tropical fruits" \
-  --story-agent asmr/asmr_glass_cutting
+  --story-director asmr/asmr_glass_cutting
 ```
 
 ## Success Criteria Met
 
 ✅ User can provide natural language input
-✅ Agent extracts objects or expands categories
+✅ Director extracts objects or expands categories
 ✅ 5-10 shots generated for categories
 ✅ Fixed duration per shot (configurable)
 ✅ Glass sculpture style strictly followed
@@ -60,7 +60,7 @@ python core/main.py \
 ## Implementation Commits
 
 1. `8e7fae2` feat: add ASMR_GLASS_CUTTING to ProjectType enum
-2. `044d563` feat: add ASMR glass cutting story agent
+2. `044d563` feat: add ASMR glass cutting story director
 3. `1441206` feat: implement build_story_asmr_glass_cutting function
 4. `9918198` feat: add CLI routing for ASMR glass cutting
 5. `ae24a64` feat: add CLI routing for ASMR in auto mode

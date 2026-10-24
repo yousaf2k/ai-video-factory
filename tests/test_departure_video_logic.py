@@ -43,7 +43,7 @@ def test_departure_video_logic():
     if not then_vs_now_sessions:
         print("\nFAIL No ThenVsNow sessions found!")
         print("Please create a ThenVsNow session first using:")
-        print("  python main.py --idea 'The Godfather' --story-agent then_vs_now")
+        print("  python main.py --idea 'The Godfather' --story-director then_vs_now")
         return False
 
     print(f"\nOK Found {len(then_vs_now_sessions)} ThenVsNow session(s)")
