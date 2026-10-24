@@ -12,6 +12,22 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), ov
 # Import secrets management for decryption
 from core.secrets import decrypt_env_var
 
+
+def _env_bool(name, default=False):
+    """Read a boolean env var ("1"/"true"/"yes"/"on", case-insensitive)."""
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_int(name, default):
+    """Read an integer env var (tolerates floats like "600.0")."""
+    try:
+        return int(float(os.getenv(name, default)))
+    except (TypeError, ValueError):
+        return default
+
 # ==========================================
 # LLM PROVIDER CONFIGURATION
 # ==========================================
@@ -372,7 +388,7 @@ def get_ai_models(category=None):
 # COMFYUI CONFIGURATION
 # ==========================================
 # ComfyUI server URL
-COMFY_URL = "http://127.0.0.1:8188"
+COMFY_URL = os.getenv("COMFY_URL", "http://127.0.0.1:8188")
 
 # ComfyUI output directory (where ComfyUI saves generated videos/images)
 # Set this if ComfyUI is installed in a different location
@@ -396,7 +412,7 @@ COMFY_INPUT_DIR = os.getenv("COMFY_INPUT_DIR", "")
 # VIDEO WORKFLOW CONFIGURATION
 # ==========================================
 # Active video workflow to use (must exist in VIDEO_WORKFLOWS)
-VIDEO_WORKFLOW = "wan22_workflow"
+VIDEO_WORKFLOW = os.getenv("VIDEO_WORKFLOW", "wan22_workflow")
 
 # Video workflow definitions
 # Each workflow is auto-detected from the workflow/video directory
@@ -676,7 +692,7 @@ WORKFLOW_PATH = resolve_path("workflow/video/wan22_workflow.json")
 # IMAGE GENERATION CONFIGURATION
 # ==========================================
 # Image generation mode: "gemini", "comfyui", or "geminiweb"
-IMAGE_GENERATION_MODE = "comfyui"  # Options: "gemini", "comfyui", "geminiweb"
+IMAGE_GENERATION_MODE = os.getenv("IMAGE_GENERATION_MODE", "comfyui")  # Options: "gemini", "comfyui", "geminiweb", "flow"
 
 # Default negative prompt for ComfyUI image generation
 # Common negative prompts: "blurry, low quality, distorted, deformed"
@@ -691,16 +707,16 @@ IMAGES_PER_SHOT = 1
 IMAGES_OUTPUT_DIR = resolve_path(os.path.join(OUTPUT_DIR, "generated_images"))
 
 # Image aspect ratio (options: "1:1", "16:9", "9:16", "4:3", "3:4")
-IMAGE_ASPECT_RATIO = "16:9"
+IMAGE_ASPECT_RATIO = os.getenv("IMAGE_ASPECT_RATIO", "16:9")
 
 # Image resolution (options: "512", "1024", "1280" "2048")
-IMAGE_RESOLUTION = "2048"
+IMAGE_RESOLUTION = os.getenv("IMAGE_RESOLUTION", "2048")
 
 # ==========================================
 # IMAGE WORKFLOW CONFIGURATION
 # ==========================================
 # Active image workflow to use (must exist in IMAGE_WORKFLOWS)
-IMAGE_WORKFLOW = "krea2_reference"
+IMAGE_WORKFLOW = os.getenv("IMAGE_WORKFLOW", "krea2_reference")
 
 # Image workflow definitions
 # Each workflow is auto-detected from the workflow/image directory
@@ -905,7 +921,7 @@ IMAGE_SAVE_NODE_ID = "9"
 VIDEO_GENERATION_MODE = os.getenv("VIDEO_GENERATION_MODE", "comfyui")
 
 # Default video length per shot (in seconds)
-DEFAULT_SHOT_LENGTH = 5
+DEFAULT_SHOT_LENGTH = float(os.getenv("DEFAULT_SHOT_LENGTH", "5"))
 
 # MIN_SHOT_DURATION / MAX_SHOT_DURATION are defined above the workflow
 # discovery block (they are referenced there for MiniMax H3 workflows).
@@ -946,7 +962,7 @@ VIDEO_FPS = 16
 
 # Video aspect ratio (options: "1:1", "16:9", "9:16", "4:3", "3:4")
 # Default uses same as images for compatibility
-VIDEO_ASPECT_RATIO = "16:9"
+VIDEO_ASPECT_RATIO = os.getenv("VIDEO_ASPECT_RATIO", "16:9")
 
 # Video resolution (options: "512", "720", "1024", "1080", "1280" "2048")
 # For landscape: width = resolution, height calculated from aspect ratio
@@ -986,11 +1002,11 @@ IMAGE_PROMPT_APPEND_POSITION = "end"  # Options: "start", "end"
 # Set to None to generate based on story length
 # Note: If both DEFAULT_MAX_SHOTS and TARGET_VIDEO_LENGTH are set,
 #       max_shots will be calculated as: int(TARGET_VIDEO_LENGTH / DEFAULT_SHOT_LENGTH)
-TARGET_VIDEO_LENGTH = 600  # or specify like: 60.0 for 60 seconds
+TARGET_VIDEO_LENGTH = _env_int("TARGET_VIDEO_LENGTH", 600)  # or specify like: 60.0 for 60 seconds
 
 # Video rendering timeout (in seconds)
 # Maximum time to wait for a single video render to complete
-VIDEO_RENDER_TIMEOUT = 900  # 15 minutes
+VIDEO_RENDER_TIMEOUT = _env_int("VIDEO_RENDER_TIMEOUT", 900)  # 15 minutes
 
 # LoRA node IDs in the workflow (for camera-based LoRA loading)
 # Array of LoRA node pairs - each pair contains HIGH_NOISE_LORA_NODE_ID and LOW_NOISE_LORA_NODE_ID
@@ -1179,10 +1195,10 @@ WATERMARK_REMOVAL_METHOD = os.getenv("WATERMARK_REMOVAL_METHOD", "builtin")
 # NARRATION/TTS CONFIGURATION
 # ==========================================
 # Whether to generate narration for videos
-GENERATE_NARRATION = False  # Set to True to enable narration by default
+GENERATE_NARRATION = _env_bool("GENERATE_NARRATION", False)  # Set to True to enable narration by default
 
 # TTS method: "comfyui", "local" (edge-tts), or "elevenlabs"
-TTS_METHOD = "local"  # Options: "comfyui", "local", "elevenlabs"
+TTS_METHOD = os.getenv("TTS_METHOD", "local")  # Options: "comfyui", "local", "elevenlabs"
 
 # ComfyUI TTS workflows
 # Each workflow defines its own node IDs and path
@@ -1200,7 +1216,7 @@ TTS_WORKFLOWS = {
 # SOUNDFX CONFIGURATION
 # ==========================================
 # Active soundfx workflow to use (must exist in SOUNDFX_WORKFLOWS)
-SOUNDFX_WORKFLOW = "mmaudio"
+SOUNDFX_WORKFLOW = os.getenv("SOUNDFX_WORKFLOW", "mmaudio")
 
 # SoundFX workflow definitions
 # Each workflow is auto-detected from the workflow/soundfx directory
@@ -1314,15 +1330,15 @@ ELEVENLABS_API_KEY = decrypt_env_var("ELEVENLABS_API_KEY", "")
 # For edge-tts: voice names like "en-US-AriaNeural", "en-GB-SoniaNeural"
 # For ComfyUI: depends on your workflow (e.g., "female_01", "male_01")
 # For ElevenLabs: voice IDs or names (e.g., "Rachel", "Domi", "21m00Tcm4TlvDq8ikWAM")
-TTS_VOICE = "en-US-AriaNeural"
+TTS_VOICE = os.getenv("TTS_VOICE", "en-US-AriaNeural")
 
 # ElevenLabs model selection
 # Options: "eleven_multilingual_v2", "eleven_turbo_v2", "eleven_monolingual_v1"
-ELEVENLABS_MODEL = "eleven_multilingual_v2"
+ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 
 # ElevenLabs voice settings
-ELEVENLABS_STABILITY = 0.5  # 0.0 to 1.0 (higher = more stable)
-ELEVENLABS_SIMILARITY = 0.75  # 0.0 to 1.0 (higher = more similar to original voice)
+ELEVENLABS_STABILITY = float(os.getenv("ELEVENLABS_STABILITY", "0.5"))  # 0.0 to 1.0 (higher = more stable)
+ELEVENLABS_SIMILARITY = float(os.getenv("ELEVENLABS_SIMILARITY", "0.75"))  # 0.0 to 1.0 (higher = more similar to original voice)
 
 
 # ==========================================
@@ -1359,13 +1375,13 @@ VIDEO_WIDTH, VIDEO_HEIGHT = get_video_dimensions()
 # IMAGE GENERATION RETRY CONFIGURATION
 # ==========================================
 # Maximum retry attempts for failed image generation (including initial attempt)
-IMAGE_GENERATION_MAX_RETRIES = 3
+IMAGE_GENERATION_MAX_RETRIES = _env_int("IMAGE_GENERATION_MAX_RETRIES", 3)
 
 # Delay between retry attempts in seconds
-IMAGE_GENERATION_RETRY_DELAY = 5
+IMAGE_GENERATION_RETRY_DELAY = _env_int("IMAGE_GENERATION_RETRY_DELAY", 5)
 
 # Continue to video generation even if some images failed
-CONTINUE_ON_PARTIAL_IMAGE_FAILURE = True
+CONTINUE_ON_PARTIAL_IMAGE_FAILURE = _env_bool("CONTINUE_ON_PARTIAL_IMAGE_FAILURE", True)
 
 
 # ==========================================
@@ -1401,7 +1417,7 @@ if not os.path.isabs(GEMINIWEB_CHROME_PROFILE):
     GEMINIWEB_CHROME_PROFILE = resolve_path(GEMINIWEB_CHROME_PROFILE)
 
 # Timeout for waiting for image generation (seconds)
-GEMINIWEB_TIMEOUT = 300
+GEMINIWEB_TIMEOUT = _env_int("GEMINIWEB_TIMEOUT", 300)
 
 # Seconds a GeminiWeb worker waits for the per-project generation lock before
 # proceeding unlocked. The lock serializes image/video generations per project
