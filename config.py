@@ -176,12 +176,15 @@ ABS_PROJECTS_DIR = resolve_path(PROJECTS_DIR)
 ASSET_LIBRARY_DIRS = os.getenv("ASSET_LIBRARY_DIRS", "output/Assets")
 
 # Main (top-level) asset categories: URL letter alias -> folder name + asset type
+# Templates (t) hold text prompt templates with {placeholder} fields; the
+# generate dialog fills them and submits the result as the prompt.
 ASSET_TYPES = {
     "i": {"folder": "Images", "type": "image"},
     "v": {"folder": "Videos", "type": "video"},
     "a": {"folder": "Audio", "type": "audio"},
     "m": {"folder": "Music", "type": "music"},
     "g": {"folder": "Guides", "type": "text"},
+    "t": {"folder": "Templates", "type": "text"},
 }
 
 
@@ -468,6 +471,7 @@ if os.path.exists(_video_workflow_dir):
                     _seed_candidates = []
                     _primitive_float_candidates = []
                     _ref_image_nodes = []  # [(index, node_id)] from [ref_N] title tags
+                    _image_in_tagged = []  # node IDs from [image_in] title tags, in JSON order
                     _is_r2v = False        # MiniMax H3 Reference-to-Video workflow
 
                     # 1. First pass: strict tag matching and gathering candidates
@@ -486,7 +490,7 @@ if os.path.exists(_video_workflow_dir):
                         elif "[image_in_last]" in _title:
                             _load_image_last_node_id = _n_id
                         elif "[image_in]" in _title:
-                            _load_image_node_id = _n_id
+                            _image_in_tagged.append(_n_id)
                         elif "[video_out]" in _title or "[video_gen]" in _title:
                             _wan_video_node_id = _n_id
                         elif "[seed]" in _title:
@@ -517,7 +521,21 @@ if os.path.exists(_video_workflow_dir):
                             _video_gen_candidates.append(_n_id)
                         if any(x in _class_type for x in ["Seed", "RandomNoise", "KSamplerAdvanced", "KSampler (Advanced)"]):
                             _seed_candidates.append(_n_id)
-                    
+
+                    # Resolve [image_in] tags: a single one is the plain image
+                    # loader; two of them (an FLF export that never renamed its
+                    # loaders) read as first/last frame in JSON order instead of
+                    # the last match silently winning
+                    if _image_in_tagged:
+                        if len(_image_in_tagged) == 1:
+                            if not _load_image_node_id:
+                                _load_image_node_id = _image_in_tagged[0]
+                        else:
+                            if not _load_image_first_node_id:
+                                _load_image_first_node_id = _image_in_tagged[0]
+                            if not _load_image_last_node_id:
+                                _load_image_last_node_id = _image_in_tagged[-1]
+
                     # 2. Second pass: Tracing connections from the identified Video Sampler
                     # This is much more robust than title matching
                     if not _wan_video_node_id and _video_gen_candidates:
@@ -546,6 +564,17 @@ if os.path.exists(_video_workflow_dir):
                                     _i_val = _inputs[_img_input]
                                     if isinstance(_i_val, list) and len(_i_val) > 0:
                                         _load_image_node_id = str(_i_val[0])
+                                        break
+
+                        # First-last-frame generators wire a second loader for
+                        # the closing frame (e.g. WanFirstLastFrameToVideo's
+                        # end_image); trace it so both frames get injected
+                        if not _load_image_last_node_id:
+                            for _img_input in ["end_image", "last_image", "image2"]:
+                                if _img_input in _inputs:
+                                    _i_val = _inputs[_img_input]
+                                    if isinstance(_i_val, list) and len(_i_val) > 0:
+                                        _load_image_last_node_id = str(_i_val[0])
                                         break
 
                     # 3. Third pass: Heuristics fallbacks for missing IDs
@@ -1475,3 +1504,24 @@ if _env_cors:
 else:
     # Use unique origins sorted
     WEB_UI_CORS_ORIGINS = sorted(list(set(_default_cors)))
+
+
+# ── Named generation styles (styles.json) ───────────────────────────────────
+# name/style pairs that populate the background-style dropdown in the web UI.
+# The selected style text is appended to the background prompt at generation
+# time; the file is re-read on every request so edits apply without a restart.
+BACKGROUND_STYLES_FILE = os.path.join(PROJECT_ROOT, "styles.json")
+
+
+def load_background_styles():
+    """List of {name, style} dicts from styles.json (empty list on any error)."""
+    try:
+        with open(BACKGROUND_STYLES_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        styles = data.get('background_styles') or []
+        return [s for s in styles
+                if isinstance(s, dict) and s.get('name') and s.get('style')]
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []

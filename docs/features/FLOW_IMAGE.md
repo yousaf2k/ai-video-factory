@@ -64,6 +64,11 @@ Flow's project grid and the title-based card search works as a fallback:
      the tile label from the prompt) so side-by-side generations never download each other's
      image. Keep parallel prompts distinct — identical prompts in one project cannot be told
      apart. The chosen tile's match score is logged (`prompt-match 0.80, label='…'`).
+     Tile labels are English, so a prompt written in a non-Latin script (e.g. an Urdu scene
+     location inside a background-sheet prompt) can never word-match its own label; such
+     prompts are first rendered into English label keywords via one LLM call
+     (`_label_hints_for_prompt`, logged as `label hints for tile matching`) and the tile is
+     matched against those (`hint-match 0.60`). ASCII-only prompts skip the LLM entirely.
 
 ## How a Generation Runs
 
@@ -74,7 +79,18 @@ Flow's project grid and the title-based card search works as a fallback:
 1. Open/reuse the Flow project (registry → card click → New project).
 2. Align the settings popover (Image tab, aspect ratio, model, outputs) — skipping anything
    already selected.
-3. Optionally upload reference images as **ingredients** via the prompt-bar **+** button.
+3. Attach reference images as **ingredients** via the prompt-bar **+** add-media panel:
+   - Uploaded assets are looked up by file name (list scan, then the **Search assets** box —
+     file names are unique per project and uploads keep their original name)
+   - Assets **generated in Flow** (backgrounds, character sheets) are listed under Flow's
+     prompt-derived titles instead, so each generation registers `{label, src}` in
+     `output/flow_asset_registry.json` (earlier generations are back-filled from the
+     subprocess log) and the attach finds them by label search + exact tile-src match
+   - The asset is selected and confirmed with **Add to prompt**; only genuinely unknown
+     files go through the panel's **Upload media** file chooser (which registers the file
+     name for future attaches)
+   - Flow's **Uploading image…** modal is awaited (dismissed + retried when stuck) because
+     its backdrop blocks every other control.
 4. Type the prompt into the editor and click the arrow (Start generation) button.
 5. Wait for the new tile to finish rendering (percentage indicator gone, image loaded).
 6. Download: native download action if available, else an authenticated fetch of the tile's
@@ -82,7 +98,8 @@ Flow's project grid and the title-based card search works as a fallback:
    is the last-resort fallback.
 
 Failures save diagnostic screenshots next to the target image path
-(`*_diagnostic.png`, `*_download_diagnostic.png`, `*_project_diagnostic.png`).
+(`*_diagnostic.png`, `*_download_diagnostic.png`, `*_project_diagnostic.png`,
+`*_upload_diagnostic.png`).
 
 ## Configuration
 

@@ -118,9 +118,9 @@ class GenerationService:
     def get_item_engine(item: QueueItem) -> str:
         """Resolve which engine will process this item"""
         import config
-        if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.THUMBNAIL, GenerationType.BACKGROUND, GenerationType.CHARACTER_IMAGE, GenerationType.PROP_IMAGE]:
+        if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.THUMBNAIL, GenerationType.BACKGROUND, GenerationType.CHARACTER_IMAGE, GenerationType.PROP_IMAGE, GenerationType.ASSET_IMAGE]:
             return item.image_mode or getattr(config, 'IMAGE_GENERATION_MODE', 'comfyui')
-        elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO]:
+        elif item.generation_type in [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO, GenerationType.ASSET_VIDEO]:
             return item.video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
         elif item.generation_type == GenerationType.NARRATION:
             return getattr(config, 'TTS_METHOD', 'local')
@@ -223,6 +223,10 @@ class GenerationService:
                     if item.generation_type in [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE]:
                         print(f"[DEBUG] routing to process_image_generation", flush=True)
                         await self._process_image_generation(item)
+                    elif item.generation_type == GenerationType.ASSET_IMAGE:
+                        await self._process_asset_image_generation(item)
+                    elif item.generation_type == GenerationType.ASSET_VIDEO:
+                        await self._process_asset_video_generation(item)
                     elif item.generation_type == GenerationType.CHARACTER_IMAGE:
                         await self._process_character_generation(item)
                     elif item.generation_type == GenerationType.PROP_IMAGE:
@@ -303,11 +307,13 @@ class GenerationService:
                         GenerationType.THEN_IMAGE: 0,
                         GenerationType.NOW_IMAGE: 0,
                         GenerationType.CHARACTER_IMAGE: 0,
+                        GenerationType.ASSET_IMAGE: 0,
                         GenerationType.NARRATION: 1,
                         GenerationType.BACKGROUND: 1,
                         GenerationType.VIDEO: 2,
                         GenerationType.MEETING_VIDEO: 2,
                         GenerationType.DEPARTURE_VIDEO: 2,
+                        GenerationType.ASSET_VIDEO: 2,
                         GenerationType.SOUNDFX: 3
                     }
                     return (type_order.get(item.generation_type, 10), item.priority)
@@ -499,6 +505,62 @@ class GenerationService:
 
         except Exception as e:
             logger.error(f"Error processing image generation for {item.item_id}: {e}")
+            raise
+
+    async def _process_asset_image_generation(self, item: QueueItem):
+        """Process an asset-library image generation. The AssetGenerationService
+        registry mirrors queue status for the asset API and grid placeholders."""
+        from web_ui.backend.services.asset_generation import (
+            get_asset_generation_service, run_asset_image,
+        )
+
+        svc = get_asset_generation_service()
+        gen = svc.get_internal(item.asset_gen_id)
+        if not gen:
+            raise RuntimeError(f"Asset generation registry entry missing: {item.asset_gen_id}")
+        queue_service = get_queue_service()
+
+        def on_progress(pct: int):
+            queue_service.update_progress(item.item_id, pct)
+            svc.set_progress(item.asset_gen_id, pct)
+
+        def on_prompt_id(pid):
+            item.comfyui_prompt_id = pid
+            if item.status != QueueItemStatus.CANCELLED:
+                queue_service.update_item(item)
+
+        svc.mark_running(item.asset_gen_id)
+        try:
+            await run_asset_image(gen, on_progress=on_progress, on_prompt_id=on_prompt_id)
+            svc.finalize_success(item.asset_gen_id)
+            queue_service.mark_completed(item.item_id, 100)
+        except Exception as e:
+            svc.finalize_failure(item.asset_gen_id, str(e))
+            raise
+
+    async def _process_asset_video_generation(self, item: QueueItem):
+        """Process an asset-library video generation (i2v from a library image)."""
+        from web_ui.backend.services.asset_generation import (
+            get_asset_generation_service, run_asset_video,
+        )
+
+        svc = get_asset_generation_service()
+        gen = svc.get_internal(item.asset_gen_id)
+        if not gen:
+            raise RuntimeError(f"Asset generation registry entry missing: {item.asset_gen_id}")
+        queue_service = get_queue_service()
+
+        def on_progress(pct: int):
+            queue_service.update_progress(item.item_id, pct)
+            svc.set_progress(item.asset_gen_id, pct)
+
+        svc.mark_running(item.asset_gen_id)
+        try:
+            await run_asset_video(gen, on_progress=on_progress)
+            svc.finalize_success(item.asset_gen_id)
+            queue_service.mark_completed(item.item_id, 100)
+        except Exception as e:
+            svc.finalize_failure(item.asset_gen_id, str(e))
             raise
 
     async def _process_character_generation(self, item: QueueItem):
@@ -811,10 +873,12 @@ class GenerationService:
                 raise ValueError(f"Scene {item.scene_id} not found in story")
 
             set_prompt = scene.get('set_prompt')
-            # r2v projects use the dedicated background-sheet prompt template
+            # Background sheets are built from the scene's set_prompt (the
+            # story LLM writes the detailed environment description there);
+            # location is the fallback for older stories.
             if self._get_project_video_generation_type(item.project_id) == 'r2v':
-                from core.sheet_generator import background_sheet_prompt
-                set_prompt = background_sheet_prompt(scene.get('location', ''), story.get('style', ''))
+                from core.sheet_generator import background_sheet_prompt, background_base_text
+                set_prompt = background_sheet_prompt(background_base_text(scene), story.get('style', ''))
 
             # Call generate_scene_background with overrides from the queue item
             await self.generate_scene_background(
@@ -825,7 +889,8 @@ class GenerationService:
                 negative_prompt=None,
                 seed=item.seed,
                 workflow=item.image_workflow,
-                image_mode=item.image_mode
+                image_mode=item.image_mode,
+                background_style=item.background_style
             )
 
             # r2v: refresh shot reference attachments with the new background
@@ -1328,7 +1393,8 @@ class GenerationService:
             prompt_override=getattr(request, 'prompt', None),
             seed=getattr(request, 'seed', None),
             image_mode=getattr(request, 'image_model', None),
-            image_workflow=getattr(request, 'workflow', None)
+            image_workflow=getattr(request, 'workflow', None),
+            background_style=getattr(request, 'background_style', None)
         )
         
         queue_service = get_queue_service()
@@ -1420,11 +1486,14 @@ class GenerationService:
                         item_id="", project_id=project_id,
                         scene_id=scene.get('scene_id'),
                         generation_type=GenerationType.BACKGROUND,
-                        prompt_override=scene.get('location'),
+                        # No prompt_override: the processor builds the sheet
+                        # prompt from set_prompt/location; an override here
+                        # would replace it with the raw location.
                         image_mode=getattr(request, 'image_mode', None),
                         image_workflow=getattr(request, 'image_workflow', None),
                         seed=getattr(request, 'seed', None),
                         gemini_mode=self._resolve_gemini_mode(request),
+                        background_style=getattr(request, 'background_style', None),
                         priority=45, project_title=project_title)
                     sheet_items.append(item)
             for pi, prop in enumerate(props):
@@ -1437,7 +1506,6 @@ class GenerationService:
                         seed=getattr(request, 'seed', None),
                         gemini_mode=self._resolve_gemini_mode(request),
                         priority=50, project_title=project_title))
-        ref_mode = vgt in ('r2v', 't2v')
 
         # Resolve indices from IDs if provided for better stability during reordering
         final_indices = []
@@ -1484,9 +1552,10 @@ class GenerationService:
             skip_images = not force_images and shot.get('image_generated', False)
             skip_videos = not force_videos and shot.get('video_rendered', False)
 
-            # Create image queue items (r2v/t2v projects generate no
-            # first-frame images — their reference sheets are queued above)
-            if request.regenerate_images and not skip_images and not ref_mode:
+            # Create image queue items. r2v/t2v videos reference sheets (not
+            # first-frame images), but an explicit batch image request is
+            # still honored — parity with single-shot image generation.
+            if request.regenerate_images and not skip_images:
                 if shot.get('is_flfi2v') and story.get('project_type') == 2:
                     # Collect NOW and THEN separately for prioritization
                     now_item = self._create_queue_item(project_id, idx, GenerationType.NOW_IMAGE, shot, story, request=request)
@@ -2901,7 +2970,8 @@ class GenerationService:
         negative_prompt: Optional[str] = None,
         seed: Optional[int] = None,
         workflow: Optional[str] = None,
-        image_mode: Optional[str] = None
+        image_mode: Optional[str] = None,
+        background_style: Optional[str] = None
     ) -> str:
         """
         Generate background image for a scene using AI
@@ -2911,6 +2981,8 @@ class GenerationService:
             scene_id: Scene ID in the story
             set_prompt: Background description prompt
             image_mode: Provider (comfyui, geminiweb, etc.)
+            background_style: Named-style text (styles.json) appended to the
+                end of the final background prompt
 
         Returns:
             Path to generated background image
@@ -2939,6 +3011,9 @@ class GenerationService:
             # Generate background using standard Flux workflow
             # Use override if provided, otherwise fallback to story set_prompt
             set_prompt = prompt if prompt else set_prompt # defined or story fallback
+            if background_style:
+                from core.sheet_generator import apply_background_style
+                set_prompt = apply_background_style(set_prompt, background_style)
             actual_workflow = workflow if workflow else "flux"
 
             logger.info(f"Generating background for scene {scene_id} using prompt: {set_prompt[:60]}... (workflow: {actual_workflow}, mode: {image_mode})")
@@ -3843,10 +3918,25 @@ class GenerationService:
         motion_prompt_node_id = workflow_config.get('motion_prompt_node_id') or '93'
         seed_node_id = workflow_config.get('seed_node_id') or '142'
 
+        # Resolve widget input names from the node itself - MiniMax H3 nodes
+        # take "prompt" (not "text") and a RandomNoise "noise_seed" (not "value")
+        prompt_input_name = "text"
+        if motion_prompt_node_id in wf:
+            target_inputs = wf[motion_prompt_node_id].get("inputs", {})
+            if "text" in target_inputs:
+                prompt_input_name = "text"
+            elif "prompt" in target_inputs:
+                prompt_input_name = "prompt"
+            elif "value" in target_inputs:
+                prompt_input_name = "value"
+
         # Set seed if provided (for first video generation)
         if seed is not None and seed_node_id in wf:
-            wf[seed_node_id]["inputs"]["value"] = seed
-            logger.info(f"FLFI2V video generation using seed: {seed}")
+            seed_inputs = wf[seed_node_id].get("inputs", {})
+            seed_input_name = ("noise_seed" if "noise_seed" in seed_inputs
+                               else "seed" if "seed" in seed_inputs else "value")
+            wf[seed_node_id]["inputs"][seed_input_name] = seed
+            logger.info(f"FLFI2V video generation using seed: {seed} (node {seed_node_id}.{seed_input_name})")
 
         # Inject images based on variant
         from core.comfy_client import prepare_comfyui_input_image
@@ -3900,7 +3990,9 @@ class GenerationService:
             )
 
         if motion_prompt_node_id in wf:
-            wf[motion_prompt_node_id]["inputs"]["text"] = motion_prompt
+            wf[motion_prompt_node_id]["inputs"][prompt_input_name] = motion_prompt
+        else:
+            logger.warning(f"FLFI2V motion prompt node '{motion_prompt_node_id}' not in workflow - template prompt will be used")
 
         # Submit to ComfyUI
         result = submit(wf)

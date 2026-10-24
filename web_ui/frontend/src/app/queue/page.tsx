@@ -134,8 +134,8 @@ export default function QueuePage() {
 
       // Type filter
       if (typeFilter !== 'all') {
-        const isImage = [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE].includes(item.generation_type);
-        const isVideo = [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO].includes(item.generation_type);
+        const isImage = [GenerationType.IMAGE, GenerationType.THEN_IMAGE, GenerationType.NOW_IMAGE, GenerationType.ASSET_IMAGE].includes(item.generation_type);
+        const isVideo = [GenerationType.VIDEO, GenerationType.MEETING_VIDEO, GenerationType.DEPARTURE_VIDEO, GenerationType.ASSET_VIDEO].includes(item.generation_type);
 
         if (typeFilter === 'image' && !isImage) return false;
         if (typeFilter === 'video' && !isVideo) return false;

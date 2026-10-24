@@ -360,6 +360,15 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
             return project_service.get_project(project_id)
         else:
             story_json = build_story(idea, request.agent, target_length, aspect_ratio)
+            # The dedicated ThenVsNow/ASMR builders stamp project_type into the
+            # story themselves; the generic (documentary/movie) path doesn't —
+            # stamp it from project metadata so clients can group by type.
+            try:
+                story_data = json.loads(story_json)
+                story_data['project_type'] = story_data.get('project_type') or meta.get('project_type', ProjectType.DOCUMENTARY)
+                story_json = json.dumps(story_data, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
             # Save story
             project_manager.save_story(project_id, story_json)
 

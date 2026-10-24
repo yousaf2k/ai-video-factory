@@ -53,11 +53,12 @@ Respond with a single valid JSON object only — no commentary before or after i
   "scenes": [
     {
       "scene_id": 0,
-      "location": "Describe setting/environment",
+      "location": "Short name of the setting",
       "characters": "Who is in the scene",
       "action": "What happens in this scene",
       "emotion": "Primary emotion of the scene",
       "narration": "Voice-over text. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
+      "set_prompt": "Detailed background image prompt for this scene's environment (location stays a short name): geography, architecture and key objects with their materials, weather and time of day, lighting, and atmosphere. 2-3 sentences, no people.",
       "scene_duration": 45
     }
   ]

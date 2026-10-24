@@ -63,12 +63,28 @@ def expression_sheet_prompt(base_desc: str) -> str:
 def background_sheet_prompt(location: str, style: str = "") -> str:
     """Environment reference for a scene — establishing view, no characters."""
     return (
-        f"wide establishing shot of {location}. "
         f"An empty environment reference: no characters or people present, "
         f"clear view of the space, key props and architecture, natural lighting for the scene's time of day. "
         f"{style + ', ' if style else ''}"
-        f"cinematic, high detail."
+        f"cinematic, high detail. "
+        f"wide establishing shot of {(location or '').strip().rstrip('.')}."
     )
+
+
+def background_base_text(scene: dict) -> str:
+    """Base text for a scene's background-sheet prompt. The story LLM writes
+    the detailed background description into set_prompt (location stays a
+    short setting name); location is the fallback for stories generated
+    before set_prompt existed."""
+    return ((scene.get('set_prompt') or scene.get('location') or '')).strip()
+
+
+def apply_background_style(prompt: str, background_style: str) -> str:
+    """Append a dropdown-selected style (styles.json) to the end of a
+    background prompt. Empty/None selections leave the prompt untouched."""
+    if not background_style or not background_style.strip():
+        return prompt
+    return f"{(prompt or '').rstrip()} {background_style.strip()}"
 
 
 def prop_sheet_prompt(prop: dict, style: str = "") -> str:
@@ -172,7 +188,7 @@ def ensure_background_sheets(project_manager, project_id, force=False, **gen_kwa
         existing = scene.get('background_image_path')
         if existing and not force and _project_file_exists(project_manager, project_id, existing):
             continue
-        prompt = background_sheet_prompt(location, style)
+        prompt = background_sheet_prompt(background_base_text(scene), style)
         path = _generate_sheet(project_manager, project_id, "backgrounds",
                                f"background_{sid:03d}", prompt, **gen_kwargs)
         if not path:

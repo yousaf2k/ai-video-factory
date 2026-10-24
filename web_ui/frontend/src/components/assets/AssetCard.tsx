@@ -48,8 +48,9 @@ export default function AssetCard({
         else onOpen?.(entry);
       }}
     >
-      {/* Media area */}
-      <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
+      {/* Media area — `relative` anchors the badge/hover overlays to the
+          thumbnail instead of the whole card (which would cover the title) */}
+      <div className="relative aspect-square bg-muted flex items-center justify-center overflow-hidden">
         {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

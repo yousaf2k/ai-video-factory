@@ -26,6 +26,7 @@ from web_ui.backend.models.asset import (
     CreateCategoryRequest, MoveCategoryRequest, RenameCategoryRequest,
     UpdateLibrariesRequest, UpdateRefsRequest, UseAsSourceRequest, ImportAssetRequest,
     TextContent, GenerateAssetRequest, GenerationStatus, GenerateOptions,
+    UpdateTextContentRequest, CreateTextRequest,
 )
 from web_ui.backend.services.asset_service import get_asset_service
 from web_ui.backend.services.asset_generation import get_asset_generation_service
@@ -139,10 +140,38 @@ async def get_project_media(project_id: str):
 
 
 @router.get("/content", response_model=TextContent)
-async def get_asset_text(ref: str = Query(..., description='Text asset ref, e.g. "g/9f3ab21c"')):
-    """Full text/markdown content of a Guides asset."""
+async def get_asset_text(ref: str = Query(..., description='Text asset ref, e.g. "g/9f3ab21c" or "t/9f3ab21c"')):
+    """Full text/markdown content of a text-type asset (Guides, Templates)."""
     try:
         return asset_service.read_text(ref)
+    except Exception as e:
+        raise _http_error(e)
+
+
+@router.get("/template", response_model=TextContent)
+async def get_expanded_template(ref: str = Query(..., description='Template ref, e.g. "t/9f3ab21c"')):
+    """A Templates asset with every {@Category\\Title} reference recursively
+    inlined — one composed template ready for placeholder rendering."""
+    try:
+        return asset_service.expand_template(ref)
+    except Exception as e:
+        raise _http_error(e)
+
+
+@router.put("/content", response_model=TextContent)
+async def update_asset_text(request: UpdateTextContentRequest):
+    """Overwrite a Guides/Templates asset's content."""
+    try:
+        return asset_service.write_text(request.ref, request.content)
+    except Exception as e:
+        raise _http_error(e)
+
+
+@router.post("/text", response_model=AssetEntry)
+async def create_text_asset(request: CreateTextRequest):
+    """Create a new text asset (.txt) under a Guides/Templates category."""
+    try:
+        return asset_service.create_text(request.cat, request.title, request.content, request.library)
     except Exception as e:
         raise _http_error(e)
 

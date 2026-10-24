@@ -694,8 +694,33 @@ def _wait_for_response_complete(page, timeout: int = 180):
 
 
 
-def _find_generated_image(page):
-    """Search the page for a generated image and return its src URL."""
+def _collect_image_srcs(page) -> set:
+    """All candidate image srcs currently on the page. Used to snapshot the
+    pre-submit state so the uploader's own reference thumbnails are never
+    mistaken for the generated result."""
+    srcs = set()
+    for selector in (
+        'message-content img[src]',
+        'img.generated-image[src]',
+        'button.image-button img[src]',
+        'button.generated-image-button img[src]',
+        'div[data-message-id] img[src]',
+    ):
+        try:
+            for img in page.query_selector_all(selector):
+                src = img.get_attribute('src')
+                if src:
+                    srcs.add(src)
+        except Exception:
+            continue
+    return srcs
+
+
+def _find_generated_image(page, known_srcs: Optional[set] = None):
+    """Search the page for a generated image and return its src URL.
+
+    `known_srcs` (the pre-submit snapshot) is excluded so reference images
+    attached to the prompt are never picked as the result."""
     # 2026-09 resync: messages are now scoped by <message-content> (the old
     # div[data-message-id] wrapper is gone from the DOM).
     image_selectors = [
@@ -714,17 +739,20 @@ def _find_generated_image(page):
             images = page.query_selector_all(selector)
             for img in reversed(images):
                 src = img.get_attribute('src')
-                if src and not src.startswith('data:image/svg') and 'avatar' not in src.lower():
-                    width = img.evaluate('el => el.naturalWidth || el.width || 0')
-                    if width > 50:
-                        logger.info(f"Found generated image: {selector} (width={width})")
-                        return src
+                if not src or src.startswith('data:image/svg') or 'avatar' in src.lower():
+                    continue
+                if known_srcs and src in known_srcs:
+                    continue
+                width = img.evaluate('el => el.naturalWidth || el.width || 0')
+                if width > 50:
+                    logger.info(f"Found generated image: {selector} (width={width})")
+                    return src
         except Exception:
             continue
     return None
 
 
-def _wait_for_image_response(page, timeout: int = None):
+def _wait_for_image_response(page, timeout: int = None, known_srcs: Optional[set] = None):
     """Wait for Gemini to generate and display an image in the response."""
     if timeout is None:
         timeout = getattr(config, 'GEMINIWEB_TIMEOUT', 120)
@@ -732,7 +760,7 @@ def _wait_for_image_response(page, timeout: int = None):
         _wait_for_response_complete(page, timeout)
     except Exception:
         pass
-    image_src = _find_generated_image(page)
+    image_src = _find_generated_image(page, known_srcs)
     if image_src:
         return image_src
     try:
@@ -745,7 +773,7 @@ def _wait_for_image_response(page, timeout: int = None):
         )
         page.wait_for_selector(selector, timeout=30000, state='visible')
         time.sleep(2)
-        image_src = _find_generated_image(page)
+        image_src = _find_generated_image(page, known_srcs)
     except Exception as e:
         logger.error(f"Timeout or error waiting for image: {e}")
     return image_src
@@ -2012,6 +2040,14 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
 
             time.sleep(0.4) # Reduced from 1.0s
 
+            # ── Snapshot image srcs BEFORE submitting ────────────────────────
+            # The attached reference thumbnails are already in the DOM at this
+            # point; excluding them keeps detection from returning the user's
+            # own reference image as the generated result.
+            known_srcs = _collect_image_srcs(page)
+            if images_to_upload:
+                logger.info(f"Pre-submit snapshot: {len(known_srcs)} existing image src(s) excluded from detection")
+
             # ── Submit the prompt ────────────────────────────────────────────
             send_selectors = [
                 'button[aria-label="Send message"]',
@@ -2033,7 +2069,7 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                 page.keyboard.press('Enter')
 
             logger.info("Prompt submitted, waiting for image generation...")
-            image_src = _wait_for_image_response(page, timeout)
+            image_src = _wait_for_image_response(page, timeout, known_srcs=known_srcs)
 
             if not image_src:
                 logger.warning("No image found on first check, trying expanded view...")
@@ -2052,7 +2088,7 @@ def run(prompt: str, output_path: str, aspect_ratio: str = None, project_title: 
                                 break
                         except Exception:
                             continue
-                    image_src = _wait_for_image_response(page, 30)
+                    image_src = _wait_for_image_response(page, 30, known_srcs=known_srcs)
                 except Exception:
                     pass
 

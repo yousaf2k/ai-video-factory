@@ -2,9 +2,9 @@
 // picker exactly: three models and three thinking levels. The backend
 // transports a selection as "<model>|<thinking>" in the gemini_mode field.
 export const GEMINI_MODELS = [
-  { value: "3.5 Flash-Lite", label: "3.5 Flash-Lite (Fastest answers)" },
-  { value: "3.8 Flash", label: "3.8 Flash (All-around help)" },
-  { value: "3.1 Pro", label: "3.1 Pro (Advanced reasoning)" },
+  { value: "3.5 Flash-Lite", label: "3.5 Flash-Lite" },
+  { value: "3.8 Flash", label: "3.8 Flash" },
+  { value: "3.1 Pro", label: "3.1 Pro" },
 ] as const;
 
 export const GEMINI_THINKING = [

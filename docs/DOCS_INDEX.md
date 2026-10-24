@@ -79,6 +79,7 @@ docs/
 | [Asset Library](features/ASSET_LIBRARY.md) 🆕 | Nested-category asset library and per-shot references |
 | [Ref2Video & Video Generation Types](features/REF2VIDEO.md) 🆕 | t2v / i2v / r2v video generation setting — reference sheets, MiniMax H3 Ref2VA prompts, props, voices |
 | [Google Flow Image Generation](features/FLOW_IMAGE.md) 🆕 | `flow` image mode — browser automation of flow.google.com (projects, settings, Nano Banana models) |
+| [Logs Page](features/LOGS_PAGE.md) 🆕 | Structured log viewer at `/log` — phase 1: LLM call inputs/outputs with resizable split view |
 | **Then Vs Now** ([Quick Start](features/ThenVsNow/THEN_VS_NOW_QUICKSTART.md)) | FLFI2V reunion videos — scene requirements, departure videos, motion prompts, thumbnails, implementation |
 | **ASMR Glass Cutting** ([User Guide](features/asmr_glass_cutting/ASMR%20Glass%20Cutting%20-%20User%20Guide.md)) | ASMR project type — usage and implementation |
 

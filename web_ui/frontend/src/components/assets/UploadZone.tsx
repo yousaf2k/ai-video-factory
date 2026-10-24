@@ -7,6 +7,7 @@ import { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { Upload, Loader2 } from 'lucide-react';
 import { useUploadAssets } from '@/hooks/useAssets';
+import { humanizeCat } from './assetUtils';
 import { extractError } from './AssetDetailView';
 
 interface UploadZoneProps {
@@ -31,7 +32,7 @@ export default function UploadZone({ cat, library, onUploaded }: UploadZoneProps
             toast.success(`Added ${result.saved.length} asset${result.saved.length > 1 ? 's' : ''} to ${cat}`);
           }
           result.rerouted.forEach((r) =>
-            toast.info(`${r.filename} is a different type — saved under ${r.to}`)
+            toast.info(`${r.filename} is a different type — saved under ${humanizeCat(r.to)}`)
           );
           result.skipped.forEach((s) => toast.error(`${s.filename}: ${s.reason}`));
           onUploaded?.();

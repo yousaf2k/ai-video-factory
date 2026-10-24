@@ -5,7 +5,7 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { ShotCard } from "./ShotCard";
 import { Shot, Scene } from "@/types";
 import { useAgents, useConfig } from "@/hooks/useAgents";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import {
   GEMINI_MODELS,
@@ -16,6 +16,7 @@ import {
 } from "@/lib/geminiModes";
 import { useUpdateShots } from "@/hooks/useShots";
 import { usePersistedState } from "@/hooks/usePersistedState";
+import { useProject } from "@/hooks/useProjects";
 import {
   CheckSquare,
   Square,
@@ -87,6 +88,17 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [generatingScenes, setGeneratingScenes] = useState<Set<number>>(new Set());
   const queryClient = useQueryClient();
   const updateShotsMutation = useUpdateShots(projectId);
+  const { data: project } = useProject(projectId);
+  // r2v projects auto-queue background sheets with batch images — the style
+  // dropdown below appends its text to those sheet prompts
+  const isR2V = project?.video_generation_type === "r2v";
+  const [batchBackgroundStyle, setBatchBackgroundStyle] = usePersistedState<string>(
+    `background_style_${projectId}`, 'none');
+  const { data: backgroundStyleOptions = [] } = useQuery({
+    queryKey: ['background-styles'],
+    queryFn: () => api.getBackgroundStyles(),
+    staleTime: 5 * 60 * 1000,
+  });
   const [viewModeOverride, setViewModeOverride] = useState<
     "image" | "video" | null
   >(null);
@@ -172,7 +184,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [ttsMethod, setTtsMethod] = usePersistedState<string>(`batch_tts_method_${projectId}`, "local");
   const [ttsVoice, setTtsVoice] = usePersistedState<string>(`batch_tts_voice_${projectId}`, "en-US-AriaNeural");
   const [resolution, setResolution] = usePersistedState<string>(`batch_resolution_${projectId}`, "720p");
-  const [generateSoundFX, setGenerateSoundFX] = usePersistedState<boolean>(`batch_generate_soundfx_${projectId}`, true);
+  const [generateSoundFX, setGenerateSoundFX] = usePersistedState<boolean>(`batch_generate_soundfx_${projectId}`, false);
   const [soundfxWorkflow, setSoundfxWorkflow] = usePersistedState<string>(`batch_soundfx_workflow_${projectId}`, "default");
   const [batchSoundfxPrompt, setBatchSoundfxPrompt] = usePersistedState<string>(`batch_soundfx_prompt_${projectId}`, "");
 
@@ -408,6 +420,11 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
     setShowBatchModal(null);
     setSelectedIndices([]);
 
+    // Resolve the selected background style name to its prompt text (styles.json)
+    const backgroundStyle = backgroundStyleOptions.find(
+      (s) => s.name === batchBackgroundStyle
+    )?.style;
+
     const actualIndicesQueued = indicesToProcess.filter(idx => {
       const shot = shots.find((s: any) => s.index === idx);
       if (!shot) return false;
@@ -447,6 +464,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           generate_soundfx: generateSoundFX,
           soundfx_workflow: generateSoundFX ? soundfxWorkflow : undefined,
           soundfx_prompt: generateSoundFX && batchSoundfxPrompt ? batchSoundfxPrompt : undefined,
+          background_style: backgroundStyle || undefined,
         });
       } catch (error) {
         console.error("Failed to start batch both generation:", error);
@@ -464,6 +482,7 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           gemini_mode: `${geminiModel}|${geminiThinking}`,
           gemini_model: geminiModel,
           gemini_thinking: geminiThinking,
+          background_style: backgroundStyle || undefined,
         });
       } catch (error) {
         console.error("Failed to start batch image generation:", error);
@@ -529,6 +548,8 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
     videoWorkflow,
     queryClient,
     batchSkipImages,
+    batchBackgroundStyle,
+    backgroundStyleOptions,
   ]);
 
   // Remove shots from queued status once the backend confirms they started generating
@@ -1436,6 +1457,33 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                     </div>
                   )}
 
+                  {isR2V && (
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium mb-1">
+                        Background Style
+                      </label>
+                      <Select
+                        value={batchBackgroundStyle}
+                        onValueChange={(val) => setBatchBackgroundStyle(val)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="None (story default)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None (story default)</SelectItem>
+                          {backgroundStyleOptions.map((s) => (
+                            <SelectItem key={s.name} value={s.name}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Appended to the end of missing background-sheet prompts
+                      </p>
+                    </div>
+                  )}
+
                   {showBatchModal === "both" && (
                     <div className="mt-3">
                       <label className="block text-sm font-medium mb-1">
@@ -1901,6 +1949,10 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                             <SelectItem value="en-US-GuyNeural">Guy (Male)</SelectItem>
                             <SelectItem value="en-GB-SoniaNeural">Sonia (UK Female)</SelectItem>
                             <SelectItem value="en-GB-RyanNeural">Ryan (UK Male)</SelectItem>
+                            <SelectItem value="ur-PK-UzmaNeural">Uzma (Urdu Female)</SelectItem>
+                            <SelectItem value="ur-PK-AsadNeural">Asad (Urdu Male)</SelectItem>
+                            <SelectItem value="ur-IN-GulNeural">Gul (Urdu India Female)</SelectItem>
+                            <SelectItem value="ur-IN-SalmanNeural">Salman (Urdu India Male)</SelectItem>
                           </>
                         ) : ttsMethod === "elevenlabs" ? (
                           <>

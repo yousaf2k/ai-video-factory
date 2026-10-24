@@ -98,6 +98,10 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onF
         return 'Background';
       case GenerationType.SOUNDFX:
         return 'Sound FX';
+      case GenerationType.ASSET_IMAGE:
+        return 'Asset Image';
+      case GenerationType.ASSET_VIDEO:
+        return 'Asset Video';
       default:
         return 'Unknown';
     }
@@ -108,10 +112,12 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onF
       case GenerationType.IMAGE:
       case GenerationType.THEN_IMAGE:
       case GenerationType.NOW_IMAGE:
+      case GenerationType.ASSET_IMAGE:
         return 'bg-purple-100 text-purple-700';
       case GenerationType.VIDEO:
       case GenerationType.MEETING_VIDEO:
       case GenerationType.DEPARTURE_VIDEO:
+      case GenerationType.ASSET_VIDEO:
         return 'bg-blue-100 text-blue-700';
       case GenerationType.NARRATION:
         return 'bg-green-100 text-green-700';

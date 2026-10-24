@@ -1,11 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Scene } from '@/types';
 import { GenerationDialog, GenerationConfig } from '../shots/GenerationDialog';
 import { useProject } from '@/hooks/useProjects';
+import { usePersistedState } from '@/hooks/usePersistedState';
+import { api } from '@/services/api';
 import { toast } from 'sonner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface SceneBackgroundManagerProps {
   scene: Scene;
@@ -25,6 +34,14 @@ export default function SceneBackgroundManager({
   const [showGenModal, setShowGenModal] = useState(false);
   const queryClient = useQueryClient();
   const { data: project } = useProject(projectId);
+  // Selected background style (by name, resolved to text from styles.json
+  // at submit time so config edits apply without stale copies)
+  const [styleName, setStyleName] = usePersistedState<string>(`background_style_${projectId}`, 'none');
+  const { data: styleOptions = [] } = useQuery({
+    queryKey: ['background-styles'],
+    queryFn: () => api.getBackgroundStyles(),
+    staleTime: 5 * 60 * 1000,
+  });
   // Reference-sheet (r2v) projects generate backgrounds from the scene
   // location — a set_prompt is not required (backend builds the sheet prompt).
   const isR2V = project?.video_generation_type === "r2v";
@@ -88,12 +105,16 @@ export default function SceneBackgroundManager({
 
     setGenerating(true);
 
+    // Resolve the selected style name to its prompt text (styles.json)
+    const backgroundStyle = styleOptions.find((s) => s.name === styleName)?.style;
+
     try {
       const requestBody = {
         prompt: config.promptOverride,
         seed: config.seed === "" ? undefined : config.seed,
         workflow: config.workflow === "default" ? undefined : config.workflow,
         image_model: config.mode,
+        background_style: backgroundStyle || undefined,
       };
 
       const response = await fetch(
@@ -142,10 +163,12 @@ export default function SceneBackgroundManager({
 
   const hasBackground = !!scene.background_image_path;
   const isGenerated = scene.background_is_generated;
-  const isType2 = projectType === 2;
+  // Backgrounds are consumed by ThenVsNow (IPAdapter) and r2v (reference
+  // sheets attached to shots); other project types don't use them.
+  const backgroundEnabled = projectType === 2 || isR2V;
 
-  if (!isType2 && !hasBackground) {
-    return null; // Hide empty container for non-Type 2
+  if (!backgroundEnabled && !hasBackground) {
+    return null; // Hide empty container where backgrounds aren't used
   }
 
   return (
@@ -187,7 +210,7 @@ export default function SceneBackgroundManager({
               className="w-full h-40 object-cover rounded"
             />
             <div className="flex gap-2 justify-center">
-              {isType2 && (
+              {backgroundEnabled && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -233,8 +256,31 @@ export default function SceneBackgroundManager({
         />
       </div>
 
+      {/* Style selection (styles.json via /api/config/styles); the selected
+          style text is appended to the end of the background prompt */}
+      {backgroundEnabled && (
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">
+            Background Style
+          </label>
+          <Select value={styleName} onValueChange={setStyleName}>
+            <SelectTrigger className="w-full h-9">
+              <SelectValue placeholder="None (story default)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None (story default)</SelectItem>
+              {styleOptions.map((s) => (
+                <SelectItem key={s.name} value={s.name}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {/* Action Buttons */}
-      {isType2 && (
+      {backgroundEnabled && (
         <div className="flex gap-2">
           <button
             onClick={(e) => {

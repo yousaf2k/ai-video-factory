@@ -285,6 +285,10 @@ export function SceneCard({
                               <SelectItem value="en-US-GuyNeural">Guy (Male)</SelectItem>
                               <SelectItem value="en-GB-SoniaNeural">Sonia (UK Female)</SelectItem>
                               <SelectItem value="en-GB-RyanNeural">Ryan (UK Male)</SelectItem>
+                              <SelectItem value="ur-PK-UzmaNeural">Uzma (Urdu Female)</SelectItem>
+                              <SelectItem value="ur-PK-AsadNeural">Asad (Urdu Male)</SelectItem>
+                              <SelectItem value="ur-IN-GulNeural">Gul (Urdu India Female)</SelectItem>
+                              <SelectItem value="ur-IN-SalmanNeural">Salman (Urdu India Male)</SelectItem>
                             </>
                           ) : ttsMethod === "elevenlabs" ? (
                             <>
@@ -339,6 +343,16 @@ export function SceneCard({
             </div>
             <div className="text-sm">
               <span className="text-muted-foreground font-medium">Emotion:</span> {scene.emotion}
+            </div>
+            <div className="text-sm">
+              <span className="text-muted-foreground font-medium">Characters:</span> {scene.characters}
+            </div>
+            <div className="text-sm">
+              <span className="text-muted-foreground font-medium">Duration:</span>{" "}
+              {scene.scene_duration ? `${scene.scene_duration}s` : "—"}
+            </div>
+            <div className="text-sm sm:col-span-2">
+              <span className="text-muted-foreground font-medium">Action:</span> {scene.action}
             </div>
           </div>
           

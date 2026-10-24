@@ -383,6 +383,11 @@ class ProjectService:
                 logger.error(f"Failed to process prompts file {request.prompts_file}: {e}")
                 print(f"[ERROR] Failed to process prompts file: {e}")
 
+        # Persist project_type for documentary/movie projects — the
+        # ThenVsNow/ASMR branches save meta themselves; without this the
+        # type only ever existed in the response body, not on disk.
+        self.project_manager._save_meta(project_id, meta)
+
         return ProjectDetail.from_project_data(meta=meta)
 
     def update_project(self, project_id: str, request: UpdateProjectRequest) -> ProjectMetadata:

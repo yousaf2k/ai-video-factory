@@ -142,3 +142,4 @@ class BackgroundGenerationRequest(BaseModel):
     height: Optional[int] = Field(default=None, description="Image height")
     workflow: Optional[str] = Field(default=None, description="ComfyUI workflow override")
     image_model: Optional[str] = Field(default=None, description="Image model selection")
+    background_style: Optional[str] = Field(default=None, description="Named-style text (styles.json) appended to the end of the background prompt")

@@ -7,7 +7,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useConfig } from "@/hooks/useAgents";
@@ -18,6 +17,11 @@ import {
   DEFAULT_GEMINI_THINKING,
   decodeLegacyGeminiMode,
 } from "@/lib/geminiModes";
+import {
+  ImageGenerationOptions,
+  imageOptionsToRequest,
+  useImageGenerationOptions,
+} from "./ImageGenerationOptions";
 
 export type GenerationType = "image" | "video" | "soundfx";
 
@@ -70,17 +74,18 @@ export function GenerationDialog({
   defaultUseOverride = false,
 }: GenerationDialogProps) {
   const { data: globalConfig } = useConfig();
+  // Image mode/workflow/seed/Gemini picker state — shared with the asset
+  // library generate dialog via ImageGenerationOptions.
+  const imgOpts = useImageGenerationOptions(projectId, isOpen && type === "image");
 
   // Common State
   const [force, setForce] = useState(false);
-  const [mode, setMode] = useState("comfyui");
-  const [workflow, setWorkflow] = useState<string>("default");
+  const [mode, setMode] = useState("comfyui"); // video generation mode
+  const [workflow, setWorkflow] = useState<string>("default"); // video workflow
   const [soundfxWorkflow, setSoundfxWorkflow] = useState<string>("mmaudio");
   const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
   const [geminiThinking, setGeminiThinking] = useState(DEFAULT_GEMINI_THINKING);
-  
-  // Image Specific State
-  const [seed, setSeed] = useState<number | "">("");
+
   const [promptOverride, setPromptOverride] = useState(defaultPromptOverride);
   const [soundfxPrompt, setSoundfxPrompt] = useState(defaultSoundFXPrompt);
 
@@ -103,33 +108,7 @@ export function GenerationDialog({
       setPromptOverride(defaultUseOverride && isThenImage ? DEFAULT_THEN_PROMPT : (defaultPromptOverride || ""));
       setSoundfxPrompt(defaultSoundFXPrompt || "");
       
-      if (type === "image") {
-        const savedImageMode = localStorage.getItem(`image_mode_${projectId}`) || "comfyui";
-        setMode(savedImageMode);
-        
-        const savedImageWf = localStorage.getItem(`image_workflow_${projectId}`);
-        if (savedImageWf && (!globalConfig?.available_image_workflows || globalConfig.available_image_workflows.includes(savedImageWf))) {
-          setWorkflow(savedImageWf);
-        } else if (globalConfig?.available_image_workflows?.length) {
-          setWorkflow(globalConfig.available_image_workflows[0]);
-        } else {
-          setWorkflow("flux2");
-        }
-        
-        const legacyPair = decodeLegacyGeminiMode(localStorage.getItem(`gemini_mode_${projectId}`));
-        setGeminiModel(
-          localStorage.getItem(`gemini_model_${projectId}`) ||
-          legacyPair.model ||
-          globalConfig?.geminiweb_model ||
-          DEFAULT_GEMINI_MODEL
-        );
-        setGeminiThinking(
-          localStorage.getItem(`gemini_thinking_${projectId}`) ||
-          legacyPair.thinking ||
-          globalConfig?.geminiweb_thinking ||
-          DEFAULT_GEMINI_THINKING
-        );
-      } else if (type === "soundfx") {
+      if (type === "soundfx") {
         const savedSoundfxWf = localStorage.getItem(`soundfx_workflow_${projectId}`);
         if (savedSoundfxWf && (!globalConfig?.available_soundfx_workflows || globalConfig.available_soundfx_workflows.includes(savedSoundfxWf))) {
           setSoundfxWorkflow(savedSoundfxWf);
@@ -138,7 +117,7 @@ export function GenerationDialog({
         } else {
           setSoundfxWorkflow("mmaudio");
         }
-      } else {
+      } else if (type === "video") {
         const savedVideoMode = localStorage.getItem(`video_mode_${projectId}`) || "comfyui";
         setMode(savedVideoMode);
         
@@ -192,19 +171,28 @@ export function GenerationDialog({
   if (!isOpen) return null;
 
   const handleSubmit = () => {
+    // Image options come from the shared ImageGenerationOptions state; video
+    // keeps its own mode/workflow/Gemini picker state below.
+    const imageReq = type === "image" ? imageOptionsToRequest(imgOpts.value) : null;
+    const isGeminiweb = type === "image"
+      ? imgOpts.value.mode === "geminiweb"
+      : mode === "geminiweb";
+    const geminiModelValue = type === "image" ? imgOpts.value.geminiModel : geminiModel;
+    const geminiThinkingValue = type === "image" ? imgOpts.value.geminiThinking : geminiThinking;
+
     onSubmit({
       force,
-      mode,
-      workflow,
-      seed: type === "image" ? seed : undefined,
+      mode: type === "image" ? imageReq!.mode : mode,
+      workflow: type === "image" ? imageReq!.workflow : workflow,
+      seed: imageReq?.seed,
       promptOverride: (type === "image" || useOverride) ? (promptOverride || undefined) : undefined,
       appendImagePrompt: type === "video" ? appendImagePrompt : undefined,
       generateSoundFX: type === "video" ? generateSoundFX : undefined,
       draftLowResVideo: type === "video" ? draftLowResVideo : undefined,
       resolution: type === "video" ? resolution : undefined,
-      gemini_mode: mode === "geminiweb" ? `${geminiModel}|${geminiThinking}` : undefined,
-      gemini_model: mode === "geminiweb" ? geminiModel : undefined,
-      gemini_thinking: mode === "geminiweb" ? geminiThinking : undefined,
+      gemini_mode: isGeminiweb ? `${geminiModelValue}|${geminiThinkingValue}` : undefined,
+      gemini_model: isGeminiweb ? geminiModelValue : undefined,
+      gemini_thinking: isGeminiweb ? geminiThinkingValue : undefined,
       soundfxWorkflow: (type === "soundfx" || generateSoundFX) ? soundfxWorkflow : undefined,
       soundfxPrompt: (type === "soundfx" || generateSoundFX) ? (soundfxPrompt || undefined) : undefined,
     });
@@ -240,161 +228,14 @@ export function GenerationDialog({
 
           {type === "image" && (
             <>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">
-                  Generation Mode
-                </label>
-                <Select
-                  value={mode}
-                  onValueChange={(val) => {
-                    setMode(val);
-                    localStorage.setItem(`image_mode_${projectId}`, val);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="comfyui">ComfyUI (Local)</SelectItem>
-                    <SelectItem value="gemini">Gemini (Cloud)</SelectItem>
-                    <SelectItem value="geminiweb">
-                      GeminiWeb - Gemini Web (Browser)
-                    </SelectItem>
-                    <SelectItem value="flow">
-                      Flow - Google Flow (Browser)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {mode === "flow" && (
-                <div className="rounded-md border border-border/50 p-3 space-y-1.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Model</span>
-                    <span className="font-medium">
-                      {globalConfig?.flow_image_model || "Nano Banana 2.1"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Outputs</span>
-                    <span className="font-medium">
-                      {globalConfig?.flow_image_outputs || "x1"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Agent Mode</span>
-                    <span className="font-medium">Off (default)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Aspect Ratio</span>
-                    <span className="font-medium">Project setting</span>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground pt-1">
-                    Runs on flow.google.com in your browser. Settings are only
-                    touched in Flow when they differ; defaults come from Global
-                    Configuration.
-                  </p>
-                </div>
-              )}
-
-              {mode === "geminiweb" && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      Gemini Model
-                    </label>
-                    <Select
-                      value={geminiModel}
-                      onValueChange={(val) => {
-                        setGeminiModel(val);
-                        localStorage.setItem(`gemini_model_${projectId}`, val);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Gemini Model" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {GEMINI_MODELS.map((m) => (
-                          <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      Extended Thinking
-                    </label>
-                    <Select
-                      value={geminiThinking}
-                      onValueChange={(val) => {
-                        setGeminiThinking(val);
-                        localStorage.setItem(`gemini_thinking_${projectId}`, val);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Thinking Level" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {GEMINI_THINKING.map((t) => (
-                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              )}
-
-              {mode === "comfyui" && (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      Workflow
-                    </label>
-                    <Select
-                      value={workflow}
-                      onValueChange={(val) => {
-                        setWorkflow(val);
-                        localStorage.setItem(`image_workflow_${projectId}`, val);
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select Workflow" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {globalConfig?.available_image_workflows?.map((wf) => (
-                          <SelectItem key={wf} value={wf}>
-                            {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
-                          </SelectItem>
-                        )) || (
-                          <>
-                            <SelectItem value="flux2">Flux 2</SelectItem>
-                            <SelectItem value="flux">Flux</SelectItem>
-                            <SelectItem value="sdxl">SDXL</SelectItem>
-                            <SelectItem value="default">Default</SelectItem>
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      Noise Seed (Optional)
-                    </label>
-                    <Input
-                      type="number"
-                      value={seed}
-                      onChange={(e) =>
-                        setSeed(e.target.value === "" ? "" : parseInt(e.target.value))
-                      }
-                      placeholder="Random"
-                    />
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      Leave blank for automatic seed (1 for 1st version, random otherwise).
-                    </p>
-                  </div>
-                </>
-              )}
+              <ImageGenerationOptions
+                value={imgOpts.value}
+                onSelectMode={imgOpts.selectMode}
+                onSelectWorkflow={imgOpts.selectWorkflow}
+                onSeedChange={imgOpts.changeSeed}
+                onSelectGeminiModel={imgOpts.selectGeminiModel}
+                onSelectGeminiThinking={imgOpts.selectGeminiThinking}
+              />
 
               {/* Prompt Override — visible for ALL image modes */}
               {!hidePrompt && (

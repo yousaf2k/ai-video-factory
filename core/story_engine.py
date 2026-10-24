@@ -198,11 +198,12 @@ Return JSON:
  "style":"ultra cinematic documentary",
  "scenes":[
    {{
-     "location":"",
+     "location":"Short name of the setting",
      "characters":"",
      "action":"",
      "emotion":"",
      "narration":"",
+     "set_prompt":"Detailed background image prompt for this scene's environment: geography, architecture and key objects with materials, weather and time of day, lighting, atmosphere. 2-3 sentences, no people.",
      "scene_duration":15
    }}
  ]

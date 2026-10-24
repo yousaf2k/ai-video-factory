@@ -47,6 +47,9 @@ export default function RootLayout({
                   <Link href="/workflows" className="text-sm font-medium hover:text-primary transition-colors">
                     Workflows
                   </Link>
+                  <Link href="/log" className="text-sm font-medium hover:text-primary transition-colors">
+                    Logs
+                  </Link>
                   <Link href="/config" className="text-sm font-medium hover:text-primary transition-colors">
                     Configuration
                   </Link>

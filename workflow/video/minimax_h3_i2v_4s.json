@@ -5,7 +5,6 @@
       "format": "auto",
       "format.codec": "auto",
       "codec": "auto",
-      "video-preview": "",
       "video": [
         "105_91",
         0
@@ -53,6 +52,8 @@
       "resize_type": "scale by multiplier",
       "resize_type.scale": 2,
       "quality": "ULTRA",
+      "strength": 1,
+      "image_encoding": "8-bit RGB",
       "images": [
         "105_10",
         0
@@ -65,7 +66,7 @@
   },
   "105_11": {
     "inputs": {
-      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+      "vae_name": "minimax_h3_video_vae_int8_convrot.safetensors"
     },
     "class_type": "VAELoader",
     "_meta": {
