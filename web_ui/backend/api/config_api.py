@@ -8,6 +8,7 @@ import sys
 import os
 import re
 import logging
+from typing import Optional, Dict, Tuple
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
@@ -22,34 +23,138 @@ import subprocess
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/config", tags=["config"])
 
+# --------------------------------------------------------------------------
+# Declarative registry of environment-backed settings editable from the Web UI
+# Configuration page. field name (lowercase env key) -> (ENV_KEY, config
+# attribute, python type). "attr" differs from ENV_KEY only where config.py
+# names the constant differently (e.g. GEMINI_MODEL -> GEMINI_TEXT_MODEL).
+# The GET endpoint returns every field; POST writes to .env, the config
+# module and os.environ so changes apply live and persist across restarts.
+# --------------------------------------------------------------------------
+_CONFIG_FIELDS: Dict[str, Tuple[str, str, str]] = {
+    # LLM providers
+    "llm_provider":                 ("LLM_PROVIDER", "LLM_PROVIDER", "str"),
+    "gemini_model":                 ("GEMINI_MODEL", "GEMINI_TEXT_MODEL", "str"),
+    "openai_model":                 ("OPENAI_MODEL", "OPENAI_MODEL", "str"),
+    "qwen_model":                   ("QWEN_MODEL", "QWEN_MODEL", "str"),
+    "kimi_model":                   ("KIMI_MODEL", "KIMI_MODEL", "str"),
+    "deepseek_model":               ("DEEPSEEK_MODEL", "DEEPSEEK_MODEL", "str"),
+    "deepseek_base_url":            ("DEEPSEEK_BASE_URL", "DEEPSEEK_BASE_URL", "str"),
+    "ollama_base_url":              ("OLLAMA_BASE_URL", "OLLAMA_BASE_URL", "str"),
+    "ollama_model":                 ("OLLAMA_MODEL", "OLLAMA_MODEL", "str"),
+    "lmstudio_base_url":            ("LMSTUDIO_BASE_URL", "LMSTUDIO_BASE_URL", "str"),
+    "lmstudio_model":               ("LMSTUDIO_MODEL", "LMSTUDIO_MODEL", "str"),
+    "llm_max_tokens":               ("LLM_MAX_TOKENS", "LLM_MAX_TOKENS", "int"),
+    "shot_generation_batch_size":   ("SHOT_GENERATION_BATCH_SIZE", "SHOT_GENERATION_BATCH_SIZE", "int"),
+    "max_parallel_batch_threads":   ("MAX_PARALLEL_BATCH_THREADS", "MAX_PARALLEL_BATCH_THREADS", "int"),
+    # Generation engines
+    "image_generation_mode":        ("IMAGE_GENERATION_MODE", "IMAGE_GENERATION_MODE", "str"),
+    "image_workflow":               ("IMAGE_WORKFLOW", "IMAGE_WORKFLOW", "str"),
+    "video_generation_mode":        ("VIDEO_GENERATION_MODE", "VIDEO_GENERATION_MODE", "str"),
+    "video_workflow":               ("VIDEO_WORKFLOW", "VIDEO_WORKFLOW", "str"),
+    "soundfx_workflow":             ("SOUNDFX_WORKFLOW", "SOUNDFX_WORKFLOW", "str"),
+    "prompt_mode":                  ("PROMPT_MODE", "DEFAULT_PROMPT_MODE", "str"),
+    # ComfyUI
+    "comfy_url":                    ("COMFY_URL", "COMFY_URL", "str"),
+    "comfy_output_dir":             ("COMFY_OUTPUT_DIR", "COMFY_OUTPUT_DIR", "str"),
+    "comfy_input_dir":              ("COMFY_INPUT_DIR", "COMFY_INPUT_DIR", "str"),
+    # Image & video defaults
+    "image_aspect_ratio":           ("IMAGE_ASPECT_RATIO", "IMAGE_ASPECT_RATIO", "str"),
+    "image_resolution":             ("IMAGE_RESOLUTION", "IMAGE_RESOLUTION", "str"),
+    "video_aspect_ratio":           ("VIDEO_ASPECT_RATIO", "VIDEO_ASPECT_RATIO", "str"),
+    "video_resolution":             ("VIDEO_RESOLUTION", "VIDEO_RESOLUTION", "str"),
+    "target_video_length":          ("TARGET_VIDEO_LENGTH", "TARGET_VIDEO_LENGTH", "int"),
+    "default_shot_length":          ("DEFAULT_SHOT_LENGTH", "DEFAULT_SHOT_LENGTH", "float"),
+    # Narration / TTS
+    "generate_narration":           ("GENERATE_NARRATION", "GENERATE_NARRATION", "bool"),
+    "tts_method":                   ("TTS_METHOD", "TTS_METHOD", "str"),
+    "tts_voice":                    ("TTS_VOICE", "TTS_VOICE", "str"),
+    "elevenlabs_model":             ("ELEVENLABS_MODEL", "ELEVENLABS_MODEL", "str"),
+    "elevenlabs_stability":         ("ELEVENLABS_STABILITY", "ELEVENLABS_STABILITY", "float"),
+    "elevenlabs_similarity":        ("ELEVENLABS_SIMILARITY", "ELEVENLABS_SIMILARITY", "float"),
+    # Performance & reliability
+    "concurrent_comfyui_limit":     ("CONCURRENT_COMFYUI_LIMIT", "CONCURRENT_COMFYUI_LIMIT", "int"),
+    "concurrent_gemini_limit":      ("CONCURRENT_GEMINI_LIMIT", "CONCURRENT_GEMINI_LIMIT", "int"),
+    "concurrent_geminiweb_limit":   ("CONCURRENT_GEMINIWEB_LIMIT", "CONCURRENT_GEMINIWEB_LIMIT", "int"),
+    "concurrent_default_limit":     ("CONCURRENT_DEFAULT_LIMIT", "CONCURRENT_DEFAULT_LIMIT", "int"),
+    "concurrent_generation_limit":  ("CONCURRENT_GENERATION_LIMIT", "CONCURRENT_GENERATION_LIMIT", "int"),
+    "flow_project_concurrency":     ("FLOW_PROJECT_CONCURRENCY", "FLOW_PROJECT_CONCURRENCY", "int"),
+    "video_render_timeout":         ("VIDEO_RENDER_TIMEOUT", "VIDEO_RENDER_TIMEOUT", "int"),
+    "image_generation_max_retries": ("IMAGE_GENERATION_MAX_RETRIES", "IMAGE_GENERATION_MAX_RETRIES", "int"),
+    "image_generation_retry_delay": ("IMAGE_GENERATION_RETRY_DELAY", "IMAGE_GENERATION_RETRY_DELAY", "int"),
+    "continue_on_partial_image_failure": ("CONTINUE_ON_PARTIAL_IMAGE_FAILURE", "CONTINUE_ON_PARTIAL_IMAGE_FAILURE", "bool"),
+    # Browser automation (GeminiWeb / Flow)
+    "geminiweb_model":              ("GEMINIWEB_MODEL", "GEMINIWEB_MODEL", "str"),
+    "geminiweb_thinking":           ("GEMINIWEB_THINKING", "GEMINIWEB_THINKING", "str"),
+    "geminiweb_default_mode":       ("GEMINIWEB_DEFAULT_MODE", "GEMINIWEB_DEFAULT_MODE", "str"),
+    "geminiweb_timeout":            ("GEMINIWEB_TIMEOUT", "GEMINIWEB_TIMEOUT", "int"),
+    "geminiweb_chat_lock_timeout":  ("GEMINIWEB_CHAT_LOCK_TIMEOUT", "GEMINIWEB_CHAT_LOCK_TIMEOUT", "int"),
+    "geminiweb_chrome_profile":     ("GEMINIWEB_CHROME_PROFILE", "GEMINIWEB_CHROME_PROFILE", "str"),
+    "flowweb_url":                  ("FLOWWEB_URL", "FLOWWEB_URL", "str"),
+    "flowweb_timeout":              ("FLOWWEB_TIMEOUT", "FLOWWEB_TIMEOUT", "int"),
+    "flow_image_model":             ("FLOW_IMAGE_MODEL", "FLOW_IMAGE_MODEL", "str"),
+    "flow_image_outputs":           ("FLOW_IMAGE_OUTPUTS", "FLOW_IMAGE_OUTPUTS", "str"),
+    # Watermark removal
+    "watermark_removal_method":     ("WATERMARK_REMOVAL_METHOD", "WATERMARK_REMOVAL_METHOD", "str"),
+    "gemini_watermark_tool_image":  ("GEMINI_WATERMARK_TOOL_IMAGE", "GEMINI_WATERMARK_TOOL_IMAGE", "str"),
+    "gemini_watermark_tool_video":  ("GEMINI_WATERMARK_TOOL_VIDEO", "GEMINI_WATERMARK_TOOL_VIDEO", "str"),
+    # Paths & storage
+    "output_dir":                   ("OUTPUT_DIR", "OUTPUT_DIR", "str"),
+    "asset_library_dirs":           ("ASSET_LIBRARY_DIRS", "ASSET_LIBRARY_DIRS", "str"),
+    # Web UI server
+    "web_ui_enabled":               ("WEB_UI_ENABLED", "WEB_UI_ENABLED", "bool"),
+    "backend_host":                 ("BACKEND_HOST", "BACKEND_HOST", "str"),
+    "backend_port":                 ("BACKEND_PORT", "BACKEND_PORT", "int"),
+    "backend_bind_host":            ("BACKEND_BIND_HOST", "BACKEND_BIND_HOST", "str"),
+    "frontend_host":                ("FRONTEND_HOST", "FRONTEND_HOST", "str"),
+    "frontend_port":                ("FRONTEND_PORT", "FRONTEND_PORT", "int"),
+    "frontend_bind_host":           ("FRONTEND_BIND_HOST", "FRONTEND_BIND_HOST", "str"),
+    "web_ui_cors_origins":          ("WEB_UI_CORS_ORIGINS", "WEB_UI_CORS_ORIGINS", "str"),
+}
 
-class UpdateConfigRequest(BaseModel):
-    """Request to update global configuration"""
-    llm_provider: Optional[str] = None
-    image_generation_mode: Optional[str] = None
-    comfy_url: Optional[str] = None
-    target_video_length: Optional[int] = None
-    gemini_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
-    deepseek_api_key: Optional[str] = None
-    elevenlabs_api_key: Optional[str] = None
-    video_workflow: Optional[str] = None
-    image_workflow: Optional[str] = None
-    soundfx_workflow: Optional[str] = None
-    playwright_browser: Optional[str] = None
-    gemini_watermark_tool_image: Optional[str] = None
-    gemini_watermark_tool_video: Optional[str] = None
-    watermark_removal_method: Optional[str] = None
-    backend_host: Optional[str] = None
-    backend_port: Optional[int] = None
-    frontend_host: Optional[str] = None
-    frontend_port: Optional[int] = None
-    backend_bind_host: Optional[str] = None
-    frontend_bind_host: Optional[str] = None
-    geminiweb_model: Optional[str] = None
-    geminiweb_thinking: Optional[str] = None
-    flow_image_model: Optional[str] = None
-    flow_image_outputs: Optional[str] = None
+# Write-only secret fields (API keys). GET never returns their values, only
+# "<field>_set": true/false flags. POST only applies non-empty values.
+_SECRET_FIELDS: Dict[str, str] = {
+    "gemini_api_key":     "GEMINI_API_KEY",
+    "openai_api_key":     "OPENAI_API_KEY",
+    "zhipu_api_key":      "ZHIPU_API_KEY",
+    "qwen_api_key":       "QWEN_API_KEY",
+    "kimi_api_key":       "KIMI_API_KEY",
+    "deepseek_api_key":   "DEEPSEEK_API_KEY",
+    "elevenlabs_api_key": "ELEVENLABS_API_KEY",
+}
+
+_FIELD_TYPE_MAP = {"str": (str, Optional[str]), "int": (int, Optional[int]),
+                   "float": (float, Optional[float]), "bool": (bool, Optional[bool])}
+
+
+def _build_update_model():
+    """Generate UpdateConfigRequest from the registry so the request model
+    always matches the editable fields (plus the special playwright_browser)."""
+    import pydantic
+    fields = {}
+    for name, (_, _, ftype) in _CONFIG_FIELDS.items():
+        fields[name] = (_FIELD_TYPE_MAP[ftype][1], None)
+    for name in _SECRET_FIELDS:
+        fields[name] = (Optional[str], None)
+    fields["playwright_browser"] = (Optional[str], None)
+    return pydantic.create_model("UpdateConfigRequest", **fields)
+
+
+UpdateConfigRequest = _build_update_model()
+
+
+def _coerce_value(value, ftype: str):
+    """Coerce an incoming value to the field's python type."""
+    if ftype == "int":
+        return int(float(value))
+    if ftype == "float":
+        return float(value)
+    if ftype == "bool":
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("1", "true", "yes", "on")
+    return str(value)
 
 
 class UpdateDirectorRequest(BaseModel):
@@ -119,44 +224,39 @@ async def get_directors():
 
 @router.get("")
 async def get_config():
-    """Get all configuration values (safe subset)"""
+    """Get all configuration values (secrets excluded, only *_set flags)"""
     try:
         import config
 
-        # Return safe configuration values
-        safe_config = {
-            "llm_provider": config.LLM_PROVIDER,
-            "image_generation_mode": config.IMAGE_GENERATION_MODE,
-            "image_workflow": getattr(config, 'IMAGE_WORKFLOW', 'flux'),
-            "video_generation_mode": getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui'),
-            "video_workflow": getattr(config, 'VIDEO_WORKFLOW', 'wan22'),
-            "soundfx_workflow": getattr(config, 'SOUNDFX_WORKFLOW', 'mmaudio'),
+        safe_config = {}
+        for name, (_, attr, ftype) in _CONFIG_FIELDS.items():
+            value = getattr(config, attr, None)
+            if value is None:
+                value = os.environ.get(_CONFIG_FIELDS[name][0], "")
+            safe_config[name] = value
+
+        # Extra read-only context for the UI dropdowns and defaults
+        safe_config.update({
             "default_story_director": getattr(config, 'DEFAULT_STORY_DIRECTOR', 'default'),
             "default_shots_director": getattr(config, 'DEFAULT_SHOTS_DIRECTOR', 'default'),
-            "comfy_url": getattr(config, 'COMFY_URL', 'http://127.0.0.1:8188'),
-            "target_video_length": getattr(config, 'TARGET_VIDEO_LENGTH', None),
             "default_max_shots": getattr(config, 'DEFAULT_MAX_SHOTS', 0),
             "available_video_workflows": list(getattr(config, 'VIDEO_WORKFLOWS', {}).keys()),
             "available_image_workflows": list(getattr(config, 'IMAGE_WORKFLOWS', {}).keys()),
             "available_soundfx_workflows": list(getattr(config, 'SOUNDFX_WORKFLOWS', {}).keys()),
+            # playwright_browser combines PLAYWRIGHT_BROWSER + PLAYWRIGHT_CHANNEL
             "playwright_browser": (
-                getattr(config, 'PLAYWRIGHT_CHANNEL', '') if getattr(config, 'PLAYWRIGHT_CHANNEL', '') in ['chrome', 'msedge'] 
+                getattr(config, 'PLAYWRIGHT_CHANNEL', '') if getattr(config, 'PLAYWRIGHT_CHANNEL', '') in ['chrome', 'msedge']
                 else getattr(config, 'PLAYWRIGHT_BROWSER', 'chromium')
             ),
-            "gemini_watermark_tool_image": getattr(config, 'GEMINI_WATERMARK_TOOL_IMAGE', ''),
-            "gemini_watermark_tool_video": getattr(config, 'GEMINI_WATERMARK_TOOL_VIDEO', ''),
-            "geminiweb_model": getattr(config, 'GEMINIWEB_MODEL', '3.8 Flash'),
-            "geminiweb_thinking": getattr(config, 'GEMINIWEB_THINKING', 'Low'),
-            "flow_image_model": getattr(config, 'FLOW_IMAGE_MODEL', 'Nano Banana 2.1'),
-            "flow_image_outputs": getattr(config, 'FLOW_IMAGE_OUTPUTS', 'x1'),
-            "watermark_removal_method": getattr(config, 'WATERMARK_REMOVAL_METHOD', 'builtin'),
-            "backend_host": getattr(config, 'BACKEND_HOST', '127.0.0.1'),
-            "backend_port": getattr(config, 'BACKEND_PORT', 8000),
-            "frontend_host": getattr(config, 'FRONTEND_HOST', '127.0.0.1'),
-            "frontend_port": getattr(config, 'FRONTEND_PORT', 3000),
-            "backend_bind_host": getattr(config, 'BACKEND_BIND_HOST', '0.0.0.0'),
-            "frontend_bind_host": getattr(config, 'FRONTEND_BIND_HOST', '0.0.0.0'),
-        }
+        })
+
+        # WEB_UI_CORS_ORIGINS is a list in config; expose it comma-separated
+        if isinstance(safe_config.get("web_ui_cors_origins"), (list, tuple)):
+            safe_config["web_ui_cors_origins"] = ",".join(safe_config["web_ui_cors_origins"])
+
+        # Secret fields: only expose whether a value is configured
+        for name, env_key in _SECRET_FIELDS.items():
+            safe_config[f"{name}_set"] = bool(getattr(config, env_key, "") or os.environ.get(env_key, ""))
 
         return safe_config
 
@@ -170,79 +270,64 @@ async def get_config():
 
 @router.post("")
 async def update_config(request: UpdateConfigRequest):
-    """Update global configuration"""
+    """Update global configuration (writes .env and applies live)"""
     try:
-        updates = {}
-        if request.llm_provider is not None:
-            updates["LLM_PROVIDER"] = request.llm_provider
-        if request.image_generation_mode is not None:
-            updates["IMAGE_GENERATION_MODE"] = request.image_generation_mode
-        if request.comfy_url is not None:
-            updates["COMFY_URL"] = request.comfy_url
-        if request.target_video_length is not None:
-            updates["TARGET_VIDEO_LENGTH"] = request.target_video_length
-        if request.gemini_api_key is not None:
-            updates["GEMINI_API_KEY"] = request.gemini_api_key
-        if request.openai_api_key is not None:
-            updates["OPENAI_API_KEY"] = request.openai_api_key
-        if request.deepseek_api_key is not None:
-            updates["DEEPSEEK_API_KEY"] = request.deepseek_api_key
-        if hasattr(request, 'video_workflow') and request.video_workflow is not None:
-            updates["VIDEO_WORKFLOW"] = request.video_workflow
-        if hasattr(request, 'image_workflow') and request.image_workflow is not None:
-            updates["IMAGE_WORKFLOW"] = request.image_workflow
-        if hasattr(request, 'soundfx_workflow') and request.soundfx_workflow is not None:
-            updates["SOUNDFX_WORKFLOW"] = request.soundfx_workflow
-        if hasattr(request, 'playwright_browser') and request.playwright_browser is not None:
-            browser = request.playwright_browser
-            if browser in ["chrome", "msedge"]:
-                updates["PLAYWRIGHT_BROWSER"] = "chromium"
-                updates["PLAYWRIGHT_CHANNEL"] = browser
-            else:
-                updates["PLAYWRIGHT_BROWSER"] = browser
-                updates["PLAYWRIGHT_CHANNEL"] = ""
-        if request.elevenlabs_api_key is not None:
-            updates["ELEVENLABS_API_KEY"] = request.elevenlabs_api_key
-        if request.gemini_watermark_tool_image is not None:
-            updates["GEMINI_WATERMARK_TOOL_IMAGE"] = request.gemini_watermark_tool_image
-        if request.gemini_watermark_tool_video is not None:
-            updates["GEMINI_WATERMARK_TOOL_VIDEO"] = request.gemini_watermark_tool_video
-        if request.geminiweb_model is not None:
-            updates["GEMINIWEB_MODEL"] = request.geminiweb_model
-        if request.geminiweb_thinking is not None:
-            updates["GEMINIWEB_THINKING"] = request.geminiweb_thinking
-        if request.flow_image_model is not None:
-            updates["FLOW_IMAGE_MODEL"] = request.flow_image_model
-        if request.flow_image_outputs is not None:
-            updates["FLOW_IMAGE_OUTPUTS"] = request.flow_image_outputs
-        if request.watermark_removal_method is not None:
-            updates["WATERMARK_REMOVAL_METHOD"] = request.watermark_removal_method
-        if request.backend_host is not None:
-            updates["BACKEND_HOST"] = request.backend_host
-        if request.backend_port is not None:
-            updates["BACKEND_PORT"] = request.backend_port
-        if request.frontend_host is not None:
-            updates["FRONTEND_HOST"] = request.frontend_host
-        if request.frontend_port is not None:
-            updates["FRONTEND_PORT"] = request.frontend_port
-        if request.backend_bind_host is not None:
-            updates["BACKEND_BIND_HOST"] = request.backend_bind_host
-        if request.frontend_bind_host is not None:
-            updates["FRONTEND_BIND_HOST"] = request.frontend_bind_host
+        import config
 
-        if updates:
-            import os
+        updates = request.model_dump(exclude_unset=True)
+        env_updates = {}   # ENV_KEY -> string value written to .env / os.environ
+        attr_updates = {}  # config attribute -> coerced python value
+
+        for name, value in updates.items():
+            if value is None:
+                continue
+
+            if name in _SECRET_FIELDS:
+                if str(value).strip() == "":
+                    continue  # empty means "keep existing key"
+                env_key = _SECRET_FIELDS[name]
+                env_updates[env_key] = str(value)
+                attr_updates[env_key] = str(value)
+                continue
+
+            if name == "playwright_browser":
+                # Browser + channel are set together: chrome/msedge select the
+                # chromium engine with a channel, everything else stands alone
+                browser = str(value)
+                if browser in ["chrome", "msedge"]:
+                    env_updates["PLAYWRIGHT_BROWSER"] = "chromium"
+                    env_updates["PLAYWRIGHT_CHANNEL"] = browser
+                    attr_updates["PLAYWRIGHT_BROWSER"] = "chromium"
+                    attr_updates["PLAYWRIGHT_CHANNEL"] = browser
+                else:
+                    env_updates["PLAYWRIGHT_BROWSER"] = browser
+                    env_updates["PLAYWRIGHT_CHANNEL"] = ""
+                    attr_updates["PLAYWRIGHT_BROWSER"] = browser
+                    attr_updates["PLAYWRIGHT_CHANNEL"] = ""
+                continue
+
+            env_key, attr, ftype = _CONFIG_FIELDS[name]
+            coerced = _coerce_value(value, ftype)
+            if name == "web_ui_cors_origins":
+                # config stores CORS origins as a list
+                coerced = [c.strip() for c in str(coerced).split(",") if c.strip()]
+            if ftype == "bool":
+                env_updates[env_key] = "true" if coerced else "false"
+            else:
+                env_updates[env_key] = str(coerced)
+            attr_updates[attr] = coerced
+
+        if env_updates:
             env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.env"))
-            update_env_config(updates, env_path=env_path)
-            
+            update_env_config(env_updates, env_path=env_path)
+
             # Reload config in the current process and environment for subprocesses
-            import config
-            import os
-            for key, value in updates.items():
-                if hasattr(config, key):
-                    setattr(config, key, value)
-                os.environ[key] = str(value)
-            
+            for attr, value in attr_updates.items():
+                if hasattr(config, attr):
+                    setattr(config, attr, value)
+            for env_key, env_value in env_updates.items():
+                os.environ[env_key] = env_value
+
         return {"status": "success", "message": "Configuration updated. Restart may be required for some changes."}
 
     except Exception as e:
