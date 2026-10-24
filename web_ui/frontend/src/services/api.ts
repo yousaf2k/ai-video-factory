@@ -782,9 +782,9 @@ class ApiClient {
   }
 
   // Logs
-  async listLLMLogs(limit = 200): Promise<LLMLogListResponse> {
+  async listLLMLogs(limit = 200, order: 'asc' | 'desc' = 'desc'): Promise<LLMLogListResponse> {
     const response = await this.client.get<LLMLogListResponse>('/api/logs/llm', {
-      params: { limit },
+      params: { limit, order },
     });
     return response.data;
   }

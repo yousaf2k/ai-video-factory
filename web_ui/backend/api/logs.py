@@ -17,16 +17,21 @@ async def list_llm_logs(
     limit: int = Query(200, ge=1, le=5000, description="Max entries to return (newest first)"),
     status: Optional[str] = Query(None, description="Filter by status: success | error"),
     provider: Optional[str] = Query(None, description="Filter by provider name"),
+    order: str = Query("desc", description="Sort by time: desc (newest first, default) | asc (oldest first)"),
 ):
     """
-    List LLM call summaries (newest first).
+    List LLM call summaries (newest first by default).
 
     Returns compact summaries (prompt preview only); fetch /api/logs/llm/{id}
     for the full input and output of a call.
     """
+    if order not in ("asc", "desc"):
+        raise HTTPException(status_code=400, detail="order must be 'asc' or 'desc'")
     try:
-        entries, total = log_service.list_llm_logs(limit=limit, status=status, provider=provider)
+        entries, total = log_service.list_llm_logs(limit=limit, status=status, provider=provider, order=order)
         return LLMLogListResponse(entries=entries, total=total, returned=len(entries))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

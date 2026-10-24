@@ -74,14 +74,19 @@ class LogService:
         limit: int = 200,
         status: Optional[str] = None,
         provider: Optional[str] = None,
+        order: str = "desc",
     ) -> Tuple[List[LLMLogEntrySummary], int]:
-        entries = self._read_entries()
-        entries.reverse()  # newest first
+        # Copy: _read_entries returns the shared cache; reversing it in place
+        # would flip the order on every call.
+        entries = list(self._read_entries())  # file order = oldest first
 
         if status:
             entries = [e for e in entries if e.get("status") == status]
         if provider:
             entries = [e for e in entries if e.get("provider", "").lower() == provider.lower()]
+
+        if order != "asc":
+            entries.reverse()  # newest first (default); asc keeps file order
 
         total = len(entries)
         summaries = [self._to_summary(e) for e in entries[:limit]]

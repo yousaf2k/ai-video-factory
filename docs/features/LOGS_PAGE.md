@@ -8,7 +8,8 @@ Every text LLM call (story generation, scene graph, shot planning, JSON repair, 
 
 ### UI
 
-- **Top section** — list of LLM calls, newest first. Each row shows status (green/red dot), time, provider, model, duration, an input preview (the error message for failed calls), and the output size.
+- **Top section** — list of LLM calls, newest first by default. Each row shows status (green/red dot), time, provider, model, duration, an input preview (the error message for failed calls), and the output size.
+- **Sort order** — click the **Time** column header to toggle newest-first / oldest-first (persisted in `localStorage`); the backend sorts via `?order=asc|desc`.
 - **Bottom section** — detail of the selected call: provider/model/timestamp/duration/char counts/response format, an error banner for failures, and **Output / Input** tabs showing the full bodies. Copy button copies the visible tab.
 - **Center splitter** — drag to resize the two sections (clamped 15–85%), double-click to reset to 45%. The position persists in `localStorage`.
 - The list auto-refreshes every 10s; the newest entry is auto-selected on load. **Clear** wipes the whole log (confirm dialog).
@@ -21,7 +22,7 @@ Calls are appended as JSON lines to `output/logs/llm_calls.jsonl` (via `config.L
 
 | Endpoint | Description |
 | --- | --- |
-| `GET /api/logs/llm?limit=&status=&provider=` | Summaries (newest first, 300-char prompt preview), default limit 200 |
+| `GET /api/logs/llm?limit=&status=&provider=&order=` | Summaries (300-char prompt preview), default limit 200, order `desc` (newest first) or `asc` |
 | `GET /api/logs/llm/{entry_id}` | Full detail: complete input prompt and output/error |
 | `DELETE /api/logs/llm` | Clear the log |
 
