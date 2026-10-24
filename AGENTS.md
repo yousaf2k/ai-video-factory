@@ -138,6 +138,7 @@ Notable defaults: `IMAGE_WORKFLOW = "krea2_reference"`, `VIDEO_WORKFLOW = "wan22
 1. Create a `.md` file in the right category: `directors/story/…` or `directors/shots/…`
 2. Use `{USER_INPUT}` for dynamic content and `{{include:name}}` for composition — name has no `.md` extension and is resolved relative to the including file's directory, its sibling subdirectories, and the director type root (e.g. `{{include:styles/style_shots_artistic}}`, `{{include:_base/base_movie_standard}}`)
 3. Reference via `--story-director {name}` or `--shots-director {name}` (subdirectory paths like `asmr/asmr_glass_cutting` work)
+4. Story generation is two-pass: Pass 1 writes a master voice-over script from `<family>/_base/master_script.md` (movie and documentary ship one; other families fall back to the documentary version), Pass 2 breaks it into scenes with the selected director — Pass 2 is authoritative for `title`/`style`
 
 Director layout:
 
@@ -147,7 +148,6 @@ directors/
 │   ├── asmr/            # ASMR glass cutting
 │   ├── documentary/     # default, netflix/youtube documentary, historical, _base/_contexts/_styles
 │   ├── movie/           # action, horror, comedy, drama, sci-fi, thriller, … + _base/_contexts/_styles
-│   ├── system/          # master_script guidelines
 │   └── then_vs_now/     # FLFI2V comparative storytelling
 └── shots/
     ├── base/            # base_shots_standard

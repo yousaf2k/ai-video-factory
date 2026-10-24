@@ -2,7 +2,7 @@
 Story Engine - Generate cinematic stories from ideas using LLM directors.
 """
 from core.llm_engine import get_provider
-from core.director_loader import load_director_prompt
+from core.director_loader import load_director_prompt, get_director_loader
 from core.logger_config import setup_director_logger
 from web_ui.backend.models.story import ProjectType
 import config
@@ -123,6 +123,31 @@ def validate_and_adjust_scene_durations(story, target_length, tolerance=0.15):
     return False, actual_total, difference, adjusted_story
 
 
+def resolve_master_script_director(director_name: str = "default") -> str:
+    """
+    Pick the Pass-1 master script director for a story director.
+
+    A story family (e.g. ``movie``, ``documentary``) ships its own Pass-1
+    prompt as ``<family>/_base/master_script.md``; families without one
+    (and bare director names) fall back to the documentary master script.
+
+    Args:
+        director_name: Name of the Pass-2 story director (may contain a
+            family prefix, e.g. "movie/horror")
+
+    Returns:
+        Director id to load for the master script pass
+    """
+    if "/" in director_name:
+        family_master = f"{director_name.split('/', 1)[0]}/_base/master_script"
+        try:
+            get_director_loader().load_prompt_raw("story", family_master)
+            return family_master
+        except (FileNotFoundError, ValueError):
+            pass
+    return "documentary/_base/master_script"
+
+
 def build_story(idea, director_name="default", target_length=None, aspect_ratio="16:9"):
     """
     Build a cinematic story from an idea using the specified director.
@@ -142,9 +167,10 @@ def build_story(idea, director_name="default", target_length=None, aspect_ratio=
     """
     provider = get_provider()
 
-    # Pass 1: Generate Master Script
+    # Pass 1: Generate Master Script (families can override via <family>/_base/master_script.md)
+    master_director = resolve_master_script_director(director_name)
     try:
-        master_prompt = load_director_prompt("story", idea, "system/master_script")
+        master_prompt = load_director_prompt("story", idea, master_director)
         if target_length:
             master_prompt = master_prompt.replace("{VIDEO_LENGTH}", str(int(target_length)))
             word_count = int(target_length * 2.5)
@@ -156,7 +182,7 @@ def build_story(idea, director_name="default", target_length=None, aspect_ratio=
         print("[WARN] Master script director not found. Generating basic story instead.")
         master_prompt = f"Write a full voice-over script for this idea: {idea}\n\nReturn JSON:\n{{\n 'title': '',\n 'style': '',\n 'master_script': ''\n}}"
 
-    print("\n[STORY] Pass 1: Generating Master Script...")
+    print(f"\n[STORY] Pass 1: Generating Master Script (director: {master_director})...")
     master_json_str = provider.ask(master_prompt, response_format="application/json")
     
     try:
@@ -203,7 +229,7 @@ Return JSON:
      "action":"",
      "emotion":"",
      "narration":"",
-     "set_prompt":"Detailed background image prompt for this scene's environment: geography, architecture and key objects with materials, weather and time of day, lighting, atmosphere. 2-3 sentences, no people.",
+     "set_prompt":"Detailed background image prompt for this scene's environment: a WIDE ESTABLISHING VIEW of the empty space — geography, architecture and key objects with materials, weather and time of day, lighting, atmosphere. Not a close-up, no camera language; 2-3 sentences, no people.",
      "scene_duration":15
    }}
  ]
@@ -221,9 +247,9 @@ Return JSON:
             # Add total_duration to story dict
             story['total_duration'] = int(target_length)
 
-            # Inject master data
-            story['title'] = master_data.get('title', story.get('title', 'Video'))
-            story['style'] = master_data.get('style', story.get('style', 'cinematic'))
+            # Inject master data (Pass 2 director is authoritative; Pass 1 fills gaps)
+            story['title'] = story.get('title') or master_data.get('title') or 'Video'
+            story['style'] = story.get('style') or master_data.get('style') or 'cinematic'
             story['master_script'] = master_script
 
             # Add aspect_ratio to story dict
@@ -239,8 +265,9 @@ Return JSON:
         # Format JSON with proper indentation even when no target_length
         try:
             story = parse_llm_json(story_json_str)
-            story['title'] = master_data.get('title', story.get('title', 'Video'))
-            story['style'] = master_data.get('style', story.get('style', 'cinematic'))
+            # Pass 2 director is authoritative; Pass 1 fills gaps
+            story['title'] = story.get('title') or master_data.get('title') or 'Video'
+            story['style'] = story.get('style') or master_data.get('style') or 'cinematic'
             story['master_script'] = master_script
 
             # Add aspect_ratio to story dict
