@@ -1143,7 +1143,7 @@ export default function ProjectDetailPage() {
         <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
           <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
             <Film className="w-5 h-5 text-primary" />
-            Shots Timeline ({project.shots.length})
+            Storyboard ({project.shots.length})
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
             {project.shots.map((shot) => (

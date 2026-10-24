@@ -883,7 +883,7 @@ export default function ProjectEditPage() {
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-border/50">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Film className="w-5 h-5 text-primary" />
-                Shots Timeline
+                Storyboard
               </h2>
               <div className="flex items-center gap-2">
                 <button

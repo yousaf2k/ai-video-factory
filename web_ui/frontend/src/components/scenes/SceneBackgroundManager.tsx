@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 
 interface SceneBackgroundManagerProps {
   scene: Scene;
@@ -32,6 +33,7 @@ export default function SceneBackgroundManager({
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [showGenModal, setShowGenModal] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { data: project } = useProject(projectId);
   // Selected background style (by name, resolved to text from styles.json
@@ -207,7 +209,11 @@ export default function SceneBackgroundManager({
             <img
               src={getMediaUrl(scene.background_image_path!)}
               alt="Scene background"
-              className="w-full h-40 object-cover rounded"
+              className="w-full h-40 object-cover rounded cursor-zoom-in"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLightboxSrc(getMediaUrl(scene.background_image_path!));
+              }}
             />
             <div className="flex gap-2 justify-center">
               {backgroundEnabled && (
@@ -320,6 +326,12 @@ export default function SceneBackgroundManager({
         defaultPromptOverride={scene.set_prompt || undefined}
         onSubmit={handleGenerateSubmit}
         title="Generate Scene Background"
+      />
+
+      <ImageLightbox
+        src={lightboxSrc}
+        alt="Scene background"
+        onClose={() => setLightboxSrc(null)}
       />
     </div>
   );
