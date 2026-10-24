@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Character } from '@/types';
 import { Sparkles, RefreshCw, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { GenerationDialog } from '../shots/GenerationDialog';
 import { api } from '@/services/api';
 import { toast } from 'sonner';
@@ -29,6 +30,7 @@ export default function CharacterReferenceUpload({
 }: CharacterReferenceUploadProps) {
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [savingPrompt, setSavingPrompt] = useState<Record<string, boolean>>({});
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   // Baseline prompts as of last persist — lets us show a Save button only
   // when the textarea actually differs from what's in story.json.
@@ -310,7 +312,11 @@ export default function CharacterReferenceUpload({
                   <img
                     src={getMediaUrl(v.ref)}
                     alt={`${v.key} reference`}
-                    className="w-full h-32 object-cover rounded"
+                    className="w-full h-32 object-cover rounded cursor-zoom-in"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLightboxSrc(getMediaUrl(v.ref!));
+                    }}
                   />
                   <div className="flex justify-center gap-3">
                     <button
@@ -379,6 +385,12 @@ export default function CharacterReferenceUpload({
           defaultPromptOverride={variants.find(v => v.key === selectedVariant)?.prompt || ""}
         />
       )}
+
+      <ImageLightbox
+        src={lightboxSrc}
+        alt="Character reference"
+        onClose={() => setLightboxSrc(null)}
+      />
     </div>
   );
 }

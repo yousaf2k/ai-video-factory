@@ -61,13 +61,18 @@ def expression_sheet_prompt(base_desc: str) -> str:
 
 
 def background_sheet_prompt(location: str, style: str = "") -> str:
-    """Environment reference for a scene — establishing view, no characters."""
+    """Strict environment reference plate for a scene — establishing view,
+    absolutely no characters."""
     return (
-        f"An empty environment reference: no characters or people present, "
-        f"clear view of the space, key props and architecture, natural lighting for the scene's time of day. "
+        f"Environment reference plate: {location}. "
+        f"This must be a pure background/environment image for compositing — "
+        f"an EMPTY scene with absolutely no characters, no people, no figures, "
+        f"no silhouettes and no faces anywhere in the frame. "
+        f"Show the whole space in a wide establishing frame: terrain, "
+        f"architecture and key stationary props with their materials, under "
+        f"natural lighting for the scene's time of day. "
         f"{style + ', ' if style else ''}"
-        f"cinematic, high detail. "
-        f"wide establishing shot of {(location or '').strip().rstrip('.')}."
+        f"cinematic, high detail, empty environment, no people."
     )
 
 

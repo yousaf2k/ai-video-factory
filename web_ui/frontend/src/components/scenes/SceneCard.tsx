@@ -356,12 +356,6 @@ export function SceneCard({
             </div>
           </div>
           
-          {scene.set_prompt && (
-            <div className="text-sm mb-2 bg-secondary/10 p-2 rounded border border-border/30">
-              <span className="text-muted-foreground font-medium">Set Prompt:</span> <span className="text-foreground/80">{scene.set_prompt}</span>
-            </div>
-          )}
-
           <div className="bg-muted/50 rounded p-2 mb-3">
             <p className="text-sm italic text-foreground leading-relaxed italic">
               "{scene.narration}"
@@ -372,10 +366,16 @@ export function SceneCard({
              <SceneBackgroundManager
                 scene={scene}
                 projectId={projectId}
-                onUpdate={() => onUpdate?.(index, scene)} 
+                onUpdate={() => onUpdate?.(index, scene)}
                 projectType={projectType}
              />
           </div>
+
+          {scene.set_prompt && (
+            <div className="text-sm mb-3 text-foreground/80 bg-secondary/10 p-2 rounded border border-border/30">
+              {scene.set_prompt}
+            </div>
+          )}
 
           {isGenerating ? (
             <div className="mt-4 space-y-2">
