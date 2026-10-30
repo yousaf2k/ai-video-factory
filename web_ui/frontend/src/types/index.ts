@@ -12,6 +12,9 @@ export enum ProjectType {
 /** Visual input strategy for shot videos (project-level). */
 export type VideoGenerationType = "t2v" | "i2v" | "r2v";
 
+/** Prompt mode for r2v projects: MiniMax H3 full-reference format flavor. */
+export type R2vMode = "standard" | "singularity";
+
 export interface MovieMetadata {
   year?: number;
   cast: string[];
@@ -61,6 +64,9 @@ export interface ProjectStats {
   narration_generated: boolean;
 }
 
+/** Last failure message per pipeline step, keyed by step name (e.g. 'story') */
+export type ProjectErrors = Record<string, string>;
+
 export interface Project {
   project_id: string;
   timestamp: string;
@@ -73,6 +79,7 @@ export interface Project {
   completed_at?: string;
   steps: ProjectStep;
   stats: ProjectStats;
+  errors?: ProjectErrors;
   thumbnail_url?: string;
   thumbnail_url_9_16?: string;
   thumbnail_url_21_8?: string;
@@ -81,6 +88,7 @@ export interface Project {
   poster_thumbnail_url_21_8?: string;
   aspect_ratio?: string;
   video_generation_type?: VideoGenerationType;
+  r2v_mode?: R2vMode;
   total_duration?: number;
   max_shot_duration?: number;
   project_type?: ProjectType; // from project metadata
@@ -211,6 +219,7 @@ export interface CreateProjectRequest {
   prompts_file?: string;
   aspect_ratio?: "16:9" | "9:16" | "21:8";
   video_generation_type?: VideoGenerationType;
+  r2v_mode?: R2vMode;
 }
 
 export interface UpdateProjectRequest {
@@ -221,6 +230,7 @@ export interface UpdateProjectRequest {
   prompt_mode?: "video" | "motion";
   aspect_ratio?: "16:9" | "9:16" | "21:8";
   video_generation_type?: VideoGenerationType;
+  r2v_mode?: R2vMode;
   max_shot_duration?: number;
 }
 
@@ -249,9 +259,15 @@ export interface GlobalConfig {
   flow_image_outputs?: string;
   // Full env-backed configuration (see backend _CONFIG_FIELDS registry)
   gemini_model?: string;
+  gemini_base_url?: string;
   openai_model?: string;
+  openai_base_url?: string;
   qwen_model?: string;
+  qwen_base_url?: string;
   kimi_model?: string;
+  kimi_base_url?: string;
+  zhipu_model?: string;
+  zhipu_base_url?: string;
   deepseek_model?: string;
   deepseek_base_url?: string;
   ollama_base_url?: string;
@@ -261,6 +277,31 @@ export interface GlobalConfig {
   llm_max_tokens?: number;
   shot_generation_batch_size?: number;
   max_parallel_batch_threads?: number;
+  // Per-provider generation tuning overrides (empty = inherit the global value above)
+  gemini_max_tokens?: string;
+  gemini_shot_batch_size?: string;
+  gemini_parallel_batch_threads?: string;
+  openai_max_tokens?: string;
+  openai_shot_batch_size?: string;
+  openai_parallel_batch_threads?: string;
+  zhipu_max_tokens?: string;
+  zhipu_shot_batch_size?: string;
+  zhipu_parallel_batch_threads?: string;
+  qwen_max_tokens?: string;
+  qwen_shot_batch_size?: string;
+  qwen_parallel_batch_threads?: string;
+  kimi_max_tokens?: string;
+  kimi_shot_batch_size?: string;
+  kimi_parallel_batch_threads?: string;
+  deepseek_max_tokens?: string;
+  deepseek_shot_batch_size?: string;
+  deepseek_parallel_batch_threads?: string;
+  ollama_max_tokens?: string;
+  ollama_shot_batch_size?: string;
+  ollama_parallel_batch_threads?: string;
+  lmstudio_max_tokens?: string;
+  lmstudio_shot_batch_size?: string;
+  lmstudio_parallel_batch_threads?: string;
   soundfx_workflow?: string;
   prompt_mode?: string;
   comfy_output_dir?: string;
@@ -334,12 +375,18 @@ export interface UpdateGlobalConfigRequest {
   flow_image_model?: string;
   flow_image_outputs?: string;
   gemini_model?: string;
+  gemini_base_url?: string;
   openai_model?: string;
+  openai_base_url?: string;
   qwen_api_key?: string;
   qwen_model?: string;
+  qwen_base_url?: string;
   kimi_api_key?: string;
   kimi_model?: string;
+  kimi_base_url?: string;
   zhipu_api_key?: string;
+  zhipu_model?: string;
+  zhipu_base_url?: string;
   deepseek_model?: string;
   deepseek_base_url?: string;
   ollama_base_url?: string;
@@ -349,6 +396,31 @@ export interface UpdateGlobalConfigRequest {
   llm_max_tokens?: number;
   shot_generation_batch_size?: number;
   max_parallel_batch_threads?: number;
+  // Per-provider generation tuning overrides (empty = inherit the global value above)
+  gemini_max_tokens?: string;
+  gemini_shot_batch_size?: string;
+  gemini_parallel_batch_threads?: string;
+  openai_max_tokens?: string;
+  openai_shot_batch_size?: string;
+  openai_parallel_batch_threads?: string;
+  zhipu_max_tokens?: string;
+  zhipu_shot_batch_size?: string;
+  zhipu_parallel_batch_threads?: string;
+  qwen_max_tokens?: string;
+  qwen_shot_batch_size?: string;
+  qwen_parallel_batch_threads?: string;
+  kimi_max_tokens?: string;
+  kimi_shot_batch_size?: string;
+  kimi_parallel_batch_threads?: string;
+  deepseek_max_tokens?: string;
+  deepseek_shot_batch_size?: string;
+  deepseek_parallel_batch_threads?: string;
+  ollama_max_tokens?: string;
+  ollama_shot_batch_size?: string;
+  ollama_parallel_batch_threads?: string;
+  lmstudio_max_tokens?: string;
+  lmstudio_shot_batch_size?: string;
+  lmstudio_parallel_batch_threads?: string;
   prompt_mode?: string;
   comfy_output_dir?: string;
   comfy_input_dir?: string;

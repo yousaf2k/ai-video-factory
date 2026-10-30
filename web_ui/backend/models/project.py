@@ -34,7 +34,9 @@ class ProjectMetadata(BaseModel):
     completed_at: Optional[str] = None
     steps: ProjectStep = Field(default_factory=ProjectStep)
     stats: ProjectStats = Field(default_factory=ProjectStats)
+    errors: Dict[str, str] = Field(default_factory=dict, description="Last failure per pipeline step (e.g. errors['story'])")
     aspect_ratio: str = "16:9"
+    r2v_mode: Optional[str] = Field(default=None, description="Prompt mode for r2v projects: 'standard' (base MiniMax H3 full-reference format) or 'singularity' (enhanced format). Absent = standard.")
 
     model_config = {
         "extra": "allow"
@@ -141,6 +143,7 @@ class CreateProjectRequest(BaseModel):
     shots_director: str = Field(default="default", description="Shots prompt director")
     prompt_mode: str = Field(default="video", description="Default prompt style for video generation: 'video' (timestamped H3 video_prompt) or 'motion' (motion_prompt)")
     video_generation_type: Optional[str] = Field(default=None, description="Visual input strategy setting (independent of project type): 't2v' (text to video), 'i2v' (image to video, default), 'r2v' (reference to video)")
+    r2v_mode: Optional[str] = Field(default=None, description="Prompt mode for r2v projects: 'standard' or 'singularity' (enhanced MiniMax H3 Singularity format)")
     total_duration: Optional[int] = Field(default=None, description="Target video length in seconds")
     max_shot_duration: Optional[float] = Field(default=None, description="Max duration of a single shot in seconds (1-15). Leave unset for the planner default (15). Use e.g. 5 for fixed-length Wan 2.2 renders.")
     prompts_file: Optional[str] = Field(default=None, description="Path to a custom prompts file")
@@ -173,6 +176,13 @@ class CreateProjectRequest(BaseModel):
             raise ValueError("video_generation_type must be 't2v', 'i2v' or 'r2v'")
         return v
 
+    @field_validator('r2v_mode')
+    @classmethod
+    def validate_r2v_mode(cls, v):
+        if v is not None and v not in ("standard", "singularity"):
+            raise ValueError("r2v_mode must be 'standard' or 'singularity'")
+        return v
+
 
 class UpdateProjectRequest(BaseModel):
     """Request to update project metadata"""
@@ -182,6 +192,7 @@ class UpdateProjectRequest(BaseModel):
     shots_director: Optional[str] = None
     prompt_mode: Optional[str] = Field(default=None, description="Default prompt style: 'video' or 'motion'")
     video_generation_type: Optional[str] = Field(default=None, description="Visual input strategy: 't2v', 'i2v' or 'r2v'")
+    r2v_mode: Optional[str] = Field(default=None, description="Prompt mode for r2v projects: 'standard' or 'singularity'")
 
     @field_validator('prompt_mode')
     @classmethod
@@ -195,6 +206,13 @@ class UpdateProjectRequest(BaseModel):
     def validate_video_generation_type(cls, v):
         if v is not None and v not in ("t2v", "i2v", "r2v"):
             raise ValueError("video_generation_type must be 't2v', 'i2v' or 'r2v'")
+        return v
+
+    @field_validator('r2v_mode')
+    @classmethod
+    def validate_r2v_mode(cls, v):
+        if v is not None and v not in ("standard", "singularity"):
+            raise ValueError("r2v_mode must be 'standard' or 'singularity'")
         return v
     aspect_ratio: Optional[str] = Field(default=None, description="Video aspect ratio (16:9, 9:16, or 21:8)")
     max_shot_duration: Optional[float] = Field(default=None, description="Max duration of a single shot in seconds (1-15); applied only when provided")

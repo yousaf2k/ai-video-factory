@@ -15,6 +15,16 @@ import uuid
 logger = setup_director_logger(__name__)
 
 
+# Common single-token LLM slips, repaired only as a last-ditch fallback when
+# strict parsing failed and the repaired text is itself re-validated by a
+# successful json.loads before being returned:
+# - a key missing its opening quote:  `,\n      emotion": "..."`  (Gemini has
+#   been observed truncating exactly the first quote of repeated keys)
+# - a trailing comma before a closing brace/bracket
+_KEY_MISSING_QUOTE_RE = re.compile(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*":)')
+_TRAILING_COMMA_RE = re.compile(r',\s*([}\]])')
+
+
 def parse_llm_json(text):
     """
     Parse JSON from an LLM response, tolerating markdown code fences
@@ -23,7 +33,8 @@ def parse_llm_json(text):
     Even when asked for response_format="application/json", providers
     sometimes wrap the payload in ```json fences or prefix it with
     prose, which plain json.loads() rejects. Strip the fences first,
-    then fall back to the outermost {...} or [...] span in the text.
+    then fall back to the outermost {...} or [...] span in the text,
+    then to repairing the common single-token slips above.
 
     Raises json.JSONDecodeError if no JSON value can be recovered.
     """
@@ -43,9 +54,61 @@ def parse_llm_json(text):
                     return json.loads(cleaned[start:end + 1])
                 except json.JSONDecodeError as e:
                     last_err = e
+        key_repaired = _KEY_MISSING_QUOTE_RE.sub(r'\1"\2\3', cleaned)
+        both_repaired = _TRAILING_COMMA_RE.sub(r'\1', key_repaired)
+        for repaired in (key_repaired, both_repaired):
+            if repaired == cleaned:
+                continue
+            try:
+                return json.loads(repaired)
+            except json.JSONDecodeError:
+                continue
         if last_err:
             raise last_err
         raise json.JSONDecodeError("No JSON found in LLM response", cleaned, 0)
+
+
+def parse_story_json_with_retry(provider, text):
+    """Parse a story LLM response, with one LLM repair pass on failure.
+
+    Raises ValueError when the response cannot be recovered — callers must
+    never fall back to the raw invalid text, which would propagate into
+    story.json and break every downstream json.loads.
+    """
+    try:
+        return parse_llm_json(text)
+    except json.JSONDecodeError as first_err:
+        logger.warning(f"Story JSON invalid ({first_err}); requesting an LLM repair pass")
+        repair_prompt = (
+            "The following text was meant to be a single valid JSON object but "
+            f"contains syntax errors ({first_err}). Return ONLY the corrected JSON "
+            "object — no markdown fences, no commentary, and no changes to the "
+            f"content:\n\n{text}"
+        )
+        try:
+            return parse_llm_json(
+                provider.ask(repair_prompt, response_format="application/json"))
+        except json.JSONDecodeError as second_err:
+            raise ValueError(
+                f"Story JSON still invalid after repair pass ({second_err}); "
+                f"response snippet: {str(text)[:300]!r}") from second_err
+
+
+def normalize_scene_ids(story):
+    """Re-index story scenes to their array position (0-based), in place.
+
+    The LLM sometimes returns 1-based scene_ids. Every downstream consumer
+    keys on 0-based positions — plan_shots injects 0-based indices into its
+    batches, background sheets are named/stamped per 0-based scene index, and
+    the r2v reference sync matches shots to backgrounds by scene_id — so a
+    story saved with the LLM's own numbering silently mismatches: backgrounds
+    attach to the wrong scene, or to none at all.
+    """
+    if isinstance(story, dict):
+        for i, scene in enumerate(story.get('scenes') or []):
+            if isinstance(scene, dict):
+                scene['scene_id'] = i
+    return story
 
 
 def validate_and_adjust_scene_durations(story, target_length, tolerance=0.15):
@@ -240,48 +303,45 @@ Return JSON:
 
     story_json_str = provider.ask(prompt, response_format="application/json")
 
-    # Merge, Validate, and Format
+    # Merge, Validate, and Format — parse_story_json_with_retry raises ValueError
+    # on unrecoverable output instead of letting raw invalid text propagate
     if target_length:
-        try:
-            story = parse_llm_json(story_json_str)
-            # Add total_duration to story dict
-            story['total_duration'] = int(target_length)
+        story = parse_story_json_with_retry(provider, story_json_str)
+        # Add total_duration to story dict
+        story['total_duration'] = int(target_length)
 
-            # Inject master data (Pass 2 director is authoritative; Pass 1 fills gaps)
-            story['title'] = story.get('title') or master_data.get('title') or 'Video'
-            story['style'] = story.get('style') or master_data.get('style') or 'cinematic'
-            story['master_script'] = master_script
+        # Inject master data (Pass 2 director is authoritative; Pass 1 fills gaps)
+        story['title'] = story.get('title') or master_data.get('title') or 'Video'
+        story['style'] = story.get('style') or master_data.get('style') or 'cinematic'
+        story['master_script'] = master_script
 
-            # Add aspect_ratio to story dict
-            story['aspect_ratio'] = aspect_ratio
+        # Add aspect_ratio to story dict
+        story['aspect_ratio'] = aspect_ratio
 
-            is_valid, actual_total, diff, adjusted_story = validate_and_adjust_scene_durations(
-                story, target_length, config.SCENE_DURATION_TOLERANCE
-            )
-            story_json_str = json.dumps(adjusted_story, ensure_ascii=False, indent=2)
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse story JSON for validation, skipping duration check")
+        is_valid, actual_total, diff, adjusted_story = validate_and_adjust_scene_durations(
+            story, target_length, config.SCENE_DURATION_TOLERANCE
+        )
+        normalize_scene_ids(adjusted_story)
+        story_json_str = json.dumps(adjusted_story, ensure_ascii=False, indent=2)
     else:
         # Format JSON with proper indentation even when no target_length
-        try:
-            story = parse_llm_json(story_json_str)
-            # Pass 2 director is authoritative; Pass 1 fills gaps
-            story['title'] = story.get('title') or master_data.get('title') or 'Video'
-            story['style'] = story.get('style') or master_data.get('style') or 'cinematic'
-            story['master_script'] = master_script
+        story = parse_story_json_with_retry(provider, story_json_str)
+        # Pass 2 director is authoritative; Pass 1 fills gaps
+        story['title'] = story.get('title') or master_data.get('title') or 'Video'
+        story['style'] = story.get('style') or master_data.get('style') or 'cinematic'
+        story['master_script'] = master_script
 
-            # Add aspect_ratio to story dict
-            story['aspect_ratio'] = aspect_ratio
+        # Add aspect_ratio to story dict
+        story['aspect_ratio'] = aspect_ratio
 
-            # Ensure scene_id in all scenes
-            if 'scenes' in story:
-                for i, scene in enumerate(story['scenes']):
-                    if 'scene_id' not in scene:
-                        scene['scene_id'] = i
+        # Ensure scene_id in all scenes
+        if 'scenes' in story:
+            for i, scene in enumerate(story['scenes']):
+                if 'scene_id' not in scene:
+                    scene['scene_id'] = i
 
-            story_json_str = json.dumps(story, ensure_ascii=False, indent=2)
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse story JSON for formatting")
+        normalize_scene_ids(story)
+        story_json_str = json.dumps(story, ensure_ascii=False, indent=2)
 
     return story_json_str
 

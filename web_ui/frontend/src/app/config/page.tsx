@@ -48,10 +48,16 @@ import { FLOW_MODELS, FLOW_OUTPUTS, DEFAULT_FLOW_MODEL, DEFAULT_FLOW_OUTPUTS } f
 // their client-side fallbacks, used to initialize the form.
 // ---------------------------------------------------------------------------
 const EDITABLE_KEYS = [
-  "llm_provider", "gemini_model", "openai_model", "qwen_model", "kimi_model",
+  "llm_provider", "gemini_model", "gemini_base_url", "openai_model",
+  "openai_base_url", "qwen_model", "qwen_base_url", "kimi_model",
+  "kimi_base_url", "zhipu_model", "zhipu_base_url",
   "deepseek_model", "deepseek_base_url", "ollama_base_url", "ollama_model",
-  "lmstudio_base_url", "lmstudio_model", "llm_max_tokens",
-  "shot_generation_batch_size", "max_parallel_batch_threads",
+  "lmstudio_base_url", "lmstudio_model",
+  "llm_max_tokens", "shot_generation_batch_size", "max_parallel_batch_threads",
+  // Per-provider generation tuning overrides (blank = inherit the global value)
+  ...(["gemini", "openai", "zhipu", "qwen", "kimi", "deepseek", "ollama", "lmstudio"].flatMap(
+    (p) => [`${p}_max_tokens`, `${p}_shot_batch_size`, `${p}_parallel_batch_threads`]
+  )),
   "gemini_api_key", "openai_api_key", "zhipu_api_key", "qwen_api_key",
   "kimi_api_key", "deepseek_api_key", "elevenlabs_api_key",
   "image_generation_mode", "image_workflow", "video_generation_mode",
@@ -102,6 +108,7 @@ const DEFAULTS: Record<string, string | number | boolean> = {
   openai_model: "gpt-4o",
   qwen_model: "qwen-max",
   kimi_model: "kimi-labs",
+  zhipu_model: "glm-5.3",
   deepseek_model: "deepseek-chat",
   deepseek_base_url: "https://api.deepseek.com",
   ollama_base_url: "http://localhost:11434",
@@ -445,6 +452,33 @@ export default function ConfigPage() {
     }
   };
 
+  const [llmTest, setLlmTest] = useState<{
+    running: boolean;
+    status?: string;
+    model?: string;
+    reply?: string;
+    error?: string;
+    elapsed_ms?: number;
+  }>({ running: false });
+
+  const handleTestLlm = async () => {
+    setLlmTest({ running: true });
+    try {
+      // Field names are uniform: {provider}_model / _api_key / _base_url.
+      // Blank values fall back to the saved config server-side.
+      const data = await api.testLlmConfig({
+        provider: selectedProvider,
+        model: String(cfg[`${selectedProvider}_model`] ?? ""),
+        api_key: String(cfg[`${selectedProvider}_api_key`] ?? ""),
+        base_url: String(cfg[`${selectedProvider}_base_url`] ?? ""),
+      });
+      setLlmTest({ running: false, ...data });
+    } catch (err: any) {
+      const detail = err.response?.data?.detail || err.message;
+      setLlmTest({ running: false, status: "error", error: detail });
+    }
+  };
+
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8 text-red-500">
@@ -463,6 +497,11 @@ export default function ConfigPage() {
       </div>
     );
   }
+
+  // The model selector beside the provider dropdown is provider-specific, as
+  // are the API key / base URL fields below it (local providers have no key)
+  const selectedProvider = String(cfg.llm_provider || "gemini");
+  const selectedProviderUsesApiKey = !["ollama", "lmstudio"].includes(selectedProvider);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -502,7 +541,7 @@ export default function ConfigPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <SelectInput
               label="LLM Provider"
-              value={String(cfg.llm_provider || "gemini")}
+              value={selectedProvider}
               onChange={(v) => set("llm_provider", v)}
               options={[
                 { value: "gemini", label: "Google Gemini" },
@@ -516,117 +555,256 @@ export default function ConfigPage() {
               ]}
               hint="Provider used for story and shot generation."
             />
-            <SelectInput
-              label="Gemini Text Model"
-              value={String(cfg.gemini_model || "gemini-3.5-flash-lite")}
-              onChange={(v) => set("gemini_model", v)}
-              options={[
-                { value: "gemini-3.5-flash-lite", label: "gemini-3.5-flash-lite (fast)" },
-                { value: "gemini-3-pro-preview", label: "gemini-3-pro-preview (quality)" },
-              ]}
-              hint="Free-text field — any Gemini model id works."
-            />
+            {selectedProvider === "gemini" && (
+              <SelectInput
+                label="Gemini Text Model"
+                value={String(cfg.gemini_model || "gemini-3.5-flash-lite")}
+                onChange={(v) => set("gemini_model", v)}
+                options={[
+                  { value: "gemini-3.5-flash-lite", label: "gemini-3.5-flash-lite (fast)" },
+                  { value: "gemini-3-pro-preview", label: "gemini-3-pro-preview (quality)" },
+                ]}
+                hint="gemini-3.5-flash-lite for speed, gemini-3-pro-preview for quality."
+              />
+            )}
+            {selectedProvider === "zhipu" && (
+              <SelectInput
+                label="Zhipu Model"
+                value={String(cfg.zhipu_model || "glm-5.3")}
+                onChange={(v) => set("zhipu_model", v)}
+                options={[
+                  { value: "glm-5.3", label: "GLM-5.3 (quality)" },
+                  { value: "glm-5.3-flash", label: "GLM-5.3-Flash (fast)" },
+                ]}
+                hint="GLM-5.3 for quality, GLM-5.3-Flash for speed."
+              />
+            )}
+            {selectedProvider === "openai" && (
+              <TextInput
+                label="OpenAI Model"
+                value={String(cfg.openai_model || "gpt-4o")}
+                onChange={(v) => set("openai_model", v)}
+                placeholder="gpt-4o"
+              />
+            )}
+            {selectedProvider === "deepseek" && (
+              <TextInput
+                label="DeepSeek Model"
+                value={String(cfg.deepseek_model || "deepseek-chat")}
+                onChange={(v) => set("deepseek_model", v)}
+                placeholder="deepseek-chat"
+                hint="deepseek-chat (V3) or deepseek-reasoner (R1)."
+              />
+            )}
+            {selectedProvider === "qwen" && (
+              <TextInput
+                label="Qwen Model"
+                value={String(cfg.qwen_model || "qwen-max")}
+                onChange={(v) => set("qwen_model", v)}
+                placeholder="qwen-max"
+              />
+            )}
+            {selectedProvider === "kimi" && (
+              <TextInput
+                label="Kimi Model"
+                value={String(cfg.kimi_model || "kimi-labs")}
+                onChange={(v) => set("kimi_model", v)}
+                placeholder="kimi-labs"
+              />
+            )}
+            {selectedProvider === "ollama" && (
+              <TextInput
+                label="Ollama Model"
+                value={String(cfg.ollama_model || "llama2")}
+                onChange={(v) => set("ollama_model", v)}
+                placeholder="llama2"
+              />
+            )}
+            {selectedProvider === "lmstudio" && (
+              <TextInput
+                label="LM Studio Model"
+                value={String(cfg.lmstudio_model || "lmstudio-community/qwen2")}
+                onChange={(v) => set("lmstudio_model", v)}
+                placeholder="lmstudio-community/qwen2"
+              />
+            )}
           </div>
 
-          <SubHeading>API Keys &amp; Models</SubHeading>
-          <p className="text-xs text-muted-foreground italic -mt-2">
-            Keys are saved to the <code>.env</code> file. Leave blank to keep existing values.
-          </p>
+          {selectedProviderUsesApiKey && (
+            <p className="text-xs text-muted-foreground italic">
+              Keys are saved to the <code>.env</code> file. Leave blank to keep existing values.
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SecretInput
-              label="Gemini API Key"
-              value={String(cfg.gemini_api_key || "")}
-              onChange={(v) => set("gemini_api_key", v)}
-              isSet={config?.gemini_api_key_set}
+            {selectedProvider === "gemini" && (
+              <>
+                <TextInput
+                  label="Gemini Base URL"
+                  value={String(cfg.gemini_base_url || "")}
+                  onChange={(v) => set("gemini_base_url", v)}
+                  placeholder="https://generativelanguage.googleapis.com"
+                />
+                <SecretInput
+                  label="Gemini API Key"
+                  value={String(cfg.gemini_api_key || "")}
+                  onChange={(v) => set("gemini_api_key", v)}
+                  isSet={config?.gemini_api_key_set}
+                />
+              </>
+            )}
+            {selectedProvider === "openai" && (
+              <>
+                <TextInput
+                  label="OpenAI Base URL"
+                  value={String(cfg.openai_base_url || "")}
+                  onChange={(v) => set("openai_base_url", v)}
+                  placeholder="https://api.openai.com/v1"
+                />
+                <SecretInput
+                  label="OpenAI API Key"
+                  value={String(cfg.openai_api_key || "")}
+                  onChange={(v) => set("openai_api_key", v)}
+                  isSet={config?.openai_api_key_set}
+                />
+              </>
+            )}
+            {selectedProvider === "zhipu" && (
+              <>
+                <TextInput
+                  label="Zhipu Base URL"
+                  value={String(cfg.zhipu_base_url || "")}
+                  onChange={(v) => set("zhipu_base_url", v)}
+                  placeholder="https://api.z.ai/api/coding/paas/v4"
+                />
+                <SecretInput
+                  label="Zhipu API Key"
+                  value={String(cfg.zhipu_api_key || "")}
+                  onChange={(v) => set("zhipu_api_key", v)}
+                  isSet={config?.zhipu_api_key_set}
+                />
+              </>
+            )}
+            {selectedProvider === "qwen" && (
+              <>
+                <TextInput
+                  label="Qwen Base URL"
+                  value={String(cfg.qwen_base_url || "")}
+                  onChange={(v) => set("qwen_base_url", v)}
+                  placeholder="https://dashscope.aliyuncs.com/api/v1"
+                />
+                <SecretInput
+                  label="Qwen API Key"
+                  value={String(cfg.qwen_api_key || "")}
+                  onChange={(v) => set("qwen_api_key", v)}
+                  isSet={config?.qwen_api_key_set}
+                />
+              </>
+            )}
+            {selectedProvider === "kimi" && (
+              <>
+                <TextInput
+                  label="Kimi Base URL"
+                  value={String(cfg.kimi_base_url || "")}
+                  onChange={(v) => set("kimi_base_url", v)}
+                  placeholder="https://api.moonshot.cn/v1"
+                />
+                <SecretInput
+                  label="Kimi API Key"
+                  value={String(cfg.kimi_api_key || "")}
+                  onChange={(v) => set("kimi_api_key", v)}
+                  isSet={config?.kimi_api_key_set}
+                />
+              </>
+            )}
+            {selectedProvider === "deepseek" && (
+              <>
+                <TextInput
+                  label="DeepSeek Base URL"
+                  value={String(cfg.deepseek_base_url || "https://api.deepseek.com")}
+                  onChange={(v) => set("deepseek_base_url", v)}
+                  placeholder="https://api.deepseek.com"
+                />
+                <SecretInput
+                  label="DeepSeek API Key"
+                  value={String(cfg.deepseek_api_key || "")}
+                  onChange={(v) => set("deepseek_api_key", v)}
+                  isSet={config?.deepseek_api_key_set}
+                />
+              </>
+            )}
+            {selectedProvider === "ollama" && (
+              <TextInput
+                label="Ollama Base URL"
+                value={String(cfg.ollama_base_url || "http://localhost:11434")}
+                onChange={(v) => set("ollama_base_url", v)}
+                placeholder="http://localhost:11434"
+              />
+            )}
+            {selectedProvider === "lmstudio" && (
+              <TextInput
+                label="LM Studio Base URL"
+                value={String(cfg.lmstudio_base_url || "http://localhost:1234")}
+                onChange={(v) => set("lmstudio_base_url", v)}
+                placeholder="http://localhost:1234"
+              />
+            )}
+          </div>
+
+          {/* Selected provider's generation tuning — blank = global default */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <NumberInput
+              label="LLM Max Tokens"
+              value={cfg[`${selectedProvider}_max_tokens`] as number}
+              onChange={(v) => set(`${selectedProvider}_max_tokens`, v === "" ? "" : String(v))}
+              step={1024}
+              min={1024}
+              hint="Blank = global default. Raise for large JSON outputs / many shots."
             />
-            <SecretInput
-              label="OpenAI API Key"
-              value={String(cfg.openai_api_key || "")}
-              onChange={(v) => set("openai_api_key", v)}
-              isSet={config?.openai_api_key_set}
+            <NumberInput
+              label="Shot Batch Size"
+              value={cfg[`${selectedProvider}_shot_batch_size`] as number}
+              onChange={(v) => set(`${selectedProvider}_shot_batch_size`, v === "" ? "" : String(v))}
+              min={1}
+              hint="Blank = global default. Scenes per LLM call."
             />
-            <TextInput
-              label="OpenAI Model"
-              value={String(cfg.openai_model || "gpt-4o")}
-              onChange={(v) => set("openai_model", v)}
-              placeholder="gpt-4o"
-            />
-            <SecretInput
-              label="Zhipu API Key"
-              value={String(cfg.zhipu_api_key || "")}
-              onChange={(v) => set("zhipu_api_key", v)}
-              isSet={config?.zhipu_api_key_set}
-            />
-            <SecretInput
-              label="Qwen API Key"
-              value={String(cfg.qwen_api_key || "")}
-              onChange={(v) => set("qwen_api_key", v)}
-              isSet={config?.qwen_api_key_set}
-            />
-            <TextInput
-              label="Qwen Model"
-              value={String(cfg.qwen_model || "qwen-max")}
-              onChange={(v) => set("qwen_model", v)}
-              placeholder="qwen-max"
-            />
-            <SecretInput
-              label="Kimi API Key"
-              value={String(cfg.kimi_api_key || "")}
-              onChange={(v) => set("kimi_api_key", v)}
-              isSet={config?.kimi_api_key_set}
-            />
-            <TextInput
-              label="Kimi Model"
-              value={String(cfg.kimi_model || "kimi-labs")}
-              onChange={(v) => set("kimi_model", v)}
-              placeholder="kimi-labs"
-            />
-            <SecretInput
-              label="DeepSeek API Key"
-              value={String(cfg.deepseek_api_key || "")}
-              onChange={(v) => set("deepseek_api_key", v)}
-              isSet={config?.deepseek_api_key_set}
-            />
-            <TextInput
-              label="DeepSeek Model"
-              value={String(cfg.deepseek_model || "deepseek-chat")}
-              onChange={(v) => set("deepseek_model", v)}
-              placeholder="deepseek-chat"
-              hint="deepseek-chat (V3) or deepseek-reasoner (R1)."
-            />
-            <TextInput
-              label="DeepSeek Base URL"
-              value={String(cfg.deepseek_base_url || "https://api.deepseek.com")}
-              onChange={(v) => set("deepseek_base_url", v)}
-              placeholder="https://api.deepseek.com"
-            />
-            <TextInput
-              label="Ollama Base URL"
-              value={String(cfg.ollama_base_url || "http://localhost:11434")}
-              onChange={(v) => set("ollama_base_url", v)}
-              placeholder="http://localhost:11434"
-            />
-            <TextInput
-              label="Ollama Model"
-              value={String(cfg.ollama_model || "llama2")}
-              onChange={(v) => set("ollama_model", v)}
-              placeholder="llama2"
-            />
-            <TextInput
-              label="LM Studio Base URL"
-              value={String(cfg.lmstudio_base_url || "http://localhost:1234")}
-              onChange={(v) => set("lmstudio_base_url", v)}
-              placeholder="http://localhost:1234"
-            />
-            <TextInput
-              label="LM Studio Model"
-              value={String(cfg.lmstudio_model || "lmstudio-community/qwen2")}
-              onChange={(v) => set("lmstudio_model", v)}
-              placeholder="lmstudio-community/qwen2"
+            <NumberInput
+              label="Parallel Batch Threads"
+              value={cfg[`${selectedProvider}_parallel_batch_threads`] as number}
+              onChange={(v) => set(`${selectedProvider}_parallel_batch_threads`, v === "" ? "" : String(v))}
+              min={1}
+              hint="Blank = global default. Cloud providers only."
             />
           </div>
 
-          <SubHeading>Generation Tuning</SubHeading>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleTestLlm}
+              disabled={llmTest.running}
+            >
+              {llmTest.running ? "Testing…" : "Test Connection"}
+            </Button>
+            {llmTest.status === "success" && (
+              <span className="text-xs text-green-600 dark:text-green-400">
+                ✓ {llmTest.model} replied &quot;{llmTest.reply}&quot; in {llmTest.elapsed_ms}ms
+              </span>
+            )}
+            {llmTest.status === "unexpected_reply" && (
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                ⚠ Connected, but unexpected reply: &quot;{llmTest.reply}&quot;
+              </span>
+            )}
+            {llmTest.status === "error" && (
+              <span className="text-xs text-red-500">✗ {llmTest.error}</span>
+            )}
+          </div>
+
+          <SubHeading>Generation Tuning (Global Defaults)</SubHeading>
+          <p className="text-xs text-muted-foreground italic -mt-2">
+            Used by providers without a per-provider override above.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <NumberInput
               label="LLM Max Tokens"

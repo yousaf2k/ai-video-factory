@@ -9,7 +9,7 @@ import json
 import math
 import re
 from config import (DEFAULT_SHOTS_PER_SCENE, MIN_SHOTS_PER_SCENE, MAX_SHOTS_PER_SCENE,
-                    SHOT_GENERATION_BATCH_SIZE, LLM_PROVIDER, MAX_PARALLEL_BATCH_THREADS,
+                    LLM_PROVIDER, get_llm_tuning,
                     DEFAULT_SHOT_LENGTH, MIN_SHOT_DURATION, MAX_SHOT_DURATION,
                     VIDEO_PROMPT_CUT_MARGIN_SECONDS)
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,6 +31,81 @@ VIDEO_PROMPT_TIMING_INSTRUCTION = (
 
 # Per-shot clip duration instruction: the LLM chooses each clip length so
 # pacing matches the action instead of a fixed default
+
+# r2v/t2v projects render from attached reference sheets instead of a
+# first-frame image, so their video prompts must come from the format-specific
+# base directors — an I2VA prompt has no subject_definitions, leaving
+# characters named but never described (their look only exists in
+# image_prompt, which r2v never renders).
+_STANDARD_SHOTS_BASE = "base/base_shots_standard"
+_R2V_SHOTS_BASE = "base/base_shots_r2v"
+_R2V_SINGULARITY_SHOTS_BASE = "base/base_shots_r2v_singularity"
+_REF_SHOTS_BASE_DIRECTORS = {"r2v": _R2V_SHOTS_BASE, "t2v": "base/base_shots_t2v"}
+
+# MiniMax H3 r2v workflow aliases: the standard checkpoint and the Singularity
+# variants (differ only in the loaded UNET). Preferred Singularity alias first;
+# any other minimax_h3_r2v_singularity* workflow is an acceptable fallback.
+DEFAULT_R2V_VIDEO_WORKFLOW = "minimax_h3_r2v"
+DEFAULT_R2V_SINGULARITY_VIDEO_WORKFLOW = "minimax_h3_r2v_singularity_v20_4s"
+_SINGULARITY_WORKFLOW_PREFIX = "minimax_h3_r2v_singularity"
+
+
+def normalize_r2v_mode(r2v_mode):
+    """Clamp an r2v prompt mode to 'standard' or 'singularity'.
+
+    Unknown/unset values (including pre-Singularity projects with no stored
+    mode) resolve to 'standard'.
+    """
+    return "singularity" if str(r2v_mode or "").strip().lower() == "singularity" else "standard"
+
+
+def _ref_shots_base(video_generation_type, r2v_mode=None):
+    """Format-correct shots base for a visual input strategy (None for i2v).
+
+    r2v projects further split by prompt mode: 'singularity' plans with the
+    enhanced Singularity base, everything else with the standard r2v base.
+    """
+    base = _REF_SHOTS_BASE_DIRECTORS.get((video_generation_type or "i2v").lower())
+    if base == _R2V_SHOTS_BASE and normalize_r2v_mode(r2v_mode) == "singularity":
+        return _R2V_SINGULARITY_SHOTS_BASE
+    return base
+
+
+def effective_r2v_video_workflow(r2v_mode, video_workflows):
+    """Best available MiniMax H3 r2v workflow alias for the project's r2v mode.
+
+    Singularity mode prefers the v2.0 Singularity checkpoint, then any other
+    Singularity variant; with none installed it falls back to the standard
+    r2v workflow (the prompts stay valid, only the tuned weights are lost).
+    Returns None when no r2v workflow is available at all.
+    """
+    aliases = set(video_workflows or {})
+    if normalize_r2v_mode(r2v_mode) == "singularity":
+        if DEFAULT_R2V_SINGULARITY_VIDEO_WORKFLOW in aliases:
+            return DEFAULT_R2V_SINGULARITY_VIDEO_WORKFLOW
+        fallbacks = sorted(a for a in aliases if a.startswith(_SINGULARITY_WORKFLOW_PREFIX))
+        if fallbacks:
+            return fallbacks[0]
+    return DEFAULT_R2V_VIDEO_WORKFLOW if DEFAULT_R2V_VIDEO_WORKFLOW in aliases else None
+
+
+def effective_shots_director(shots_director, video_generation_type="i2v", r2v_mode=None):
+    """Resolve the shots director against a project's visual input strategy.
+
+    For r2v/t2v projects, replaces the unset default or the I2VA standard
+    base with the matching format-correct base while keeping any
+    camera/style/context packs appended after it; any other explicit
+    director is left untouched. A stored sibling r2v base is also swapped
+    so changing the project's r2v mode re-targets the matching base.
+    """
+    base = _ref_shots_base(video_generation_type, r2v_mode)
+    if not base:
+        return shots_director
+    parts = [p.strip() for p in str(shots_director or "").split(",") if p.strip()]
+    swappable = {"default", _STANDARD_SHOTS_BASE, _R2V_SHOTS_BASE, _R2V_SINGULARITY_SHOTS_BASE}
+    if not parts or parts[0] in swappable:
+        parts = [base] + parts[1:]
+    return ", ".join(parts)
 
 def normalize_shot_duration_cap(max_shot_duration=None):
     """Clamp a per-project max shot duration onto the supported range.
@@ -175,7 +250,7 @@ def build_characters_block(characters):
     )
 
 
-def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_director, characters_block="", max_shot_duration=None):
+def plan_shots_batch(scenes_batch, batch_num, total_batches, max_shots_instruction, shots_director, characters_block="", max_shot_duration=None, base_override=None):
     """Plan shots for a batch of scenes"""
     duration_instruction = get_shot_duration_instruction(max_shot_duration)
     # Create scene graph for this batch
@@ -195,7 +270,8 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
     # Try to use director prompts
     try:
         user_input = f"{batch_graph}{batch_instruction}"
-        image_prompt = load_director_prompt("shots", user_input, shots_director)
+        image_prompt = load_director_prompt("shots", user_input, shots_director,
+                                            base_override=base_override)
 
         provider = get_provider()
         response = provider.ask(image_prompt, response_format="application/json")
@@ -752,7 +828,8 @@ def extract_complete_objects(json_str):
 
 
 @log_director_call
-def plan_shots(scene_graph, max_shots=None, shots_director="default", shots_per_scene=None, max_shot_duration=None):
+def plan_shots(scene_graph, max_shots=None, shots_director="default", shots_per_scene=None, max_shot_duration=None,
+               video_generation_type=None, r2v_mode=None):
     """
     Plan cinematic shots for WAN 2.2 video generation.
 
@@ -762,6 +839,8 @@ def plan_shots(scene_graph, max_shots=None, shots_director="default", shots_per_
         shots_director: Name of shots prompt director to use (default: "default")
                     Available: default, artistic
         shots_per_scene: Target number of shots per scene (optional)
+        r2v_mode: Prompt mode for r2v projects — "singularity" (enhanced
+                  full-reference format) or "standard". Ignored for i2v/t2v.
 
     Returns:
         List of shot dictionaries with image_prompt, motion_prompt, and camera
@@ -801,7 +880,13 @@ def plan_shots(scene_graph, max_shots=None, shots_director="default", shots_per_
     # Inject 0-based index into each scene so LLM knows which index to return
     for i, scene in enumerate(scenes):
         scene['scene_id'] = i
-        
+
+    # r2v/t2v projects render from reference sheets — any include of the I2VA
+    # base inside the director (named directors compose it themselves) is
+    # swapped for the format-correct base during expansion (singularity r2v
+    # projects get the enhanced Singularity base)
+    base_override = _ref_shots_base(video_generation_type, r2v_mode)
+
     scene_graph_with_indices = json.dumps(scenes, ensure_ascii=False, indent=2)
     scene_count = len(scenes)
 
@@ -872,8 +957,10 @@ IMPORTANT SHOT DISTRIBUTION:
 - Each scene MUST have at least 1 shot with different camera angles.
 """
 
-    # Use batch processing if there are many scenes to avoid truncation
-    batch_size = SHOT_GENERATION_BATCH_SIZE
+    # Use batch processing if there are many scenes to avoid truncation.
+    # Batch size and parallelism come from the active provider's tuning.
+    tuning = get_llm_tuning(LLM_PROVIDER)
+    batch_size = tuning["shot_batch_size"]
     if scene_count > batch_size:
         # Split scenes into batches
         total_batches = (scene_count + batch_size - 1) // batch_size
@@ -954,7 +1041,8 @@ CRITICAL SHOT REQUIREMENTS:
                     max_shots_instruction=batch_data['max_shots_instruction'],
                     shots_director=batch_data['shots_director'],
                     characters_block=batch_data.get('characters_block', ""),
-                    max_shot_duration=max_shot_duration
+                    max_shot_duration=max_shot_duration,
+                    base_override=base_override
                 )
 
                 # Add batch number
@@ -971,8 +1059,8 @@ CRITICAL SHOT REQUIREMENTS:
                 return result, batch_data['batch_num']
 
             # Process batches in parallel
-            max_workers = min(total_batches, MAX_PARALLEL_BATCH_THREADS)
-            logger.info(f"Using {max_workers} parallel threads (max configured: {MAX_PARALLEL_BATCH_THREADS})")
+            max_workers = min(total_batches, tuning["parallel_threads"])
+            logger.info(f"Using {max_workers} parallel threads (max configured: {tuning['parallel_threads']})")
 
             # Store results with batch numbers for later sorting
             batch_results = []
@@ -1013,7 +1101,8 @@ CRITICAL SHOT REQUIREMENTS:
                     max_shots_instruction=batch_data['max_shots_instruction'],
                     shots_director=batch_data['shots_director'],
                     characters_block=batch_data.get('characters_block', ""),
-                    max_shot_duration=max_shot_duration
+                    max_shot_duration=max_shot_duration,
+                    base_override=base_override
                 )
 
                 # Add batch number and ensure scene_index is present
@@ -1051,7 +1140,8 @@ CRITICAL SHOT REQUIREMENTS:
     # Try to use director prompts
     try:
         # Load shots director prompt
-        image_prompt = load_director_prompt("shots", user_input, shots_director)
+        image_prompt = load_director_prompt("shots", user_input, shots_director,
+                                            base_override=base_override)
 
         # Get the response
         provider = get_provider()

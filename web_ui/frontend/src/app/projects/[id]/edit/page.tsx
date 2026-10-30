@@ -21,7 +21,7 @@ import { useDirectors, useDirectorTree } from "@/hooks/useDirectors";
 import { SceneList } from "@/components/scenes/SceneList";
 import { ShotGrid } from "@/components/shots/ShotGrid";
 import { Scene, Story, Shot, ProjectType, Character } from "@/types";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import CharacterReferenceUpload from "@/components/characters/CharacterReferenceUpload";
 import { useProgress } from "@/hooks/useProgress";
@@ -501,7 +501,7 @@ export default function ProjectEditPage() {
       toast.success("Story regenerated successfully.");
     } catch (error) {
       console.error("Failed to generate story:", error);
-      toast.error("Failed to generate story. Please try again.");
+      toast.error(getApiErrorMessage(error, "Failed to generate story. Please try again."));
     }
   };
 

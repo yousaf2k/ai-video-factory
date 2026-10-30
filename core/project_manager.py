@@ -335,7 +335,12 @@ class ProjectManager:
                 synced = shot.get('synced_video_ref_asset_refs') or []
                 # Keep user-attached refs (position preserved), drop stale synced ones
                 user_refs = [r for r in original_refs if r not in synced]
-                new_refs = user_refs + refs
+                # Dedupe while preserving order: a ref attached under another
+                # tracking key (e.g. by the character-only sync) can coincide
+                # with one this sync attaches, and must not appear twice
+                seen = set()
+                new_refs = [r for r in (user_refs + refs)
+                            if not (r in seen or seen.add(r))]
                 if new_refs == original_refs:
                     continue
                 shot['reference_asset_ids'] = new_refs
@@ -501,7 +506,7 @@ class ProjectManager:
             return latest['meta']
         return None
 
-    def create_project(self, idea, project_id=None, story_director="default", shots_director="default", total_duration=None, aspect_ratio="16:9", prompt_mode="video", video_generation_type=None, max_shot_duration=None):
+    def create_project(self, idea, project_id=None, story_director="default", shots_director="default", total_duration=None, aspect_ratio="16:9", prompt_mode="video", video_generation_type=None, r2v_mode=None, max_shot_duration=None):
         """Create a new project
 
         Args:
@@ -515,6 +520,9 @@ class ProjectManager:
             video_generation_type: Visual input strategy — "i2v" (image to video,
                 today's pipeline), "r2v" (reference to video) or "t2v" (text to video).
                 Defaults to "i2v".
+            r2v_mode: Prompt mode for r2v projects — "singularity" (MiniMax H3
+                Singularity enhanced full-reference format) or "standard".
+                Anything else (including None) stores as "standard".
             max_shot_duration: Optional cap on a single shot's planned duration in
                 seconds (1-15). None leaves the planner's default range in effect.
         """
@@ -535,6 +543,14 @@ class ProjectManager:
             logger.warning(f"Unknown video_generation_type {video_generation_type!r}; defaulting to i2v")
             video_generation_type = None
 
+        from core.shot_planner import normalize_r2v_mode
+        if r2v_mode is not None and str(r2v_mode).lower() not in ("standard", "singularity"):
+            logger.warning(f"Unknown r2v_mode {r2v_mode!r}; defaulting to standard")
+            r2v_mode = None
+        # Only meaningful on r2v projects; stored normalized so the web UI and
+        # CLI read one spelling (absent key = standard, pre-Singularity projects)
+        r2v_mode = normalize_r2v_mode(r2v_mode) if (video_generation_type or 'i2v') == 'r2v' else None
+
         meta = {
             'project_id': project_id,
             'timestamp': timestamp,
@@ -543,6 +559,7 @@ class ProjectManager:
             'shots_director': shots_director,
             'prompt_mode': prompt_mode,
             'video_generation_type': video_generation_type or 'i2v',
+            'r2v_mode': r2v_mode,
             'total_duration': total_duration,
             'max_shot_duration': max_shot_duration,
             'aspect_ratio': aspect_ratio,

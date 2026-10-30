@@ -31,6 +31,18 @@ import type {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
+/**
+ * Extract a human-readable message from an axios/API error, preferring the
+ * backend's `detail` field (e.g. "Failed to regenerate story: HTTP 400 ...").
+ */
+export function getApiErrorMessage(error: unknown, fallback = 'Request failed'): string {
+  const err = error as { response?: { data?: { detail?: unknown } }; message?: string };
+  const detail = err?.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (err?.message) return err.message;
+  return fallback;
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -503,6 +515,16 @@ class ApiClient {
 
   async updateConfig(request: UpdateGlobalConfigRequest): Promise<any> {
     const response = await this.client.post('/api/config', request);
+    return response.data;
+  }
+
+  async testLlmConfig(request: {
+    provider: string;
+    model?: string;
+    api_key?: string;
+    base_url?: string;
+  }): Promise<any> {
+    const response = await this.client.post('/api/config/test-llm', request);
     return response.data;
   }
 

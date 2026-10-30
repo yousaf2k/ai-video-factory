@@ -84,6 +84,42 @@ def background_base_text(scene: dict) -> str:
     return ((scene.get('set_prompt') or scene.get('location') or '')).strip()
 
 
+# The story LLM writes set_prompt as "A WIDE ESTABLISHING VIEW of ..."; the
+# grid template assigns its own per-panel angles, so that camera wording is
+# stripped before the description is injected.
+_ESTABLISHING_VIEW_PREFIX_RE = re.compile(
+    r"^a\s+wide\s+establishing\s+(?:view|shot|frame)\s+of\s+", re.IGNORECASE)
+
+BACKGROUND_GRID_TEMPLATE = (
+    "A 2x2 grid of four panels showing the same {background_prompt} background "
+    "from four different camera angles. Empty scene, no people or characters. "
+    "Consistent location, lighting, color palette, and art style across all four panels.\n"
+    "\n"
+    "Panel 1 (top left): [ANGLE 1, e.g. \"wide establishing shot, eye level\"]\n"
+    "Panel 2 (top right): [ANGLE 2, e.g. \"low angle looking up, dramatic perspective\"]\n"
+    "Panel 3 (bottom left): [ANGLE 3, e.g. \"high angle / bird's-eye view looking down\"]\n"
+    "Panel 4 (bottom right): [ANGLE 4, e.g. \"close-up detail shot of foreground elements, shallow depth of field\"]\n"
+    "\n"
+    "Aspect ratio of each panel: {aspect_ratio}, thin even white borders between "
+    "panels, equal-sized panels, no text, no labels, no watermarks."
+)
+
+
+def background_grid_prompt(background_prompt: str, aspect_ratio: str = "16:9") -> str:
+    """Wrap a background description in the 2x2 multi-angle grid template.
+
+    One location rendered from four camera angles in a single image, so
+    reference-driven renders (r2v) see the space from every side. Strips the
+    story directors' leading "A WIDE ESTABLISHING VIEW of" camera wording —
+    Panel 1 of the template carries its own angles.
+    """
+    desc = _ESTABLISHING_VIEW_PREFIX_RE.sub("", (background_prompt or "").strip())
+    desc = desc.rstrip(".") or "scene environment"
+    return (BACKGROUND_GRID_TEMPLATE
+            .replace("{background_prompt}", desc)
+            .replace("{aspect_ratio}", (aspect_ratio or "16:9").strip()))
+
+
 def apply_background_style(prompt: str, background_style: str) -> str:
     """Append a dropdown-selected style (styles.json) to the end of a
     background prompt. Empty/None selections leave the prompt untouched."""
@@ -183,7 +219,6 @@ def ensure_character_sheets(project_manager, project_id, force=False,
 def ensure_background_sheets(project_manager, project_id, force=False, **gen_kwargs):
     """Generate missing per-scene background sheets; returns [(scene_id, rel_path)]."""
     story = project_manager.get_story(project_id) or {}
-    style = story.get('style', '')
     generated = []
     for scene in story.get('scenes') or []:
         sid = scene.get('scene_id')
@@ -193,7 +228,8 @@ def ensure_background_sheets(project_manager, project_id, force=False, **gen_kwa
         existing = scene.get('background_image_path')
         if existing and not force and _project_file_exists(project_manager, project_id, existing):
             continue
-        prompt = background_sheet_prompt(background_base_text(scene), style)
+        prompt = background_grid_prompt(
+            background_base_text(scene), gen_kwargs.get('aspect_ratio') or "16:9")
         path = _generate_sheet(project_manager, project_id, "backgrounds",
                                f"background_{sid:03d}", prompt, **gen_kwargs)
         if not path:

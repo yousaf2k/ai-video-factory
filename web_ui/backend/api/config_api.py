@@ -2,8 +2,8 @@
 Configuration API endpoints
 """
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, BeforeValidator
+from typing import Annotated, Optional
 import sys
 import os
 import re
@@ -19,6 +19,7 @@ from core.config_utils import update_env_config
 import asyncio
 import threading
 import subprocess
+import time
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/config", tags=["config"])
@@ -35,9 +36,15 @@ _CONFIG_FIELDS: Dict[str, Tuple[str, str, str]] = {
     # LLM providers
     "llm_provider":                 ("LLM_PROVIDER", "LLM_PROVIDER", "str"),
     "gemini_model":                 ("GEMINI_MODEL", "GEMINI_TEXT_MODEL", "str"),
+    "gemini_base_url":              ("GEMINI_BASE_URL", "GEMINI_BASE_URL", "str"),
     "openai_model":                 ("OPENAI_MODEL", "OPENAI_MODEL", "str"),
+    "openai_base_url":              ("OPENAI_BASE_URL", "OPENAI_BASE_URL", "str"),
+    "zhipu_base_url":               ("ZHIPU_BASE_URL", "ZHIPU_BASE_URL", "str"),
     "qwen_model":                   ("QWEN_MODEL", "QWEN_MODEL", "str"),
+    "qwen_base_url":                ("QWEN_BASE_URL", "QWEN_BASE_URL", "str"),
     "kimi_model":                   ("KIMI_MODEL", "KIMI_MODEL", "str"),
+    "kimi_base_url":                ("KIMI_BASE_URL", "KIMI_BASE_URL", "str"),
+    "zhipu_model":                  ("ZHIPU_MODEL", "ZHIPU_MODEL", "str"),
     "deepseek_model":               ("DEEPSEEK_MODEL", "DEEPSEEK_MODEL", "str"),
     "deepseek_base_url":            ("DEEPSEEK_BASE_URL", "DEEPSEEK_BASE_URL", "str"),
     "ollama_base_url":              ("OLLAMA_BASE_URL", "OLLAMA_BASE_URL", "str"),
@@ -47,6 +54,31 @@ _CONFIG_FIELDS: Dict[str, Tuple[str, str, str]] = {
     "llm_max_tokens":               ("LLM_MAX_TOKENS", "LLM_MAX_TOKENS", "int"),
     "shot_generation_batch_size":   ("SHOT_GENERATION_BATCH_SIZE", "SHOT_GENERATION_BATCH_SIZE", "int"),
     "max_parallel_batch_threads":   ("MAX_PARALLEL_BATCH_THREADS", "MAX_PARALLEL_BATCH_THREADS", "int"),
+    # Per-provider tuning overrides (empty string = inherit the global value)
+    "gemini_max_tokens":            ("GEMINI_MAX_TOKENS", "GEMINI_MAX_TOKENS", "str"),
+    "gemini_shot_batch_size":       ("GEMINI_SHOT_BATCH_SIZE", "GEMINI_SHOT_BATCH_SIZE", "str"),
+    "gemini_parallel_batch_threads": ("GEMINI_PARALLEL_BATCH_THREADS", "GEMINI_PARALLEL_BATCH_THREADS", "str"),
+    "openai_max_tokens":            ("OPENAI_MAX_TOKENS", "OPENAI_MAX_TOKENS", "str"),
+    "openai_shot_batch_size":       ("OPENAI_SHOT_BATCH_SIZE", "OPENAI_SHOT_BATCH_SIZE", "str"),
+    "openai_parallel_batch_threads": ("OPENAI_PARALLEL_BATCH_THREADS", "OPENAI_PARALLEL_BATCH_THREADS", "str"),
+    "zhipu_max_tokens":             ("ZHIPU_MAX_TOKENS", "ZHIPU_MAX_TOKENS", "str"),
+    "zhipu_shot_batch_size":        ("ZHIPU_SHOT_BATCH_SIZE", "ZHIPU_SHOT_BATCH_SIZE", "str"),
+    "zhipu_parallel_batch_threads": ("ZHIPU_PARALLEL_BATCH_THREADS", "ZHIPU_PARALLEL_BATCH_THREADS", "str"),
+    "qwen_max_tokens":              ("QWEN_MAX_TOKENS", "QWEN_MAX_TOKENS", "str"),
+    "qwen_shot_batch_size":         ("QWEN_SHOT_BATCH_SIZE", "QWEN_SHOT_BATCH_SIZE", "str"),
+    "qwen_parallel_batch_threads":  ("QWEN_PARALLEL_BATCH_THREADS", "QWEN_PARALLEL_BATCH_THREADS", "str"),
+    "kimi_max_tokens":              ("KIMI_MAX_TOKENS", "KIMI_MAX_TOKENS", "str"),
+    "kimi_shot_batch_size":         ("KIMI_SHOT_BATCH_SIZE", "KIMI_SHOT_BATCH_SIZE", "str"),
+    "kimi_parallel_batch_threads":  ("KIMI_PARALLEL_BATCH_THREADS", "KIMI_PARALLEL_BATCH_THREADS", "str"),
+    "deepseek_max_tokens":          ("DEEPSEEK_MAX_TOKENS", "DEEPSEEK_MAX_TOKENS", "str"),
+    "deepseek_shot_batch_size":     ("DEEPSEEK_SHOT_BATCH_SIZE", "DEEPSEEK_SHOT_BATCH_SIZE", "str"),
+    "deepseek_parallel_batch_threads": ("DEEPSEEK_PARALLEL_BATCH_THREADS", "DEEPSEEK_PARALLEL_BATCH_THREADS", "str"),
+    "ollama_max_tokens":            ("OLLAMA_MAX_TOKENS", "OLLAMA_MAX_TOKENS", "str"),
+    "ollama_shot_batch_size":       ("OLLAMA_SHOT_BATCH_SIZE", "OLLAMA_SHOT_BATCH_SIZE", "str"),
+    "ollama_parallel_batch_threads": ("OLLAMA_PARALLEL_BATCH_THREADS", "OLLAMA_PARALLEL_BATCH_THREADS", "str"),
+    "lmstudio_max_tokens":          ("LMSTUDIO_MAX_TOKENS", "LMSTUDIO_MAX_TOKENS", "str"),
+    "lmstudio_shot_batch_size":     ("LMSTUDIO_SHOT_BATCH_SIZE", "LMSTUDIO_SHOT_BATCH_SIZE", "str"),
+    "lmstudio_parallel_batch_threads": ("LMSTUDIO_PARALLEL_BATCH_THREADS", "LMSTUDIO_PARALLEL_BATCH_THREADS", "str"),
     # Generation engines
     "image_generation_mode":        ("IMAGE_GENERATION_MODE", "IMAGE_GENERATION_MODE", "str"),
     "image_workflow":               ("IMAGE_WORKFLOW", "IMAGE_WORKFLOW", "str"),
@@ -124,7 +156,14 @@ _SECRET_FIELDS: Dict[str, str] = {
     "elevenlabs_api_key": "ELEVENLABS_API_KEY",
 }
 
-_FIELD_TYPE_MAP = {"str": (str, Optional[str]), "int": (int, Optional[int]),
+def _stringify(v):
+    """Coerce JSON numbers/bools to string before str validation (Pydantic v2
+    refuses int->str). Number inputs for override fields send numbers."""
+    return v if v is None or isinstance(v, str) else str(v)
+
+
+_FIELD_TYPE_MAP = {"str": (str, Optional[Annotated[str, BeforeValidator(_stringify)]]),
+                   "int": (int, Optional[int]),
                    "float": (float, Optional[float]), "bool": (bool, Optional[bool])}
 
 
@@ -336,6 +375,94 @@ async def update_config(request: UpdateConfigRequest):
             status_code=500,
             detail=f"Failed to update config: {str(e)}"
         )
+
+
+# provider -> (model attr, api-key attr or None for local, base-url attr).
+# Used to overlay unsaved form values onto the saved config for live tests.
+_PROVIDER_ATTRS: Dict[str, Tuple[str, Optional[str], Optional[str]]] = {
+    "gemini":   ("GEMINI_TEXT_MODEL", "GEMINI_API_KEY", "GEMINI_BASE_URL"),
+    "openai":   ("OPENAI_MODEL", "OPENAI_API_KEY", "OPENAI_BASE_URL"),
+    "zhipu":    ("ZHIPU_MODEL", "ZHIPU_API_KEY", "ZHIPU_BASE_URL"),
+    "qwen":     ("QWEN_MODEL", "QWEN_API_KEY", "QWEN_BASE_URL"),
+    "kimi":     ("KIMI_MODEL", "KIMI_API_KEY", "KIMI_BASE_URL"),
+    "deepseek": ("DEEPSEEK_MODEL", "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL"),
+    "ollama":   ("OLLAMA_MODEL", None, "OLLAMA_BASE_URL"),
+    "lmstudio": ("LMSTUDIO_MODEL", None, "LMSTUDIO_BASE_URL"),
+}
+
+
+class TestLLMRequest(BaseModel):
+    provider: str
+    model: Optional[str] = None      # blank = use saved value
+    api_key: Optional[str] = None    # blank = use saved key
+    base_url: Optional[str] = None   # blank = saved/default endpoint
+
+
+@router.post("/test-llm")
+async def test_llm(request: TestLLMRequest):
+    """Send a tiny prompt through a provider to verify its configuration.
+
+    Uses the saved .env values overlaid with any unsaved form values, so the
+    user can test a key/endpoint before saving it.
+    """
+    try:
+        import types as _types
+        import config
+        from core.llm_engine import get_provider
+
+        attrs = _PROVIDER_ATTRS.get(request.provider)
+        if attrs is None:
+            raise HTTPException(status_code=400, detail=f"Unknown provider: {request.provider}")
+
+        # Config shim: every saved constant plus the unsaved form overrides
+        shim = _types.SimpleNamespace()
+        for attr in dir(config):
+            if attr.isupper():
+                setattr(shim, attr, getattr(config, attr))
+
+        model_attr, key_attr, base_attr = attrs
+        if request.model:
+            setattr(shim, model_attr, request.model)
+        if key_attr and request.api_key:
+            setattr(shim, key_attr, request.api_key)
+        if base_attr and request.base_url:
+            setattr(shim, base_attr, request.base_url)
+
+        provider = get_provider(request.provider, config_module=shim)
+        provider.timeout = min(provider.timeout, 60)
+
+        def _ask():
+            return provider.ask("Reply with exactly one word: PONG")
+
+        start = time.time()
+        try:
+            reply = await asyncio.wait_for(asyncio.to_thread(_ask), timeout=90)
+        except asyncio.TimeoutError:
+            return {"status": "error", "error": "Timed out after 90 seconds", "elapsed_ms": 90000}
+        elapsed_ms = int((time.time() - start) * 1000)
+        reply_text = (reply or "").strip()
+
+        if "pong" in reply_text.lower():
+            return {
+                "status": "success",
+                "provider": request.provider,
+                "model": provider.model,
+                "reply": reply_text[:200],
+                "elapsed_ms": elapsed_ms,
+            }
+        return {
+            "status": "unexpected_reply",
+            "provider": request.provider,
+            "model": provider.model,
+            "reply": reply_text[:200] or "(empty reply)",
+            "elapsed_ms": elapsed_ms,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"LLM connection test failed: {e}")
+        return {"status": "error", "error": str(e)}
 
 
 @router.get("/directors/tree")

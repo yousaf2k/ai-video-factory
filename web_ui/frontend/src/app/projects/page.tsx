@@ -40,8 +40,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { api } from "@/services/api";
-import { type CreateProjectRequest, ProjectType, type VideoGenerationType } from "@/types";
+import { api, getApiErrorMessage } from "@/services/api";
+import { type CreateProjectRequest, ProjectType, type R2vMode, type VideoGenerationType } from "@/types";
 import { formatDistanceToNow } from "date-fns";
 
 export default function ProjectsPage() {
@@ -60,6 +60,9 @@ export default function ProjectsPage() {
   const [selectedProjectType, setSelectedProjectType] = useState<number>(ProjectType.Documentary);
   // Video generation type: standalone setting, independent of project type
   const [videoGenerationType, setVideoGenerationType] = useState<VideoGenerationType>("i2v");
+  // Prompt mode for r2v projects (MiniMax H3 full-reference format flavor);
+  // defaults to the enhanced Singularity format
+  const [r2vMode, setR2vMode] = useState<R2vMode>("singularity");
   const [selectedStoryDirector, setSelectedStoryDirector] = useState("choose");
   const [selectedShotsDirector, setSelectedShotsDirector] = useState("default");
 
@@ -123,6 +126,7 @@ export default function ProjectsPage() {
       prompts_file: promptsFile.trim() || undefined,
       aspect_ratio: selectedAspectRatio,
       video_generation_type: videoGenerationType,
+      r2v_mode: videoGenerationType === "r2v" ? r2vMode : undefined,
     };
 
     try {
@@ -136,6 +140,10 @@ export default function ProjectsPage() {
         }
       } catch (storyError) {
         console.error("Failed to generate initial story:", storyError);
+        toast.error(
+          `Story generation failed: ${getApiErrorMessage(storyError, "unknown error")}. You can retry it from the project page.`,
+          { duration: 10000 }
+        );
         // Continue to the project page even if story generation fails
       }
 
@@ -491,9 +499,14 @@ export default function ProjectsPage() {
                         setVideoGenerationType(vgt);
                         // r2v/t2v need their prompt-format shots directors; keep a
                         // manual director choice unless it was one of the defaults
-                        if (vgt === "r2v") setSelectedShotsDirector("base/base_shots_r2v");
+                        if (vgt === "r2v")
+                          setSelectedShotsDirector(
+                            r2vMode === "singularity"
+                              ? "base/base_shots_r2v_singularity"
+                              : "base/base_shots_r2v"
+                          );
                         else if (vgt === "t2v") setSelectedShotsDirector("base/base_shots_t2v");
-                        else if (["default", "base/base_shots_r2v", "base/base_shots_t2v"].includes(selectedShotsDirector))
+                        else if (["default", "base/base_shots_r2v", "base/base_shots_r2v_singularity", "base/base_shots_t2v"].includes(selectedShotsDirector))
                           setSelectedShotsDirector("default");
                       }}
                     >
@@ -511,6 +524,43 @@ export default function ProjectsPage() {
                       character/background/prop reference sheets instead of first-frame images.
                     </p>
                   </div>
+
+                  {videoGenerationType === "r2v" && (
+                  <div className="ml-4 border-l-2 border-muted pl-4">
+                    <label className="block text-sm font-medium mb-1.5">
+                      Reference Mode
+                    </label>
+                    <Select
+                      value={r2vMode}
+                      onValueChange={(val) => {
+                        const mode = val as R2vMode;
+                        setR2vMode(mode);
+                        // Follow the mode with the matching r2v base director
+                        // unless the user picked a director manually
+                        if (["default", "base/base_shots_r2v", "base/base_shots_r2v_singularity"].includes(selectedShotsDirector))
+                          setSelectedShotsDirector(
+                            mode === "singularity"
+                              ? "base/base_shots_r2v_singularity"
+                              : "base/base_shots_r2v"
+                          );
+                      }}
+                    >
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Select Reference Mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="singularity">Singularity (default)</SelectItem>
+                        <SelectItem value="standard">Standard</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Singularity plans prompts with the enhanced MiniMax H3 Singularity
+                      specification (action/camera/VFX chains, physics and continuity rules) and
+                      renders on a Singularity checkpoint. Standard keeps the base full-reference
+                      format.
+                    </p>
+                  </div>
+                  )}
 
                   {selectedProjectType === ProjectType.Documentary && (
                   <div className="flex items-center space-x-2 mt-2">

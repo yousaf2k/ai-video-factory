@@ -46,6 +46,58 @@ SHOT_GENERATION_BATCH_SIZE = int(os.getenv("SHOT_GENERATION_BATCH_SIZE", "1"))  
 # Recommended: 3-5 for most APIs, 1-2 for free tier accounts
 MAX_PARALLEL_BATCH_THREADS = int(os.getenv("MAX_PARALLEL_BATCH_THREADS", "5"))  # Default: 5 parallel threads
 
+# Per-provider overrides for the three tuning values above; empty = inherit
+# the global default. Written by the Web UI; resolved via get_llm_tuning().
+GEMINI_MAX_TOKENS = os.getenv("GEMINI_MAX_TOKENS", "")
+GEMINI_SHOT_BATCH_SIZE = os.getenv("GEMINI_SHOT_BATCH_SIZE", "")
+GEMINI_PARALLEL_BATCH_THREADS = os.getenv("GEMINI_PARALLEL_BATCH_THREADS", "")
+OPENAI_MAX_TOKENS = os.getenv("OPENAI_MAX_TOKENS", "")
+OPENAI_SHOT_BATCH_SIZE = os.getenv("OPENAI_SHOT_BATCH_SIZE", "")
+OPENAI_PARALLEL_BATCH_THREADS = os.getenv("OPENAI_PARALLEL_BATCH_THREADS", "")
+ZHIPU_MAX_TOKENS = os.getenv("ZHIPU_MAX_TOKENS", "")
+ZHIPU_SHOT_BATCH_SIZE = os.getenv("ZHIPU_SHOT_BATCH_SIZE", "")
+ZHIPU_PARALLEL_BATCH_THREADS = os.getenv("ZHIPU_PARALLEL_BATCH_THREADS", "")
+QWEN_MAX_TOKENS = os.getenv("QWEN_MAX_TOKENS", "")
+QWEN_SHOT_BATCH_SIZE = os.getenv("QWEN_SHOT_BATCH_SIZE", "")
+QWEN_PARALLEL_BATCH_THREADS = os.getenv("QWEN_PARALLEL_BATCH_THREADS", "")
+KIMI_MAX_TOKENS = os.getenv("KIMI_MAX_TOKENS", "")
+KIMI_SHOT_BATCH_SIZE = os.getenv("KIMI_SHOT_BATCH_SIZE", "")
+KIMI_PARALLEL_BATCH_THREADS = os.getenv("KIMI_PARALLEL_BATCH_THREADS", "")
+DEEPSEEK_MAX_TOKENS = os.getenv("DEEPSEEK_MAX_TOKENS", "")
+DEEPSEEK_SHOT_BATCH_SIZE = os.getenv("DEEPSEEK_SHOT_BATCH_SIZE", "")
+DEEPSEEK_PARALLEL_BATCH_THREADS = os.getenv("DEEPSEEK_PARALLEL_BATCH_THREADS", "")
+OLLAMA_MAX_TOKENS = os.getenv("OLLAMA_MAX_TOKENS", "")
+OLLAMA_SHOT_BATCH_SIZE = os.getenv("OLLAMA_SHOT_BATCH_SIZE", "")
+OLLAMA_PARALLEL_BATCH_THREADS = os.getenv("OLLAMA_PARALLEL_BATCH_THREADS", "")
+LMSTUDIO_MAX_TOKENS = os.getenv("LMSTUDIO_MAX_TOKENS", "")
+LMSTUDIO_SHOT_BATCH_SIZE = os.getenv("LMSTUDIO_SHOT_BATCH_SIZE", "")
+LMSTUDIO_PARALLEL_BATCH_THREADS = os.getenv("LMSTUDIO_PARALLEL_BATCH_THREADS", "")
+
+
+def get_llm_tuning(provider=None):
+    """Resolve generation tuning for a provider.
+
+    Per-provider overrides ({PROVIDER}_MAX_TOKENS / _SHOT_BATCH_SIZE /
+    _PARALLEL_BATCH_THREADS) win when set; otherwise the global defaults
+    apply. Returns ints: {'max_tokens', 'shot_batch_size', 'parallel_threads'}.
+    """
+    prefix = str(provider or LLM_PROVIDER).upper()
+
+    def _resolve(suffix, global_value, default):
+        raw = str(globals().get(f"{prefix}_{suffix}", "") or "").strip()
+        if raw:
+            try:
+                return int(raw)
+            except ValueError:
+                pass
+        return global_value if global_value else default
+
+    return {
+        "max_tokens": _resolve("MAX_TOKENS", LLM_MAX_TOKENS, 16384),
+        "shot_batch_size": _resolve("SHOT_BATCH_SIZE", SHOT_GENERATION_BATCH_SIZE, 1),
+        "parallel_threads": _resolve("PARALLEL_BATCH_THREADS", MAX_PARALLEL_BATCH_THREADS, 5),
+    }
+
 # Maximum concurrent generations in the background queue per engine type
 # This allows separate limits for different backends (useful for local GPUs vs cloud APIs)
 CONCURRENT_GENERATION_LIMITS = {
@@ -70,6 +122,9 @@ GEMINI_API_KEY = decrypt_env_var("GEMINI_API_KEY", "")
 # Text generation model (for story, shots, etc. "gemini-3.5-flash-lite" is faster and cheaper, "gemini-3-pro-preview" is higher quality but more expensive)
 GEMINI_TEXT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
+# Optional override of the Gemini API endpoint (empty = SDK default)
+GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "")
+
 # ==========================================
 # OPENAI (CHATGPT) CONFIGURATION
 # ==========================================
@@ -79,11 +134,24 @@ OPENAI_API_KEY = decrypt_env_var("OPENAI_API_KEY", "")
 # ChatGPT model (gpt-4o is latest, gpt-4o-mini is faster/cheaper)
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
+# Optional override of the OpenAI-compatible API endpoint (empty = https://api.openai.com/v1)
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "")
+
 # ==========================================
 # ZHIPU CONFIGURATION
 # ==========================================
 # Get your API key from Z.AI platform
 ZHIPU_API_KEY = decrypt_env_var("ZHIPU_API_KEY", "")
+
+# Zhipu model (glm-5.3 is latest, glm-5.3-flash is faster/cheaper)
+ZHIPU_MODEL = os.getenv("ZHIPU_MODEL", "glm-5.3")
+
+# Optional override of the Z.AI API endpoint (empty = https://api.z.ai/api/coding/paas/v4)
+ZHIPU_BASE_URL = os.getenv("ZHIPU_BASE_URL", "")
+
+# Request timeout in seconds (reasoning models like glm-5.3 can think for minutes
+# on long story prompts; the old hardcoded 120s caused read timeouts)
+ZHIPU_TIMEOUT = int(os.getenv("ZHIPU_TIMEOUT", os.getenv("LLM_TIMEOUT", "300")))
 
 
 # ==========================================
@@ -95,6 +163,9 @@ QWEN_API_KEY = decrypt_env_var("QWEN_API_KEY", "")
 # Qwen model (qwen-max is latest)
 QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen-max")
 
+# Optional override of the DashScope API endpoint (empty = https://dashscope.aliyuncs.com/api/v1)
+QWEN_BASE_URL = os.getenv("QWEN_BASE_URL", "")
+
 # ==========================================
 # KIMI (MOONSHOT) CONFIGURATION
 # ==========================================
@@ -103,6 +174,9 @@ KIMI_API_KEY = decrypt_env_var("KIMI_API_KEY", "")
 
 # Kimi K2 2.5 model (kimi-labs is recommended)
 KIMI_MODEL = os.getenv("KIMI_MODEL", "kimi-labs")
+
+# Optional override of the Moonshot API endpoint (empty = https://api.moonshot.cn/v1)
+KIMI_BASE_URL = os.getenv("KIMI_BASE_URL", "")
 
 # ==========================================
 # DEEPSEEK CONFIGURATION

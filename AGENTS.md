@@ -20,6 +20,9 @@ python core/main.py --idea "Historical documentary" --story-director netflix_doc
 # Override workflows for a single run
 python core/main.py --idea "..." --video-workflow minimax_h3_i2v_8s --image-workflow krea2_reference
 
+# Reference-to-video with the enhanced MiniMax H3 Singularity prompt format
+python core/main.py --idea "..." --video-generation-type r2v --r2v-mode singularity
+
 # List available directors / projects / TTS voices
 python core/main.py --list-directors
 python core/main.py --list-projects
@@ -150,19 +153,21 @@ directors/
 │   ├── movie/           # action, horror, comedy, drama, sci-fi, thriller, … + _base/_contexts/_styles
 │   └── then_vs_now/     # FLFI2V comparative storytelling
 └── shots/
-    ├── base/            # base_shots_standard
+    ├── base/            # base_shots_standard, base_shots_r2v, base_shots_r2v_singularity, base_shots_t2v
     ├── cameras/         # gopro, disney/ghibli/pixar animation, imax, horror, rockstar
     ├── contexts/        # visual context packs (greek, roman, indus, gta6, prehistoric, …)
     ├── soundfx/         # soundfx_default
     ├── styles/          # artistic, ghibli, horror, pixar, vlog, …
-    └── videoprompt/     # videoprompt_minimax_h3 (MiniMax H3 prompt rules)
+    └── videoprompt/     # videoprompt_minimax_h3 (prompt rules; r2v and r2v_singularity variants for full-reference formats)
 ```
 
 Character references use a **unified schema**: a single `image_prompt` and `character_reference_image_path` per character; reference generation produces 8-view character sheets (4 full-body + 4 face close-ups). Shots directors may emit `soundfx_prompt`; blank soundfx falls back to generic sounds.
 
 ## Workflow Development
 
-- **Video** (`workflow/video/`): Wan 2.2 (t2v/i2v/FLFI2V, VFI + super-resolution variants), MiniMax H3 (`minimax_h3_i2v*.json`), LTX-2. Title tags: `[prompt]`, `[image_in]`, `[video_out]`, `[seed]`; FLFI2V uses `[image_in_first]`/`[image_in_last]`.
+- **Video** (`workflow/video/`): Wan 2.2 (t2v/i2v/FLFI2V, VFI + super-resolution variants), MiniMax H3 (`minimax_h3_i2v*.json`; r2v reference-to-video in standard and Singularity checkpoint variants — `minimax_h3_r2v*`, `minimax_h3_r2v_singularity_*`), LTX-2. Title tags: `[prompt]`, `[image_in]`, `[video_out]`, `[seed]`, `[ref_N]` (r2v reference slots); FLFI2V uses `[image_in_first]`/`[image_in_last]`.
+
+r2v prompt modes: projects with `video_generation_type: r2v` pick a `r2v_mode` — `standard` (base full-reference format, `base/base_shots_r2v`) or `singularity` (enhanced format per `docs/guides/MiniMax_H3_Singularity_Prompt_Writing_Specification_Enhanced_EN.md`, `base/base_shots_r2v_singularity`). CLI: `--r2v-mode`; web UI: Reference Mode sub-select in the new-project dialog (defaults to Singularity). Singularity mode also defaults the video workflow to a Singularity checkpoint.
 - **Image** (`workflow/image/`): Flux, Flux 2, Krea 2 reference, HiDream, Z-Image Turbo, IPAdapter (then/now). Tags: `[positive]`, `[negative]`, `[ksampler]`, `[vae]`, `[save]`; IPAdapter uses `[reference]`/`[ipadapter]`.
 - **Sound FX** (`workflow/soundfx/`): MMAudio and woosh workflows for shot SFX.
 - **Voice** (`workflow/voice/`): TTS workflows.

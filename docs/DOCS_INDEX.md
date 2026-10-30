@@ -70,7 +70,7 @@ docs/
 | [Multi-LLM Summary](guides/MULTI_LLM_SUMMARY.md) | Supported LLM providers |
 | [Gemini API](guides/GEMINI_API_SUMMARY.md) / [Gemini Web](guides/GEMINI_WEB_SUMMARY.md) | Generation backends |
 | [Logging](guides/LOGGING_README.md) / [Usage](guides/LOGGING_USAGE_SUMMARY.md) | Logging system |
-| **MiniMax H3 Prompt Guides** ([base](guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_base_en.md), [ref](guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_ref_en.md)) | Prompt-writing rules for MiniMax H3 video |
+| **MiniMax H3 Prompt Guides** ([base](guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_base_en.md), [ref](guides/Minimax_H3_VIDEO_PROMPT_WRITING_GUIDE_ref_en.md), [Singularity](guides/MiniMax_H3_Singularity_Prompt_Writing_Specification_Enhanced_EN.md)) | Prompt-writing rules for MiniMax H3 video |
 
 ### Features (`features/`)
 

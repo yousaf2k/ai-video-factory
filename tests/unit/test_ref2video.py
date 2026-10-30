@@ -28,7 +28,13 @@ from core.r2v_composer import (
     validate_composed_prompt,
     R2V_PROMPT_CHAR_LIMIT,
 )
-from core.shot_planner import validate_video_prompt
+from core.director_loader import DirectorLoader
+from core.shot_planner import (
+    validate_video_prompt,
+    effective_shots_director,
+    effective_r2v_video_workflow,
+    normalize_r2v_mode,
+)
 
 
 def _r2v_template():
@@ -239,3 +245,169 @@ class TestValidatorVariants:
         long_prompt = R2V_PROMPT + " " + "x" * 7000
         problems = validate_video_prompt(long_prompt, prompt_kind="r2v")
         assert any("7000" in p for p in problems)
+
+
+class TestEffectiveShotsDirector:
+    def test_r2v_swaps_unset_and_standard_base(self):
+        assert effective_shots_director("default", "r2v") == "base/base_shots_r2v"
+        assert effective_shots_director(None, "r2v") == "base/base_shots_r2v"
+        assert effective_shots_director("base/base_shots_standard", "r2v") == "base/base_shots_r2v"
+
+    def test_r2v_keeps_packs_after_base(self):
+        assert (effective_shots_director(
+            "base/base_shots_standard, cameras/gopro, styles/ghibli", "r2v")
+            == "base/base_shots_r2v, cameras/gopro, styles/ghibli")
+
+    def test_t2v_uses_t2v_base(self):
+        assert effective_shots_director("default", "t2v") == "base/base_shots_t2v"
+
+    def test_i2v_and_unknown_types_untouched(self):
+        assert effective_shots_director("base/base_shots_standard", "i2v") == "base/base_shots_standard"
+        assert effective_shots_director("default", None) == "default"
+        assert effective_shots_director("default", "weird") == "default"
+
+    def test_explicit_ref_director_untouched(self):
+        assert effective_shots_director("base/base_shots_r2v", "r2v") == "base/base_shots_r2v"
+
+    def test_r2v_singularity_mode_targets_singularity_base(self):
+        assert (effective_shots_director("default", "r2v", "singularity")
+                == "base/base_shots_r2v_singularity")
+        assert (effective_shots_director(None, "r2v", "singularity")
+                == "base/base_shots_r2v_singularity")
+        assert (effective_shots_director("base/base_shots_standard", "r2v", "singularity")
+                == "base/base_shots_r2v_singularity")
+
+    def test_r2v_mode_change_swaps_sibling_r2v_base(self):
+        # switching modes after creation re-targets the matching base
+        assert (effective_shots_director("base/base_shots_r2v", "r2v", "singularity")
+                == "base/base_shots_r2v_singularity")
+        assert (effective_shots_director("base/base_shots_r2v_singularity", "r2v", "standard")
+                == "base/base_shots_r2v")
+
+    def test_r2v_unset_or_unknown_mode_stays_standard(self):
+        assert effective_shots_director("default", "r2v", None) == "base/base_shots_r2v"
+        assert effective_shots_director("default", "r2v", "weird") == "base/base_shots_r2v"
+
+    def test_r2v_singularity_keeps_packs_after_base(self):
+        assert (effective_shots_director(
+            "default, cameras/gopro, styles/ghibli", "r2v", "singularity")
+            == "base/base_shots_r2v_singularity, cameras/gopro, styles/ghibli")
+
+    def test_singularity_mode_ignored_for_other_types(self):
+        assert effective_shots_director("default", "i2v", "singularity") == "default"
+        assert effective_shots_director("default", "t2v", "singularity") == "base/base_shots_t2v"
+
+
+class TestNormalizeR2vMode:
+    def test_unknown_and_unset_values_resolve_to_standard(self):
+        assert normalize_r2v_mode(None) == "standard"
+        assert normalize_r2v_mode("") == "standard"
+        assert normalize_r2v_mode("weird") == "standard"
+
+    def test_singularity_spelling_normalized(self):
+        assert normalize_r2v_mode("singularity") == "singularity"
+        assert normalize_r2v_mode(" Singularity ") == "singularity"
+
+
+class TestEffectiveR2vVideoWorkflow:
+    _STD = "minimax_h3_r2v"
+    _SING_V20 = "minimax_h3_r2v_singularity_v20_4s"
+
+    def test_standard_mode_uses_standard_workflow(self):
+        aliases = {self._STD, self._SING_V20}
+        assert effective_r2v_video_workflow("standard", aliases) == self._STD
+        assert effective_r2v_video_workflow(None, aliases) == self._STD
+
+    def test_singularity_mode_prefers_v20_checkpoint(self):
+        aliases = {self._STD, "minimax_h3_r2v_singularity_v13_4s",
+                   "minimax_h3_r2v_singularity_v13_8s", self._SING_V20}
+        assert effective_r2v_video_workflow("singularity", aliases) == self._SING_V20
+
+    def test_singularity_mode_falls_back_to_other_singularity_variants(self):
+        aliases = {self._STD, "minimax_h3_r2v_singularity_v13_4s",
+                   "minimax_h3_r2v_singularity_v13_8s"}
+        assert (effective_r2v_video_workflow("singularity", aliases)
+                == "minimax_h3_r2v_singularity_v13_4s")
+
+    def test_singularity_mode_falls_back_to_standard_workflow(self):
+        # no Singularity checkpoint installed: prompts stay valid on the
+        # standard H3 r2v model, only the tuned weights are lost
+        assert effective_r2v_video_workflow("singularity", {self._STD}) == self._STD
+
+    def test_no_r2v_workflow_available_returns_none(self):
+        assert effective_r2v_video_workflow("standard", {"wan22_workflow"}) is None
+        assert effective_r2v_video_workflow("singularity", {}) is None
+
+
+class TestLoaderBaseOverride:
+    """r2v/t2v planning must convert named directors that compose the I2VA
+    base (e.g. horror_movie) by swapping that include at expansion time."""
+
+    def test_named_director_defaults_to_i2va(self):
+        prompt = DirectorLoader().load_prompt("shots", "horror_movie")
+        assert "For the target video, at 0.00 seconds" in prompt
+        assert "subject_definitions" not in prompt
+
+    def test_named_director_converted_for_r2v(self):
+        prompt = DirectorLoader().load_prompt(
+            "shots", "horror_movie", base_override="base/base_shots_r2v")
+        assert "subject_definitions" in prompt
+        assert "For the target video, at 0.00 seconds" not in prompt
+        # the director's own packs and input placeholder survive the swap
+        assert "{USER_INPUT}" in prompt
+        assert "horror" in prompt.lower()
+
+    def test_default_director_converted_for_t2v(self):
+        prompt = DirectorLoader().load_prompt(
+            "shots", "default", base_override="base/base_shots_t2v")
+        assert "For the target video, at 0.00 seconds" not in prompt
+
+    def test_missing_base_include_left_alone_without_override(self):
+        loader = DirectorLoader()
+        default_prompt = loader.load_prompt("shots", "default")
+        assert "For the target video, at 0.00 seconds" in default_prompt
+
+    def test_named_director_passes_through_string_resolution(self):
+        # string-level resolution leaves named directors alone; the loader
+        # override is what converts their format
+        assert effective_shots_director("horror_movie", "r2v") == "horror_movie"
+
+
+class TestSingularityDirectors:
+    """The r2v Singularity mode must load its own base/videoprompt pair and
+    convert I2VA-composing directors with the enhanced format."""
+
+    def test_singularity_base_loads_with_enhanced_rules(self):
+        prompt = DirectorLoader().load_prompt("shots", "base/base_shots_r2v_singularity")
+        assert "subject_definitions" in prompt
+        assert "{USER_INPUT}" in prompt
+        # enhanced-format markers from the Singularity specification
+        assert "Action chains" in prompt
+        assert "retention_analysis" in prompt
+        assert "overall_soundscape" in prompt
+
+    def test_named_director_converted_for_singularity(self):
+        prompt = DirectorLoader().load_prompt(
+            "shots", "horror_movie", base_override="base/base_shots_r2v_singularity")
+        assert "subject_definitions" in prompt
+        assert "For the target video, at 0.00 seconds" not in prompt
+        # the director's own packs and input placeholder survive the swap
+        assert "{USER_INPUT}" in prompt
+        assert "horror" in prompt.lower()
+        assert "Action chains" in prompt
+
+    def test_singularity_prompt_passes_r2v_validation(self):
+        # the enhanced format keeps the six named sections, so the r2v
+        # structural validation accepts it unchanged
+        singularity_prompt = (
+            'id="x1"\n\n'
+            'subject_definitions:\n<Subject 1>: the warrior in <Picture 1>\n'
+            '<Environment>: the courtyard in <Picture 2>\n\n'
+            'summary:\n[reference generation] the warrior charges.\n\n'
+            'retention_analysis:\n<Subject 1> (appears in [Shot 1]): fully_preserved - keeps identity\n\n'
+            'detailed_description:\nThe target video is live-action.\n'
+            '[Shot 1] A wide shot establishes the courtyard.\n\n'
+            'overall_soundscape: wind, footsteps, metal.\n\n'
+            'non_diegetic_music: N/A'
+        )
+        assert validate_video_prompt(singularity_prompt, prompt_kind="r2v") == []
