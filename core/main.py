@@ -53,7 +53,8 @@ STEP_NAMES = {
 
 from core.story_engine import build_story, build_story_then_vs_now, build_story_asmr_glass_cutting
 from core.scene_graph import build_scene_graph
-from core.shot_planner import plan_shots, effective_shots_director
+from core.shot_planner import (plan_shots, effective_shots_director,
+                               effective_r2v_video_workflow)
 from core.prompt_compiler import load_workflow, compile_workflow
 from core.comfy_client import submit, wait_for_prompt_completion
 from core.render_monitor import wait_until_idle
@@ -62,7 +63,7 @@ from core.project_manager import ProjectManager
 
 
 def plan_shots_with_cast(graph, story_json, max_shots=None, shots_director="default", shots_per_scene=None,
-                         max_shot_duration=None):
+                         max_shot_duration=None, video_generation_type=None, r2v_mode=None):
     """
     plan_shots with the story's cast injected (scenes themselves unchanged from
     the scene graph), so shot prompts name the characters consistently and each
@@ -74,7 +75,8 @@ def plan_shots_with_cast(graph, story_json, max_shots=None, shots_director="defa
         story_data = {}
     payload = {'scenes': graph, 'characters': story_data.get('characters') or []}
     return plan_shots(payload, max_shots=max_shots, shots_director=shots_director, shots_per_scene=shots_per_scene,
-                      max_shot_duration=max_shot_duration)
+                      max_shot_duration=max_shot_duration, video_generation_type=video_generation_type,
+                      r2v_mode=r2v_mode)
 
 
 def generate_unique_video_filename(videos_dir, shot_idx):
@@ -1177,6 +1179,9 @@ def _continue_existing_project(project_id, project_meta, project_mgr, args=None)
     if llm_config:
         config.LLM_PROVIDER = llm_config.get('provider', config.LLM_PROVIDER)
         config.LLM_MAX_TOKENS = llm_config.get('max_tokens', config.LLM_MAX_TOKENS)
+        # Providers resolve {PROVIDER}_MAX_TOKENS first, so pin it too to
+        # keep the project's value in effect for the resumed run
+        setattr(config, f"{config.LLM_PROVIDER.upper()}_MAX_TOKENS", str(config.LLM_MAX_TOKENS))
         model = llm_config.get('text_model')
         if model and model != "unknown":
             if config.LLM_PROVIDER == "gemini":
@@ -1233,7 +1238,8 @@ def _continue_existing_project(project_id, project_meta, project_mgr, args=None)
     shots_director = director_config.get('shots', config.SHOTS_DIRECTOR)
     # Guard against stored/unset I2VA directors on r2v/t2v projects
     shots_director = effective_shots_director(
-        shots_director, project_meta.get('video_generation_type'))
+        shots_director, project_meta.get('video_generation_type'),
+        project_meta.get('r2v_mode'))
 
     # Get narration config
     narration_config = project_meta.get('narration_config', {})
@@ -1382,13 +1388,19 @@ def run_new_project(project_mgr, args=None):
 
     # Create new project
     video_generation_type = getattr(args, 'video_generation_type', None) if args else None
+    r2v_mode = getattr(args, 'r2v_mode', None) if args else None
     if video_generation_type in ('r2v', 't2v') and not getattr(args, 'video_workflow', None):
         # r2v/t2v imply the MiniMax H3 r2v workflow (t2v = same workflow with
-        # zero refs attached) unless the user explicitly overrode --video-workflow
-        if 'minimax_h3_r2v' in getattr(config, 'VIDEO_WORKFLOWS', {}):
-            config.VIDEO_WORKFLOW = 'minimax_h3_r2v'
-            print(f"[INFO] video_generation_type '{video_generation_type}': defaulting video workflow to minimax_h3_r2v")
-    project_id, project_meta = project_mgr.create_project(idea, video_generation_type=video_generation_type)
+        # zero refs attached); r2v + --r2v-mode singularity implies a Singularity
+        # checkpoint workflow — unless the user explicitly overrode --video-workflow
+        _wf_alias = effective_r2v_video_workflow(
+            r2v_mode if video_generation_type == 'r2v' else None,
+            getattr(config, 'VIDEO_WORKFLOWS', {}))
+        if _wf_alias:
+            config.VIDEO_WORKFLOW = _wf_alias
+            print(f"[INFO] video_generation_type '{video_generation_type}': defaulting video workflow to {_wf_alias}")
+    project_id, project_meta = project_mgr.create_project(idea, video_generation_type=video_generation_type,
+                                                          r2v_mode=r2v_mode)
 
     logger.info(f"Project created: {project_id}")
     # Store LLM config in project
@@ -1446,8 +1458,9 @@ def run_new_project(project_mgr, args=None):
     shots_director = getattr(args, 'shots_director', None) or config.SHOTS_DIRECTOR
 
     # r2v/t2v projects need their prompt-format directors; swap the unset
-    # default or the I2VA standard base for the matching one (packs kept)
-    _resolved_shots_director = effective_shots_director(shots_director, video_generation_type)
+    # default or the I2VA standard base for the matching one (packs kept).
+    # r2v + singularity mode targets the enhanced Singularity base
+    _resolved_shots_director = effective_shots_director(shots_director, video_generation_type, r2v_mode)
     if _resolved_shots_director != shots_director:
         print(f"[INFO] video_generation_type '{video_generation_type}': shots director set to {_resolved_shots_director}")
     shots_director = _resolved_shots_director
@@ -1650,7 +1663,9 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
         print("\nSTEP 4: Shot Planning")
         planner_max_duration = (project_meta.get('video_config') or {}).get('max_shot_duration')
         shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_director=shots_director,
-                                     shots_per_scene=shots_per_scene, max_shot_duration=planner_max_duration)
+                                     shots_per_scene=shots_per_scene, max_shot_duration=planner_max_duration,
+                                     video_generation_type=project_meta.get('video_generation_type'),
+                                     r2v_mode=project_meta.get('r2v_mode'))
         # Enhance motion prompts with trigger keywords for LoRA activation
         shots = enhance_motion_prompts_with_triggers(shots)
         project_mgr.save_shots(project_id, shots)
@@ -1962,7 +1977,9 @@ def _run_manual_mode(project_id, project_meta, project_mgr, idea, image_mode, ne
                 print("\nSTEP 4: Shot Planning")
                 planner_max_duration = (project_meta.get('video_config') or {}).get('max_shot_duration')
                 shots = plan_shots_with_cast(graph, story_json, max_shots=max_shots, shots_director=shots_director,
-                                             shots_per_scene=shots_per_scene, max_shot_duration=planner_max_duration)
+                                             shots_per_scene=shots_per_scene, max_shot_duration=planner_max_duration,
+                                             video_generation_type=project_meta.get('video_generation_type'),
+                                             r2v_mode=project_meta.get('r2v_mode'))
                 # Enhance motion prompts with trigger keywords for LoRA activation
                 shots = enhance_motion_prompts_with_triggers(shots)
                 project_mgr.save_shots(project_id, shots)
@@ -2804,6 +2821,17 @@ Testing Options:
         help='Visual input strategy for a new project: t2v (text to video, no images), '
              'i2v (image to video, today\'s default), r2v (reference to video: '
              'character/background/prop reference sheets, no first-frame images)'
+    )
+
+    parser.add_argument(
+        '--r2v-mode',
+        type=str,
+        default=None,
+        choices=['standard', 'singularity'],
+        help='Prompt mode for --video-generation-type r2v: standard (base MiniMax H3 '
+             'full-reference format) or singularity (enhanced MiniMax H3 Singularity '
+             'format: action/camera/VFX chains, physics and continuity rules). '
+             'Singularity also defaults the video workflow to a Singularity checkpoint.'
     )
 
     parser.add_argument(

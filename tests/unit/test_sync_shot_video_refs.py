@@ -137,6 +137,22 @@ class TestSyncShotVideoRefs:
         assert refs.count(f"p/{pid}/images/character_00_001.png") == 0
         assert user_ref in refs and len(refs) == 5
 
+    def test_no_duplicate_when_ref_attached_by_other_sync(self, r2v_project, projects_dir):
+        """A ref attached under another tracking key (e.g. the character-only
+        sync that ran after a web UI replan) coincides with one this sync
+        attaches — it must not appear twice in reference_asset_ids."""
+        pm, pid = r2v_project
+        baker_sheet = "output/projects/%s/images/character_00_001.png" % pid
+        _write_shots(projects_dir, pid, [
+            {"index": 1, "scene_id": 0, "characters": ["Baker"],
+             "reference_asset_ids": [baker_sheet],
+             "synced_character_asset_refs": [baker_sheet]},
+        ])
+        pm.sync_shot_video_refs(pid)
+        refs = _read_shots(projects_dir, pid)[0]["reference_asset_ids"]
+        assert refs.count(baker_sheet) == 1
+        assert len(refs) == len(set(refs))
+
     def test_skips_non_r2v_projects(self, projects_dir):
         pm = ProjectManager(projects_dir=projects_dir)
         pid = "project_i2v"

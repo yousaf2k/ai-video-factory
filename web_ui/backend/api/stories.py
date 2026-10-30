@@ -8,7 +8,6 @@ import os
 import json
 import logging
 import asyncio
-import uuid
 import shutil
 
 # Add parent directory to path
@@ -278,6 +277,21 @@ async def update_story(project_id: str, request: UpdateStoryRequest):
         )
 
 
+def _record_story_error(project_id: str, message: str) -> None:
+    """Persist (or clear with an empty message) the story step error in project
+    meta so clients can tell a failed story generation from a pending one."""
+    def _set_error(current_meta):
+        errors = current_meta.setdefault('errors', {})
+        if message:
+            errors['story'] = message
+        else:
+            errors.pop('story', None)
+    try:
+        project_manager.update_meta_safely(project_id, _set_error)
+    except Exception:
+        logger.warning("Could not record story error for %s", project_id)
+
+
 @router.post("/generate")
 async def generate_story(project_id: str, request: RegenerateStoryRequest):
     """Generate story with new director"""
@@ -326,6 +340,7 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
                 current_meta['steps']['story'] = True
                 current_meta['stats']['total_shots'] = len(shots)
             meta = project_manager.update_meta_safely(project_id, mark_asmr_story_meta) or meta
+            _record_story_error(project_id, "")
 
             return {
                 "story": story,
@@ -359,7 +374,8 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
                 current_meta['steps']['shots'] = True
                 current_meta['stats']['total_shots'] = len(shots)
             project_manager.update_meta_safely(project_id, mark_thenvsnow_meta)
-            
+            _record_story_error(project_id, "")
+
             logger.info(f"ThenVsNow story regenerated with {len(shots)} shots")
             return project_service.get_project(project_id)
         else:
@@ -375,6 +391,7 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
                 pass
             # Save story
             project_manager.save_story(project_id, story_json)
+            _record_story_error(project_id, "")
 
         # Return updated project
         return project_service.get_project(project_id)
@@ -386,6 +403,7 @@ async def generate_story(project_id: str, request: RegenerateStoryRequest):
         )
     except Exception as e:
         logger.error(f"Error regenerating story: {e}")
+        _record_story_error(project_id, str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to regenerate story: {str(e)}"
@@ -446,15 +464,18 @@ async def upload_character_reference(
                 detail="File must be an image"
             )
 
-        # Create references directory
-        import config
-        references_dir = os.path.join(project_dir, "references")
-        os.makedirs(references_dir, exist_ok=True)
+        # Save into images/ alongside generated character sheets: uploads and
+        # generation share one versioned filename family
+        # (shot_{idx}_{variant}_{version}), like the background upload pair
+        # shares backgrounds/.
+        images_dir = os.path.join(project_dir, "images")
+        os.makedirs(images_dir, exist_ok=True)
 
-        # Generate unique filename
         file_extension = os.path.splitext(file.filename)[1] if file.filename else '.png'
-        unique_filename = f"{uuid.uuid4().hex[:8]}_{variant}_ref{file_extension}"
-        file_path = os.path.join(references_dir, unique_filename)
+        next_version = generation_service._get_next_image_version(
+            images_dir, character_index, variant)
+        unique_filename = f"shot_{character_index:03d}_{variant}_{next_version:03d}{file_extension}"
+        file_path = os.path.join(images_dir, unique_filename)
 
         # Save uploaded file
         with open(file_path, 'wb') as f:
@@ -462,7 +483,7 @@ async def upload_character_reference(
 
         # Update character model on the FRESH story under the project lock
         field_name = f"{variant}_reference_image_path"
-        relative_path = f"output/projects/{project_id}/references/{unique_filename}"
+        relative_path = f"output/projects/{project_id}/images/{unique_filename}"
 
         def set_character_ref(current_story):
             current_characters = current_story.get('characters', [])

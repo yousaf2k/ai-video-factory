@@ -41,6 +41,13 @@ DIRECTOR_TYPES = {
     'shots': 'Shots prompt engineering director',
 }
 
+# Include spellings that pull in the I2VA shots base director. When a project
+# plans with a reference-based prompt format (r2v/t2v), these includes are
+# swapped for the format-correct base — named directors (horror_movie,
+# pixar_animation, ...) compose the I2VA base themselves, so the swap must
+# happen wherever the include is expanded, not just in the director string.
+_I2VA_BASE_INCLUDES = {"base/base_shots_standard", "base_shots_standard"}
+
 # Directories holding shared/base component files (not selectable as run directors)
 BASE_DIR_NAMES = {"base", "common", "cameras", "contexts", "styles", "soundfx", "videoprompt"}
 
@@ -226,13 +233,19 @@ class DirectorLoader:
 
         return tree
 
-    def load_prompt(self, director_type: str, director_name: str = "default") -> str:
+    def load_prompt(self, director_type: str, director_name: str = "default",
+                    base_override: Optional[str] = None) -> str:
         """
         Load a system prompt for a specific director.
 
         Args:
             director_type: Type of director ('story', 'shots')
             director_name: Name of the director (default: "default")
+            base_override: When set, any include of the I2VA shots base
+                (base/base_shots_standard) resolved inside the director is
+                replaced by this base director (e.g. base/base_shots_r2v).
+                Used to convert named/composed directors to the r2v/t2v
+                prompt format.
 
         Returns:
             The system prompt as a string
@@ -249,7 +262,7 @@ class DirectorLoader:
             names = [n.strip() for n in director_name.split(",")]
             contents = []
             for name in names:
-                contents.append(self.load_prompt(director_type, name))
+                contents.append(self.load_prompt(director_type, name, base_override=base_override))
             return "\n\n".join(contents)
 
         director_file = self._resolve_director_file(director_type, director_name)
@@ -263,10 +276,11 @@ class DirectorLoader:
 
         with open(director_file, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         # Process includes recursively
         # Use parent folder of director_file as initial base_dir
-        return self._process_includes(director_type, content, {str(director_file.resolve())}, base_dir=director_file.parent)
+        return self._process_includes(director_type, content, {str(director_file.resolve())},
+                                      base_dir=director_file.parent, base_override=base_override)
 
     def load_prompt_segments(self, director_type: str, director_name: str = "default") -> dict:
         """
@@ -379,29 +393,37 @@ class DirectorLoader:
                 return p
         return None
 
-    def _process_includes(self, director_type: str, content: str, seen_paths: Set[str] = None, base_dir: Path = None) -> str:
+    def _process_includes(self, director_type: str, content: str, seen_paths: Set[str] = None,
+                          base_dir: Path = None, base_override: Optional[str] = None) -> str:
         """
         Process {{include:path}} directives in the content.
-        
+
         Args:
             director_type: Type of director
             content: The prompt content to process
             seen_paths: Set of already seen file paths (for circular dependency protection)
             base_dir: Base directory for resolving includes (defaults to directors_dir/director_type)
-            
+            base_override: When set, includes of the I2VA shots base are
+                resolved to this base director instead (r2v/t2v conversion)
+
         Returns:
             Content with inclusions resolved
         """
         if seen_paths is None:
             seen_paths = set()
-        
+
         if base_dir is None:
             base_dir = self.directors_dir / director_type
 
         include_pattern = re.compile(r'\{\{include:(.+?)\}\}')
-        
+
         def replace_include(match):
             include_name = match.group(1).strip()
+
+            if base_override and include_name in _I2VA_BASE_INCLUDES:
+                logger.info(f"[DIRECTOR] Prompt format override: swapping include "
+                            f"{include_name} -> {base_override}")
+                include_name = base_override
 
             include_file = self._resolve_include_path(include_name, base_dir, director_type)
 
@@ -479,7 +501,8 @@ class DirectorLoader:
 
         logger.info(f"Saved director prompt: {director_file}")
 
-    def format_prompt(self, director_type: str, user_input: str, director_name: str = "default") -> str:
+    def format_prompt(self, director_type: str, user_input: str, director_name: str = "default",
+                      base_override: Optional[str] = None) -> str:
         """
         Load and format a system prompt with user input.
 
@@ -487,11 +510,13 @@ class DirectorLoader:
             director_type: Type of director ('story', 'shots')
             user_input: The user input to insert into the prompt
             director_name: Name of the director (default: "default")
+            base_override: Swap the I2VA shots base include for this base
+                director (r2v/t2v prompt format conversion)
 
         Returns:
             Formatted prompt with user input inserted
         """
-        prompt = self.load_prompt(director_type, director_name)
+        prompt = self.load_prompt(director_type, director_name, base_override=base_override)
         return prompt.replace("{USER_INPUT}", user_input)
 
     def get_director_info(self, director_type: str) -> dict:
@@ -541,7 +566,8 @@ def get_director_loader() -> DirectorLoader:
     return _director_loader
 
 
-def load_director_prompt(director_type: str, user_input: str, director_name: str = "default") -> str:
+def load_director_prompt(director_type: str, user_input: str, director_name: str = "default",
+                         base_override: Optional[str] = None) -> str:
     """
     Convenience function to load and format an director prompt.
 
@@ -549,12 +575,14 @@ def load_director_prompt(director_type: str, user_input: str, director_name: str
         director_type: Type of director ('story', 'shots')
         user_input: The user input to insert into the prompt
         director_name: Name of the director (default: "default")
+        base_override: Swap the I2VA shots base include for this base
+            director (r2v/t2v prompt format conversion)
 
     Returns:
         Formatted prompt ready to send to LLM
     """
     loader = get_director_loader()
-    return loader.format_prompt(director_type, user_input, director_name)
+    return loader.format_prompt(director_type, user_input, director_name, base_override=base_override)
 
 
 def list_directors() -> list:

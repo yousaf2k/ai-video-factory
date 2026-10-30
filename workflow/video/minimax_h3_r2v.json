@@ -294,7 +294,7 @@
   },
   "137": {
     "inputs": {
-      "image": "red_superboy_on_city_roof.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -303,7 +303,7 @@
   },
   "138": {
     "inputs": {
-      "value": "Bold comic-book ink style, heavy linework, red and blue-black palette, night city. Use <Picture 2> and <Picture 1> as reference frames and <Audio 1> exactly as it is.\nCUT 1: top-down view of the little boy superhero on the rooftop — red cape fluttering in the wind, hands planted on his hips, freckles and a cocky grin as he looks straight up into the camera. The camera slowly descends toward him as he delivers his line — as he speaks, comic-book graphic overlay text word by word in sync with his voice: \"GET READY TO\" - \"MEET\" — \"YOUR\" — \"MAKER\" — huge jagged comic lettering, white with heavy black outlines and red drop shadows, tilted at scrappy angles, until the three words hang stacked in the air above him between his face and the lens.\nTRANSITION: a violent WHIP PAN off the rooftop that SMEARS the floating words away with it, motion-streaked —\nCUT 2: low hero angle on the colossal black mech-kaiju towering over the skyline as it rears back and unleashes a GIANT terrifying ROAR — jaws wide with fangs, red eyes and chest-core flaring blinding bright, blue lightning arcing off its head, the roar's shockwave rippling dust and rattling windows down the buildings, comic-style speed-lines and ink splatter bursting from the impact of the sound. It leans INTO the camera as the roar peaks. Hold on the roar."
+      "value": ""
     },
     "class_type": "PrimitiveStringMultiline",
     "_meta": {
@@ -312,7 +312,7 @@
   },
   "139": {
     "inputs": {
-      "image": "fearsome-mechanical-dragon-glowing-orange-eyes-internal-lights-roaring-amidst-dramatic-lightning-storm-heavy-rain-409598565.webp"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -402,7 +402,7 @@
   },
   "147": {
     "inputs": {
-      "image": "red_superboy_on_city_roof.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -411,7 +411,7 @@
   },
   "148": {
     "inputs": {
-      "image": "red_superboy_on_city_roof.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -420,7 +420,7 @@
   },
   "149": {
     "inputs": {
-      "image": "red_superboy_on_city_roof.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -429,7 +429,7 @@
   },
   "150": {
     "inputs": {
-      "image": "red_superboy_on_city_roof.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -438,7 +438,7 @@
   },
   "151": {
     "inputs": {
-      "image": "red_superboy_on_city_roof.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -447,7 +447,7 @@
   },
   "152": {
     "inputs": {
-      "image": "red_superboy_on_city_roof.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -456,7 +456,7 @@
   },
   "153": {
     "inputs": {
-      "image": "red_superboy_on_city_roof.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {

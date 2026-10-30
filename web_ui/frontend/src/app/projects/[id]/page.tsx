@@ -9,7 +9,7 @@ import { useProject } from "@/hooks/useProjects";
 import { formatDistanceToNow } from "date-fns";
 import { getMediaUrl } from "@/lib/utils";
 import { useState } from "react";
-import { api } from "@/services/api";
+import { api, getApiErrorMessage } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, ImageIcon, X, Copy, Globe, Search, MessageSquare, Tag, Upload } from "lucide-react";
@@ -55,6 +55,7 @@ export default function ProjectDetailPage() {
   const [imageVersion, setImageVersion] = useState<number>(Date.now());
   const [isUpdatingAspectRatio, setIsUpdatingAspectRatio] = useState(false);
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
+  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
 
   // Regeneration Modal State
   const [showRegenModal, setShowRegenModal] = useState<{
@@ -122,9 +123,24 @@ export default function ProjectDetailPage() {
       toast.success("Thumbnail uploaded successfully!");
     } catch (error) {
       console.error(`Failed to upload ${aspectRatio} thumbnail:`, error);
-      toast.error("Failed to upload thumbnail.");
+      toast.error("Failed to upload thumbnail. Please try again.");
     } finally {
       setGeneratingThumbnails((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleGenerateStory = async () => {
+    try {
+      setIsGeneratingStory(true);
+      await api.generateStory(projectId, project?.story_director || "default");
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("Story generated successfully!");
+    } catch (error) {
+      console.error("Failed to generate story:", error);
+      toast.error(getApiErrorMessage(error, "Failed to generate story. Please try again."));
+    } finally {
+      setIsGeneratingStory(false);
     }
   };
 
@@ -279,6 +295,38 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Story missing / failed banner — without a story the pipeline is stuck
+          here, so offer an explicit (re)try instead of a perpetual "In Progress" */}
+      {!project.completed && project.steps && !project.steps.story && (
+        <div className="mb-8 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+              <p className="text-sm font-semibold text-amber-500">
+                {project.errors?.story ? "Story generation failed" : "Story not generated yet"}
+              </p>
+            </div>
+            {project.errors?.story ? (
+              <p className="text-xs text-muted-foreground break-words">
+                {project.errors.story}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Generate the story to unlock scenes, shots, and rendering.
+              </p>
+            )}
+          </div>
+          <Button onClick={handleGenerateStory} disabled={isGeneratingStory} className="shrink-0">
+            <RefreshCw className={`w-4 h-4 mr-2 ${isGeneratingStory ? "animate-spin" : ""}`} />
+            {isGeneratingStory
+              ? "Generating Story..."
+              : project.errors?.story
+                ? "Retry Story Generation"
+                : "Generate Story"}
+          </Button>
+        </div>
+      )}
 
       <Tabs defaultValue="workspace" className="space-y-6">
         <TabsList className="bg-muted p-1 border rounded-lg">

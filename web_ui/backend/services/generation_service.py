@@ -149,6 +149,19 @@ class GenerationService:
             else:
                 self._vgt_cache.clear()
 
+    def _get_project_r2v_mode(self, project_id: str) -> str:
+        """Prompt mode for r2v projects: 'standard' or 'singularity'.
+
+        Reads meta per call (used only at replan/render decision points, not
+        per queue poll); non-r2v projects and pre-Singularity projects (no
+        stored mode) resolve to 'standard'.
+        """
+        if self._get_project_video_generation_type(project_id) != 'r2v':
+            return 'standard'
+        meta = self.project_manager.load_project(project_id) or {}
+        from core.shot_planner import normalize_r2v_mode
+        return normalize_r2v_mode(meta.get('r2v_mode'))
+
     def _get_relative_path(self, path: str) -> str:
         """Convert absolute path to relative format using ProjectManager utility"""
         return self.project_manager.relativize_path(path)
@@ -872,13 +885,12 @@ class GenerationService:
             if not scene:
                 raise ValueError(f"Scene {item.scene_id} not found in story")
 
-            set_prompt = scene.get('set_prompt')
             # Background sheets are built from the scene's set_prompt (the
             # story LLM writes the detailed environment description there);
-            # location is the fallback for older stories.
-            if self._get_project_video_generation_type(item.project_id) == 'r2v':
-                from core.sheet_generator import background_sheet_prompt, background_base_text
-                set_prompt = background_sheet_prompt(background_base_text(scene), story.get('style', ''))
+            # location is the fallback for older stories. generate_scene_background
+            # wraps the description in the 2x2 multi-angle grid template.
+            from core.sheet_generator import background_base_text
+            set_prompt = background_base_text(scene)
 
             # Call generate_scene_background with overrides from the queue item
             await self.generate_scene_background(
@@ -3014,6 +3026,12 @@ class GenerationService:
             if background_style:
                 from core.sheet_generator import apply_background_style
                 set_prompt = apply_background_style(set_prompt, background_style)
+            # Final image is a 2x2 multi-angle background sheet; the project's
+            # aspect ratio labels each panel
+            from core.sheet_generator import background_grid_prompt
+            project_meta = self.project_manager.load_project(project_id) or {}
+            set_prompt = background_grid_prompt(
+                set_prompt, project_meta.get('aspect_ratio') or "16:9")
             actual_workflow = workflow if workflow else "flux"
 
             logger.info(f"Generating background for scene {scene_id} using prompt: {set_prompt[:60]}... (workflow: {actual_workflow}, mode: {image_mode})")
@@ -3244,9 +3262,11 @@ class GenerationService:
                 max_shot_duration = project_meta.get('max_shot_duration')
 
             # r2v/t2v projects must be planned with their prompt-format
-            # directors; requests default to the standard I2VA director
+            # directors; requests default to the standard I2VA director.
+            # r2v + singularity mode plans with the enhanced Singularity base
+            _r2v_mode = project_meta.get('r2v_mode')
             shots_director = effective_shots_director(
-                shots_director, project_meta.get('video_generation_type'))
+                shots_director, project_meta.get('video_generation_type'), _r2v_mode)
 
             if is_then_vs_now:
                 logger.info(f"Detected ThenVsNow project for {project_id}, using specialized shot generator")
@@ -3260,7 +3280,9 @@ class GenerationService:
                     story_json,
                     max_shots=max_shots,
                     shots_director=shots_director,
-                    max_shot_duration=max_shot_duration
+                    max_shot_duration=max_shot_duration,
+                    video_generation_type=project_meta.get('video_generation_type'),
+                    r2v_mode=_r2v_mode
                 )
             else:
                 # Run standard planner in thread pool to avoid blocking
@@ -3269,18 +3291,25 @@ class GenerationService:
                     story_json,
                     max_shots=max_shots,
                     shots_director=shots_director,
-                    max_shot_duration=max_shot_duration
+                    max_shot_duration=max_shot_duration,
+                    video_generation_type=project_meta.get('video_generation_type'),
+                    r2v_mode=_r2v_mode
                 )
 
             # Save shots
             self.project_manager.save_shots(project_id, shots)
 
             # Fresh shots don't have the characters' reference images attached
-            # yet — re-attach them as asset references where characters have one.
+            # yet — re-attach them as asset references. r2v projects use the
+            # video-reference sync (character sheet + background + props, in
+            # priority order); it supersedes the character-only sync there.
             try:
-                self.project_manager.sync_character_asset_refs(project_id)
+                if (project_meta.get('video_generation_type') or 'i2v') == 'r2v':
+                    self.project_manager.sync_shot_video_refs(project_id)
+                else:
+                    self.project_manager.sync_character_asset_refs(project_id)
             except Exception as sync_err:
-                logger.warning(f"Could not sync character asset refs after replan: {sync_err}")
+                logger.warning(f"Could not sync asset refs after replan: {sync_err}")
 
             logger.info(f"Re-planned {len(shots)} shots")
             return shots
@@ -3723,6 +3752,18 @@ class GenerationService:
             # Determine workflow path and resolve alias if needed
             if not workflow_path:
                 workflow_path = getattr(config, 'VIDEO_WORKFLOW', 'wan22')
+                # r2v + singularity projects render on a Singularity checkpoint:
+                # unless the global default already targets one, swap in the
+                # project mode's workflow (explicit per-request choice above wins)
+                if (_vgt == 'r2v'
+                        and self._get_project_r2v_mode(project_id) == 'singularity'
+                        and 'singularity' not in str(workflow_path).lower()):
+                    from core.shot_planner import effective_r2v_video_workflow
+                    singularity_alias = effective_r2v_video_workflow(
+                        'singularity', getattr(config, 'VIDEO_WORKFLOWS', {}))
+                    if singularity_alias:
+                        logger.info(f"[R2V] Singularity project: video workflow {workflow_path} -> {singularity_alias}")
+                        workflow_path = singularity_alias
 
             # If workflow_path is an alias in VIDEO_WORKFLOWS, resolve it to the actual file path
             video_workflows = getattr(config, 'VIDEO_WORKFLOWS', {})

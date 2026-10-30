@@ -17,7 +17,7 @@
   },
   "114": {
     "inputs": {
-      "image": "shot_002_001.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -50,7 +50,7 @@
   "121": {
     "inputs": {
       "resize_type": "scale by multiplier",
-      "resize_type.scale": 2,
+      "resize_type.scale": 4,
       "quality": "ULTRA",
       "strength": 1,
       "image_encoding": "8-bit RGB",
@@ -66,7 +66,7 @@
   },
   "122": {
     "inputs": {
-      "image": "shot_002_001.png"
+      "image": ""
     },
     "class_type": "LoadImage",
     "_meta": {
@@ -235,7 +235,7 @@
   },
   "105_104": {
     "inputs": {
-      "prompt": "integrated_multimodal_description:\n\n[Shot 1] Cinematic 2D animated rural drama, matching the exact visual style, character design, environment, lighting, colours, and composition of the reference image. A middle-aged-to-elderly farmer kneels in the dry, cracked field, wearing a loose off-white traditional shirt, dark trousers, sandals, and a dark headband. He grips a wooden farming tool with both hands and prepares to strike the parched ground. His face looks tired and focused. The green rice fields, terraced hills, palm trees, small rural houses, and warm late-afternoon sunlight remain consistent with the reference image. A hot breeze gently moves his shirt, sleeves, beard, and nearby grass. The camera begins a smooth horizontal tracking movement from left to right, keeping the farmer prominently framed while revealing more of the surrounding farmland. Subtle cloth rustling, grass movement, distant birds, and soft rural ambience are audible.\n\n[Shot 2] At 00:03.000, the camera continues its smooth horizontal movement and moves slightly closer to the farmer from a medium-wide angle. The farmer raises the wooden tool and then forcefully brings it down into the dry cracked soil. The tool makes clear contact with the ground. A small, natural puff of fine dust rises from the impact point and disperses gently in the hot breeze. Tiny pieces of loose dry soil shift around the tool. His arms and shoulders move naturally with the strike, while his clothing sways from both the motion and the breeze. Synchronized diegetic sound: a distinct wooden impact against hard dry earth, a soft gritty crunch of soil, followed by a brief dusty whoosh. His breathing is subtle and natural.\n\n[Shot 3] At 00:06.000, the camera continues tracking horizontally to the right, gradually revealing the farmer in the foreground against the expansive green fields and terraced landscape. The farmer remains kneeling and steadies the tool after the strike, looking down at the cracked earth with a tired but determined expression. The small dust cloud settles naturally back onto the soil. His loose shirt and headband continue to flutter gently in the hot breeze, and the surrounding grass ripples softly. Warm sunlight creates a peaceful golden glow across the farmland. The camera movement remains smooth and cinematic, with realistic parallax between the farmer, foreground soil, rice fields, trees, houses, and distant mountains. Maintain consistent character identity, proportions, clothing, tool design, background layout, and 2D illustrated style throughout all three shots.\n\noverall_soundscape: Hot rural countryside ambience with a gentle dry breeze, soft rustling clothing, grass and leaves moving in the wind, distant birds, subtle farmer breathing, the wooden tool striking hard dry soil, gritty soil movement, and a brief soft dust impact sound. Keep the sound natural and synchronized precisely with the visible actions.\n\nnon_diegetic_music: N/A",
+      "prompt": "",
       "width": 864,
       "height": 480,
       "length": [

@@ -83,6 +83,23 @@ def regenerate_videos(project_id, new_shot_length=None, force_regenerate_all=Fal
         print(f"[ERROR] Could not load project: {e}")
         return False
 
+    # Restore the project's stored video workflow (CLI runs record it at
+    # creation), then honor the r2v prompt mode: singularity projects render
+    # on a Singularity checkpoint unless the config already targets one
+    _stored_wf = (project_meta.get('video_config') or {}).get('workflow')
+    if _stored_wf:
+        import config as _cfg
+        _cfg.VIDEO_WORKFLOW = _stored_wf
+    if ((project_meta.get('video_generation_type') or 'i2v').lower() == 'r2v'
+            and (project_meta.get('r2v_mode') or 'standard').lower() == 'singularity'):
+        import config as _cfg
+        from core.shot_planner import effective_r2v_video_workflow
+        if 'singularity' not in str(getattr(_cfg, 'VIDEO_WORKFLOW', '')).lower():
+            _sing = effective_r2v_video_workflow('singularity', getattr(_cfg, 'VIDEO_WORKFLOWS', {}))
+            if _sing:
+                print(f"[INFO] r2v singularity project: video workflow set to {_sing}")
+                _cfg.VIDEO_WORKFLOW = _sing
+
     # Load shots data
     shots_dir = project_mgr.get_project_dir(project_id)
     shots_path = os.path.join(shots_dir, "shots.json")

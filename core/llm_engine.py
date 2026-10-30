@@ -16,6 +16,17 @@ from core import llm_call_log
 logger = logging.getLogger(__name__)
 
 
+def _resolve_max_tokens(config_module, prefix: str, default: int = 16384) -> int:
+    """Provider-specific {PREFIX}_MAX_TOKENS override, else global LLM_MAX_TOKENS."""
+    raw = str(getattr(config_module, f"{prefix}_MAX_TOKENS", "") or "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+    return getattr(config_module, 'LLM_MAX_TOKENS', default)
+
+
 class LLMProvider(ABC):
     """Abstract base class for LLM providers"""
 
@@ -111,12 +122,13 @@ class LLMProvider(ABC):
 class GeminiProvider(LLMProvider):
     """Google Gemini API provider (refactored from gemini_engine.py)"""
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, base_url: str = None):
         self.api_key = api_key
         self.model = model
         self.env_key = "GEMINI_API_KEY"
+        self.base_url = base_url
         self.timeout = 120  # Default timeout in seconds
-        self.max_tokens = getattr(config, 'LLM_MAX_TOKENS', 16384)
+        self.max_tokens = _resolve_max_tokens(config, 'GEMINI')
 
     @property
     def name(self) -> str:
@@ -139,9 +151,12 @@ class GeminiProvider(LLMProvider):
             start_time = time.time()
 
             # Initialize client
+            http_options = {'api_version': 'v1alpha'}
+            if self.base_url:
+                http_options['base_url'] = self.base_url
             client = genai.Client(
                 api_key=self.api_key,
-                http_options={'api_version': 'v1alpha'}
+                http_options=http_options
             )
 
             # Configure response format
@@ -172,10 +187,11 @@ class GeminiProvider(LLMProvider):
 class OpenAIProvider(LLMProvider):
     """OpenAI (ChatGPT) API provider"""
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, base_url: str = None):
         self.api_key = api_key
         self.model = model
         self.env_key = "OPENAI_API_KEY"
+        self.base_url = base_url
         self.timeout = 120  # Default timeout in seconds
 
     @property
@@ -198,7 +214,7 @@ class OpenAIProvider(LLMProvider):
             start_time = time.time()
 
             # Initialize client
-            client = openai.OpenAI(api_key=self.api_key)
+            client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url or None)
 
             # Make request
             response = client.responses.create(
@@ -227,9 +243,9 @@ class ZAIProvider(LLMProvider):
         self.env_key = "ZHIPU_API_KEY"
         # Updated to correct BigModel endpoint
         self.base_url = base_url or "https://api.z.ai/api/coding/paas/v4"
-        self.timeout = 120  # Default timeout in seconds
+        self.timeout = getattr(config, 'ZHIPU_TIMEOUT', 120)
         self.disable_ssl_verify = disable_ssl_verify
-        self.max_tokens = getattr(config, 'LLM_MAX_TOKENS', 16384)
+        self.max_tokens = _resolve_max_tokens(config, 'ZHIPU')
 
     @property
     def name(self) -> str:
@@ -299,7 +315,7 @@ class DeepSeekProvider(LLMProvider):
         self.env_key = "DEEPSEEK_API_KEY"
         self.base_url = base_url or "https://api.deepseek.com"
         self.timeout = 120  # Default timeout in seconds
-        self.max_tokens = getattr(config, 'LLM_MAX_TOKENS', 16384)
+        self.max_tokens = _resolve_max_tokens(config, 'DEEPSEEK')
 
     @property
     def name(self) -> str:
@@ -357,10 +373,11 @@ class DeepSeekProvider(LLMProvider):
 class QwenProvider(LLMProvider):
     """Qwen (Alibaba Cloud) API provider"""
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, base_url: str = None):
         self.api_key = api_key
         self.model = model
         self.env_key = "QWEN_API_KEY"
+        self.base_url = base_url or "https://dashscope.aliyuncs.com/api/v1"
         self.timeout = 120  # Default timeout in seconds
 
     @property
@@ -381,7 +398,7 @@ class QwenProvider(LLMProvider):
             start_time = time.time()
 
             # Prepare request
-            url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+            url = f"{self.base_url}/services/aigc/text-generation/generation"
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
@@ -416,10 +433,11 @@ class QwenProvider(LLMProvider):
 class KimiProvider(LLMProvider):
     """Kimi K2 2.5 (Moonshot AI) API provider"""
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, base_url: str = None):
         self.api_key = api_key
         self.model = model
         self.env_key = "KIMI_API_KEY"
+        self.base_url = base_url or "https://api.moonshot.cn/v1"
         self.timeout = 120  # Default timeout in seconds
 
     @property
@@ -440,7 +458,7 @@ class KimiProvider(LLMProvider):
             start_time = time.time()
 
             # Prepare request
-            url = "https://api.moonshot.cn/v1"
+            url = f"{self.base_url}/chat/completions"
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
@@ -607,19 +625,22 @@ def get_provider(provider_name: Optional[str] = None, config_module=None) -> LLM
 
     if provider_name == "gemini":
         api_key = getattr(config, 'GEMINI_API_KEY', '')
-        model = getattr(config, 'GEMINI_TEXT_MODEL', 'gemini-2.0-flash')
-        return GeminiProvider(api_key=api_key, model=model)
+        model = getattr(config, 'GEMINI_TEXT_MODEL', 'gemini-3.5-flash-lite')
+        base_url = getattr(config, 'GEMINI_BASE_URL', '') or None
+        return GeminiProvider(api_key=api_key, model=model, base_url=base_url)
 
     elif provider_name == "openai":
         api_key = getattr(config, 'OPENAI_API_KEY', '')
         model = getattr(config, 'OPENAI_MODEL', 'gpt-4o')
-        return OpenAIProvider(api_key=api_key, model=model)
+        base_url = getattr(config, 'OPENAI_BASE_URL', '') or None
+        return OpenAIProvider(api_key=api_key, model=model, base_url=base_url)
 
     elif provider_name == "zhipu":
         api_key = getattr(config, 'ZHIPU_API_KEY', '')
-        model = getattr(config, 'ZHIPU_MODEL', 'deep-v3')
+        model = getattr(config, 'ZHIPU_MODEL', 'glm-5.3')
+        base_url = getattr(config, 'ZHIPU_BASE_URL', '') or None
         disable_ssl_verify = getattr(config, 'ZHIPU_DISABLE_SSL_VERIFY', False)
-        return ZAIProvider(api_key=api_key, model=model, disable_ssl_verify=disable_ssl_verify)
+        return ZAIProvider(api_key=api_key, model=model, base_url=base_url, disable_ssl_verify=disable_ssl_verify)
 
     elif provider_name == "deepseek":
         api_key = getattr(config, 'DEEPSEEK_API_KEY', '')
@@ -630,12 +651,14 @@ def get_provider(provider_name: Optional[str] = None, config_module=None) -> LLM
     elif provider_name == "qwen":
         api_key = getattr(config, 'QWEN_API_KEY', '')
         model = getattr(config, 'QWEN_MODEL', 'qwen-max')
-        return QwenProvider(api_key=api_key, model=model)
+        base_url = getattr(config, 'QWEN_BASE_URL', '') or None
+        return QwenProvider(api_key=api_key, model=model, base_url=base_url)
 
     elif provider_name == "kimi":
         api_key = getattr(config, 'KIMI_API_KEY', '')
         model = getattr(config, 'KIMI_MODEL', 'kimi-labs')
-        return KimiProvider(api_key=api_key, model=model)
+        base_url = getattr(config, 'KIMI_BASE_URL', '') or None
+        return KimiProvider(api_key=api_key, model=model, base_url=base_url)
 
     elif provider_name == "ollama":
         base_url = getattr(config, 'OLLAMA_BASE_URL', 'http://localhost:11434')

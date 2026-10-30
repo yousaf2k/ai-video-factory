@@ -194,6 +194,7 @@ class ProjectService:
             aspect_ratio=request.aspect_ratio,
             prompt_mode=request.prompt_mode,
             video_generation_type=request.video_generation_type,
+            r2v_mode=request.r2v_mode,
             max_shot_duration=request.max_shot_duration
         )
 
@@ -419,6 +420,13 @@ class ProjectService:
                     get_generation_service().invalidate_project_cache(project_id)
                 except Exception:
                     pass
+
+        if request.r2v_mode is not None:
+            # Stored normalized; only meaningful while the project is r2v
+            from core.shot_planner import normalize_r2v_mode
+            meta['r2v_mode'] = (normalize_r2v_mode(request.r2v_mode)
+                                if (meta.get('video_generation_type') or 'i2v') == 'r2v'
+                                else None)
 
         if request.aspect_ratio is not None:
             meta['aspect_ratio'] = request.aspect_ratio
