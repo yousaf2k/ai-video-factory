@@ -5,6 +5,7 @@ from core.llm_engine import get_provider
 from core.director_loader import load_director_prompt
 from core.logger_config import setup_director_logger
 from core.log_decorators import log_director_call
+from core.character_matching import canonicalize_scene_cast
 import json
 import math
 import re
@@ -880,6 +881,20 @@ def plan_shots(scene_graph, max_shots=None, shots_director="default", shots_per_
     # Inject 0-based index into each scene so LLM knows which index to return
     for i, scene in enumerate(scenes):
         scene['scene_id'] = i
+
+    # Scene cast strings carry short names ("Chi She") while the story cast
+    # uses display names ("Chi She (Red Snake)") — canonicalize scenes to the
+    # story spelling so the scene text and the STORY CHARACTERS block agree
+    # and shot['characters'] comes back matching the cast (refs/voices then
+    # resolve without fuzzy matching)
+    if isinstance(parsed_graph, dict):
+        story_cast = [c.get('name') for c in (parsed_graph.get('characters') or [])
+                      if isinstance(c, dict) and (c.get('name') or '').strip()]
+        story_props = [p.get('name') for p in (parsed_graph.get('props') or [])
+                       if isinstance(p, dict) and (p.get('name') or '').strip()]
+        for scene in scenes:
+            if isinstance(scene, dict):
+                canonicalize_scene_cast(scene, story_cast, story_props)
 
     # r2v/t2v projects render from reference sheets — any include of the I2VA
     # base inside the director (named directors compose it themselves) is

@@ -323,11 +323,14 @@ matching at generation time any more: character references are attached to the c
 as project refs (`p/{project_id}/{media_dir}/{filename}`) by `ProjectManager.sync_character_asset_refs`,
 which runs when a reference is uploaded or AI-generated (and after a shots replan). A shot is
 matched to characters explicitly (`characters` name list from r2v directors, else `character_name`);
-shots with no attribution are matched by character name in the prompt — full name
+names match tolerantly via `core.character_matching.resolve_character_name` — the story cast uses
+display names with qualifiers ("Chi She (Red Snake)") while shots usually carry the short form
+("Chi She"), so exact equality would drop the match. Resolved names are canonicalized to the story
+display name on `shot['characters']`, which the shot card shows next to the
+camera badge. Shots with no attribution are matched by character name in the prompt — full name
 case-insensitively, or a single capitalized significant word (so "rich shadow detail" does not
-attach The Shadow, and "Jamshed" matches Inspector Jamshed). Matched names are persisted on
-shot['characters'] when the shot carries no attribution, which the shot card shows next to the
-camera badge. Synced refs are tracked per shot
+attach The Shadow, and "Jamshed" matches Inspector Jamshed); prompt-discovered names are also
+persisted on shot['characters']. Synced refs are tracked per shot
 (`synced_character_asset_refs`), so regenerating a character image swaps the attached ref instead
 of accumulating old versions; still-current refs keep their position (order = priority, first is
 primary) and other user-chosen refs are never touched. FLFI2V shots are skipped — they keep their

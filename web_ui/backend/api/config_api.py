@@ -52,6 +52,15 @@ _CONFIG_FIELDS: Dict[str, Tuple[str, str, str]] = {
     "lmstudio_base_url":            ("LMSTUDIO_BASE_URL", "LMSTUDIO_BASE_URL", "str"),
     "lmstudio_model":               ("LMSTUDIO_MODEL", "LMSTUDIO_MODEL", "str"),
     "llm_max_tokens":               ("LLM_MAX_TOKENS", "LLM_MAX_TOKENS", "int"),
+    # AI Agent Assistant (Web UI left-panel agent)
+    "agent_llm_provider":           ("AGENT_LLM_PROVIDER", "AGENT_LLM_PROVIDER", "str"),
+    "agent_llm_model":              ("AGENT_LLM_MODEL", "AGENT_LLM_MODEL", "str"),
+    "agent_max_iterations":         ("AGENT_MAX_ITERATIONS", "AGENT_MAX_ITERATIONS", "int"),
+    "zhipu_reasoning_effort":       ("ZHIPU_REASONING_EFFORT", "ZHIPU_REASONING_EFFORT", "str"),
+    "openai_reasoning_effort":      ("OPENAI_REASONING_EFFORT", "OPENAI_REASONING_EFFORT", "str"),
+    "agent_allow_dangerous_tools":  ("AGENT_ALLOW_DANGEROUS_TOOLS", "AGENT_ALLOW_DANGEROUS_TOOLS", "bool"),
+    "agent_file_search_use_shell":  ("AGENT_FILE_SEARCH_USE_SHELL", "AGENT_FILE_SEARCH_USE_SHELL", "bool"),
+    "agent_max_tool_result_chars":  ("AGENT_MAX_TOOL_RESULT_CHARS", "AGENT_MAX_TOOL_RESULT_CHARS", "int"),
     "shot_generation_batch_size":   ("SHOT_GENERATION_BATCH_SIZE", "SHOT_GENERATION_BATCH_SIZE", "int"),
     "max_parallel_batch_threads":   ("MAX_PARALLEL_BATCH_THREADS", "MAX_PARALLEL_BATCH_THREADS", "int"),
     # Per-provider tuning overrides (empty string = inherit the global value)

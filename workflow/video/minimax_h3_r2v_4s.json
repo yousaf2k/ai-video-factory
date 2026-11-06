@@ -12,7 +12,9 @@
     },
     "class_type": "SaveVideo",
     "_meta": {
-      "title": "Save Video"
+      "title": "Save Video",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "115": {
@@ -23,7 +25,9 @@
     },
     "class_type": "ResolutionSelector",
     "_meta": {
-      "title": "Resolution Selector (Size)"
+      "title": "Resolution Selector (Size)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "119": {
@@ -32,7 +36,9 @@
     },
     "class_type": "VAELoader",
     "_meta": {
-      "title": "Load VAE"
+      "title": "Load VAE",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "120": {
@@ -41,7 +47,9 @@
     },
     "class_type": "VAELoader",
     "_meta": {
-      "title": "Load VAE"
+      "title": "Load VAE",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "121": {
@@ -57,7 +65,9 @@
     },
     "class_type": "VAEDecodeAudio",
     "_meta": {
-      "title": "VAE Decode Audio"
+      "title": "VAE Decode Audio",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "122": {
@@ -73,7 +83,9 @@
     },
     "class_type": "VAEDecode",
     "_meta": {
-      "title": "VAE Decode"
+      "title": "VAE Decode",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "123": {
@@ -82,7 +94,9 @@
     },
     "class_type": "KSamplerSelect",
     "_meta": {
-      "title": "KSamplerSelect"
+      "title": "KSamplerSelect",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "124": {
@@ -100,7 +114,9 @@
     },
     "class_type": "BasicScheduler",
     "_meta": {
-      "title": "BasicScheduler"
+      "title": "BasicScheduler",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "125": {
@@ -128,7 +144,9 @@
     },
     "class_type": "SamplerCustomAdvanced",
     "_meta": {
-      "title": "SamplerCustomAdvanced"
+      "title": "SamplerCustomAdvanced",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "126": {
@@ -144,7 +162,9 @@
     },
     "class_type": "BasicGuider",
     "_meta": {
-      "title": "Basic Guider"
+      "title": "Basic Guider",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "127": {
@@ -154,7 +174,9 @@
     },
     "class_type": "UNETLoader",
     "_meta": {
-      "title": "Load Diffusion Model"
+      "title": "Load Diffusion Model",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "128": {
@@ -165,7 +187,9 @@
     },
     "class_type": "CLIPLoader",
     "_meta": {
-      "title": "Load CLIP"
+      "title": "Load CLIP",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "129": {
@@ -174,17 +198,19 @@
     },
     "class_type": "RandomNoise",
     "_meta": {
-      "title": "RandomNoise"
+      "title": "RandomNoise",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "130": {
     "inputs": {
-      "fps": 24,
+      "fps": 48,
       "bit_depth": 8,
       "color_space": "sRGB",
       "codec": "none",
       "images": [
-        "122",
+        "155",
         0
       ],
       "audio": [
@@ -194,7 +220,9 @@
     },
     "class_type": "CreateVideo",
     "_meta": {
-      "title": "Create Video"
+      "title": "Create Video",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "131": {
@@ -207,7 +235,9 @@
     },
     "class_type": "ComfyMathExpression",
     "_meta": {
-      "title": "Math Expression"
+      "title": "Math Expression",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "132": {
@@ -216,7 +246,9 @@
     },
     "class_type": "PrimitiveFloat",
     "_meta": {
-      "title": "Float (Duration)"
+      "title": "Float (Duration)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "136": {
@@ -289,7 +321,9 @@
     },
     "class_type": "MiniMaxH3ReferenceToVideo",
     "_meta": {
-      "title": "MiniMax H3 Reference to Video"
+      "title": "MiniMax H3 Reference to Video",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "137": {
@@ -298,7 +332,9 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "[ref_0] Load Image (Reference)"
+      "title": "[ref_0] Load Image (Reference)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "138": {
@@ -307,7 +343,9 @@
     },
     "class_type": "PrimitiveStringMultiline",
     "_meta": {
-      "title": "[prompt] Input Text (Prompt)"
+      "title": "[prompt] Input Text (Prompt)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "139": {
@@ -316,7 +354,9 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "[ref_1] Load Image (Reference)"
+      "title": "[ref_1] Load Image (Reference)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "141": {
@@ -336,7 +376,9 @@
     },
     "class_type": "ComfySwitchNode",
     "_meta": {
-      "title": "If/Else Switch (model)"
+      "title": "If/Else Switch (model)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "142": {
@@ -356,7 +398,9 @@
     },
     "class_type": "ComfySwitchNode",
     "_meta": {
-      "title": "If/Else Switch (Steps)"
+      "title": "If/Else Switch (Steps)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "143": {
@@ -365,7 +409,9 @@
     },
     "class_type": "PrimitiveInt",
     "_meta": {
-      "title": "Int (Full)"
+      "title": "Int (Full)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "144": {
@@ -374,7 +420,9 @@
     },
     "class_type": "PrimitiveInt",
     "_meta": {
-      "title": "Int (Lightning LoRA)"
+      "title": "Int (Lightning LoRA)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "145": {
@@ -388,7 +436,9 @@
     },
     "class_type": "LoraLoaderModelOnly",
     "_meta": {
-      "title": "Load LoRA"
+      "title": "Load LoRA",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "146": {
@@ -397,7 +447,9 @@
     },
     "class_type": "PrimitiveBoolean",
     "_meta": {
-      "title": "Boolean (Enable Lightning LoRA)"
+      "title": "Boolean (Enable Lightning LoRA)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "147": {
@@ -406,7 +458,9 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "[ref_2] Load Image (Reference)"
+      "title": "[ref_2] Load Image (Reference)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "148": {
@@ -415,7 +469,9 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "[ref_3] Load Image (Reference)"
+      "title": "[ref_3] Load Image (Reference)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "149": {
@@ -424,7 +480,9 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "[ref_4] Load Image (Reference)"
+      "title": "[ref_4] Load Image (Reference)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "150": {
@@ -433,7 +491,9 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "[ref_5] Load Image (Reference)"
+      "title": "[ref_5] Load Image (Reference)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "151": {
@@ -442,7 +502,9 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "[ref_6] Load Image (Reference)"
+      "title": "[ref_6] Load Image (Reference)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "152": {
@@ -451,7 +513,9 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "[ref_7] Load Image (Reference)"
+      "title": "[ref_7] Load Image (Reference)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "153": {
@@ -460,7 +524,48 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "[ref_8] Load Image (Reference)"
+      "title": "[ref_8] Load Image (Reference)",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
+    }
+  },
+  "154": {
+    "inputs": {
+      "generation_type": "frame rate multiplier",
+      "generation_type.multiplier": 2,
+      "mode": "MEDIUM",
+      "automatic_shot_change_detection": true,
+      "shot_change": false,
+      "image_encoding": "8-bit RGB",
+      "images": [
+        "122",
+        0
+      ]
+    },
+    "class_type": "RTXVideoFrameGeneration",
+    "_meta": {
+      "title": "RTX Video Frame Generation",
+      "cnr_id": "comfyui_nvidia_rtx_nodes",
+      "ver": "38d790ded00650681fa3645362efe28c8560cf40"
+    }
+  },
+  "155": {
+    "inputs": {
+      "resize_type": "scale by multiplier",
+      "resize_type.scale": 2,
+      "quality": "ULTRA",
+      "strength": 1,
+      "image_encoding": "8-bit RGB",
+      "images": [
+        "154",
+        0
+      ]
+    },
+    "class_type": "RTXVideoSuperResolution",
+    "_meta": {
+      "title": "RTX Video Super Resolution",
+      "cnr_id": "comfyui_nvidia_rtx_nodes",
+      "ver": "38d790ded00650681fa3645362efe28c8560cf40"
     }
   }
 }

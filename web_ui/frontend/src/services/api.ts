@@ -28,6 +28,17 @@ import type {
   LLMLogListResponse,
   LLMLogEntryDetail,
 } from '@/types';
+import type {
+  AgentConfigResponse,
+  AgentChatResponse,
+  AgentConversationDetail,
+  AgentConversationSummary,
+  AgentSkill,
+  AgentStatusConfig,
+  AgentTestResult,
+  McpServerConfig,
+  McpToolDescriptor,
+} from '@/types/agent';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
@@ -819,6 +830,96 @@ class ApiClient {
   async clearLLMLogs(): Promise<{ message: string }> {
     const response = await this.client.delete<{ message: string }>('/api/logs/llm');
     return response.data;
+  }
+
+  // Agent Assistant
+  async getAgentConfig(): Promise<AgentConfigResponse> {
+    const response = await this.client.get<AgentConfigResponse>('/api/agent/config');
+    return response.data;
+  }
+
+  async updateAgentConfig(update: {
+    provider?: string;
+    model?: string;
+    effort?: string;
+    max_iterations?: number;
+    dangerous_tools_allowed?: boolean;
+    enabled_tools?: Record<string, boolean>;
+    mcp_servers?: Record<string, McpServerConfig>;
+    extra_system_prompt?: string;
+    auto_include_project_context?: boolean;
+  }): Promise<AgentStatusConfig> {
+    const response = await this.client.put<AgentStatusConfig>('/api/agent/config', update);
+    return response.data;
+  }
+
+  async testAgentLlm(): Promise<AgentTestResult> {
+    const response = await this.client.post<AgentTestResult>('/api/agent/test');
+    return response.data;
+  }
+
+  async listMcpServerTools(server: string): Promise<{ server: string; tools: McpToolDescriptor[] }> {
+    const response = await this.client.get<{ server: string; tools: McpToolDescriptor[] }>(
+      `/api/agent/mcp/${encodeURIComponent(server)}/tools`,
+    );
+    return response.data;
+  }
+
+  async listAgentSkills(): Promise<AgentSkill[]> {
+    const response = await this.client.get<AgentSkill[]>('/api/agent/skills');
+    return response.data;
+  }
+
+  async createAgentSkill(request: { name: string; description: string; content: string }): Promise<{ name: string; created: boolean }> {
+    const response = await this.client.post<{ name: string; created: boolean }>('/api/agent/skills', request);
+    return response.data;
+  }
+
+  async readAgentSkill(name: string): Promise<{ name: string; description: string; content: string; files: string[] }> {
+    const response = await this.client.get(`/api/agent/skills/${encodeURIComponent(name)}`);
+    return response.data;
+  }
+
+  async deleteAgentSkill(name: string): Promise<{ deleted: boolean }> {
+    const response = await this.client.delete<{ deleted: boolean }>(`/api/agent/skills/${encodeURIComponent(name)}`);
+    return response.data;
+  }
+
+  async listAgentConversations(): Promise<AgentConversationSummary[]> {
+    const response = await this.client.get<AgentConversationSummary[]>('/api/agent/conversations');
+    return response.data;
+  }
+
+  async getAgentConversation(id: string): Promise<AgentConversationDetail> {
+    const response = await this.client.get<AgentConversationDetail>(`/api/agent/conversations/${id}`);
+    return response.data;
+  }
+
+  async createAgentConversation(projectId?: string | null): Promise<AgentConversationDetail> {
+    const response = await this.client.post<AgentConversationDetail>('/api/agent/conversations', {
+      project_id: projectId ?? null,
+    });
+    return response.data;
+  }
+
+  async deleteAgentConversation(id: string): Promise<{ deleted: boolean }> {
+    const response = await this.client.delete<{ deleted: boolean }>(`/api/agent/conversations/${id}`);
+    return response.data;
+  }
+
+  async agentChat(request: {
+    message: string;
+    conversation_id?: string | null;
+    project_id?: string | null;
+  }): Promise<AgentChatResponse> {
+    const response = await this.client.post<AgentChatResponse>('/api/agent/chat', request);
+    return response.data;
+  }
+
+  /** WebSocket URL for streaming agent chat */
+  getAgentWsUrl(): string {
+    const base = API_BASE_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+    return `${base}/api/agent/ws`;
   }
 
   // Generic HTTP methods for queue operations

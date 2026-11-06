@@ -1596,6 +1596,56 @@ else:
     WEB_UI_CORS_ORIGINS = sorted(list(set(_default_cors)))
 
 
+# ==========================================
+# AI Agent Assistant Configuration
+# ==========================================
+# The Web UI ships an AI Agent Assistant (left dock panel + /agent page) that
+# can operate the whole pipeline through tools. The LLM used by the agent is
+# configured independently from the story-generation LLM: leave
+# AGENT_LLM_PROVIDER empty to follow LLM_PROVIDER.
+
+# Provider for the agent ("gemini", "openai", "zhipu", "deepseek", "qwen",
+# "kimi", "ollama", "lmstudio"); empty = follow LLM_PROVIDER.
+AGENT_LLM_PROVIDER = os.getenv("AGENT_LLM_PROVIDER", "").strip() or None
+
+# Optional model override for the agent (applied to whichever provider is
+# selected); empty = the provider's configured model.
+AGENT_LLM_MODEL = os.getenv("AGENT_LLM_MODEL", "").strip() or None
+
+# Max tool-call round trips per user message (keeps runaway loops bounded).
+AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", "12"))
+
+# Folder with agent SKILL.md files the agent can load at runtime.
+AGENT_SKILLS_DIR = os.path.join(PROJECT_ROOT, os.getenv("AGENT_SKILLS_DIR", "agent_skills").strip().strip('/\\'))
+
+# Runtime data (config.json, conversations) lives under output/agent/.
+AGENT_DATA_DIR = os.path.join(ABS_OUTPUT_DIR, "agent")
+
+# Gate for destructive tools (delete_project, delete_shot, delete_file, ...).
+AGENT_ALLOW_DANGEROUS_TOOLS = os.getenv("AGENT_ALLOW_DANGEROUS_TOOLS", "false").lower() == "true"
+
+# Use native shell commands for the agent's file search tool (PowerShell
+# Select-String on Windows, grep on Linux/macOS) with a pure-Python fallback.
+AGENT_FILE_SEARCH_USE_SHELL = os.getenv("AGENT_FILE_SEARCH_USE_SHELL", "true").lower() == "true"
+
+# Tool results fed back to the agent are truncated to this many characters.
+AGENT_MAX_TOOL_RESULT_CHARS = int(os.getenv("AGENT_MAX_TOOL_RESULT_CHARS", "32768"))
+
+# Context-window size (tokens) used by the agent's usage meter. 0 = estimate
+# from the provider's typical window (see engine._PROVIDER_CONTEXT_LIMITS).
+AGENT_CONTEXT_LIMIT_TOKENS = int(os.getenv("AGENT_CONTEXT_LIMIT_TOKENS", "0"))
+
+# How many past messages (user/assistant/tool results) are serialized into
+# each agent prompt.
+AGENT_HISTORY_MAX_MESSAGES = int(os.getenv("AGENT_HISTORY_MAX_MESSAGES", "40"))
+
+# Reasoning/thinking effort for providers that support it (empty = model
+# auto-selects its default). Zhipu GLM-5.x: default/low/high/max (sent as
+# thinking.effort); OpenAI reasoning models: minimal/low/medium/high (sent as
+# reasoning_effort). The agent settings page overrides these at runtime.
+ZHIPU_REASONING_EFFORT = os.getenv("ZHIPU_REASONING_EFFORT", "").strip().lower() or None
+OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "").strip().lower() or None
+
 # ── Named generation styles (styles.json) ───────────────────────────────────
 # name/style pairs that populate the background-style dropdown in the web UI.
 # The selected style text is appended to the background prompt at generation

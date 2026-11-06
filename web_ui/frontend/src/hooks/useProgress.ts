@@ -8,12 +8,19 @@ interface ProgressMessage {
     scene_id?: number;
     step?: string;
     progress?: number;
+    generation_type?: string;
 }
 
-export const useProgress = (projectId: string | undefined, onCompleted?: (id: string | number, type: 'shot' | 'scene') => void) => {
+export const useProgress = (
+    projectId: string | undefined,
+    onCompleted?: (id: string | number, type: 'shot' | 'scene') => void,
+    onStoryUpdated?: () => void,
+) => {
     // We now map progress by stable UUID strings rather than index integers, to survive insertion/deletion reindexes
     const [shotProgress, setShotProgress] = useState<Record<string, number>>({});
     const [sceneProgress, setSceneProgress] = useState<Record<number, number>>({});
+    // True while a story generation is running (e.g. started via the AI Agent)
+    const [storyGenerating, setStoryGenerating] = useState(false);
 
     useEffect(() => {
         if (!projectId) return;
@@ -41,6 +48,18 @@ export const useProgress = (projectId: string | undefined, onCompleted?: (id: st
             socket.onmessage = (event) => {
                 try {
                     const data: ProgressMessage = JSON.parse(event.data);
+
+                    // Story-level events (story generation, e.g. via the AI Agent)
+                    if (data.generation_type === 'story') {
+                        if (data.type === 'progress') setStoryGenerating(true);
+                        if (data.type === 'completed' || data.type === 'cancelled') {
+                            setStoryGenerating(false);
+                        }
+                    }
+                    if (data.type === 'story_updated') {
+                        setStoryGenerating(false);
+                        onStoryUpdated?.();
+                    }
 
                     // Handle Shot Progress
                     const shotKey = data.shot_id || (data.shot_index !== undefined ? data.shot_index.toString() : null);
@@ -142,5 +161,5 @@ export const useProgress = (projectId: string | undefined, onCompleted?: (id: st
         });
     }, []);
 
-    return { shotProgress, sceneProgress, clearProgress };
+    return { shotProgress, sceneProgress, storyGenerating, clearProgress };
 };

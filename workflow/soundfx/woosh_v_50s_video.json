@@ -1,0 +1,127 @@
+{
+  "7": {
+    "inputs": {
+      "model_name": "Woosh-VFlow-8s",
+      "model_type": "VFlow"
+    },
+    "class_type": "WooshLoadFlow",
+    "_meta": {
+      "title": "Woosh Model Loader [model_loader]"
+    }
+  },
+  "9": {
+    "inputs": {
+      "audioUI": "/api/view?filename=ComfyUI_temp_ppyqw_00001_.flac&type=temp&subfolder=&rand=0.12220625571663368",
+      "audio": [
+        "38",
+        1
+      ]
+    },
+    "class_type": "PreviewAudio",
+    "_meta": {
+      "title": "Preview Audio"
+    }
+  },
+  "19": {
+    "inputs": {
+      "mode": "V2A — video to audio (VFlow/DVFlow)"
+    },
+    "class_type": "WooshTextEncode",
+    "_meta": {
+      "title": "Woosh TextConditioning"
+    }
+  },
+  "33": {
+    "inputs": {
+      "frame_rate": 25,
+      "loop_count": 0,
+      "filename_prefix": "AnimateDiff",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "38",
+        0
+      ],
+      "audio": [
+        "38",
+        1
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine [out_video]"
+    }
+  },
+  "34": {
+    "inputs": {
+      "video": "Extinction Scene 1.mp4",
+      "force_rate": 25,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 200,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "AnimateDiff"
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Video (Upload) [in_video]"
+    }
+  },
+  "37": {
+    "inputs": {
+      "video_path": "",
+      "max_duration_s": 8,
+      "image_batch": [
+        "34",
+        0
+      ]
+    },
+    "class_type": "WooshLoadVideo",
+    "_meta": {
+      "title": "Woosh Video Loader"
+    }
+  },
+  "38": {
+    "inputs": {
+      "prompt": "",
+      "steps": 50,
+      "cfg": 4.5,
+      "seed": 2556346335,
+      "latent_frames": 801,
+      "subprocess": false,
+      "force_offload": false,
+      "gen_model": [
+        "7",
+        0
+      ],
+      "text_conditioning": [
+        "19",
+        0
+      ],
+      "video": [
+        "37",
+        0
+      ]
+    },
+    "class_type": "WooshSample",
+    "_meta": {
+      "title": "Woosh Sampler [sampler]"
+    }
+  },
+  "40": {
+    "inputs": {
+      "model_name": "Woosh-Flow",
+      "model_type": "Flow"
+    },
+    "class_type": "WooshLoadFlow",
+    "_meta": {
+      "title": "Woosh Model Loader"
+    }
+  }
+}

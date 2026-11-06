@@ -110,7 +110,11 @@ Idea → Story → Scene Graph → Shots (r2v director)
   queue type `PROP_IMAGE`, API `POST /api/projects/{id}/stories/props/{idx}/generate-reference`.
 - **Reference attachment** — `ProjectManager.sync_shot_video_refs()` fills each shot's
   `reference_asset_ids` in priority order (r2v projects only; supersedes the character-ref
-  sync there; manual refs preserved; idempotent).
+  sync there; manual refs preserved; idempotent). Shot character/prop names resolve tolerantly
+  against the story cast (`core.character_matching` — short forms like "Chi She" attach to
+  "Chi She (Red Snake)") and are canonicalized to the story spelling on the shot. The shot
+  planner likewise canonicalizes scene cast strings to story display names before planning,
+  so shots come back naming characters exactly as the story cast does.
 
 ## Web API additions
 
