@@ -9,6 +9,8 @@ import { Toaster } from 'sonner';
 import Link from 'next/link';
 import QueueMenuLink from '@/components/navigation/QueueMenuLink';
 import EditorMenuLink from '@/components/navigation/EditorMenuLink';
+import AgentMenuLink from '@/components/navigation/AgentMenuLink';
+import { AgentShell } from '@/components/agent/AgentShell';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -26,7 +28,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <Providers>
-          <div className="min-h-screen bg-background">
+          <AgentShell>
             <header className="border-b bg-card">
               <div className="container mx-auto px-4 py-4 flex items-center justify-between">
                 <Link href="/projects" className="text-xl font-bold text-primary">
@@ -40,6 +42,7 @@ export default function RootLayout({
                     Assets
                   </Link>
                   <QueueMenuLink />
+                  <AgentMenuLink />
                   <Link href="/directors" className="text-sm font-medium hover:text-primary transition-colors">
                     Directors
                   </Link>
@@ -59,7 +62,7 @@ export default function RootLayout({
             <main>
               {children}
             </main>
-          </div>
+          </AgentShell>
           <Toaster
             position="bottom-right"
             toastOptions={{

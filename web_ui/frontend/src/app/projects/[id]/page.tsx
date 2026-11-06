@@ -6,9 +6,10 @@
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useProject } from "@/hooks/useProjects";
+import { useProgress } from "@/hooks/useProgress";
 import { formatDistanceToNow } from "date-fns";
 import { getMediaUrl } from "@/lib/utils";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { api, getApiErrorMessage } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,14 @@ export default function ProjectDetailPage() {
   const projectId = params.id as string;
   const { data: project, isLoading, error } = useProject(projectId);
   const queryClient = useQueryClient();
+
+  // Live story status: while the AI Agent (or backend) generates the story,
+  // show it in the banner and refresh automatically when it lands.
+  const onStoryUpdated = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    queryClient.invalidateQueries({ queryKey: ["projects"] });
+  }, [queryClient, projectId]);
+  const { storyGenerating } = useProgress(projectId, undefined, onStoryUpdated);
   const [generatingThumbnails, setGeneratingThumbnails] = useState<
     Record<string, boolean>
   >({});
@@ -302,12 +311,25 @@ export default function ProjectDetailPage() {
         <div className="mb-8 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+              {storyGenerating ? (
+                <RefreshCw className="w-4 h-4 shrink-0 animate-spin text-amber-500" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+              )}
               <p className="text-sm font-semibold text-amber-500">
-                {project.errors?.story ? "Story generation failed" : "Story not generated yet"}
+                {storyGenerating
+                  ? "Generating story…"
+                  : project.errors?.story
+                    ? "Story generation failed"
+                    : "Story not generated yet"}
               </p>
             </div>
-            {project.errors?.story ? (
+            {storyGenerating ? (
+              <p className="text-xs text-muted-foreground">
+                The AI Agent is writing the story (10–60s) — this page updates
+                automatically when it's ready.
+              </p>
+            ) : project.errors?.story ? (
               <p className="text-xs text-muted-foreground break-words">
                 {project.errors.story}
               </p>
@@ -317,7 +339,11 @@ export default function ProjectDetailPage() {
               </p>
             )}
           </div>
-          <Button onClick={handleGenerateStory} disabled={isGeneratingStory} className="shrink-0">
+          <Button
+            onClick={handleGenerateStory}
+            disabled={isGeneratingStory || storyGenerating}
+            className="shrink-0"
+          >
             <RefreshCw className={`w-4 h-4 mr-2 ${isGeneratingStory ? "animate-spin" : ""}`} />
             {isGeneratingStory
               ? "Generating Story..."

@@ -193,6 +193,13 @@ class OpenAIProvider(LLMProvider):
         self.env_key = "OPENAI_API_KEY"
         self.base_url = base_url
         self.timeout = 120  # Default timeout in seconds
+        # Optional reasoning effort for reasoning models (o-series / gpt-5*):
+        # "minimal" | "low" | "medium" | "high". None = model default.
+        self.reasoning_effort = None
+
+    def set_reasoning_effort(self, effort):
+        if effort and str(effort).strip().lower() in ("minimal", "low", "medium", "high"):
+            self.reasoning_effort = str(effort).strip().lower()
 
     @property
     def name(self) -> str:
@@ -216,11 +223,15 @@ class OpenAIProvider(LLMProvider):
             # Initialize client
             client = openai.OpenAI(api_key=self.api_key, base_url=self.base_url or None)
 
-            # Make request
-            response = client.responses.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}]
-            )
+            # Make request (chat completions — the Responses API takes `input`,
+            # not `messages`, and does not return `.choices`)
+            request_kwargs = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            if self.reasoning_effort:
+                request_kwargs["reasoning_effort"] = self.reasoning_effort
+            response = client.chat.completions.create(**request_kwargs)
 
             elapsed = time.time() - start_time
             self.log_response(response.choices[0].message.content, elapsed)
@@ -237,7 +248,8 @@ class OpenAIProvider(LLMProvider):
 class ZAIProvider(LLMProvider):
     """Z.AI (Zhipu / BigModel) API provider"""
 
-    def __init__(self, api_key: str, model: str, base_url: str = None, disable_ssl_verify: bool = False):
+    def __init__(self, api_key: str, model: str, base_url: str = None, disable_ssl_verify: bool = False,
+                 reasoning_effort: str = None):
         self.api_key = api_key
         self.model = model
         self.env_key = "ZHIPU_API_KEY"
@@ -246,6 +258,15 @@ class ZAIProvider(LLMProvider):
         self.timeout = getattr(config, 'ZHIPU_TIMEOUT', 120)
         self.disable_ssl_verify = disable_ssl_verify
         self.max_tokens = _resolve_max_tokens(config, 'ZHIPU')
+        # GLM-5.x thinking effort: "default" | "low" | "high" | "max".
+        # None = send nothing, the model auto-selects its default.
+        self.reasoning_effort = self._normalize_effort(reasoning_effort)
+
+    @staticmethod
+    def _normalize_effort(effort):
+        if effort and str(effort).strip().lower() in ("default", "low", "high", "max"):
+            return str(effort).strip().lower()
+        return None
 
     @property
     def name(self) -> str:
@@ -280,6 +301,10 @@ class ZAIProvider(LLMProvider):
                 "stream": False,
                 "max_tokens": self.max_tokens
             }
+            if self.reasoning_effort:
+                # GLM-5.x thinking effort (verified empirically: effort=max
+                # measurably deepens reasoning; unset -> model auto-defaults)
+                data["thinking"] = {"type": "enabled", "effort": self.reasoning_effort}
 
             # Make request
             response = http_session.post(
@@ -633,14 +658,19 @@ def get_provider(provider_name: Optional[str] = None, config_module=None) -> LLM
         api_key = getattr(config, 'OPENAI_API_KEY', '')
         model = getattr(config, 'OPENAI_MODEL', 'gpt-4o')
         base_url = getattr(config, 'OPENAI_BASE_URL', '') or None
-        return OpenAIProvider(api_key=api_key, model=model, base_url=base_url)
+        provider = OpenAIProvider(api_key=api_key, model=model, base_url=base_url)
+        provider.set_reasoning_effort(getattr(config, 'OPENAI_REASONING_EFFORT', None))
+        return provider
 
     elif provider_name == "zhipu":
         api_key = getattr(config, 'ZHIPU_API_KEY', '')
         model = getattr(config, 'ZHIPU_MODEL', 'glm-5.3')
         base_url = getattr(config, 'ZHIPU_BASE_URL', '') or None
         disable_ssl_verify = getattr(config, 'ZHIPU_DISABLE_SSL_VERIFY', False)
-        return ZAIProvider(api_key=api_key, model=model, base_url=base_url, disable_ssl_verify=disable_ssl_verify)
+        reasoning_effort = getattr(config, 'ZHIPU_REASONING_EFFORT', None)
+        return ZAIProvider(api_key=api_key, model=model, base_url=base_url,
+                           disable_ssl_verify=disable_ssl_verify,
+                           reasoning_effort=reasoning_effort)
 
     elif provider_name == "deepseek":
         api_key = getattr(config, 'DEEPSEEK_API_KEY', '')

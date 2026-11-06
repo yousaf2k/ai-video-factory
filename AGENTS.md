@@ -105,9 +105,9 @@ Idea → Story → Scene Graph → Shots → Images → Videos → Narration
 ### Web UI Architecture
 
 **Backend** (`web_ui/backend/`) — FastAPI + WebSocket (`/api/ws/progress/{project_id}`):
-- `api/`: routers — `projects.py`, `stories.py`, `editor.py`, `shots.py`, `queue.py`, `assets.py`, `config_api.py`
-- `services/`: business logic — `project_service.py`, `generation_service.py`, `queue_service.py`, `asset_service.py`, `export_service.py`
-- `models/`: Pydantic schemas per domain (project, story, shot, queue, asset)
+- `api/`: routers — `projects.py`, `stories.py`, `editor.py`, `shots.py`, `queue.py`, `assets.py`, `config_api.py`, `agent.py` (AI Agent Assistant REST + `/api/agent/ws` streaming chat)
+- `services/`: business logic — `project_service.py`, `generation_service.py`, `queue_service.py`, `asset_service.py`, `export_service.py`, `agent/` (engine, 56-tool registry, skills loader, MCP client — see `docs/features/AGENT_ASSISTANT.md`)
+- `models/`: Pydantic schemas per domain (project, story, shot, queue, asset, agent)
 
 **Frontend** (`web_ui/frontend/`) — Next.js 14 App Router, React Query, Radix UI + Tailwind CSS, Zustand, DnD Kit:
 - Feature components in `src/components/{feature}/` (directors, assets, characters, editor, queue, scenes, shots, …)
