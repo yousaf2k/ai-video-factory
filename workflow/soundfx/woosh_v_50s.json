@@ -6,12 +6,13 @@
     },
     "class_type": "WooshLoadFlow",
     "_meta": {
-      "title": "Woosh Model Loader [model_loader]"
+      "title": "Woosh Model Loader [model_loader]",
+      "cnr_id": "ComfyUI-Woosh",
+      "ver": "380b452d2e255d47ae854723a4ebfa97e4d59ce9"
     }
   },
   "9": {
     "inputs": {
-      "audioUI": "/api/view?filename=ComfyUI_temp_ppyqw_00001_.flac&type=temp&subfolder=&rand=0.12220625571663368",
       "audio": [
         "38",
         1
@@ -19,7 +20,9 @@
     },
     "class_type": "PreviewAudio",
     "_meta": {
-      "title": "Preview Audio"
+      "title": "Preview Audio",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   },
   "19": {
@@ -28,33 +31,9 @@
     },
     "class_type": "WooshTextEncode",
     "_meta": {
-      "title": "Woosh TextConditioning"
-    }
-  },
-  "33": {
-    "inputs": {
-      "frame_rate": 25,
-      "loop_count": 0,
-      "filename_prefix": "AnimateDiff",
-      "format": "video/h264-mp4",
-      "pix_fmt": "yuv420p",
-      "crf": 19,
-      "save_metadata": true,
-      "trim_to_audio": false,
-      "pingpong": false,
-      "save_output": true,
-      "images": [
-        "38",
-        0
-      ],
-      "audio": [
-        "38",
-        1
-      ]
-    },
-    "class_type": "VHS_VideoCombine",
-    "_meta": {
-      "title": "Video Combine [out_video]"
+      "title": "Woosh TextConditioning",
+      "cnr_id": "ComfyUI-Woosh",
+      "ver": "380b452d2e255d47ae854723a4ebfa97e4d59ce9"
     }
   },
   "34": {
@@ -70,7 +49,9 @@
     },
     "class_type": "VHS_LoadVideo",
     "_meta": {
-      "title": "Load Video (Upload) [in_video]"
+      "title": "Load Video (Upload) [in_video]",
+      "cnr_id": "comfyui-videohelpersuite",
+      "ver": "1.7.8"
     }
   },
   "37": {
@@ -84,7 +65,9 @@
     },
     "class_type": "WooshLoadVideo",
     "_meta": {
-      "title": "Woosh Video Loader"
+      "title": "Woosh Video Loader",
+      "cnr_id": "ComfyUI-Woosh",
+      "ver": "380b452d2e255d47ae854723a4ebfa97e4d59ce9"
     }
   },
   "38": {
@@ -111,7 +94,9 @@
     },
     "class_type": "WooshSample",
     "_meta": {
-      "title": "Woosh Sampler [sampler]"
+      "title": "Woosh Sampler [sampler]",
+      "cnr_id": "ComfyUI-Woosh",
+      "ver": "380b452d2e255d47ae854723a4ebfa97e4d59ce9"
     }
   },
   "40": {
@@ -121,7 +106,25 @@
     },
     "class_type": "WooshLoadFlow",
     "_meta": {
-      "title": "Woosh Model Loader"
+      "title": "Woosh Model Loader",
+      "cnr_id": "ComfyUI-Woosh",
+      "ver": "380b452d2e255d47ae854723a4ebfa97e4d59ce9"
+    }
+  },
+  "41": {
+    "inputs": {
+      "filename_prefix": "audio/ComfyUI",
+      "format": "flac",
+      "audio": [
+        "38",
+        1
+      ]
+    },
+    "class_type": "SaveAudioAdvanced",
+    "_meta": {
+      "title": "[out_video]",
+      "cnr_id": "comfy-core",
+      "ver": "0.43.0"
     }
   }
 }
