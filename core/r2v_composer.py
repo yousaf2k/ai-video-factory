@@ -23,6 +23,8 @@ handling is a no-op with zero refs.
 import logging
 import re
 
+from core.character_matching import resolve_character_name
+
 logger = logging.getLogger(__name__)
 
 R2V_PROMPT_CHAR_LIMIT = 7000
@@ -56,7 +58,16 @@ def _voice_texts_for_shot(shot, story):
     if not names:
         single = (shot.get('character_name') or '').strip()
         names = [single] if single else []
-    return [(n, voices[n]) for n in names if n in voices]
+    # Shots usually carry short names ("Chi She") while the story cast uses
+    # display names ("Chi She (Red Snake)") — resolve tolerantly, else voice
+    # lines never attach to the character's shots
+    out = []
+    for n in names:
+        display = resolve_character_name(n, list(voices.keys()))
+        text = voices.get(display) if display else None
+        if text:
+            out.append((display, text))
+    return out
 
 
 def _insert_into_subject_definitions(prompt: str, lines) -> str:

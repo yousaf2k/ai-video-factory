@@ -10,6 +10,10 @@ from datetime import datetime
 import contextlib
 from core.logger_config import get_logger
 from core import json_atomic
+from core.character_matching import (
+    canonicalize_name_list,
+    resolve_character_name,
+)
 import config
 
 
@@ -26,11 +30,14 @@ def _name_in_prompt(name, prompt, prompt_lower=None):
     attach The Shadow to every moody-lit shot. Prompts written entirely in
     lowercase fall back to a case-insensitive whole-word match."""
     if prompt_lower is None:
-        prompt_lower = (prompt or "").lower()
+        prompt_lower = (prompt or '').lower()
     name_lower = name.lower()
     if name_lower in prompt_lower:
         return True
-    words = [w for w in name_lower.split() if len(w) >= 4]
+    # Strip punctuation per word — display names carry qualifiers like
+    # "(White Snake)" and a bare "(white" would build an invalid regex
+    words = [re.sub(r"\W", "", w) for w in name_lower.split()]
+    words = [w for w in words if len(w) >= 4]
     if not words or not prompt:
         return False
     if not any(c.isupper() for c in prompt):
@@ -139,12 +146,17 @@ class ProjectManager:
         character objects at generation time.
 
         A shot is matched to characters explicitly (shot['characters'] name list,
-        else character_name). When the shot carries no character attribution, the
-        character names are matched against the shot's image_prompt — the same
-        matching the old generation-time lookup used, but done once at attach
-        time where the result is visible and editable per shot. Matched names
-        are persisted on shot['characters'] when the shot has none, so the UI
-        can show them and later syncs match explicitly.
+        else character_name). Shot names are matched tolerantly against the
+        story cast — the story names characters with display qualifiers
+        ("Chi She (Red Snake)") while shots usually carry the short form
+        ("Chi She"), so exact equality would drop most matches. Resolved names
+        are canonicalized back onto shot['characters'] (story display names),
+        so the UI and later syncs match exactly. When the shot carries no
+        character attribution at all, the character names are matched against
+        the shot's image_prompt — the same matching the old generation-time
+        lookup used, but done once at attach time where the result is visible
+        and editable per shot. Prompt-discovered names are also persisted on
+        shot['characters'] so the UI can show them.
 
         Only standard (non-FLFI2V) shots are touched — FLFI2V shots resolve
         then/now references from the character separately. Refs the sync
@@ -179,13 +191,19 @@ class ProjectManager:
                     refs_by_name[name.lower()] = asset_ref
         if not display_names:
             return 0
+        cast_names = list(display_names.values())
 
         def explicit_shot_names(shot):
-            names = [(n or '').strip().lower() for n in (shot.get('characters') or [])]
-            if not names:
-                cn = (shot.get('character_name') or '').strip().lower()
-                names = [cn] if cn else []
-            return [n for n in names if n in display_names]
+            raw = [n for n in (shot.get('characters') or []) if (n or '').strip()]
+            if not raw:
+                cn = (shot.get('character_name') or '').strip()
+                raw = [cn] if cn else []
+            resolved = []
+            for n in raw:
+                display = resolve_character_name(n, cast_names)
+                if display and display not in resolved:
+                    resolved.append(display)
+            return resolved
 
         def prompt_matched_names(shot):
             if shot.get('characters') or (shot.get('character_name') or '').strip():
@@ -194,7 +212,7 @@ class ProjectManager:
             if not prompt:
                 return []
             prompt_lower = prompt.lower()
-            return [lower for lower, name in display_names.items()
+            return [name for lower, name in display_names.items()
                     if _name_in_prompt(name, prompt, prompt_lower)]
 
         updated = 0
@@ -204,19 +222,28 @@ class ProjectManager:
             for shot in shots:
                 if shot.get('is_flfi2v'):
                     continue
-                matched = explicit_shot_names(shot) or prompt_matched_names(shot)
-                prompt_matched = matched if not explicit_shot_names(shot) else []
+                explicit = explicit_shot_names(shot)
+                matched = explicit or prompt_matched_names(shot)
+                prompt_matched = [] if explicit else matched
                 matched_refs = []
-                for lower in matched:
-                    ref = refs_by_name.get(lower)
+                for display in matched:
+                    ref = refs_by_name.get(display.lower())
                     if ref and ref not in matched_refs:
                         matched_refs.append(ref)
 
                 # Persist discovered attribution (prompt matching) so the UI and
-                # later syncs can use it — never overwrite existing attribution
+                # later syncs can use it — never overwrite existing attribution;
+                # explicit attribution gets canonicalized to story display names
+                # (e.g. 'Chi She' -> 'Chi She (Red Snake)') so chips and refs
+                # line up with the story cast
                 original_characters = shot.get('characters')
                 if prompt_matched and not original_characters:
-                    shot['characters'] = [display_names[lower] for lower in prompt_matched]
+                    shot['characters'] = list(prompt_matched)
+                elif explicit and original_characters:
+                    canonical, _ = canonicalize_name_list(
+                        shot.get('characters') or [], cast_names)
+                    if canonical != original_characters:
+                        shot['characters'] = canonical
 
                 original_refs = shot.get('reference_asset_ids') or []
                 synced = shot.get('synced_character_asset_refs') or []
@@ -247,6 +274,11 @@ class ProjectManager:
             1. character sheets of shot['characters'] (fallback: character_name)
             2. the owning scene's background sheet
             3. prop sheets of shot['props']
+
+        Character and prop names resolve tolerantly against the story cast —
+        story display names carry qualifiers ("Chi She (Red Snake)") that shot
+        names usually drop ("Chi She") — and resolve to the story spelling on
+        shot['characters'] / shot['props'].
 
         Only runs when the project's video_generation_type is 'r2v' (in r2v
         projects this supersedes sync_character_asset_refs, so the character
@@ -310,17 +342,33 @@ class ProjectManager:
                 if shot.get('is_flfi2v'):
                     continue
 
-                # Priority fill: characters -> background -> props (D2 order)
+                # Priority fill: characters -> background -> props (D2 order).
+                # Shot names resolve tolerantly against the story cast (story
+                # display names carry qualifiers shots drop) and are
+                # canonicalized to the story spelling for the same reason as
+                # the character-only sync.
                 refs = []
+                names_changed = False
 
                 shot_characters = shot.get('characters')
                 if not shot_characters:
                     name = (shot.get('character_name') or '').strip()
                     shot_characters = [name] if name else []
+                resolved_characters = []
                 for name in shot_characters:
                     name = (name or '').strip()
-                    if name in char_ref and char_ref[name] not in refs:
-                        refs.append(char_ref[name])
+                    display = resolve_character_name(name, char_names) if name else None
+                    if display:
+                        resolved_characters.append(display)
+                        ref = char_ref.get(display)
+                        if ref and ref not in refs:
+                            refs.append(ref)
+                if resolved_characters and shot.get('characters'):
+                    canonical, _ = canonicalize_name_list(
+                        shot.get('characters') or [], sorted(char_names))
+                    if canonical and canonical != shot.get('characters'):
+                        shot['characters'] = canonical
+                        names_changed = True
 
                 scene_bg = bg_ref.get(str(shot.get('scene_id')))
                 if scene_bg and scene_bg not in refs:
@@ -328,8 +376,17 @@ class ProjectManager:
 
                 for name in shot.get('props') or []:
                     name = (name or '').strip()
-                    if name in prop_ref and prop_ref[name] not in refs:
-                        refs.append(prop_ref[name])
+                    display = resolve_character_name(name, prop_names) if name else None
+                    if display:
+                        ref = prop_ref.get(display)
+                        if ref and ref not in refs:
+                            refs.append(ref)
+                if shot.get('props'):
+                    canonical_props, _ = canonicalize_name_list(
+                        shot.get('props') or [], sorted(prop_names))
+                    if canonical_props and canonical_props != shot.get('props'):
+                        shot['props'] = canonical_props
+                        names_changed = True
 
                 original_refs = shot.get('reference_asset_ids') or []
                 synced = shot.get('synced_video_ref_asset_refs') or []
@@ -341,7 +398,7 @@ class ProjectManager:
                 seen = set()
                 new_refs = [r for r in (user_refs + refs)
                             if not (r in seen or seen.add(r))]
-                if new_refs == original_refs:
+                if new_refs == original_refs and not names_changed:
                     continue
                 shot['reference_asset_ids'] = new_refs
                 shot['synced_video_ref_asset_refs'] = refs
