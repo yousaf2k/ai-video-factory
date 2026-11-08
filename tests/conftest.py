@@ -53,3 +53,20 @@ collect_ignore = [
 def temp_output_dir(tmp_path):
     """Fixture providing temporary output directory for tests"""
     return tmp_path
+
+
+# ---------------------------------------------------------------------------
+# Console streaming disabled for the offline test suite: existing provider
+# tests mock non-streaming HTTP responses (no SSE iter_lines). Streaming
+# behavior itself is covered by tests/unit/test_console_streaming.py.
+# ---------------------------------------------------------------------------
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _disable_llm_console_streaming(monkeypatch):
+    try:
+        import config
+        monkeypatch.setattr(config, "LLM_STREAM_TO_CONSOLE", False, raising=False)
+    except Exception:
+        pass

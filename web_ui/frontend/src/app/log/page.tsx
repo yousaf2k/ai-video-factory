@@ -47,7 +47,7 @@ export default function LogPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data: detail, isLoading: detailLoading } = useLLMLogDetail(selectedId);
 
-  const [detailTab, setDetailTab] = useState<'output' | 'input'>('output');
+  const [detailTab, setDetailTab] = useState<'output' | 'input' | 'raw_req' | 'raw_res'>('output');
   const [copied, setCopied] = useState(false);
 
   // Split state (top section height as % of the page), persisted to localStorage
@@ -146,9 +146,19 @@ export default function LogPage() {
     }
   };
 
+  const rawContent = (raw?: Record<string, unknown> | null) =>
+    raw ? JSON.stringify(raw, null, 2) : '';
+
   const copyVisibleContent = useCallback(async () => {
     if (!detail) return;
-    const content = detailTab === 'input' ? detail.prompt : detail.output || detail.error || '';
+    const content =
+      detailTab === 'input'
+        ? detail.prompt
+        : detailTab === 'raw_req'
+          ? rawContent(detail.raw_request)
+          : detailTab === 'raw_res'
+            ? rawContent(detail.raw_response)
+            : detail.output || detail.error || '';
     try {
       await navigator.clipboard.writeText(content);
       setCopied(true);
@@ -336,6 +346,24 @@ export default function LogPage() {
                 >
                   Input
                 </Button>
+                {detail.raw_request && (
+                  <Button
+                    variant={detailTab === 'raw_req' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setDetailTab('raw_req')}
+                  >
+                    Raw Request
+                  </Button>
+                )}
+                {detail.raw_response && (
+                  <Button
+                    variant={detailTab === 'raw_res' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setDetailTab('raw_res')}
+                  >
+                    Raw Response
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon" onClick={copyVisibleContent} title="Copy">
                   {copied ? (
                     <Check className="h-4 w-4 text-green-600" />
@@ -359,9 +387,13 @@ export default function LogPage() {
               <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
                 {detailTab === 'input'
                   ? detail.prompt
-                  : detail.status === 'error'
-                    ? detail.error || 'No output — the call failed.'
-                    : detail.output || ''}
+                  : detailTab === 'raw_req'
+                    ? rawContent(detail.raw_request) || 'No raw request recorded.'
+                    : detailTab === 'raw_res'
+                      ? rawContent(detail.raw_response) || 'No raw response recorded.'
+                      : detail.status === 'error'
+                        ? detail.error || 'No output — the call failed.'
+                        : detail.output || ''}
               </pre>
             </div>
           </>

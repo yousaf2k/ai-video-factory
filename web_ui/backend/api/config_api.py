@@ -51,13 +51,13 @@ _CONFIG_FIELDS: Dict[str, Tuple[str, str, str]] = {
     "ollama_model":                 ("OLLAMA_MODEL", "OLLAMA_MODEL", "str"),
     "lmstudio_base_url":            ("LMSTUDIO_BASE_URL", "LMSTUDIO_BASE_URL", "str"),
     "lmstudio_model":               ("LMSTUDIO_MODEL", "LMSTUDIO_MODEL", "str"),
+    "strata_base_url":              ("STRATA_BASE_URL", "STRATA_BASE_URL", "str"),
+    "strata_model":                 ("STRATA_MODEL", "STRATA_MODEL", "str"),
     "llm_max_tokens":               ("LLM_MAX_TOKENS", "LLM_MAX_TOKENS", "int"),
     # AI Agent Assistant (Web UI left-panel agent)
     "agent_llm_provider":           ("AGENT_LLM_PROVIDER", "AGENT_LLM_PROVIDER", "str"),
     "agent_llm_model":              ("AGENT_LLM_MODEL", "AGENT_LLM_MODEL", "str"),
     "agent_max_iterations":         ("AGENT_MAX_ITERATIONS", "AGENT_MAX_ITERATIONS", "int"),
-    "zhipu_reasoning_effort":       ("ZHIPU_REASONING_EFFORT", "ZHIPU_REASONING_EFFORT", "str"),
-    "openai_reasoning_effort":      ("OPENAI_REASONING_EFFORT", "OPENAI_REASONING_EFFORT", "str"),
     "agent_allow_dangerous_tools":  ("AGENT_ALLOW_DANGEROUS_TOOLS", "AGENT_ALLOW_DANGEROUS_TOOLS", "bool"),
     "agent_file_search_use_shell":  ("AGENT_FILE_SEARCH_USE_SHELL", "AGENT_FILE_SEARCH_USE_SHELL", "bool"),
     "agent_max_tool_result_chars":  ("AGENT_MAX_TOOL_RESULT_CHARS", "AGENT_MAX_TOOL_RESULT_CHARS", "int"),
@@ -88,12 +88,27 @@ _CONFIG_FIELDS: Dict[str, Tuple[str, str, str]] = {
     "lmstudio_max_tokens":          ("LMSTUDIO_MAX_TOKENS", "LMSTUDIO_MAX_TOKENS", "str"),
     "lmstudio_shot_batch_size":     ("LMSTUDIO_SHOT_BATCH_SIZE", "LMSTUDIO_SHOT_BATCH_SIZE", "str"),
     "lmstudio_parallel_batch_threads": ("LMSTUDIO_PARALLEL_BATCH_THREADS", "LMSTUDIO_PARALLEL_BATCH_THREADS", "str"),
+    "strata_max_tokens":            ("STRATA_MAX_TOKENS", "STRATA_MAX_TOKENS", "str"),
+    "strata_shot_batch_size":       ("STRATA_SHOT_BATCH_SIZE", "STRATA_SHOT_BATCH_SIZE", "str"),
+    "strata_parallel_batch_threads": ("STRATA_PARALLEL_BATCH_THREADS", "STRATA_PARALLEL_BATCH_THREADS", "str"),
+    # Thinking / reasoning effort per provider (custom values pass through)
+    "zhipu_reasoning_effort":       ("ZHIPU_REASONING_EFFORT", "ZHIPU_REASONING_EFFORT", "str"),
+    "openai_reasoning_effort":      ("OPENAI_REASONING_EFFORT", "OPENAI_REASONING_EFFORT", "str"),
+    "gemini_thinking_level":        ("GEMINI_THINKING_LEVEL", "GEMINI_THINKING_LEVEL", "str"),
+    "deepseek_thinking_level":      ("DEEPSEEK_THINKING_LEVEL", "DEEPSEEK_THINKING_LEVEL", "str"),
+    "qwen_thinking_level":          ("QWEN_THINKING_LEVEL", "QWEN_THINKING_LEVEL", "str"),
+    "kimi_thinking_level":          ("KIMI_THINKING_LEVEL", "KIMI_THINKING_LEVEL", "str"),
+    "ollama_thinking_level":        ("OLLAMA_THINKING_LEVEL", "OLLAMA_THINKING_LEVEL", "str"),
+    "lmstudio_thinking_level":      ("LMSTUDIO_THINKING_LEVEL", "LMSTUDIO_THINKING_LEVEL", "str"),
+    "strata_thinking_level":        ("STRATA_THINKING_LEVEL", "STRATA_THINKING_LEVEL", "str"),
     # Generation engines
     "image_generation_mode":        ("IMAGE_GENERATION_MODE", "IMAGE_GENERATION_MODE", "str"),
     "image_workflow":               ("IMAGE_WORKFLOW", "IMAGE_WORKFLOW", "str"),
     "video_generation_mode":        ("VIDEO_GENERATION_MODE", "VIDEO_GENERATION_MODE", "str"),
     "video_workflow":               ("VIDEO_WORKFLOW", "VIDEO_WORKFLOW", "str"),
     "soundfx_workflow":             ("SOUNDFX_WORKFLOW", "SOUNDFX_WORKFLOW", "str"),
+    "music_generation_mode":        ("MUSIC_GENERATION_MODE", "MUSIC_GENERATION_MODE", "str"),
+    "music_workflow":               ("MUSIC_WORKFLOW", "MUSIC_WORKFLOW", "str"),
     "prompt_mode":                  ("PROMPT_MODE", "DEFAULT_PROMPT_MODE", "str"),
     # ComfyUI
     "comfy_url":                    ("COMFY_URL", "COMFY_URL", "str"),
@@ -270,6 +285,44 @@ async def get_directors():
         )
 
 
+def _models_registry() -> dict:
+    """{provider: [model ids]} from models.json (empty dict on any error)."""
+    try:
+        from core import model_registry
+        return {p: model_registry.get_model_ids(p)
+                for p in model_registry.load_models_config().get("providers", {})}
+    except Exception as e:
+        logger.warning(f"Could not load models registry: {e}")
+        return {}
+
+
+def _supported_thinking_levels(provider: str) -> list:
+    """Standard thinking levels the provider's configured model supports.
+
+    Levels mapped to null in the model's thinkingLevelMap (unsupported) are
+    excluded so they never appear in the Settings dropdown.
+    """
+    import config
+    try:
+        from core import model_registry
+        model_attr = "GEMINI_TEXT_MODEL" if provider == "gemini" else f"{provider.upper()}_MODEL"
+        model = getattr(config, model_attr, "") or ""
+        return model_registry.supported_thinking_levels(provider, model)
+    except Exception as e:
+        logger.warning(f"Could not resolve supported thinking levels for {provider}: {e}")
+        return list(getattr(config, 'THINKING_LEVELS', []))
+
+
+def _thinking_level_maps() -> dict:
+    """{provider: {model_id: thinkingLevelMap}} for live UI filtering."""
+    try:
+        from core import model_registry
+        return model_registry.get_thinking_level_maps()
+    except Exception as e:
+        logger.warning(f"Could not load thinking level maps: {e}")
+        return {}
+
+
 @router.get("")
 async def get_config():
     """Get all configuration values (secrets excluded, only *_set flags)"""
@@ -291,6 +344,22 @@ async def get_config():
             "available_video_workflows": list(getattr(config, 'VIDEO_WORKFLOWS', {}).keys()),
             "available_image_workflows": list(getattr(config, 'IMAGE_WORKFLOWS', {}).keys()),
             "available_soundfx_workflows": list(getattr(config, 'SOUNDFX_WORKFLOWS', {}).keys()),
+            "available_music_workflows": list(getattr(config, 'MUSIC_WORKFLOWS', {}).keys()),
+            "music_generation_mode": getattr(config, 'MUSIC_GENERATION_MODE', 'comfyui'),
+            # Thinking/reasoning levels per provider (drives the Settings dropdown
+            # + custom level input; THINKING_CONFIG_FIELDS maps provider -> field).
+            # Options are filtered to the levels each provider's configured model
+            # supports (null in its thinkingLevelMap = hidden); the full maps are
+            # served so the UI re-filters live when the selected model changes.
+            "thinking_options": {
+                p: _supported_thinking_levels(p)
+                for p in getattr(config, 'THINKING_CONFIG_FIELDS', {})
+            },
+            "thinking_level_maps": _thinking_level_maps(),
+            "thinking_config_fields": dict(getattr(config, 'THINKING_CONFIG_FIELDS', {})),
+            # Available models per provider from models.json (PI format registry)
+            "models_registry": {p: ms for p, ms in
+                                _models_registry().items() if ms},
             # playwright_browser combines PLAYWRIGHT_BROWSER + PLAYWRIGHT_CHANNEL
             "playwright_browser": (
                 getattr(config, 'PLAYWRIGHT_CHANNEL', '') if getattr(config, 'PLAYWRIGHT_CHANNEL', '') in ['chrome', 'msedge']
@@ -397,6 +466,7 @@ _PROVIDER_ATTRS: Dict[str, Tuple[str, Optional[str], Optional[str]]] = {
     "deepseek": ("DEEPSEEK_MODEL", "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL"),
     "ollama":   ("OLLAMA_MODEL", None, "OLLAMA_BASE_URL"),
     "lmstudio": ("LMSTUDIO_MODEL", None, "LMSTUDIO_BASE_URL"),
+    "strata":   ("STRATA_MODEL", None, "STRATA_BASE_URL"),
 }
 
 
@@ -438,16 +508,20 @@ async def test_llm(request: TestLLMRequest):
             setattr(shim, base_attr, request.base_url)
 
         provider = get_provider(request.provider, config_module=shim)
-        provider.timeout = min(provider.timeout, 60)
+        # Local models may cold-load on first request - honor the provider's
+        # configured timeout with a small buffer instead of a fixed short cap.
+        test_timeout = int(provider.timeout) + 30
 
         def _ask():
             return provider.ask("Reply with exactly one word: PONG")
 
         start = time.time()
         try:
-            reply = await asyncio.wait_for(asyncio.to_thread(_ask), timeout=90)
+            reply = await asyncio.wait_for(asyncio.to_thread(_ask), timeout=test_timeout)
         except asyncio.TimeoutError:
-            return {"status": "error", "error": "Timed out after 90 seconds", "elapsed_ms": 90000}
+            return {"status": "error",
+                    "error": f"Timed out after {test_timeout} seconds",
+                    "elapsed_ms": test_timeout * 1000}
         elapsed_ms = int((time.time() - start) * 1000)
         reply_text = (reply or "").strip()
 

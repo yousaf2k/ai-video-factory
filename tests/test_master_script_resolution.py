@@ -22,6 +22,10 @@ class FakeProvider:
         self.prompts.append(prompt)
         return json.dumps(self.responses.pop(0))
 
+    def disable_thinking(self):
+        # Part of the LLMProvider contract; story builders call it.
+        return False
+
 
 def test_family_override_used_for_movie_directors():
     assert resolve_master_script_director("movie/horror") == "movie/_base/master_script"

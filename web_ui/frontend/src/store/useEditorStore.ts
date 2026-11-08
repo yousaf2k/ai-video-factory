@@ -26,6 +26,7 @@ export interface Track {
   order: number;
   isVisible?: boolean; // For video tracks - controls visibility in preview and export
   isMuted?: boolean; // For audio tracks - controls mute state for preview and export
+  volume?: number; // For audio tracks - playback/export gain multiplier (0-2, default 1)
 }
 
 export interface TimelineExport {
@@ -59,6 +60,7 @@ interface EditorState {
   setTracks: (tracks: Track[]) => void;
   toggleTrackVisibility: (trackId: string) => void;
   toggleTrackMute: (trackId: string) => void;
+  setTrackVolume: (trackId: string, volume: number) => void;
   addClip: (clip: Clip) => void;
   setClips: (clips: Clip[]) => void;
   updateClip: (id: string, updates: Partial<Clip>) => void;
@@ -84,8 +86,8 @@ export const useEditorStore: any = create<EditorState>((set: any) => ({
   tracks: [
     { id: 'v2', name: 'Video 2', type: 'video', order: 0, isVisible: true, isMuted: false },
     { id: 'v1', name: 'Video 1', type: 'video', order: 1, isVisible: true, isMuted: false },
-    { id: 'a1', name: 'Narration', type: 'audio', order: 2, isMuted: false },
-    { id: 'a2', name: 'BGM / SFX', type: 'audio', order: 3, isMuted: false },
+    { id: 'a1', name: 'Narration', type: 'audio', order: 2, isMuted: false, volume: 1 },
+    { id: 'a2', name: 'BGM / SFX', type: 'audio', order: 3, isMuted: false, volume: 1 },
   ],
   clips: [],
   selectedClipId: null,
@@ -112,6 +114,11 @@ export const useEditorStore: any = create<EditorState>((set: any) => ({
   toggleTrackMute: (trackId) => set((state: any) => ({
     tracks: state.tracks.map((track: any) =>
       track.id === trackId ? { ...track, isMuted: track.isMuted !== undefined ? !track.isMuted : true } : track
+    )
+  })),
+  setTrackVolume: (trackId, volume) => set((state: any) => ({
+    tracks: state.tracks.map((track: any) =>
+      track.id === trackId ? { ...track, volume: Math.max(0, Math.min(2, volume)) } : track
     )
   })),
   addClip: (clip) => set((state: any) => ({ clips: [...state.clips, clip] })),

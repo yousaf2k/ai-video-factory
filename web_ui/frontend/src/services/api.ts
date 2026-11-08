@@ -257,7 +257,8 @@ class ApiClient {
     soundfxWorkflow?: string,
     soundfxPrompt?: string,
     geminiModel?: string,
-    geminiThinking?: string
+    geminiThinking?: string,
+    noMusic?: boolean
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-video`, {
       force,
@@ -266,6 +267,7 @@ class ApiClient {
       video_variant: videoVariant || undefined,
       append_image_prompt: appendImagePrompt,
       generate_soundfx: generateSoundFX || false,
+      no_music: noMusic || false,
       draft_low_res_video: draftLowResVideo || false,
       prompt_override: promptOverride || undefined,
       resolution: resolution || undefined,
@@ -289,6 +291,71 @@ class ApiClient {
       workflow,
       prompt_override: promptOverride
     });
+  }
+
+  async generateMusic(
+    projectId: string,
+    shotIdOrIndex: string | number,
+    force: boolean = false,
+    mode?: string,
+    workflow?: string,
+    promptOverride?: string
+  ): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/shots/${shotIdOrIndex}/generate-music`, {
+      force,
+      mode,
+      workflow,
+      prompt_override: promptOverride
+    });
+  }
+
+  async generateSceneMusic(
+    projectId: string,
+    sceneId: number,
+    config?: { force?: boolean, mode?: string, workflow?: string, prompt_override?: string }
+  ): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/story/scenes/${sceneId}/generate-music`, config || {});
+  }
+
+  async uploadShotMusic(
+    projectId: string,
+    shotIdOrIndex: string | number,
+    file: File
+  ): Promise<{ music_path: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await this.client.post<{ status: string; music_path: string }>(
+      `/api/projects/${projectId}/shots/${shotIdOrIndex}/upload-music`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  }
+
+  async uploadSceneMusic(
+    projectId: string,
+    sceneId: number,
+    file: File
+  ): Promise<{ music_path: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await this.client.post<{ status: string; music_path: string }>(
+      `/api/projects/${projectId}/story/scenes/${sceneId}/upload-music`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  }
+
+  async deleteShotMusic(projectId: string, shotIdOrIndex: string | number): Promise<void> {
+    await this.client.delete(`/api/projects/${projectId}/shots/${shotIdOrIndex}/music`);
+  }
+
+  async deleteSceneMusic(projectId: string, sceneId: number): Promise<{ deleted: string[] }> {
+    const response = await this.client.delete<{ status: string; deleted: string[] }>(
+      `/api/projects/${projectId}/story/scenes/${sceneId}/music`
+    );
+    return response.data;
   }
 
 
@@ -461,6 +528,7 @@ class ApiClient {
       queue_setting?: string;
       append_image_prompt?: string;
       generate_soundfx?: boolean;
+      no_music?: boolean;
       draft_low_res_video?: boolean;
       departure_prompt_override?: string;
       then_prompt_override?: string;
@@ -470,6 +538,10 @@ class ApiClient {
       gemini_thinking?: string;
       soundfx_workflow?: string;
       soundfx_prompt?: string;
+      generate_music?: boolean;
+      music_mode?: string;
+      music_workflow?: string;
+      music_prompt?: string;
       background_style?: string;
     }
   ): Promise<any> {
@@ -504,7 +576,7 @@ class ApiClient {
   }
 
   // Assets
-  getAssetUrl(projectId: string, assetType: 'images' | 'videos', filename: string): string {
+  getAssetUrl(projectId: string, assetType: 'images' | 'videos' | 'music', filename: string): string {
     return `${API_BASE_URL}/api/projects/${projectId}/${assetType}/${filename}`;
   }
 

@@ -98,6 +98,8 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onF
         return 'Background';
       case GenerationType.SOUNDFX:
         return 'Sound FX';
+      case GenerationType.MUSIC:
+        return 'Music';
       case GenerationType.ASSET_IMAGE:
         return 'Asset Image';
       case GenerationType.ASSET_VIDEO:
@@ -125,6 +127,8 @@ export function QueueItem({ item, isSelected, onSelect, onCancel, onRequeue, onF
         return 'bg-orange-100 text-orange-700';
       case GenerationType.SOUNDFX:
         return 'bg-yellow-100 text-yellow-700';
+      case GenerationType.MUSIC:
+        return 'bg-fuchsia-100 text-fuchsia-700';
       default:
         return 'bg-gray-100 text-gray-700';
     }

@@ -420,7 +420,7 @@ class ProjectManager:
             return None
         rest = p[len(prefix):]
         media_dir, _, filename = rest.partition('/')
-        if not filename or media_dir not in ("images", "references", "backgrounds", "audio", "videos"):
+        if not filename or media_dir not in ("images", "references", "backgrounds", "audio", "videos", "music"):
             return None
         return f"p/{project_id}/{rest}"
 
@@ -704,6 +704,9 @@ class ProjectManager:
                 'soundfx_prompt': shot.get('soundfx_prompt'),
                 'soundfx_generated': shot.get('soundfx_generated', False),
                 'soundfx_path': shot.get('soundfx_path'),
+                'music_prompt': shot.get('music_prompt'),
+                'music_generated': shot.get('music_generated', False),
+                'music_path': shot.get('music_path'),
                 'scene_id': shot.get('scene_id', 0),
                 'batch_number': shot.get('batch_number', idx),
                 'reference_asset_ids': shot.get('reference_asset_ids', []),
@@ -899,6 +902,10 @@ class ProjectManager:
     def get_narration_dir(self, project_id):
         """Get the narration directory for a project"""
         return os.path.join(self.projects_dir, project_id, "narration")
+
+    def get_music_dir(self, project_id):
+        """Get the music directory for a project (generated scene/shot music)"""
+        return os.path.join(self.projects_dir, project_id, "music")
 
     def get_shots(self, project_id):
         """Get shots from shots.json"""

@@ -23,7 +23,7 @@ import {
   useImageGenerationOptions,
 } from "./ImageGenerationOptions";
 
-export type GenerationType = "image" | "video" | "soundfx";
+export type GenerationType = "image" | "video" | "soundfx" | "music";
 
 export interface GenerationConfig {
   force?: boolean;
@@ -40,6 +40,10 @@ export interface GenerationConfig {
   gemini_thinking?: string;
   soundfxWorkflow?: string;
   soundfxPrompt?: string;
+  musicMode?: string;
+  musicWorkflow?: string;
+  musicPrompt?: string;
+  noMusic?: boolean;
 }
 
 interface GenerationDialogProps {
@@ -52,6 +56,7 @@ interface GenerationDialogProps {
   title?: string;
   defaultPromptOverride?: string;
   defaultSoundFXPrompt?: string;
+  defaultMusicPrompt?: string;
   hidePrompt?: boolean;
   isFLFI2V?: boolean;
   isThenImage?: boolean;
@@ -68,6 +73,7 @@ export function GenerationDialog({
   title,
   defaultPromptOverride = "",
   defaultSoundFXPrompt = "",
+  defaultMusicPrompt = "",
   hidePrompt = false,
   isFLFI2V = false,
   isThenImage = false,
@@ -89,9 +95,15 @@ export function GenerationDialog({
   const [promptOverride, setPromptOverride] = useState(defaultPromptOverride);
   const [soundfxPrompt, setSoundfxPrompt] = useState(defaultSoundFXPrompt);
 
+  // Music generation state
+  const [musicMode, setMusicMode] = useState("comfyui");
+  const [musicWorkflow, setMusicWorkflow] = useState<string>("default");
+  const [musicPrompt, setMusicPrompt] = useState(defaultMusicPrompt);
+
   const [appendImagePrompt, setAppendImagePrompt] = useState("default");
   const [generateSoundFX, setGenerateSoundFX] = useState(false);
   const [draftLowResVideo, setDraftLowResVideo] = useState(false);
+  const [noMusic, setNoMusic] = useState(false);
   const [resolution, setResolution] = useState("720p");
   
   // Override toggle and custom prompt
@@ -104,11 +116,25 @@ export function GenerationDialog({
     if (isOpen) {
       setGenerateSoundFX(false);
       setDraftLowResVideo(false);
+      setNoMusic(false);
       setUseOverride(defaultUseOverride);
       setPromptOverride(defaultUseOverride && isThenImage ? DEFAULT_THEN_PROMPT : (defaultPromptOverride || ""));
       setSoundfxPrompt(defaultSoundFXPrompt || "");
-      
-      if (type === "soundfx") {
+      setMusicPrompt(defaultMusicPrompt || "");
+
+      if (type === "music") {
+        const savedMusicMode = localStorage.getItem(`music_mode_${projectId}`) || globalConfig?.music_generation_mode || "comfyui";
+        setMusicMode(savedMusicMode);
+
+        const savedMusicWf = localStorage.getItem(`music_workflow_${projectId}`);
+        if (savedMusicWf && (!globalConfig?.available_music_workflows || globalConfig.available_music_workflows.includes(savedMusicWf))) {
+          setMusicWorkflow(savedMusicWf);
+        } else if (globalConfig?.available_music_workflows?.length) {
+          setMusicWorkflow(globalConfig.available_music_workflows[0]);
+        } else {
+          setMusicWorkflow("default");
+        }
+      } else if (type === "soundfx") {
         const savedSoundfxWf = localStorage.getItem(`soundfx_workflow_${projectId}`);
         if (savedSoundfxWf && (!globalConfig?.available_soundfx_workflows || globalConfig.available_soundfx_workflows.includes(savedSoundfxWf))) {
           setSoundfxWorkflow(savedSoundfxWf);
@@ -147,7 +173,10 @@ export function GenerationDialog({
         
         const savedDraft = localStorage.getItem(`video_draft_${projectId}`);
         if (savedDraft) setDraftLowResVideo(savedDraft === "true");
- 
+
+        const savedNoMusic = localStorage.getItem(`video_no_music_${projectId}`);
+        setNoMusic(savedNoMusic === "true");
+
         const savedRes = localStorage.getItem(`video_resolution_${projectId}`);
         if (savedRes) setResolution(savedRes);
  
@@ -188,6 +217,7 @@ export function GenerationDialog({
       promptOverride: (type === "image" || useOverride) ? (promptOverride || undefined) : undefined,
       appendImagePrompt: type === "video" ? appendImagePrompt : undefined,
       generateSoundFX: type === "video" ? generateSoundFX : undefined,
+      noMusic: type === "video" ? noMusic : undefined,
       draftLowResVideo: type === "video" ? draftLowResVideo : undefined,
       resolution: type === "video" ? resolution : undefined,
       gemini_mode: isGeminiweb ? `${geminiModelValue}|${geminiThinkingValue}` : undefined,
@@ -195,6 +225,9 @@ export function GenerationDialog({
       gemini_thinking: isGeminiweb ? geminiThinkingValue : undefined,
       soundfxWorkflow: (type === "soundfx" || generateSoundFX) ? soundfxWorkflow : undefined,
       soundfxPrompt: (type === "soundfx" || generateSoundFX) ? (soundfxPrompt || undefined) : undefined,
+      musicMode: type === "music" ? musicMode : undefined,
+      musicWorkflow: type === "music" && musicMode === "comfyui" ? musicWorkflow : undefined,
+      musicPrompt: type === "music" ? (musicPrompt || undefined) : undefined,
     });
   };
 
@@ -209,7 +242,7 @@ export function GenerationDialog({
         </button>
 
         <h2 className="text-lg font-semibold mb-4">
-          {title || `Generate ${type === "image" ? "Image" : type === "video" ? "Video" : "Sound FX"}`}
+          {title || `Generate ${type === "image" ? "Image" : type === "video" ? "Video" : type === "music" ? "Music" : "Sound FX"}`}
         </h2>
 
         <div className="space-y-4">
@@ -415,6 +448,22 @@ export function GenerationDialog({
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
+                  id="regen-no-music"
+                  checked={noMusic}
+                  onChange={(e) => {
+                    setNoMusic(e.target.checked);
+                    localStorage.setItem(`video_no_music_${projectId}`, e.target.checked.toString());
+                  }}
+                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
+                />
+                <label htmlFor="regen-no-music" className="text-sm">
+                  🚫🎵 No H3 Music (remove music prompt section)
+                </label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
                   id="regen-soundfx"
                   checked={generateSoundFX}
                   onChange={(e) => {
@@ -537,6 +586,75 @@ export function GenerationDialog({
                 </div>
               )}
             </>
+          )}
+
+          {type === "music" && (
+            <div>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                Music Generation Mode
+              </label>
+              <Select
+                value={musicMode}
+                onValueChange={(val) => {
+                  setMusicMode(val);
+                  localStorage.setItem(`music_mode_${projectId}`, val);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="comfyui">ComfyUI</SelectItem>
+                  <SelectItem value="geminiweb">Gemini Web</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {musicMode === "comfyui" && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    Music Workflow
+                  </label>
+                  <Select
+                    value={musicWorkflow}
+                    onValueChange={(val) => {
+                      setMusicWorkflow(val);
+                      localStorage.setItem(`music_workflow_${projectId}`, val);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Music Workflow" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {globalConfig?.available_music_workflows?.map((wf) => (
+                        <SelectItem key={wf} value={wf}>
+                          {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                        </SelectItem>
+                      )) || (
+                        <SelectItem value="default">Default</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="mt-4">
+                <label className="block text-xs font-medium text-muted-foreground mb-1">
+                  Music Prompt
+                </label>
+                <Textarea
+                  value={musicPrompt}
+                  onChange={(e) => setMusicPrompt(e.target.value)}
+                  rows={4}
+                  placeholder="Describe the music: slow melancholic piano, ambient pads, 80 BPM..."
+                  className="text-xs resize-y"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {musicMode === "geminiweb"
+                    ? 'Sent to Gemini Web as "Create a music: <prompt>".'
+                    : "Leave blank to use the saved music prompt from the shot."}
+                </p>
+              </div>
+            </div>
           )}
 
           {type === "soundfx" && (

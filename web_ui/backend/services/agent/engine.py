@@ -34,6 +34,7 @@ _PROVIDER_ATTRS = {
     "kimi": ("KIMI_MODEL", "KIMI_API_KEY", "KIMI_BASE_URL"),
     "ollama": ("OLLAMA_MODEL", None, "OLLAMA_BASE_URL"),
     "lmstudio": ("LMSTUDIO_MODEL", None, "LMSTUDIO_BASE_URL"),
+    "strata": ("STRATA_MODEL", None, "STRATA_BASE_URL"),
 }
 
 # Rough context-window sizes (tokens) for the usage meter. Estimates — set
@@ -47,6 +48,7 @@ _PROVIDER_CONTEXT_LIMITS = {
     "kimi": 128_000,
     "ollama": 32_000,
     "lmstudio": 32_000,
+    "strata": 32_000,
 }
 
 _CJK_RE = re.compile(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]")
@@ -199,16 +201,18 @@ def _build_provider(cfg: Dict[str, Any]):
     model_attr = _PROVIDER_ATTRS.get(provider_name, (None, None, None))[0]
     if model_attr and model_override:
         setattr(shim, model_attr, model_override)
-    # Agent effort override: only for providers whose wire format supports it.
+    # Agent effort override: written to the provider's thinking/effort config
+    # attr (the same fields the Settings page persists); custom values pass
+    # through — core.llm_engine maps them to each provider's wire format.
     effort = (cfg.get("effort") or "").strip().lower()
-    if provider_name == "zhipu" and effort in ("default", "low", "high", "max"):
+    if effort in ("", "auto", "default"):
+        effort = None
+    if provider_name == "zhipu":
         shim.ZHIPU_REASONING_EFFORT = effort
-    elif provider_name == "zhipu":
-        shim.ZHIPU_REASONING_EFFORT = None
-    if provider_name == "openai" and effort in ("minimal", "low", "medium", "high"):
-        shim.OPENAI_REASONING_EFFORT = effort
     elif provider_name == "openai":
-        shim.OPENAI_REASONING_EFFORT = None
+        shim.OPENAI_REASONING_EFFORT = effort
+    else:
+        setattr(shim, f"{provider_name.upper()}_THINKING_LEVEL", effort)
     provider = get_provider(provider_name, config_module=shim)
     model_label = model_override or (getattr(shim, model_attr, "") if model_attr else "")
     return provider, provider_name, model_label

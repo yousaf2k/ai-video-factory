@@ -208,6 +208,31 @@ async def get_project_narration(project_id: str, filename: str):
         )
 
 
+@router.get("/{project_id}/music/{filename}", response_class=FileResponse)
+async def get_project_music(project_id: str, filename: str):
+    """Serve a project music audio file directly"""
+    try:
+        project_dir = project_service.get_project_dir(project_id)
+        music_dir = os.path.join(project_dir, "music")
+        audio_path = os.path.join(music_dir, filename)
+
+        if not os.path.exists(audio_path) or not os.path.isfile(audio_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Music {filename} not found for project {project_id}"
+            )
+
+        return FileResponse(audio_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving music {filename} for project {project_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to serve music: {str(e)}"
+        )
+
+
 @router.get("/{project_id}/audio/{filename}", response_class=FileResponse)
 async def get_project_audio(project_id: str, filename: str):
     """Serve a project audio file directly (custom uploads)"""

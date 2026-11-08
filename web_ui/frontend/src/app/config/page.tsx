@@ -52,12 +52,17 @@ const EDITABLE_KEYS = [
   "openai_base_url", "qwen_model", "qwen_base_url", "kimi_model",
   "kimi_base_url", "zhipu_model", "zhipu_base_url",
   "deepseek_model", "deepseek_base_url", "ollama_base_url", "ollama_model",
-  "lmstudio_base_url", "lmstudio_model",
+  "lmstudio_base_url", "lmstudio_model", "strata_base_url", "strata_model",
   "llm_max_tokens", "shot_generation_batch_size", "max_parallel_batch_threads",
   // Per-provider generation tuning overrides (blank = inherit the global value)
-  ...(["gemini", "openai", "zhipu", "qwen", "kimi", "deepseek", "ollama", "lmstudio"].flatMap(
+  ...(["gemini", "openai", "zhipu", "qwen", "kimi", "deepseek", "ollama", "lmstudio", "strata"].flatMap(
     (p) => [`${p}_max_tokens`, `${p}_shot_batch_size`, `${p}_parallel_batch_threads`]
   )),
+  // Thinking / reasoning effort per provider (custom values pass through)
+  "zhipu_reasoning_effort", "openai_reasoning_effort", "gemini_thinking_level",
+  "deepseek_thinking_level", "qwen_thinking_level", "kimi_thinking_level",
+  "ollama_thinking_level", "lmstudio_thinking_level",
+  "strata_thinking_level",
   "gemini_api_key", "openai_api_key", "zhipu_api_key", "qwen_api_key",
   "kimi_api_key", "deepseek_api_key", "elevenlabs_api_key",
   "image_generation_mode", "image_workflow", "video_generation_mode",
@@ -110,11 +115,9 @@ const DEFAULTS: Record<string, string | number | boolean> = {
   kimi_model: "kimi-labs",
   zhipu_model: "glm-5.3",
   deepseek_model: "deepseek-chat",
-  deepseek_base_url: "https://api.deepseek.com",
-  ollama_base_url: "http://localhost:11434",
   ollama_model: "llama2",
-  lmstudio_base_url: "http://localhost:1234",
   lmstudio_model: "lmstudio-community/qwen2",
+  strata_model: "strata",
   llm_max_tokens: 16384,
   shot_generation_batch_size: 1,
   max_parallel_batch_threads: 5,
@@ -287,6 +290,60 @@ function SelectInput({ label, value, onChange, options, hint, placeholder, disab
         </SelectContent>
       </Select>
     </FieldShell>
+  );
+}
+
+// Model picker fed by models.json (via GET /api/config models_registry):
+// dropdown of the registered ids + "Custom…" for unlisted models.
+function RegistryModelInput({ provider, label, placeholder, cfg, config, onChange }: {
+  provider: string;
+  label: string;
+  placeholder: string;
+  cfg: Record<string, unknown>;
+  config?: { models_registry?: Record<string, string[]> } | null;
+  onChange: (v: string) => void;
+}) {
+  const registryModels: string[] = (config?.models_registry as Record<string, string[]> | undefined)?.[provider] || [];
+  const current = String(cfg[`${provider}_model`] ?? "");
+  const CUSTOM = "__custom__";
+  const isCustom = current !== "" && !registryModels.includes(current);
+
+  if (!registryModels.length) {
+    return (
+      <TextInput
+        label={label}
+        value={current}
+        onChange={onChange}
+        placeholder={placeholder}
+        hint="Not in models.json — free text."
+      />
+    );
+  }
+
+  return (
+    <>
+      <SelectInput
+        label={label}
+        value={isCustom ? CUSTOM : current}
+        onChange={(v) => {
+          if (v === CUSTOM) return; // pick Custom… then type below
+          onChange(v);
+        }}
+        options={[
+          ...registryModels.map((m) => ({ value: m, label: m })),
+          { value: CUSTOM, label: "Custom…" },
+        ]}
+        hint="Loaded from models.json."
+      />
+      {isCustom && (
+        <TextInput
+          label={`${label} (custom)`}
+          value={current}
+          onChange={onChange}
+          placeholder={placeholder}
+        />
+      )}
+    </>
   );
 }
 
@@ -501,7 +558,7 @@ export default function ConfigPage() {
   // The model selector beside the provider dropdown is provider-specific, as
   // are the API key / base URL fields below it (local providers have no key)
   const selectedProvider = String(cfg.llm_provider || "gemini");
-  const selectedProviderUsesApiKey = !["ollama", "lmstudio"].includes(selectedProvider);
+  const selectedProviderUsesApiKey = !["ollama", "lmstudio", "strata"].includes(selectedProvider);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -552,6 +609,7 @@ export default function ConfigPage() {
                 { value: "kimi", label: "Kimi (Moonshot)" },
                 { value: "ollama", label: "Ollama (Local)" },
                 { value: "lmstudio", label: "LM Studio (Local)" },
+                { value: "strata", label: "Strata (Local)" },
               ]}
               hint="Provider used for story and shot generation."
             />
@@ -580,55 +638,126 @@ export default function ConfigPage() {
               />
             )}
             {selectedProvider === "openai" && (
-              <TextInput
+              <RegistryModelInput
+                provider="openai"
                 label="OpenAI Model"
-                value={String(cfg.openai_model || "gpt-4o")}
-                onChange={(v) => set("openai_model", v)}
                 placeholder="gpt-4o"
+                cfg={cfg as Record<string, unknown>}
+                config={config}
+                onChange={(v) => set("openai_model", v)}
               />
             )}
             {selectedProvider === "deepseek" && (
-              <TextInput
+              <RegistryModelInput
+                provider="deepseek"
                 label="DeepSeek Model"
-                value={String(cfg.deepseek_model || "deepseek-chat")}
-                onChange={(v) => set("deepseek_model", v)}
                 placeholder="deepseek-chat"
-                hint="deepseek-chat (V3) or deepseek-reasoner (R1)."
+                cfg={cfg as Record<string, unknown>}
+                config={config}
+                onChange={(v) => set("deepseek_model", v)}
               />
             )}
             {selectedProvider === "qwen" && (
-              <TextInput
+              <RegistryModelInput
+                provider="qwen"
                 label="Qwen Model"
-                value={String(cfg.qwen_model || "qwen-max")}
-                onChange={(v) => set("qwen_model", v)}
                 placeholder="qwen-max"
+                cfg={cfg as Record<string, unknown>}
+                config={config}
+                onChange={(v) => set("qwen_model", v)}
               />
             )}
             {selectedProvider === "kimi" && (
-              <TextInput
+              <RegistryModelInput
+                provider="kimi"
                 label="Kimi Model"
-                value={String(cfg.kimi_model || "kimi-labs")}
-                onChange={(v) => set("kimi_model", v)}
                 placeholder="kimi-labs"
+                cfg={cfg as Record<string, unknown>}
+                config={config}
+                onChange={(v) => set("kimi_model", v)}
               />
             )}
             {selectedProvider === "ollama" && (
-              <TextInput
+              <RegistryModelInput
+                provider="ollama"
                 label="Ollama Model"
-                value={String(cfg.ollama_model || "llama2")}
-                onChange={(v) => set("ollama_model", v)}
                 placeholder="llama2"
+                cfg={cfg as Record<string, unknown>}
+                config={config}
+                onChange={(v) => set("ollama_model", v)}
               />
             )}
             {selectedProvider === "lmstudio" && (
-              <TextInput
+              <RegistryModelInput
+                provider="lmstudio"
                 label="LM Studio Model"
-                value={String(cfg.lmstudio_model || "lmstudio-community/qwen2")}
-                onChange={(v) => set("lmstudio_model", v)}
                 placeholder="lmstudio-community/qwen2"
+                cfg={cfg as Record<string, unknown>}
+                config={config}
+                onChange={(v) => set("lmstudio_model", v)}
+              />
+            )}
+            {selectedProvider === "strata" && (
+              <RegistryModelInput
+                provider="strata"
+                label="Strata Model"
+                placeholder="strata"
+                cfg={cfg as Record<string, unknown>}
+                config={config}
+                onChange={(v) => set("strata_model", v)}
               />
             )}
           </div>
+
+          {/* Thinking / reasoning level for the selected provider — dropdown of
+              supported options + a custom passthrough value */}
+          {(() => {
+            const thinkingField = config?.thinking_config_fields?.[selectedProvider];
+            const thinkingOpts = config?.thinking_options?.[selectedProvider] || [];
+            if (!thinkingField) return null;
+            const CUSTOM = "__custom__";
+            const current = String((cfg as Record<string, unknown>)[thinkingField] ?? "");
+            const isCustom = current !== "" && !thinkingOpts.includes(current);
+            // Hide levels the selected model doesn't support: a null in its
+            // thinkingLevelMap (models.json) means "unsupported". Models without
+            // a map entry (custom ids) keep every level (values pass through).
+            const selectedModel = String(
+              (cfg as Record<string, unknown>)[`${selectedProvider}_model`] ?? "");
+            const levelMap = config?.thinking_level_maps?.[selectedProvider]?.[selectedModel];
+            const supported = levelMap
+              ? thinkingOpts.filter((lvl) => levelMap[lvl] !== null)
+              : thinkingOpts;
+            const hint = supported.length === 0
+              ? "The selected model doesn't support thinking levels."
+              : `Standard levels for every provider — mapped to each model's real values via models.json (unsupported levels send nothing).`;
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t">
+                <SelectInput
+                  label="Thinking / Reasoning Level"
+                  value={isCustom ? CUSTOM : (current || "default")}
+                  onChange={(v) => {
+                    if (v === CUSTOM) return; // pick Custom… then type below
+                    set(thinkingField, v);
+                  }}
+                  options={[
+                    { value: "default", label: "Default (model decides)" },
+                    ...supported
+                      .filter((o) => o !== "default")
+                      .map((o) => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) })),
+                    { value: CUSTOM, label: "Custom…" },
+                  ]}
+                  hint={hint}
+                />
+                <TextInput
+                  label="Custom Thinking Level"
+                  value={isCustom ? current : ""}
+                  onChange={(v) => set(thinkingField, v)}
+                  placeholder="e.g. none, minimal, turbo — passed to the API verbatim"
+                  hint="Overrides the dropdown when filled."
+                />
+              </div>
+            );
+          })()}
 
           {selectedProviderUsesApiKey && (
             <p className="text-xs text-muted-foreground italic">
@@ -720,7 +849,7 @@ export default function ConfigPage() {
               <>
                 <TextInput
                   label="DeepSeek Base URL"
-                  value={String(cfg.deepseek_base_url || "https://api.deepseek.com")}
+                  value={String(cfg.deepseek_base_url || "")}
                   onChange={(v) => set("deepseek_base_url", v)}
                   placeholder="https://api.deepseek.com"
                 />
@@ -735,7 +864,7 @@ export default function ConfigPage() {
             {selectedProvider === "ollama" && (
               <TextInput
                 label="Ollama Base URL"
-                value={String(cfg.ollama_base_url || "http://localhost:11434")}
+                value={String(cfg.ollama_base_url || "")}
                 onChange={(v) => set("ollama_base_url", v)}
                 placeholder="http://localhost:11434"
               />
@@ -743,9 +872,17 @@ export default function ConfigPage() {
             {selectedProvider === "lmstudio" && (
               <TextInput
                 label="LM Studio Base URL"
-                value={String(cfg.lmstudio_base_url || "http://localhost:1234")}
+                value={String(cfg.lmstudio_base_url || "")}
                 onChange={(v) => set("lmstudio_base_url", v)}
                 placeholder="http://localhost:1234"
+              />
+            )}
+            {selectedProvider === "strata" && (
+              <TextInput
+                label="Strata Base URL"
+                value={String(cfg.strata_base_url || "")}
+                onChange={(v) => set("strata_base_url", v)}
+                placeholder="http://127.0.0.1:8080"
               />
             )}
           </div>

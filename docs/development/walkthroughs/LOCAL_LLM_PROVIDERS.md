@@ -2,7 +2,7 @@
 
 ## 🆕 New Feature: Local LLM Support
 
-AI Video Factory now supports **two local LLM providers** that run entirely on your machine:
+AI Video Factory now supports **three local LLM providers** that run entirely on your machine:
 
 ## Available Providers
 
@@ -26,6 +26,23 @@ OLLAMA_MODEL = "llama2"
 ```
 
 **Models**: llama2, mistral, qwen2, codellama, llama3, and more
+
+### 3. Strata (OpenAI-compatible, local server)
+
+**Quick Install**:
+```bash
+# 1. Start your Strata local server (default: http://127.0.0.1:8080)
+
+# 2. Configure AI Video Factory
+# In Settings -> LLM Providers, pick "Strata (Local)" and set the
+# model name your server exposes, or via config.py:
+LLM_PROVIDER = "strata"
+STRATA_BASE_URL = "http://127.0.0.1:8080"
+STRATA_MODEL = "strata"
+```
+
+**Thinking control**: like LM Studio, the configured thinking level is passed
+through as `reasoning_effort` on `/v1/chat/completions` (Default sends nothing).
 
 ### 2. LM Studio (OpenAI-compatible, GUI-focused)
 

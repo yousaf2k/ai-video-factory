@@ -45,7 +45,7 @@ from web_ui.backend.models.shot import (
     UpdateShotsRequest, UpdateShotRequest, RegenerateImageRequest,
     RegenerateVideoRequest, BatchRegenerateRequest, ReplanShotsRequest,
     SelectImageRequest, SelectVideoRequest, RemoveWatermarkRequest,
-    RegenerateSoundFXRequest
+    RegenerateSoundFXRequest, RegenerateMusicRequest
 )
 from web_ui.backend.services.project_service import ProjectService
 from web_ui.backend.services.generation_service import get_generation_service
@@ -193,10 +193,11 @@ GENERATION_STATUS_FIELDS = (
     'meeting_video_rendered', 'meeting_video_path',
     'departure_video_rendered', 'departure_video_path',
     'soundfx_generated', 'soundfx_path',
+    'music_generated', 'music_path',
 )
 
 # Fields copied verbatim (never renamed by update_shots, stored relative)
-_VERBATIM_STATUS_FIELDS = {'soundfx_generated', 'soundfx_path'}
+_VERBATIM_STATUS_FIELDS = {'soundfx_generated', 'soundfx_path', 'music_generated', 'music_path'}
 
 
 def merge_fresh_generation_status(incoming_shots, current_shots, rename_operations):
@@ -363,7 +364,8 @@ async def update_shot(project_id: str, shot_id_or_index: str, request: UpdateSho
         def modify_shot(shots):
             shot = shots[shot_index - 1]
             for field in ['duration', 'image_prompt', 'motion_prompt', 'video_prompt', 'prompt_type', 'camera', 'narration', 'scene_id',
-                         'then_image_prompt', 'now_image_prompt', 'meeting_video_prompt', 'departure_video_prompt']:
+                         'then_image_prompt', 'now_image_prompt', 'meeting_video_prompt', 'departure_video_prompt',
+                         'soundfx_prompt', 'music_prompt']:
                 val = getattr(request, field, None)
                 if val is not None:
                     shot[field] = val
@@ -466,6 +468,66 @@ async def generate_single_shot_soundfx(project_id: str, shot_id_or_index: str, r
         return {"status": "queued", "item_count": len(result)}
     except Exception as e:
         logger.error(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{shot_id_or_index}/generate-music")
+async def generate_single_shot_music(project_id: str, shot_id_or_index: str, request: RegenerateMusicRequest):
+    """Queue music generation for a single shot"""
+    try:
+        await _resolve_shot(project_id, shot_id_or_index)
+        result = generation_service.add_single_shot_to_queue(project_id, shot_id_or_index, GenerationType.MUSIC, request)
+        return {"status": "queued", "item_count": len(result)}
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{shot_id_or_index}/upload-music")
+async def upload_shot_music(project_id: str, shot_id_or_index: str, file: UploadFile = File(...)):
+    """Upload a music file for a shot (fallback when generation is unavailable)"""
+    try:
+        shot, shot_index = await _resolve_shot(project_id, shot_id_or_index)
+        content = await file.read()
+        abs_path, rel_path = generation_service.save_uploaded_music(
+            project_id, 'shot', shot_index, file.filename, content)
+
+        def modify_shot(shots):
+            target = shots[shot_index - 1]
+            target['music_path'] = rel_path
+            target['music_generated'] = True
+
+        project_service.project_manager.update_shots_safely(project_id, modify_shot)
+        logger.info(f"Uploaded music for shot {shot_index}: {rel_path}")
+        return {"status": "success", "music_path": rel_path}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error uploading shot music: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{shot_id_or_index}/music")
+async def delete_shot_music(project_id: str, shot_id_or_index: str):
+    """Delete the shot's music file and clear its music status"""
+    try:
+        shot, shot_index = await _resolve_shot(project_id, shot_id_or_index)
+        music_path = shot.get('music_path')
+
+        def modify_shot(shots):
+            target = shots[shot_index - 1]
+            target['music_path'] = None
+            target['music_generated'] = False
+
+        if music_path:
+            abs_path = config.resolve_path(music_path)
+            if os.path.exists(abs_path):
+                os.remove(abs_path)
+
+        project_service.project_manager.update_shots_safely(project_id, modify_shot)
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Error deleting shot music: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

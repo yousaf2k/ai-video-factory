@@ -18,6 +18,7 @@ class GenerationType(str, Enum):
     NARRATION = "narration"
     BACKGROUND = "background"
     SOUNDFX = "soundfx"
+    MUSIC = "music"
     THUMBNAIL = "thumbnail"
     CHARACTER_IMAGE = "character_image"
     PROP_IMAGE = "prop_image"
@@ -67,12 +68,16 @@ class QueueItem(BaseModel):
     video_variant: Optional[str] = Field(None, description="Video variant (meeting/departure)")
     append_image_prompt: Optional[str] = Field(None, description="Append image prompt position ('none', 'start', 'end')")
     generate_soundfx: bool = Field(default=False, description="Auto-generate sound FX after video generation")
+    no_music: bool = Field(default=False, description="Strip the non_diegetic_music section from the H3 video prompt")
     draft_low_res_video: bool = Field(default=False, description="Generate video at half resolution (divisible by 16)")
     aspect_ratio: Optional[str] = Field(None, description="Aspect ratio for thumbnails/standard shots")
     resolution: Optional[str] = Field(None, description="Resolution string ('480p', '720p', etc.)")
     gemini_mode: Optional[str] = Field(None, description="Gemini model mode (Fast/Thinking/Pro)")
     soundfx_workflow: Optional[str] = Field(None, description="Override Sound FX Workflow template")
     soundfx_prompt: Optional[str] = Field(None, description="Prompt override for sound FX generation")
+    music_mode: Optional[str] = Field(None, description="Music generation mode: 'comfyui' or 'geminiweb'")
+    music_workflow: Optional[str] = Field(None, description="Override Music Workflow template (comfyui mode)")
+    music_prompt: Optional[str] = Field(None, description="Prompt override for music generation")
     background_style: Optional[str] = Field(None, description="Named-style text (styles.json) appended to the end of the background prompt")
     is_poster: bool = Field(default=False, description="Is this a poster-style generation?")
 

@@ -13,6 +13,7 @@ import threading
 import logging
 import time
 import shutil
+import subprocess
 import uuid
 
 # Add parent directory to path
@@ -124,6 +125,8 @@ class GenerationService:
             return item.video_mode or getattr(config, 'VIDEO_GENERATION_MODE', 'comfyui')
         elif item.generation_type == GenerationType.NARRATION:
             return getattr(config, 'TTS_METHOD', 'local')
+        elif item.generation_type == GenerationType.MUSIC:
+            return item.music_mode or getattr(config, 'MUSIC_GENERATION_MODE', 'comfyui')
         return 'other'
 
     def _get_project_video_generation_type(self, project_id: str) -> str:
@@ -253,6 +256,8 @@ class GenerationService:
                         await self._process_background_generation(item)
                     elif item.generation_type == GenerationType.SOUNDFX:
                         await self._process_soundfx_generation(item)
+                    elif item.generation_type == GenerationType.MUSIC:
+                        await self._process_music_generation(item)
                     elif item.generation_type == GenerationType.THUMBNAIL:
                         await self._process_thumbnail_generation(item)
                     else:
@@ -327,7 +332,8 @@ class GenerationService:
                         GenerationType.MEETING_VIDEO: 2,
                         GenerationType.DEPARTURE_VIDEO: 2,
                         GenerationType.ASSET_VIDEO: 2,
-                        GenerationType.SOUNDFX: 3
+                        GenerationType.SOUNDFX: 3,
+                        GenerationType.MUSIC: 3
                     }
                     return (type_order.get(item.generation_type, 10), item.priority)
 
@@ -656,7 +662,10 @@ class GenerationService:
                 variant,
                 None, # reference_images
                 GenerationType.CHARACTER_IMAGE,
-                gemini_mode=item.gemini_mode
+                gemini_mode=item.gemini_mode,
+                # Reference sheets are always landscape 16:9 by spec (8-view
+                # grid), regardless of the project's aspect ratio.
+                aspect_ratio="16:9"
             )
             
             # Update story.json under the project lock with a fresh on-disk read,
@@ -765,6 +774,8 @@ class GenerationService:
                     await self._process_background_generation(item)
                 elif item.generation_type == GenerationType.SOUNDFX:
                     await self._process_soundfx_generation(item)
+                elif item.generation_type == GenerationType.MUSIC:
+                    await self._process_music_generation(item)
                 else:
                     logger.warning(f"Unknown generation type on force start: {item.generation_type}")
             except Exception as e:
@@ -839,7 +850,8 @@ class GenerationService:
                 resolution=res,
                 prompt_id_callback=save_prompt_id,
                 existing_prompt_id=item.comfyui_prompt_id,
-                gemini_mode=item.gemini_mode
+                gemini_mode=item.gemini_mode,
+                no_music=getattr(item, 'no_music', False)
             )
 
             logger.info(f"Completed video generation for queue item {item.item_id}")
@@ -1024,6 +1036,40 @@ class GenerationService:
             logger.error(f"Error processing sound FX generation for {item.item_id}: {e}")
             raise
 
+    async def _process_music_generation(self, item: QueueItem):
+        """Process music generation for a queue item (shot-scoped or scene-scoped)"""
+        try:
+            if item.shot_index is None and item.scene_id is not None:
+                # Scene background music — scene-scoped queue item
+                await self.regenerate_scene_music(
+                    item.project_id,
+                    item.scene_id,
+                    mode=getattr(item, 'music_mode', None),
+                    workflow=getattr(item, 'music_workflow', None),
+                    prompt_override=getattr(item, 'music_prompt', None),
+                    force=True
+                )
+            else:
+                story = self.project_manager.get_story(item.project_id)
+                project_title = self._gemini_chat_title(story, item.project_id)
+
+                await self.generate_music(
+                    item.project_id,
+                    item.shot_index,
+                    force=getattr(item, 'force', True),
+                    mode=getattr(item, 'music_mode', None),
+                    workflow=getattr(item, 'music_workflow', None),
+                    prompt_override=getattr(item, 'music_prompt', None),
+                    gemini_mode=item.gemini_mode,
+                    project_title=project_title,
+                    shot_id=item.shot_id
+                )
+
+            logger.info(f"Completed music generation for queue item {item.item_id}")
+        except Exception as e:
+            logger.error(f"Error processing music generation for {item.item_id}: {e}")
+            raise
+
     def cancel_project(self, project_id: str):
         """Mark a project as cancelled to halt background queue processing."""
         self.cancelled_projects.add(project_id)
@@ -1145,14 +1191,29 @@ class GenerationService:
             # For standalone soundfx generation, 'prompt_override' is the sfx prompt
             if generation_type == GenerationType.SOUNDFX:
                 soundfx_prompt = getattr(request, 'prompt_override', None)
-            
+
             # For video/batch generation, check 'soundfx_prompt' specifically
             if not soundfx_prompt:
                 soundfx_prompt = getattr(request, 'soundfx_prompt', None)
-        
+
         # Final fallback to shot data
         if not soundfx_prompt and shot:
             soundfx_prompt = shot.get('soundfx_prompt')
+
+        # Extract music prompt override (same convention as soundfx)
+        music_prompt = None
+        if request:
+            # For standalone music generation, 'prompt_override' is the music prompt
+            if generation_type == GenerationType.MUSIC:
+                music_prompt = getattr(request, 'prompt_override', None)
+
+            # For video/batch generation, check 'music_prompt' specifically
+            if not music_prompt:
+                music_prompt = getattr(request, 'music_prompt', None)
+
+        # Final fallback to shot data
+        if not music_prompt and shot:
+            music_prompt = shot.get('music_prompt')
 
         return QueueItem(
             item_id="",  # Will be assigned by QueueService
@@ -1180,8 +1241,12 @@ class GenerationService:
             video_variant=getattr(request, 'video_variant', None) if request else None,
             append_image_prompt=getattr(request, 'append_image_prompt', None) if request else None,
             generate_soundfx=getattr(request, 'generate_soundfx', False) if request else False,
+            no_music=getattr(request, 'no_music', False) if request else False,
             soundfx_workflow=getattr(request, 'soundfx_workflow', getattr(request, 'workflow', None)) if request else None,
             soundfx_prompt=soundfx_prompt,
+            music_mode=getattr(request, 'music_mode', getattr(request, 'mode', None)) if request else None,
+            music_workflow=getattr(request, 'music_workflow', getattr(request, 'workflow', None)) if request and generation_type == GenerationType.MUSIC else None,
+            music_prompt=music_prompt,
             draft_low_res_video=getattr(request, 'draft_low_res_video', False) if request else False,
             resolution=(getattr(request, 'resolution', None) or None) if request else None,
             gemini_mode=self._resolve_gemini_mode(request, shot)
@@ -1414,6 +1479,56 @@ class GenerationService:
         self._wake_up_processor()
         return added_items
 
+    def add_scene_music_to_queue(
+        self,
+        project_id: str,
+        scene_id: int,
+        request: Any
+    ) -> list:
+        """Add a scene music generation item to the background queue.
+
+        Scene music goes through the unified queue (unlike narration's
+        fire-and-forget tasks) so it is visible, cancellable and retryable
+        from the queue panel.
+        """
+        from web_ui.backend.services.queue_service import get_queue_service
+        # Ensure queue processor is running
+        self._ensure_queue_processor_started()
+
+        story = self.project_manager.get_story(project_id)
+        project_title = self._gemini_chat_title(story, project_id)
+
+        scenes = (story or {}).get('scenes', [])
+        if scene_id < 0 or scene_id >= len(scenes):
+            raise ValueError(f"Scene index {scene_id} out of range")
+        scene = scenes[scene_id]
+
+        # Request override wins, then the scene's own music prompt
+        music_prompt = getattr(request, 'prompt_override', None) if request else None
+        if not music_prompt:
+            music_prompt = scene.get('music_prompt')
+
+        item = QueueItem(
+            item_id="",
+            project_id=project_id,
+            shot_index=None,
+            scene_id=scene_id,
+            generation_type=GenerationType.MUSIC,
+            status=QueueItemStatus.QUEUED,
+            progress=0,
+            priority=60,
+            project_title=project_title,
+            scene_name=scene.get('scene_name') or f"Scene {scene_id + 1}",
+            music_mode=getattr(request, 'mode', None) if request else None,
+            music_workflow=getattr(request, 'workflow', None) if request else None,
+            music_prompt=music_prompt,
+        )
+
+        queue_service = get_queue_service()
+        added_items = queue_service.add_items([item])
+        self._wake_up_processor()
+        return added_items
+
     def queue_character_image(self, project_id: str, character_index: int, request: Any):
         """Add character image to queue"""
         self._ensure_queue_processor_started()
@@ -1589,9 +1704,15 @@ class GenerationService:
                     video_item = self._create_queue_item(project_id, idx, GenerationType.VIDEO, shot, story, request=request)
                     video_items.append(video_item)
 
+            # Create music queue items (standalone or after videos, mirroring
+            # the soundfx batch convention)
+            if getattr(request, 'generate_music', False):
+                music_item = self._create_queue_item(project_id, idx, GenerationType.MUSIC, shot, story, request=request)
+                other_items.append(music_item)
+
         # Assemble the final queue in the priority order:
         # All NOW images globally first -> then THEN images -> Standard images
-        # -> r2v reference sheets -> All Videos
+        # -> r2v reference sheets -> All Videos -> Music
         # This satisfies the user's explicit request: "queue all now images first then then images"
         queue_items = []
         queue_items.extend(now_images)
@@ -2136,7 +2257,7 @@ class GenerationService:
         prompt_id_callback=None, existing_prompt_id=None,
         shot_id: str = None, prompt_override: Optional[str] = None,
         resolution: Optional[str] = None, gemini_mode: Optional[str] = None,
-        prompt_type: Optional[str] = None
+        prompt_type: Optional[str] = None, no_music: bool = False
     ) -> str:
         """
         Regenerate video for a single shot
@@ -2236,7 +2357,8 @@ class GenerationService:
                 prompt_override=prompt_override,
                 resolution=resolution,
                 gemini_mode=gemini_mode,
-                prompt_type=prompt_type
+                prompt_type=prompt_type,
+                no_music=no_music
             )
 
             # Mark as rendered safely
@@ -2364,6 +2486,563 @@ class GenerationService:
                 "shot_id": shots[shot_index - 1].get('id') if shot_index <= len(shots) else None,
                 "generation_type": "soundfx",
                 "error": str(e)
+            })
+            raise
+
+    async def generate_music(
+        self, project_id: str, shot_index: int, force: bool = False, mode: str = None,
+        workflow: str = None, prompt_override: str = None, gemini_mode: str = None,
+        project_title: str = None, shot_id: str = None
+    ) -> str:
+        """
+        Generate background music for a shot using the configured music mode.
+
+        Args:
+            project_id: Project identifier
+            shot_index: Shot number (1-based)
+            force: Force regeneration even if music already exists
+            mode: Music generation mode ('comfyui' or 'geminiweb'); None = config default
+            workflow: Music workflow key (comfyui mode)
+            prompt_override: Override the shot's music_prompt
+            gemini_mode: Gemini model mode (geminiweb mode)
+            project_title: Gemini chat title (geminiweb mode)
+            shot_id: Stable shot ID (preferred over index for resolution)
+
+        Returns:
+            Path to the generated music audio file (mp3)
+        """
+        try:
+            shots = self.project_manager.get_shots(project_id)
+
+            shot = None
+            if shot_id:
+                shot = next((s for s in shots if s.get('id') == shot_id), None)
+                if shot is not None:
+                    shot_index = shot.get('index', shot_index)
+            if shot is None:
+                if shot_index < 1 or shot_index > len(shots):
+                    raise ValueError(f"Shot {shot_index} not found")
+                shot = shots[shot_index - 1]
+
+            # Check if already exists and not forcing
+            if not force and shot.get('music_generated', False):
+                logger.info(f"Shot {shot_index} already has music, skipping")
+                return shot.get('music_path')
+
+            # Resolve the music prompt (override -> shot prompt)
+            music_prompt = prompt_override or shot.get('music_prompt') or ""
+            if not music_prompt.strip():
+                raise ValueError(
+                    f"Shot {shot_index} has no music prompt. "
+                    "Set a music prompt on the shot or provide an override.")
+
+            import config
+            resolved_mode = (mode or getattr(config, 'MUSIC_GENERATION_MODE', 'comfyui')).lower()
+
+            logger.info(f"Generating music for shot {shot_index} (mode={resolved_mode})")
+
+            # Mark queue item as active
+            self._mark_queue_item_active(project_id, shot_index, GenerationType.MUSIC)
+
+            # Broadcast initial 0% progress
+            manager.broadcast_sync(project_id, {
+                "type": "progress",
+                "project_id": project_id,
+                "shot_index": shot_index,
+                "shot_id": shot.get('id'),
+                "generation_type": "music",
+                "progress": 0
+            })
+
+            music_dir = self.project_manager.get_music_dir(project_id)
+            os.makedirs(music_dir, exist_ok=True)
+            version = self._get_next_music_version(music_dir, shot_index, kind='shot')
+            output_path = os.path.join(music_dir, f"shot_{shot_index:03d}_{version:03d}.mp3")
+
+            if resolved_mode == 'geminiweb':
+                from core.geminiweb_music_generator import generate_music_geminiweb
+                prefix = getattr(config, 'MUSIC_GEMINIWEB_PROMPT_PREFIX', 'Create a music:')
+                full_prompt = f"{prefix} {music_prompt}".strip()
+                if not project_title:
+                    story = self.project_manager.get_story(project_id)
+                    project_title = self._gemini_chat_title(story, project_id)
+                final_path = await asyncio.to_thread(
+                    generate_music_geminiweb,
+                    full_prompt,
+                    output_path,
+                    project_title,
+                    gemini_mode
+                )
+                if not final_path or not os.path.exists(final_path):
+                    raise RuntimeError(f"Music generation failed for shot {shot_index} (GeminiWeb)")
+            else:
+                final_path = await self._generate_music_comfyui(
+                    project_id,
+                    shot,
+                    workflow_key=workflow,
+                    prompt_override=music_prompt
+                )
+
+            # Update shot with music path atomically
+            self.project_manager.update_shot_metadata(
+                project_id,
+                {
+                    'music_path': self.project_manager.relativize_path(final_path),
+                    'music_generated': True
+                },
+                shot_id=shot.get('id'),
+                shot_index=shot_index
+            )
+
+            # Mark queue item as completed
+            self._mark_queue_item_completed(project_id, shot_index, GenerationType.MUSIC)
+
+            # Broadcast completion
+            manager.broadcast_sync(project_id, {
+                "type": "completed",
+                "project_id": project_id,
+                "shot_index": shot_index,
+                "shot_id": shot.get('id'),
+                "generation_type": "music"
+            })
+
+            logger.info(f"Shot {shot_index} music generated: {final_path}")
+            return final_path
+
+        except Exception as e:
+            logger.error(f"Error generating music for shot {shot_index}: {e}")
+            # Mark queue item as failed
+            self._mark_queue_item_failed(project_id, shot_index, GenerationType.MUSIC, str(e))
+            # Broadcast cancelled event to clear loading state
+            manager.broadcast_sync(project_id, {
+                "type": "cancelled",
+                "project_id": project_id,
+                "shot_index": shot_index,
+                "shot_id": shots[shot_index - 1].get('id') if shot_index <= len(shots) else None,
+                "generation_type": "music",
+                "error": str(e)
+            })
+            raise
+
+    async def _generate_music_comfyui(self, project_id: str, shot: Dict[str, Any],
+                                      workflow_key: str = None, prompt_override: str = None) -> str:
+        """Generate music for a shot using a ComfyUI workflow (asynchronous).
+
+        Loads the specified (or default) music workflow template, injects the
+        music prompt (and optional lyrics/duration), submits, waits, and saves
+        the output as an mp3 in the project's music dir.
+        """
+        import config
+        import requests as http_requests
+        from core.comfy_client import submit, async_wait_for_prompt_completion_with_progress, get_output_file_path
+
+        shot_index = shot['index']
+        music_dir = self.project_manager.get_music_dir(project_id)
+        os.makedirs(music_dir, exist_ok=True)
+
+        # Select workflow
+        wf_key = workflow_key or getattr(config, 'MUSIC_WORKFLOW', 'default')
+        all_wfs = getattr(config, 'MUSIC_WORKFLOWS', {})
+
+        if wf_key not in all_wfs and "default" in all_wfs:
+            wf_key = "default"
+
+        if wf_key not in all_wfs:
+            raise RuntimeError(
+                "No music workflow discovered (check workflow/music and ComfyUI). "
+                "Add a music workflow JSON or switch the music mode to GeminiWeb.")
+        wf_info = all_wfs[wf_key]
+        workflow_path = wf_info["workflow_path"]
+
+        logger.info(f"Using music workflow: {wf_key} ({workflow_path})")
+
+        with open(workflow_path, 'r', encoding='utf-8') as f:
+            wf = json.load(f)
+
+        # Prompt node - set the music prompt (auto-detect the input name)
+        prompt_text = prompt_override or shot.get('music_prompt') or ""
+        prompt_node_id = wf_info.get('prompt_node_id')
+        if not prompt_node_id or prompt_node_id not in wf:
+            raise RuntimeError(f"Music workflow '{wf_key}' has no resolvable prompt node")
+        prompt_inputs = wf[prompt_node_id].get('inputs', {})
+        for key in ('description', 'tags', 'prompt', 'text'):
+            if key in prompt_inputs:
+                wf[prompt_node_id]['inputs'][key] = prompt_text
+                break
+        else:
+            wf[prompt_node_id]['inputs']['prompt'] = prompt_text
+        logger.info(f"Using music prompt: {prompt_text[:100]}...")
+
+        # Lyrics node (optional) - default to instrumental when present and empty
+        lyrics_node_id = wf_info.get('lyrics_node_id')
+        if lyrics_node_id and lyrics_node_id in wf:
+            lyrics_inputs = wf[lyrics_node_id].get('inputs', {})
+            if 'lyrics' in lyrics_inputs and not lyrics_inputs.get('lyrics'):
+                wf[lyrics_node_id]['inputs']['lyrics'] = "[inst]"
+
+        # Duration node (optional) - cap at the configured music length limit
+        duration_node_id = wf_info.get('duration_node_id')
+        if duration_node_id and duration_node_id in wf:
+            duration = shot.get('duration') or 60.0
+            max_dur = float(getattr(config, 'MUSIC_MAX_DURATION_SECONDS', 240))
+            duration = max(1.0, min(float(duration), max_dur))
+            duration_inputs = wf[duration_node_id].get('inputs', {})
+            for key in ('duration', 'seconds', 'value'):
+                if key in duration_inputs:
+                    wf[duration_node_id]['inputs'][key] = duration
+                    break
+
+        # Output node - set the filename prefix so the output is identifiable
+        output_node_id = wf_info.get('output_node_id')
+        if output_node_id and output_node_id in wf:
+            output_inputs = wf[output_node_id].get('inputs', {})
+            if 'filename_prefix' in output_inputs:
+                wf[output_node_id]['inputs']['filename_prefix'] = f"music_shot_{shot_index:03d}"
+
+        # Submit to ComfyUI
+        result = submit(wf)
+        prompt_id = result.get('prompt_id')
+        if not prompt_id:
+            raise RuntimeError(f"No prompt_id returned for music shot {shot_index}")
+
+        logger.info(f"Music submitted for shot {shot_index}: prompt_id={prompt_id}")
+
+        last_reported_progress = -1
+
+        def on_step_progress(current, total):
+            nonlocal last_reported_progress
+            # Check for cancellation
+            if project_id in self.cancelled_shots and shot_index in self.cancelled_shots[project_id]:
+                raise InterruptedError(f"Shot {shot_index} music was cancelled")
+            if project_id in self.cancelled_projects:
+                raise InterruptedError(f"Project {project_id} was cancelled")
+
+            progress = int((current / total) * 100) if total > 0 else 0
+            if progress == last_reported_progress:
+                return
+            last_reported_progress = progress
+
+            self._update_queue_item_progress(project_id, shot_index, GenerationType.MUSIC, progress)
+
+            manager.broadcast_sync(project_id, {
+                "type": "progress",
+                "project_id": project_id,
+                "shot_index": shot_index,
+                "shot_id": shot.get('id'),
+                "generation_type": "music",
+                "progress": progress
+            })
+
+        # Wait for completion with progress callback
+        wait_result = await async_wait_for_prompt_completion_with_progress(
+            prompt_id,
+            progress_callback=on_step_progress,
+            timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
+        )
+
+        if not wait_result.get('success'):
+            raise RuntimeError(f"Music generation failed for shot {shot_index}: {wait_result.get('error')}")
+
+        # Get output files (audio preferred, video accepted - audio extracted below)
+        outputs = wait_result.get('outputs', [])
+        media = [o for o in outputs if o.get('type') in ('audio', 'video')]
+        media.sort(key=lambda o: 0 if o.get('type') == 'audio' else 1)
+
+        if not media:
+            raise RuntimeError(f"No audio output for music shot {shot_index}")
+
+        info = media[0]
+        source_path = get_output_file_path(
+            info.get('filename') if isinstance(info, dict) else info,
+            None,
+            subfolder=info.get('subfolder') if isinstance(info, dict) else None
+        )
+        if not isinstance(source_path, str) or not os.path.isfile(source_path):
+            raise RuntimeError(f"Music output file not found: {source_path}")
+
+        # Save as versioned mp3
+        version = self._get_next_music_version(music_dir, shot_index, kind='shot')
+        mp3_path = os.path.join(music_dir, f"shot_{shot_index:03d}_{version:03d}.mp3")
+        self._convert_music_to_mp3(source_path, mp3_path)
+
+        return mp3_path
+
+    def _get_next_music_version(self, music_dir: str, index: int, kind: str = None) -> int:
+        """Find the next available version number for shot/scene music.
+
+        Scans for existing files like shot_001_001.mp3 / scene_001_001.mp3
+        (any supported audio extension — uploads keep their original format).
+        kind scopes the counter to 'shot' or 'scene' (None = either).
+        Returns the next version number (starting from 1).
+        """
+        max_version = 0
+        if os.path.isdir(music_dir):
+            prefix = kind if kind in ('shot', 'scene') else '(?:shot|scene)'
+            version_re = re.compile(
+                rf"{prefix}_{index:03d}_(\d+)\.(?:mp3|wav|ogg|m4a|aac|flac)$", re.IGNORECASE)
+            for filename in os.listdir(music_dir):
+                match = version_re.match(filename)
+                if match:
+                    max_version = max(max_version, int(match.group(1)))
+        return max_version + 1
+
+    def _convert_music_to_mp3(self, source_path: str, mp3_path: str) -> str:
+        """Copy an mp3 output as-is; extract/convert anything else via ffmpeg."""
+        ext = os.path.splitext(source_path)[1].lower()
+
+        if ext == ".mp3":
+            shutil.copy2(source_path, mp3_path)
+            return mp3_path
+
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            raise RuntimeError("ffmpeg is required to extract audio from the generated music file")
+        cmd = [ffmpeg, "-y", "-loglevel", "error", "-i", source_path, "-vn",
+               "-acodec", "libmp3lame", "-q:a", "2", mp3_path]
+        proc = subprocess.run(cmd, capture_output=True, timeout=600)
+        if proc.returncode != 0 or not os.path.isfile(mp3_path):
+            raise RuntimeError(f"Failed to convert music output to mp3: {proc.stderr.decode(errors='ignore')[:300]}")
+        return mp3_path
+
+    def save_uploaded_music(self, project_id: str, kind: str, index: int,
+                            original_filename: str, content: bytes):
+        """Save an uploaded music file as the next versioned music asset.
+
+        kind: 'shot' or 'scene'; index is the 1-based display index used in
+        filenames (shot index / scene display index). The original extension
+        is preserved. Returns (abs_path, rel_path).
+        """
+        ext = os.path.splitext(original_filename or '')[1].lower()
+        if ext not in ('.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'):
+            raise ValueError(f"Unsupported audio format: {ext or '(no extension)'}")
+
+        music_dir = self.project_manager.get_music_dir(project_id)
+        os.makedirs(music_dir, exist_ok=True)
+        version = self._get_next_music_version(music_dir, index, kind=kind)
+        filename = f"{kind}_{index:03d}_{version:03d}{ext}"
+        abs_path = os.path.join(music_dir, filename)
+        with open(abs_path, 'wb') as f:
+            f.write(content)
+        return abs_path, self.project_manager.relativize_path(abs_path)
+
+    async def regenerate_scene_music(
+        self, project_id: str, scene_id: int,
+        mode: Optional[str] = None,
+        workflow: Optional[str] = None,
+        prompt_override: Optional[str] = None,
+        force: bool = False
+    ) -> str:
+        """
+        Generate background music for a single scene.
+        """
+        import config
+
+        try:
+            # Load story to get the scene music prompt
+            project_dir = self.project_manager.get_project_dir(project_id)
+            story_path = os.path.join(project_dir, "story.json")
+            with open(story_path, 'r', encoding='utf-8') as f:
+                story_data = json.load(f)
+
+            scenes = story_data.get('scenes', [])
+            if scene_id < 0 or scene_id >= len(scenes):
+                raise ValueError(f"Scene index {scene_id} out of range")
+
+            scene = scenes[scene_id]
+
+            if not force and scene.get('music_generated', False) and scene.get('music_path'):
+                logger.info(f"Scene {scene_id} already has music, skipping")
+                return scene.get('music_path')
+
+            music_prompt = prompt_override or scene.get('music_prompt') or ""
+            if not music_prompt.strip():
+                raise ValueError(
+                    f"Scene {scene_id} has no music prompt. "
+                    "Set a music prompt on the scene or provide an override.")
+
+            resolved_mode = (mode or getattr(config, 'MUSIC_GENERATION_MODE', 'comfyui')).lower()
+
+            logger.info(f"Generating music for scene {scene_id} (mode={resolved_mode})")
+
+            # Mark the queue item active (no-op when invoked without one)
+            self._mark_queue_item_active(project_id, None, GenerationType.MUSIC, scene_id=scene_id)
+
+            # Broadcast 0%
+            manager.broadcast_sync(project_id, {
+                "type": "progress",
+                "project_id": project_id,
+                "scene_id": scene_id,
+                "step": "music",
+                "progress": 0
+            })
+
+            music_dir = self.project_manager.get_music_dir(project_id)
+            os.makedirs(music_dir, exist_ok=True)
+            display_index = scene_id + 1
+            version = self._get_next_music_version(music_dir, display_index, kind='scene')
+            output_path = os.path.join(music_dir, f"scene_{display_index:03d}_{version:03d}.mp3")
+
+            if resolved_mode == 'geminiweb':
+                from core.geminiweb_music_generator import generate_music_geminiweb
+                prefix = getattr(config, 'MUSIC_GEMINIWEB_PROMPT_PREFIX', 'Create a music:')
+                full_prompt = f"{prefix} {music_prompt}".strip()
+                project_title = self._gemini_chat_title(story_data, project_id)
+                final_path = await asyncio.to_thread(
+                    generate_music_geminiweb,
+                    full_prompt,
+                    output_path,
+                    project_title
+                )
+                if not final_path or not os.path.exists(final_path):
+                    raise RuntimeError(f"Music generation failed for scene {scene_id} (GeminiWeb)")
+            else:
+                # Reuse the ComfyUI path with a scene-shaped stand-in carrying
+                # index/display_index-derived numbering for the version helper.
+                scene_duration = scene.get('scene_duration')
+                version = self._get_next_music_version(music_dir, display_index, kind='scene')
+                mp3_path = os.path.join(music_dir, f"scene_{display_index:03d}_{version:03d}.mp3")
+
+                if workflow:
+                    wf_key = workflow
+                else:
+                    wf_key = getattr(config, 'MUSIC_WORKFLOW', 'default')
+                all_wfs = getattr(config, 'MUSIC_WORKFLOWS', {})
+                if wf_key not in all_wfs and "default" in all_wfs:
+                    wf_key = "default"
+                if wf_key not in all_wfs:
+                    raise RuntimeError(
+                        "No music workflow discovered (check workflow/music and ComfyUI). "
+                        "Add a music workflow JSON or switch the music mode to GeminiWeb.")
+                wf_info = all_wfs[wf_key]
+
+                with open(wf_info["workflow_path"], 'r', encoding='utf-8') as f:
+                    wf = json.load(f)
+
+                prompt_node_id = wf_info.get('prompt_node_id')
+                if not prompt_node_id or prompt_node_id not in wf:
+                    raise RuntimeError(f"Music workflow '{wf_key}' has no resolvable prompt node")
+                prompt_inputs = wf[prompt_node_id].get('inputs', {})
+                for key in ('description', 'tags', 'prompt', 'text'):
+                    if key in prompt_inputs:
+                        wf[prompt_node_id]['inputs'][key] = music_prompt
+                        break
+                else:
+                    wf[prompt_node_id]['inputs']['prompt'] = music_prompt
+
+                lyrics_node_id = wf_info.get('lyrics_node_id')
+                if lyrics_node_id and lyrics_node_id in wf:
+                    lyrics_inputs = wf[lyrics_node_id].get('inputs', {})
+                    if 'lyrics' in lyrics_inputs and not lyrics_inputs.get('lyrics'):
+                        wf[lyrics_node_id]['inputs']['lyrics'] = "[inst]"
+
+                duration_node_id = wf_info.get('duration_node_id')
+                if duration_node_id and duration_node_id in wf and scene_duration:
+                    max_dur = float(getattr(config, 'MUSIC_MAX_DURATION_SECONDS', 240))
+                    duration = max(1.0, min(float(scene_duration), max_dur))
+                    duration_inputs = wf[duration_node_id].get('inputs', {})
+                    for key in ('duration', 'seconds', 'value'):
+                        if key in duration_inputs:
+                            wf[duration_node_id]['inputs'][key] = duration
+                            break
+
+                output_node_id = wf_info.get('output_node_id')
+                if output_node_id and output_node_id in wf:
+                    output_inputs = wf[output_node_id].get('inputs', {})
+                    if 'filename_prefix' in output_inputs:
+                        wf[output_node_id]['inputs']['filename_prefix'] = f"music_scene_{display_index:03d}"
+
+                from core.comfy_client import submit, async_wait_for_prompt_completion_with_progress, get_output_file_path
+
+                result = submit(wf)
+                prompt_id = result.get('prompt_id')
+                if not prompt_id:
+                    raise RuntimeError(f"No prompt_id returned for music scene {scene_id}")
+
+                def on_step_progress(current, total):
+                    if project_id in self.cancelled_scenes and scene_id in self.cancelled_scenes[project_id]:
+                        raise InterruptedError(f"Scene {scene_id} music was cancelled")
+                    if project_id in self.cancelled_projects:
+                        raise InterruptedError(f"Project {project_id} was cancelled")
+                    progress = int((current / total) * 100) if total > 0 else 0
+                    self._update_queue_item_progress(project_id, None, GenerationType.MUSIC, min(progress, 99), scene_id=scene_id)
+                    if progress % 10 == 0:
+                        manager.broadcast_sync(project_id, {
+                            "type": "progress",
+                            "project_id": project_id,
+                            "scene_id": scene_id,
+                            "step": "music",
+                            "progress": progress
+                        })
+
+                wait_result = await async_wait_for_prompt_completion_with_progress(
+                    prompt_id,
+                    progress_callback=on_step_progress,
+                    timeout=getattr(config, 'VIDEO_RENDER_TIMEOUT', 1800)
+                )
+                if not wait_result.get('success'):
+                    raise RuntimeError(f"Music generation failed for scene {scene_id}: {wait_result.get('error')}")
+
+                outputs = wait_result.get('outputs', [])
+                media = [o for o in outputs if o.get('type') in ('audio', 'video')]
+                media.sort(key=lambda o: 0 if o.get('type') == 'audio' else 1)
+                if not media:
+                    raise RuntimeError(f"No audio output for music scene {scene_id}")
+
+                info = media[0]
+                source_path = get_output_file_path(
+                    info.get('filename') if isinstance(info, dict) else info,
+                    None,
+                    subfolder=info.get('subfolder') if isinstance(info, dict) else None
+                )
+                if not isinstance(source_path, str) or not os.path.isfile(source_path):
+                    raise RuntimeError(f"Music output file not found: {source_path}")
+
+                self._convert_music_to_mp3(source_path, mp3_path)
+                final_path = mp3_path
+
+            # Update story.json under the project lock with a fresh on-disk read
+            rel_path = self.project_manager.relativize_path(final_path)
+
+            def set_scene_music(story_data):
+                scenes = story_data.get('scenes', [])
+                if scene_id < 0 or scene_id >= len(scenes):
+                    raise ValueError(f"Scene index {scene_id} out of range")
+                scene = scenes[scene_id]
+                scene['music_path'] = rel_path
+                scene['music_generated'] = True
+                music_paths = scene.get('music_paths')
+                if not isinstance(music_paths, list):
+                    music_paths = []
+                    scene['music_paths'] = music_paths
+                if rel_path not in music_paths:
+                    music_paths.append(rel_path)
+
+            self.project_manager.update_story_safely(project_id, set_scene_music)
+
+            # Mark the queue item completed (no-op when invoked without one)
+            self._mark_queue_item_completed(project_id, None, GenerationType.MUSIC, scene_id=scene_id)
+
+            # Broadcast completion
+            manager.broadcast_sync(project_id, {
+                "type": "completed",
+                "project_id": project_id,
+                "scene_id": scene_id,
+                "step": "music",
+                "music_path": rel_path
+            })
+
+            return rel_path
+
+        except Exception as e:
+            logger.error(f"Error generating music for scene {scene_id}: {e}")
+            # Mark the queue item failed (no-op when invoked without one)
+            self._mark_queue_item_failed(project_id, None, GenerationType.MUSIC, str(e), scene_id=scene_id)
+            manager.broadcast_sync(project_id, {
+                "type": "error",
+                "project_id": project_id,
+                "scene_id": scene_id,
+                "step": "music",
+                "message": str(e)
             })
             raise
 
@@ -3026,12 +3705,12 @@ class GenerationService:
             if background_style:
                 from core.sheet_generator import apply_background_style
                 set_prompt = apply_background_style(set_prompt, background_style)
-            # Final image is a 2x2 multi-angle background sheet; the project's
-            # aspect ratio labels each panel
+            # Final image is a 2x2 multi-angle background sheet; reference
+            # sheets are always 16:9 by spec, so label each panel 16:9
+            # regardless of the project's aspect ratio.
             from core.sheet_generator import background_grid_prompt
             project_meta = self.project_manager.load_project(project_id) or {}
-            set_prompt = background_grid_prompt(
-                set_prompt, project_meta.get('aspect_ratio') or "16:9")
+            set_prompt = background_grid_prompt(set_prompt, "16:9")
             actual_workflow = workflow if workflow else "flux"
 
             logger.info(f"Generating background for scene {scene_id} using prompt: {set_prompt[:60]}... (workflow: {actual_workflow}, mode: {image_mode})")
@@ -3059,7 +3738,10 @@ class GenerationService:
                 GenerationType.BACKGROUND,
                 None,  # gemini_mode
                 backgrounds_dir,  # output dir: project backgrounds/
-                f"background_{scene_id:03d}_%03d.png"  # filename pattern
+                f"background_{scene_id:03d}_%03d.png",  # filename pattern
+                # Background reference sheets are always landscape 16:9 by
+                # spec, regardless of the project's aspect ratio.
+                aspect_ratio="16:9"
             )
             if not result_path or not os.path.exists(result_path):
                 raise RuntimeError(f"Failed to generate background for scene {scene_id}")
@@ -3516,11 +4198,16 @@ class GenerationService:
         generation_type: GenerationType = None,
         gemini_mode: Optional[str] = None,
         output_dir: Optional[str] = None,
-        filename_pattern: Optional[str] = None
+        filename_pattern: Optional[str] = None,
+        aspect_ratio: Optional[str] = None
     ) -> str:
         """Generate image for a single shot (synchronous)
 
         Args:
+            aspect_ratio: Explicit aspect ratio override. When provided it
+                replaces the project's aspect_ratio — used by reference-sheet
+                generation (characters, backgrounds) which is always 16:9 by
+                spec, regardless of the project's orientation.
         """
         print(f"[DEBUG] entering _generate_single_image for item {project_id}")
         logger.info(f"entering _generate_single_image for item {project_id}")
@@ -3538,7 +4225,11 @@ class GenerationService:
 
         # Load project to get aspect_ratio
         project_meta = self.project_manager.load_project(project_id)
-        aspect_ratio = project_meta.get('aspect_ratio', '16:9')
+        if aspect_ratio:
+            logger.info(f"Using explicit aspect ratio {aspect_ratio} for {generation_type or 'image'} "
+                        f"(project aspect is {project_meta.get('aspect_ratio', '16:9')})")
+        else:
+            aspect_ratio = project_meta.get('aspect_ratio', '16:9')
 
         # Generate versioned filename with optional variant suffix
         next_version = self._get_next_image_version(actual_dir, shot_index, image_variant, generation_type)
@@ -3628,7 +4319,8 @@ class GenerationService:
                                prompt_override: Optional[str] = None,
                                resolution: Optional[str] = None,
                                gemini_mode: Optional[str] = None,
-                               prompt_type: Optional[str] = None) -> str:
+                               prompt_type: Optional[str] = None,
+                               no_music: bool = False) -> str:
         """Generate video for a single shot (synchronous)"""
         import shutil
         import config
@@ -3685,6 +4377,19 @@ class GenerationService:
             use_video_prompt = True
             logger.info(f"[VIDEO PROMPT] Shot {shot_index}: using detailed video_prompt")
         shot['prompt_type'] = 'video' if use_video_prompt else 'motion'
+
+        # "No H3 Music": strip the trailing non_diegetic_music section so the
+        # model leaves the clip silent (the user scores it with their own
+        # generated/uploaded music instead). Both fields are stripped because
+        # compile_workflow re-reads video_prompt when prompt_type is 'video'.
+        if no_music:
+            from core.r2v_composer import strip_non_diegetic_music
+            for prompt_field in ('motion_prompt', 'video_prompt'):
+                current_prompt = shot.get(prompt_field) or ''
+                stripped_prompt = strip_non_diegetic_music(current_prompt)
+                if stripped_prompt != current_prompt:
+                    shot[prompt_field] = stripped_prompt
+                    logger.info(f"[NO MUSIC] Shot {shot_index}: removed non_diegetic_music section from {prompt_field}")
 
         # Resolve prompt append choice
         append_image_choice = append_image_prompt

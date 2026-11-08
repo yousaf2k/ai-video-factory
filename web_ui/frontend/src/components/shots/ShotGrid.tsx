@@ -187,6 +187,11 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [generateSoundFX, setGenerateSoundFX] = usePersistedState<boolean>(`batch_generate_soundfx_${projectId}`, false);
   const [soundfxWorkflow, setSoundfxWorkflow] = usePersistedState<string>(`batch_soundfx_workflow_${projectId}`, "default");
   const [batchSoundfxPrompt, setBatchSoundfxPrompt] = usePersistedState<string>(`batch_soundfx_prompt_${projectId}`, "");
+  const [batchNoMusic, setBatchNoMusic] = usePersistedState<boolean>(`batch_no_music_${projectId}`, false);
+  const [generateMusic, setGenerateMusic] = usePersistedState<boolean>(`batch_generate_music_${projectId}`, false);
+  const [musicMode, setMusicMode] = usePersistedState<string>(`batch_music_mode_${projectId}`, "comfyui");
+  const [musicWorkflow, setMusicWorkflow] = usePersistedState<string>(`batch_music_workflow_${projectId}`, "default");
+  const [batchMusicPrompt, setBatchMusicPrompt] = usePersistedState<string>(`batch_music_prompt_${projectId}`, "");
 
   // Batch Departure Override states
   const [batchUseDepartureOverride, setBatchUseDepartureOverride] = usePersistedState<boolean>(`batch_use_departure_override_${projectId}`, true);
@@ -462,8 +467,13 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           gemini_model: geminiModel,
           gemini_thinking: geminiThinking,
           generate_soundfx: generateSoundFX,
+          no_music: batchNoMusic,
           soundfx_workflow: generateSoundFX ? soundfxWorkflow : undefined,
           soundfx_prompt: generateSoundFX && batchSoundfxPrompt ? batchSoundfxPrompt : undefined,
+          generate_music: generateMusic,
+          music_mode: generateMusic ? musicMode : undefined,
+          music_workflow: generateMusic && musicMode === "comfyui" ? musicWorkflow : undefined,
+          music_prompt: generateMusic && batchMusicPrompt ? batchMusicPrompt : undefined,
           background_style: backgroundStyle || undefined,
         });
       } catch (error) {
@@ -503,8 +513,13 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
           gemini_model: geminiModel,
           gemini_thinking: geminiThinking,
           generate_soundfx: generateSoundFX,
+          no_music: batchNoMusic,
           soundfx_workflow: generateSoundFX ? soundfxWorkflow : undefined,
           soundfx_prompt: generateSoundFX && batchSoundfxPrompt ? batchSoundfxPrompt : undefined,
+          generate_music: generateMusic,
+          music_mode: generateMusic ? musicMode : undefined,
+          music_workflow: generateMusic && musicMode === "comfyui" ? musicWorkflow : undefined,
+          music_prompt: generateMusic && batchMusicPrompt ? batchMusicPrompt : undefined,
         });
       } catch (error) {
         console.error("Failed to start batch video generation:", error);
@@ -1819,6 +1834,22 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                     <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
+                        id="batch-no-music"
+                        checked={batchNoMusic}
+                        onChange={(e) => setBatchNoMusic(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
+                      />
+                      <label htmlFor="batch-no-music" className="text-sm font-semibold">
+                        🚫🎵 No H3 Music (remove music prompt section)
+                      </label>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic -mt-2 ml-6">
+                      Removes the non_diegetic_music section from every selected shot's H3 video prompt.
+                    </p>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
                         id="batch-generate-soundfx"
                         checked={generateSoundFX}
                         onChange={(e) => setGenerateSoundFX(e.target.checked)}
@@ -1867,6 +1898,83 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                           />
                           <p className="text-[10px] text-muted-foreground italic">
                             If left blank, each shot's specific SFX prompt (or motion prompt) will be used.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Music Generation Section */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="batch-generate-music"
+                        checked={generateMusic}
+                        onChange={(e) => setGenerateMusic(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
+                      />
+                      <label htmlFor="batch-generate-music" className="text-sm font-semibold">
+                        🎵 Generate Music
+                      </label>
+                    </div>
+
+                    {generateMusic && (
+                      <div className="ml-6 space-y-3 border-l-2 pl-3 py-1">
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                            Music Generation Mode
+                          </label>
+                          <Select
+                            value={musicMode}
+                            onValueChange={(val) => setMusicMode(val)}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Select Mode" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="comfyui" className="text-xs">ComfyUI</SelectItem>
+                              <SelectItem value="geminiweb" className="text-xs">Gemini Web</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {musicMode === "comfyui" && globalConfig?.available_music_workflows && globalConfig.available_music_workflows.length > 0 && (
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                              Music Workflow
+                            </label>
+                            <Select
+                              value={musicWorkflow}
+                              onValueChange={(val) => setMusicWorkflow(val)}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select Music Workflow" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {globalConfig.available_music_workflows.map((wf) => (
+                                  <SelectItem key={wf} value={wf} className="text-xs">
+                                    {wf.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wider">
+                            Global Music Prompt Override
+                          </label>
+                          <Textarea
+                            value={batchMusicPrompt}
+                            onChange={(e) => setBatchMusicPrompt(e.target.value)}
+                            rows={2}
+                            placeholder="Describe the music for all selected shots: epic orchestral, ambient pads..."
+                            className="text-xs min-h-[60px] bg-muted/20"
+                          />
+                          <p className="text-[10px] text-muted-foreground italic">
+                            If left blank, each shot's specific music prompt will be used.
                           </p>
                         </div>
                       </div>

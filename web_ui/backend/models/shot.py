@@ -51,6 +51,11 @@ class Shot(BaseModel):
     soundfx_generated: bool = Field(default=False, description="Whether sound effects have been generated")
     soundfx_prompt: Optional[str] = Field(default=None, description="Prompt for sound effects generation")
 
+    # Music fields
+    music_prompt: Optional[str] = Field(default=None, description="Music style/mood prompt for background music generation")
+    music_path: Optional[str] = Field(default=None, description="Path to generated music audio")
+    music_generated: bool = Field(default=False, description="Whether music has been generated")
+
     # Asset references (asset library feature)
     reference_asset_ids: Optional[List[str]] = Field(default=None, description="Ordered asset refs attached to this shot: 'i/{id}' library refs, '{library}/i/{id}' for non-default libraries, or 'p/{project_id}/{media_dir}/{filename}' for other projects' media. First = primary reference.")
     synced_character_asset_refs: Optional[List[str]] = Field(default=None, description="Internal bookkeeping: refs attached by ProjectManager.sync_character_asset_refs (character reference images). Replaced on the next sync; never includes user-attached refs.")
@@ -95,6 +100,7 @@ class UpdateShotRequest(BaseModel):
     meeting_video_prompt: Optional[str] = None
     departure_video_prompt: Optional[str] = None
     soundfx_prompt: Optional[str] = None
+    music_prompt: Optional[str] = None
 
 
 class RegenerateImageRequest(BaseModel):
@@ -128,6 +134,7 @@ class RegenerateVideoRequest(BaseModel):
     gemini_thinking: Optional[str] = Field(default=None, description="Exact Gemini Web thinking level ('Low', 'Medium', 'High')")
     soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")
     soundfx_prompt: Optional[str] = Field(default=None, description="Prompt override for sound FX generation")
+    no_music: bool = Field(default=False, description="Strip the non_diegetic_music section from the H3 video prompt before generation")
 
 
 class BatchRegenerateRequest(BaseModel):
@@ -155,6 +162,11 @@ class BatchRegenerateRequest(BaseModel):
     gemini_thinking: Optional[str] = Field(default=None, description="Exact Gemini Web thinking level ('Low', 'Medium', 'High')")
     soundfx_workflow: Optional[str] = Field(default=None, description="Override sound FX workflow")
     soundfx_prompt: Optional[str] = Field(default=None, description="Prompt override for sound FX generation")
+    generate_music: bool = Field(default=False, description="Also generate music for the selected shots")
+    no_music: bool = Field(default=False, description="Strip the non_diegetic_music section from the H3 video prompts before generation")
+    music_mode: Optional[str] = Field(default=None, description="Music generation mode: 'comfyui' or 'geminiweb'")
+    music_workflow: Optional[str] = Field(default=None, description="Override music workflow (comfyui mode)")
+    music_prompt: Optional[str] = Field(default=None, description="Prompt override for music generation")
     background_style: Optional[str] = Field(default=None, description="Named-style text (styles.json) appended to queued background-sheet prompts (r2v)")
 
 
@@ -201,4 +213,12 @@ class RegenerateSoundFXRequest(BaseModel):
     force: bool = Field(default=False, description="Force regeneration even if sound FX exists")
     workflow: Optional[str] = Field(default=None, description="Specific sound FX workflow to use")
     prompt_override: Optional[str] = Field(default=None, description="Override the sound FX prompt")
+
+
+class RegenerateMusicRequest(BaseModel):
+    """Request to generate music for a shot"""
+    force: bool = Field(default=False, description="Force regeneration even if music exists")
+    mode: Optional[str] = Field(default=None, description="Music generation mode: 'comfyui' or 'geminiweb' (None = config default)")
+    workflow: Optional[str] = Field(default=None, description="Specific music workflow to use (comfyui mode)")
+    prompt_override: Optional[str] = Field(default=None, description="Override the music prompt")
 

@@ -21,6 +21,7 @@ export function Timeline() {
   const setDragMode = useEditorStore((state: any) => state.setDragMode);
   const toggleTrackVisibility = useEditorStore((state: any) => state.toggleTrackVisibility);
   const toggleTrackMute = useEditorStore((state: any) => state.toggleTrackMute);
+  const setTrackVolume = useEditorStore((state: any) => state.setTrackVolume);
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
@@ -512,23 +513,37 @@ export function Timeline() {
                         </button>
                       </>
                     ) : (
-                      /* Audio tracks: Only show mute control */
-                      <button
-                        onClick={() => toggleTrackMute(track.id)}
-                        className={`flex-shrink-0 p-1 hover:bg-slate-800 rounded transition-colors ${isMuted ? 'opacity-50' : ''}`}
-                        title={isMuted ? 'Unmute track (will export)' : 'Mute track (won\'t export)'}
-                      >
-                        {isMuted ? (
-                          <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-.777 1.337-1.707 1.293L5.586 15z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-                          </svg>
-                        ) : (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-.777 1.337-1.707 1.293L5.586 15z" />
-                          </svg>
-                        )}
-                      </button>
+                      /* Audio tracks: volume slider + mute control */
+                      <>
+                        <input
+                          type="range"
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          value={track.volume ?? 1}
+                          onChange={(e) => setTrackVolume(track.id, parseFloat(e.target.value))}
+                          onClick={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="flex-shrink-0 w-12 h-1 accent-emerald-400 cursor-pointer"
+                          title={`Volume: ${Math.round((track.volume ?? 1) * 100)}%`}
+                        />
+                        <button
+                          onClick={() => toggleTrackMute(track.id)}
+                          className={`flex-shrink-0 p-1 hover:bg-slate-800 rounded transition-colors ${isMuted ? 'opacity-50' : ''}`}
+                          title={isMuted ? 'Unmute track (will export)' : 'Mute track (won\'t export)'}
+                        >
+                          {isMuted ? (
+                            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-.777 1.337-1.707 1.293L5.586 15z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 01-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-.777 1.337-1.707 1.293L5.586 15z" />
+                            </svg>
+                          )}
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

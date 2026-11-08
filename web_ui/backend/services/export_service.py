@@ -267,7 +267,26 @@ class ExportService:
         valid_inputs = 0
         valid_input_refs = []
 
+        # Per-track mixer state: muted tracks are excluded, tracks carry a
+        # volume gain multiplier (0-2, default 1)
+        track_map = {t.get('id'): t for t in (tracks or []) if isinstance(t, dict)}
+
         for clip in clips:
+            track = track_map.get(clip.get('trackId'))
+            if track is not None and track.get('isMuted'):
+                logger.info(f"Skipping clip on muted track '{track.get('name', clip.get('trackId'))}': {clip.get('name')}")
+                continue
+            gain = 1.0
+            if track is not None and track.get('volume') is not None:
+                try:
+                    gain = float(track['volume'])
+                except (TypeError, ValueError):
+                    gain = 1.0
+            gain = max(0.0, min(2.0, gain))
+            if gain <= 0.0:
+                logger.info(f"Skipping zero-volume clip: {clip.get('name')}")
+                continue
+
             clip_path = self._resolve_clip_path(clip['url'], project_dir)
 
             if not os.path.exists(clip_path):
@@ -275,11 +294,12 @@ class ExportService:
                 continue
 
             input_files.extend(['-i', clip_path])
-            
+
             input_idx = valid_inputs
-            # Trim and delay audio to correct position
+            # Trim, apply the track gain, and delay to the correct position
             filter_complex.append(
                 f"[{input_idx}:a]atrim=start=0:end={clip['duration']},"
+                f"volume={gain:.3f},"
                 f"adelay={int(clip['startAt'] * 1000)}|{int(clip['startAt'] * 1000)}[a{input_idx}]"
             )
             valid_input_refs.append(f"[a{input_idx}]")
@@ -292,10 +312,12 @@ class ExportService:
         elif valid_inputs == 1:
             final_audio = valid_input_refs[0]
         else:
-            # Mix all valid audio inputs
+            # Mix all valid audio inputs; normalize=0 keeps each track at its
+            # own gain (default amix rescales every input by 1/N, which is why
+            # multi-track mixes sounded quiet and needed a volume boost)
             mix_inputs = "".join(valid_input_refs)
             filter_complex.append(
-                f"{mix_inputs}amix=inputs={valid_inputs}:duration=longest[audio_mix]"
+                f"{mix_inputs}amix=inputs={valid_inputs}:duration=longest:normalize=0[audio_mix]"
             )
             final_audio = "[audio_mix]"
 

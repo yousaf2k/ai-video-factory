@@ -660,6 +660,18 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
                                 'subfolder': subfolder
                             })
 
+                    # Check for audio outputs (SaveAudio / PreviewAudio / ACE-Step
+                    # music workflows emit their files under the "audio" key)
+                    if "audio" in node_output and len(node_output["audio"]) > 0:
+                        for audio_info in node_output["audio"]:
+                            filename = audio_info.get("filename", "")
+                            subfolder = audio_info.get("subfolder", "")
+                            output_files.append({
+                                'type': 'audio',
+                                'filename': filename,
+                                'subfolder': subfolder
+                            })
+
                     # Check for images - but filter for video files (.mp4, .webm, etc.)
                     # ComfyUI's SaveVideo node sometimes outputs to the "images" field
                     if "images" in node_output and len(node_output["images"]) > 0:
@@ -671,6 +683,14 @@ def wait_for_prompt_completion(prompt_id, timeout=1800):
                             if any(filename.lower().endswith(ext) for ext in ['.mp4', '.webm', '.avi', '.mov', '.mkv']):
                                 output_files.append({
                                     'type': 'video',
+                                    'filename': filename,
+                                    'subfolder': subfolder
+                                })
+                            elif any(filename.lower().endswith(ext) for ext in ['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac']):
+                                # Audio emitted through the images field (some
+                                # audio node packs do this)
+                                output_files.append({
+                                    'type': 'audio',
                                     'filename': filename,
                                     'subfolder': subfolder
                                 })

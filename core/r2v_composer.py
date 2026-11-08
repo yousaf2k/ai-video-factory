@@ -70,6 +70,26 @@ def _voice_texts_for_shot(shot, story):
     return out
 
 
+# The non_diegetic_music section is the last H3 prompt section: its header
+# line plus every following line that does not start a new "header:" block.
+_NON_DIEGETIC_MUSIC_RE = re.compile(
+    r"\s*non_diegetic_music:[^\n]*(?:\n(?!\s*[A-Za-z_]+:)[^\n]*)*",
+    re.IGNORECASE,
+)
+
+
+def strip_non_diegetic_music(prompt: str) -> str:
+    """Remove the non_diegetic_music: section from a MiniMax H3 video prompt.
+
+    Used by the "No H3 Music" generation option: the model then leaves the
+    clip silent so the user's own generated/uploaded music is the only score.
+    A no-op for prompts without the section (e.g. plain motion prompts).
+    """
+    if not prompt:
+        return prompt or ""
+    return _NON_DIEGETIC_MUSIC_RE.sub("", prompt).rstrip()
+
+
 def _insert_into_subject_definitions(prompt: str, lines) -> str:
     """Append definition lines at the end of the subject_definitions block."""
     if not lines:

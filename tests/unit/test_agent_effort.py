@@ -112,12 +112,27 @@ def client(tmp_path, monkeypatch):
 
 
 def test_effort_options_per_provider(client):
+    import config
+    from core import model_registry
+    model_registry.load_models_config(force=True)
     cfg = client.get("/api/agent/config").json()["config"]
 
-    # zhipu (current app provider) -> the four GLM effort levels
-    if cfg["effective_provider"] == "zhipu":
-        assert cfg["effort_options"] == ["default", "low", "high", "max"]
-        assert cfg["effort_supported"] is True
+    # Options are the standard PI levels FILTERED by the effective model's
+    # thinkingLevelMap: a level mapped to null is unsupported and hidden.
+    # Expectations derive from the live models.json (user-owned data).
+    from core import model_registry
+    from web_ui.backend.api.agent import _PROVIDER_MODEL_ATTR
+    model_registry.load_models_config(force=True)
+
+    def expected_for(provider, model):
+        eff = model or ""
+        if not eff:
+            attr = _PROVIDER_MODEL_ATTR.get(provider)
+            eff = getattr(config, attr, "") if attr else ""
+        return model_registry.supported_thinking_levels(provider, eff)
+
+    assert cfg["effort_options"] == expected_for(cfg["effective_provider"], "")
+    assert cfg["effort_supported"] is True
     assert cfg["effort"] == ""  # auto by default
 
     def options_for(provider, model):
@@ -125,10 +140,16 @@ def test_effort_options_per_provider(client):
         c = client.get("/api/agent/config").json()["config"]
         return c["effort_options"], c["effort_supported"]
 
+    # Models whose maps mark every level null -> nothing offered
     assert options_for("deepseek", "deepseek-chat") == ([], False)
-    assert options_for("openai", "gpt-4o") == ([], False)          # non-reasoning model
-    opts, ok = options_for("openai", "o4-mini")                     # reasoning model
-    assert ok and "high" in opts and "minimal" in opts
+    assert options_for("openai", "gpt-4o") == ([], False)
+    assert options_for("deepseek", "deepseek-reasoner") == ([], False)
+    # Reasoning model with a full map -> all standard levels
+    opts, ok = options_for("openai", "gpt-5.1")
+    assert ok and opts == config.THINKING_LEVELS
+    # Unknown model (not in models.json) -> all levels pass through
+    opts, ok = options_for("openai", "o4-mini")
+    assert ok and "high" in opts and "xhigh" in opts
     client.put("/api/agent/config", json={"provider": "", "model": ""})
 
 

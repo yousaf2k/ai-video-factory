@@ -26,6 +26,7 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
   const setIsPlaying = useEditorStore((state: any) => state.setIsPlaying);
   const zoom = useEditorStore((state: any) => state.zoom);
   const addClip = useEditorStore((state: any) => state.addClip);
+  const addTrack = useEditorStore((state: any) => state.addTrack);
   const updateClip = useEditorStore((state: any) => state.updateClip);
   const setClips = useEditorStore((state: any) => state.setClips);
   const duration = useEditorStore((state: any) => state.duration);
@@ -63,11 +64,15 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
       const newClips: Clip[] = [];
       let currentVideoTime = 0;
       let currentAudioTime = 0;
+      // Per-shot timeline span (start/end on the video tracks) — used to place
+      // scene/shot music clips across their shots' time ranges
+      const shotSpans = new Map<number, { start: number; end: number }>();
 
       if (project.shots) {
         project.shots.forEach((shot: Shot, index: number) => {
           // Planned length for shots whose video hasn't been rendered yet
           const plannedDuration = shot.duration && shot.duration > 0 ? shot.duration : 5;
+          const shotStart = currentVideoTime;
 
           if (shot.video_path) {
             // Actual rendered file length, falling back to the planned duration
@@ -162,6 +167,8 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
             });
             currentVideoTime += plannedDuration;
           }
+
+          shotSpans.set(shot.index, { start: shotStart, end: currentVideoTime });
         });
       }
 
@@ -184,6 +191,65 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
         });
       }
 
+      // Background music — generated or uploaded — placed across its shots'
+      // time range: scene music spans from the scene's first shot start to the
+      // scene's last shot end (BGM/SFX track); shot music spans its own shot
+      // on a dedicated Shot Music track.
+      const musicUrl = (musicPath: string) => {
+        const filename = musicPath.split(/[\\/]/).pop() || '';
+        return api.getAssetUrl(id, 'music', filename);
+      };
+
+      if (project.story && project.story.scenes) {
+        project.story.scenes.forEach((scene: any, index: number) => {
+          if (!scene.music_path) return;
+          const sceneShots = (project.shots || []).filter((s: Shot) => s.scene_id === scene.scene_id);
+          const spans = sceneShots
+            .map((s: Shot) => shotSpans.get(s.index))
+            .filter(Boolean) as { start: number; end: number }[];
+          if (!spans.length) return;
+          const spanStart = Math.min(...spans.map(s => s.start));
+          const spanEnd = Math.max(...spans.map(s => s.end));
+          if (spanEnd <= spanStart) return;
+          newClips.push({
+            id: `m-scene-${index}`,
+            trackId: 'a2',
+            type: 'audio',
+            name: `Music — Scene ${index + 1}`,
+            url: musicUrl(scene.music_path),
+            startAt: spanStart,
+            duration: spanEnd - spanStart,
+            sourceStart: 0,
+            sourceDuration: spanEnd - spanStart
+          });
+        });
+      }
+
+      let hasShotMusic = false;
+      (project.shots || []).forEach((shot: Shot) => {
+        if (!shot.music_path) return;
+        const span = shotSpans.get(shot.index);
+        if (!span || span.end <= span.start) return;
+        hasShotMusic = true;
+        newClips.push({
+          id: `m-shot-${shot.index}`,
+          trackId: 'a3',
+          type: 'audio',
+          name: `Music — Shot ${shot.index}`,
+          url: musicUrl(shot.music_path),
+          startAt: span.start,
+          duration: span.end - span.start,
+          sourceStart: 0,
+          sourceDuration: span.end - span.start
+        });
+      });
+      if (hasShotMusic) {
+        const existingTracks = (useEditorStore.getState() as any).tracks || [];
+        if (!existingTracks.some((t: any) => t.id === 'a3')) {
+          addTrack({ id: 'a3', name: 'Shot Music', type: 'audio', order: 4, isMuted: false });
+        }
+      }
+
       setClips(newClips);
 
       const maxEndTime = newClips.reduce((max, clip) => {
@@ -199,7 +265,7 @@ export function EditorLayout({ projectId }: EditorLayoutProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [clearStore, setClips, addClip, setDuration]);
+  }, [clearStore, setClips, addClip, setDuration, addTrack]);
 
   useEffect(() => {
     if (projectId) {

@@ -62,6 +62,10 @@ class Scene(BaseModel):
     scene_duration: Optional[int] = Field(default=None, description="Scene duration in seconds")
     narration_path: Optional[str] = Field(default=None, description="Active narration audio path")
     narration_paths: List[str] = Field(default_factory=list, description="All narration audio variations")
+    music_prompt: Optional[str] = Field(default=None, description="Music style/mood prompt for scene background music")
+    music_path: Optional[str] = Field(default=None, description="Active music audio path")
+    music_paths: List[str] = Field(default_factory=list, description="All music audio variations")
+    music_generated: bool = Field(default=False, description="Whether music has been generated")
     set_prompt: Optional[str] = Field(default=None, description="Movie set background prompt (for ThenVsNow)")
     scene_image_path: Optional[str] = Field(default=None, description="Path to generated scene/set image (for departure video last frame)")
     background_image_path: Optional[str] = Field(default=None, description="Path to scene background image (uploaded or AI-generated)")
@@ -118,6 +122,14 @@ class GenerateSceneNarrationRequest(BaseModel):
     tts_method: Optional[str] = Field(default=None, description="TTS method override")
     tts_workflow: Optional[str] = Field(default=None, description="TTS workflow key")
     voice: Optional[str] = Field(default=None, description="Voice override")
+
+
+class GenerateSceneMusicRequest(BaseModel):
+    """Request to generate music for a scene"""
+    force: bool = Field(default=False, description="Force regeneration even if music exists")
+    mode: Optional[str] = Field(default=None, description="Music generation mode: 'comfyui' or 'geminiweb' (None = config default)")
+    workflow: Optional[str] = Field(default=None, description="Specific music workflow to use (comfyui mode)")
+    prompt_override: Optional[str] = Field(default=None, description="Override the scene music prompt")
 
 
 class BatchGenerateNarrationRequest(BaseModel):

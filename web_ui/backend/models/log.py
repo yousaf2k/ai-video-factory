@@ -21,11 +21,13 @@ class LLMLogEntrySummary(BaseModel):
 
 
 class LLMLogEntryDetail(LLMLogEntrySummary):
-    """Full detail of a single LLM call (input + output)"""
+    """Full detail of a single LLM call (input + output + raw wire traffic)"""
     prompt: str
     output: Optional[str] = None
     error: Optional[str] = None
     thread: Optional[str] = None
+    raw_request: Optional[dict] = None
+    raw_response: Optional[dict] = None
 
 
 class LLMLogListResponse(BaseModel):

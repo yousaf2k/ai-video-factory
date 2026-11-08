@@ -77,6 +77,92 @@ def fail_call(error: Exception, elapsed: float) -> None:
     _append(record)
 
 
+def raw_enabled() -> bool:
+    """Whether full raw request/response wire logging is on (default: on)."""
+    try:
+        import config
+        return bool(getattr(config, 'LOG_LLM_RAW_REQUESTS', True))
+    except Exception:
+        return True
+
+
+_SENSITIVE_HEADER_MARKERS = ("authorization", "api-key", "x-api-key",
+                             "access-token", "token", "key")
+
+
+def redact_headers(headers: Optional[dict]) -> dict:
+    """Header copy with secret values truncated (Authorization, api keys...)."""
+    safe = {}
+    for k, v in (headers or {}).items():
+        kl = str(k).lower()
+        if any(m in kl for m in _SENSITIVE_HEADER_MARKERS):
+            safe[str(k)] = (str(v)[:8] + "***") if v else "***"
+        else:
+            safe[str(k)] = str(v)
+    return safe
+
+
+def record_raw_request(provider, url: str, method: str = "POST",
+                       headers: Optional[dict] = None, body=None) -> None:
+    """Attach the raw wire request to the pending call on this thread.
+
+    Headers are redacted here (Authorization / api-key values replaced with
+    ***) so the secret never reaches the log files.
+    """
+    if not raw_enabled():
+        return
+    record = getattr(_pending, "record", None)
+    if not record:
+        return
+    record["raw_request"] = {
+        "url": url,
+        "method": method,
+        "headers": redact_headers(headers),
+        "body": _jsonify(body),
+    }
+
+
+def record_raw_response(provider, status=None, body=None) -> None:
+    """Attach the raw wire response to the pending call on this thread."""
+    if not raw_enabled():
+        return
+    record = getattr(_pending, "record", None)
+    if not record:
+        return
+    record["raw_response"] = {
+        "status": status,
+        "body": _jsonify(body),
+    }
+
+
+def _jsonify(value):
+    """Best-effort conversion of a request body / response payload to
+    JSON-safe data (dicts pass through; SDK objects use model_dump())."""
+    if value is None:
+        return None
+    if isinstance(value, (dict, list, str, int, float, bool)):
+        return value
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        try:
+            return model_dump()
+        except Exception:
+            pass
+    v1_dict = getattr(value, "dict", None)
+    if callable(v1_dict):
+        try:
+            return v1_dict()
+        except Exception:
+            pass
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        try:
+            return to_dict()
+        except Exception:
+            pass
+    return str(value)
+
+
 def _append(record: dict) -> None:
     try:
         line = json.dumps(record, ensure_ascii=False)

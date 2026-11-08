@@ -13,6 +13,7 @@ Return a JSON list where each item contains:
 - `motion_prompt`: One-line motion summary.
 - `video_prompt`: The complete id + six-section enhanced full-reference prompt (rules below). All timestamped cuts must fit inside this shot's `duration`.
 - `soundfx_prompt`: Descriptive sound tags for audio generation (e.g., "wind howling, gravel crunching, low hum").
+- `music_prompt`: Background music style/mood for music generation (e.g., "slow melancholic piano, ambient pads, 80 BPM"). Instrumental direction only.
 - `camera`: One of [static, pan, dolly, drone, orbit, tracking, arc, whip pan, handheld, close-up, extreme close-up].
 
 {{include:videoprompt/videoprompt_minimax_h3_r2v_singularity}}

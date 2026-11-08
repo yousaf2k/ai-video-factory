@@ -229,6 +229,9 @@ def build_story(idea, director_name="default", target_length=None, aspect_ratio=
         JSON string with story structure including scenes
     """
     provider = get_provider()
+    # Story prompts are long and structural — thinking adds latency/cost
+    # without quality here, so turn it off for story-generation calls.
+    provider.disable_thinking()
 
     # Pass 1: Generate Master Script (families can override via <family>/_base/master_script.md)
     master_director = resolve_master_script_director(director_name)
@@ -360,6 +363,9 @@ def build_story_then_vs_now(movie_name: str, director_name: str = "then_vs_now/t
         JSON string with story structure including shots
     """
     provider = get_provider()
+    # Story prompts are long and structural — thinking adds latency/cost
+    # without quality here, so turn it off for story-generation calls.
+    provider.disable_thinking()
 
     # Load the then_vs_now director
     # If director_name doesn't already contain a slash, prepend 'then_vs_now/'
@@ -439,6 +445,9 @@ def build_story_asmr_glass_cutting(
         raise ValueError("Please describe the fruits or vegetables to create videos for")
 
     provider = get_provider()
+    # Story prompts are long and structural — thinking adds latency/cost
+    # without quality here, so turn it off for story-generation calls.
+    provider.disable_thinking()
 
     # Load the ASMR director prompt
     # If director_name doesn't contain a slash, assume it's in the asmr/ directory

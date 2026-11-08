@@ -66,7 +66,8 @@ def build_scene_graph(story_json):
             "action": s.get("action", ""),
             "emotion": s.get("emotion", ""),
             "characters": s.get("characters", ""),
-            "narration": s.get("narration", "")  # Include narration from story
+            "narration": s.get("narration", ""),  # Include narration from story
+            "music_prompt": s.get("music_prompt", "")  # Scene music direction
         })
 
     logger.info(f"Built scene graph with {len(graph)} scenes from {len(scenes)} input scenes")

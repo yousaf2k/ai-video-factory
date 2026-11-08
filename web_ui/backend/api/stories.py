@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 from web_ui.backend.models.story import (
     UpdateStoryRequest, RegenerateStoryRequest,
     GenerateSceneNarrationRequest, BatchGenerateNarrationRequest,
+    GenerateSceneMusicRequest,
     SelectSceneNarrationRequest, BackgroundGenerationRequest
 )
 from pydantic import BaseModel, Field
@@ -61,6 +62,133 @@ async def generate_scene_narration(project_id: str, scene_id: int, request: Gene
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to start narration generation: {str(e)}"
+        )
+
+
+@router.post("/scenes/{scene_id}/generate-music")
+async def generate_scene_music(project_id: str, scene_id: int, request: GenerateSceneMusicRequest):
+    """Queue music generation for a single scene (visible in the queue panel)"""
+    try:
+        result = generation_service.add_scene_music_to_queue(project_id, scene_id, request)
+        return {"status": "queued", "item_count": len(result)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error queuing scene music generation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to queue music generation: {str(e)}"
+        )
+
+
+@router.post("/scenes/{scene_id}/upload-music")
+async def upload_scene_music(project_id: str, scene_id: int, file: UploadFile = File(...)):
+    """Upload a music file for a scene (fallback when generation is unavailable)"""
+    try:
+        # Validate scene index
+        story = project_manager.get_story(project_id)
+        scenes = (story or {}).get('scenes', [])
+        if scene_id < 0 or scene_id >= len(scenes):
+            raise HTTPException(status_code=404, detail=f"Scene {scene_id} not found")
+
+        display_index = scene_id + 1
+        content = await file.read()
+        abs_path, rel_path = generation_service.save_uploaded_music(
+            project_id, 'scene', display_index, file.filename, content)
+
+        def set_scene_music(story_data):
+            scenes_now = story_data.get('scenes', [])
+            if scene_id < 0 or scene_id >= len(scenes_now):
+                raise ValueError(f"Scene index {scene_id} out of range")
+            scene = scenes_now[scene_id]
+            scene['music_path'] = rel_path
+            scene['music_generated'] = True
+            music_paths = scene.get('music_paths')
+            if not isinstance(music_paths, list):
+                music_paths = []
+                scene['music_paths'] = music_paths
+            if rel_path not in music_paths:
+                music_paths.append(rel_path)
+
+        project_manager.update_story_safely(project_id, set_scene_music)
+        logger.info(f"Uploaded music for scene {scene_id}: {rel_path}")
+        return {"status": "success", "music_path": rel_path}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error uploading scene music: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload scene music: {str(e)}"
+        )
+
+
+@router.delete("/scenes/{scene_id}/music")
+async def delete_scene_music(project_id: str, scene_id: int):
+    """Delete the scene's music (active + all variations)"""
+    try:
+        project_dir = project_manager.get_project_dir(project_id)
+        story_path = os.path.join(project_dir, "story.json")
+        with open(story_path, 'r', encoding='utf-8') as f:
+            story_data = json.load(f)
+
+        scenes = story_data.get('scenes', [])
+        if scene_id < 0 or scene_id >= len(scenes):
+            raise ValueError(f"Scene index {scene_id} out of range")
+
+        scene = scenes[scene_id]
+
+        # Collect every music file referenced by the scene
+        rel_paths = list(scene.get('music_paths', []))
+        if scene.get('music_path') and scene['music_path'] not in rel_paths:
+            rel_paths.append(scene['music_path'])
+
+        music_dir = os.path.realpath(os.path.join(project_dir, "music"))
+        deleted = []
+        for rel_path in rel_paths:
+            # rel paths look like "music/scene_001_....mp3" or "output/projects/..."
+            if rel_path.startswith("output/"):
+                import config
+                file_path = os.path.realpath(config.resolve_path(rel_path))
+            else:
+                file_path = os.path.realpath(os.path.join(project_dir, rel_path))
+            if not file_path.startswith(music_dir + os.sep):
+                logger.warning(f"Skipping music path outside project music dir: {rel_path}")
+                continue
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                deleted.append(rel_path)
+
+        # Clear the music refs on the FRESH story under the project lock
+        def clear_scene_music(current_story):
+            current_scenes = current_story.get('scenes', [])
+            if 0 <= scene_id < len(current_scenes):
+                current_scenes[scene_id].pop('music_path', None)
+                current_scenes[scene_id].pop('music_paths', None)
+                current_scenes[scene_id].pop('music_generated', None)
+
+        project_manager.update_story_safely(project_id, clear_scene_music)
+
+        from web_ui.backend.websocket.manager import manager
+        manager.broadcast_sync(project_id, {
+            "type": "music_deleted",
+            "project_id": project_id,
+            "scene_id": scene_id,
+            "deleted": deleted
+        })
+
+        return {"status": "success", "deleted": deleted}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Project {project_id} not found")
+    except Exception as e:
+        logger.error(f"Error deleting scene music: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete scene music: {str(e)}"
         )
 
 
