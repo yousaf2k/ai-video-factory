@@ -20,7 +20,8 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     # "" = the provider's configured model
     "model": "",
     # Reasoning effort: "" = auto (don't send, model picks its default);
-    # zhipu: default/low/high/max; openai reasoning models: minimal/low/medium/high.
+    # valid values per provider come from config.THINKING_OPTIONS (the same
+    # options the Configuration page's thinking dropdown offers).
     "effort": "",
     "max_iterations": None,  # None = config.AGENT_MAX_ITERATIONS
     # Master gate for tools flagged dangerous=True (delete_project, ...)

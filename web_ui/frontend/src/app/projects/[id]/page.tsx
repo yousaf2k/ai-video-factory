@@ -42,7 +42,8 @@ import {
   ArrowLeft,
   BookOpen,
   LayoutDashboard,
-  Layers
+  Layers,
+  Music2
 } from "lucide-react";
 
 export default function ProjectDetailPage() {
@@ -57,7 +58,15 @@ export default function ProjectDetailPage() {
     queryClient.invalidateQueries({ queryKey: ["project", projectId] });
     queryClient.invalidateQueries({ queryKey: ["projects"] });
   }, [queryClient, projectId]);
-  const { storyGenerating } = useProgress(projectId, undefined, onStoryUpdated);
+  const { storyGenerating } = useProgress(
+    projectId,
+    useCallback(() => {
+      // Any queued generation (image/video/soundfx/music) finished — refresh
+      // so status badges and music players appear without a manual reload
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    }, [queryClient, projectId]),
+    onStoryUpdated
+  );
   const [generatingThumbnails, setGeneratingThumbnails] = useState<
     Record<string, boolean>
   >({});
@@ -351,6 +360,14 @@ export default function ProjectDetailPage() {
                 ? "Retry Story Generation"
                 : "Generate Story"}
           </Button>
+          {!storyGenerating && (
+            <Link
+              href={`/projects/${projectId}/edit`}
+              className="shrink-0 inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2"
+            >
+              Write Manually
+            </Link>
+          )}
         </div>
       )}
 
@@ -1266,6 +1283,19 @@ export default function ProjectDetailPage() {
                   <div className="flex justify-between text-xs font-medium text-muted-foreground mb-2">
                     <span>{shot.camera || "No Camera Info"}</span>
                   </div>
+
+                  {shot.music_path && (
+                    <div className="flex items-center gap-2 px-2 py-1.5 mb-2 bg-fuchsia-500/5 border border-fuchsia-500/20 rounded">
+                      <Music2 className="w-3.5 h-3.5 text-fuchsia-600 shrink-0" />
+                      <audio
+                        key={shot.music_path}
+                        src={getMediaUrl(shot.music_path)}
+                        controls
+                        className="h-7 w-full"
+                      />
+                    </div>
+                  )}
+
                   <p className="text-xs text-card-foreground line-clamp-3 leading-relaxed mt-auto" title={shot.image_prompt}>
                     {shot.image_prompt}
                   </p>

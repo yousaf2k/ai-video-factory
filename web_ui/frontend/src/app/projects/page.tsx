@@ -82,6 +82,9 @@ export default function ProjectsPage() {
   const [maxShotDuration, setMaxShotDuration] = useState(5);
   const [promptsFile, setPromptsFile] = useState("");
   const [usePromptsFile, setUsePromptsFile] = useState(false);
+  // Blank mode: create the project without AI story generation — the user
+  // writes story/scenes/characters manually in the project editor.
+  const [createBlank, setCreateBlank] = useState(false);
   const [selectedAspectRatio, setSelectedAspectRatio] = useState<"16:9" | "9:16" | "21:8">("16:9");
   const [generatingThumbnails, setGeneratingThumbnails] = useState<
     Record<string, boolean>
@@ -130,8 +133,19 @@ export default function ProjectsPage() {
     };
 
     try {
-      setIsGeneratingStory(true);
       const project = await createProjectMutation.mutateAsync(request);
+
+      if (createBlank) {
+        // Blank mode: no AI story generation — open the manual editor directly.
+        setShowNewDialog(false);
+        setNewIdea("");
+        setPromptsFile("");
+        setCreateBlank(false);
+        window.location.href = `/projects/${project.project_id}/edit`;
+        return;
+      }
+
+      setIsGeneratingStory(true);
 
       try {
         // Automatically generate the initial story ONLY if not using a prompts file
@@ -150,6 +164,7 @@ export default function ProjectsPage() {
       setShowNewDialog(false);
       setNewIdea("");
       setPromptsFile("");
+      setCreateBlank(false);
       // Navigate to the new project
       window.location.href = `/projects/${project.project_id}`;
     } catch (error) {
@@ -588,10 +603,30 @@ export default function ProjectsPage() {
                       value={newIdea}
                       onChange={(e) => setNewIdea(e.target.value)}
                       className="min-h-[120px] resize-y bg-background"
-                      placeholder="Describe your video idea in detail..."
+                      placeholder={createBlank
+                        ? "Project title / short description (you'll write the story manually)..."
+                        : "Describe your video idea in detail..."}
                       required={!usePromptsFile}
                     />
                   </div>
+                  )}
+
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="createBlankProject"
+                      checked={createBlank}
+                      onCheckedChange={setCreateBlank}
+                    />
+                    <label htmlFor="createBlankProject" className="text-sm font-medium text-foreground">
+                      Start blank — write the story manually
+                    </label>
+                  </div>
+                  {createBlank && (
+                    <p className="text-xs text-muted-foreground -mt-1">
+                      Skips AI story generation. The project is created empty and opens
+                      straight in the editor where you add title, scenes, characters and
+                      shots yourself.
+                    </p>
                   )}
 
                   {selectedProjectType === ProjectType.Documentary && usePromptsFile && (
@@ -784,7 +819,7 @@ export default function ProjectsPage() {
                   ) : (
                     <>
                       <Plus className="w-4 h-4 mr-2" />
-                      Create Project
+                      {createBlank ? "Create Blank Project" : "Create Project"}
                     </>
                   )}
                 </Button>

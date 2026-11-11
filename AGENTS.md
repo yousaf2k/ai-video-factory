@@ -4,7 +4,7 @@ Guidance for AI coding agents (and humans) working in this repository. This is t
 
 ## Project Overview
 
-AI Video Factory is an end-to-end pipeline that transforms text ideas into cinematic videos using AI. It combines multiple LLM providers (Gemini, OpenAI, Zhipu, DeepSeek, Qwen, Kimi, Ollama, LM Studio) for story/prompt generation with ComfyUI (and Gemini Flow web automation) for image/video rendering, wrapped in a FastAPI + React web UI.
+AI Video Factory is an end-to-end pipeline that transforms text ideas into cinematic videos using AI. It combines multiple LLM providers (Gemini, OpenAI, Zhipu, DeepSeek, Qwen, Kimi, Ollama, LM Studio, Strata) for story/prompt generation with ComfyUI (and Gemini Flow web automation) for image/video rendering, wrapped in a FastAPI + React web UI.
 
 ## Development Commands
 
@@ -119,6 +119,32 @@ Global asset library with nested categories (top-level category = asset type: `I
 
 ## Configuration System
 
+**`models.json`** (project root, PI models.json format) is the canonical model
+registry AND the source of truth for provider/model details: per provider it
+holds `baseUrl`, `api`, `apiKey` as a `${ENV_VAR}` reference (keys live in
+`.env`), and `models[]` with `id`, `reasoning`, `compat.thinkingFormat` and
+`thinkingLevelMap`. `core/model_registry.py` loads it;
+`llm_engine.get_provider()` resolves base URLs, keys and the active model from
+it (non-empty `{PROVIDER}_BASE_URL` settings override the file). At request
+time the thinking wire format is **dispatched per model** from
+`compat.thinkingFormat` (all 11 PI formats implemented in
+`core/thinking_formats.py`; the provider class default is only a fallback),
+and the configured level is translated through the model's
+`thinkingLevelMap` (a null mapping = unsupported: hidden from the dropdown
+and never sent). The model's `"reasoning"` flag is the primary gate: a model
+with `"reasoning": false` (the PI default) gets no thinking dropdown and
+never sends a thinking field, regardless of its map.
+
+LLM output is **streamed to the console** token-by-token as it generates
+(all providers; `LLM_STREAM_TO_CONSOLE`, default on) — the assembled text is
+still what the pipeline parses, and the JSONL/file logs are unchanged.
+
+Every LLM call logs its **full raw wire traffic** (final URL, redacted
+headers, exact JSON body incl. thinking fields, raw response) into
+`output/logs/llm_io.log` and the structured `llm_calls.jsonl` — visible on the
+Logs page via the "Raw Request" / "Raw Response" tabs. Toggle with
+`LOG_LLM_RAW_REQUESTS` (default on).
+
 **`config.py`** is the central hub: LLM provider selection, image/video dimensions and workflows, camera-to-LoRA mappings, concurrent generation limits, and path resolution (`config.resolve_path()` for cross-drive compatibility).
 
 Key environment variables (`.env` at project root):
@@ -126,7 +152,7 @@ Key environment variables (`.env` at project root):
 ```bash
 GEMINI_API_KEY="..."               # Primary LLM key
 OPENAI_API_KEY="..."               # Optional
-LLM_PROVIDER="gemini"              # gemini, openai, zhipu, deepseek, qwen, kimi, ollama, lmstudio
+LLM_PROVIDER="gemini"              # gemini, openai, zhipu, deepseek, qwen, kimi, ollama, lmstudio, strata
 IMAGE_GENERATION_MODE="comfyui"    # comfyui, gemini, geminiweb, flow
 VIDEO_GENERATION_MODE="comfyui"    # comfyui, geminiweb
 COMFY_URL="http://127.0.0.1:8188"
@@ -161,7 +187,7 @@ directors/
     └── videoprompt/     # videoprompt_minimax_h3 (prompt rules; r2v and r2v_singularity variants for full-reference formats)
 ```
 
-Character references use a **unified schema**: a single `image_prompt` and `character_reference_image_path` per character; reference generation produces 8-view character sheets (4 full-body + 4 face close-ups). Shots directors may emit `soundfx_prompt`; blank soundfx falls back to generic sounds.
+Character references use a **unified schema**: a single `image_prompt` and `character_reference_image_path` per character; reference generation produces 8-view character sheets (4 full-body + 4 face close-ups). Shots directors may emit `soundfx_prompt` and `music_prompt`; blank soundfx falls back to generic sounds.
 
 ## Workflow Development
 
@@ -170,6 +196,7 @@ Character references use a **unified schema**: a single `image_prompt` and `char
 r2v prompt modes: projects with `video_generation_type: r2v` pick a `r2v_mode` — `standard` (base full-reference format, `base/base_shots_r2v`) or `singularity` (enhanced format per `docs/guides/MiniMax_H3_Singularity_Prompt_Writing_Specification_Enhanced_EN.md`, `base/base_shots_r2v_singularity`). CLI: `--r2v-mode`; web UI: Reference Mode sub-select in the new-project dialog (defaults to Singularity). Singularity mode also defaults the video workflow to a Singularity checkpoint.
 - **Image** (`workflow/image/`): Flux, Flux 2, Krea 2 reference, HiDream, Z-Image Turbo, IPAdapter (then/now). Tags: `[positive]`, `[negative]`, `[ksampler]`, `[vae]`, `[save]`; IPAdapter uses `[reference]`/`[ipadapter]`.
 - **Sound FX** (`workflow/soundfx/`): MMAudio and woosh workflows for shot SFX.
+- **Music** (`workflow/music/`): text-to-music workflows (sample: native ACE-Step). Tags: `[prompt]`, `[lyrics]`, `[duration]`, `[audio_out]`. Music generation modes: `MUSIC_GENERATION_MODE` = `comfyui` or `geminiweb` (Gemini Web sends "Create a music: …" and downloads the audio attachment). Scene and shot music prompts are editable in the UI; outputs land in the project's `music/` dir as mp3. Music can also be uploaded per scene/shot (upload-music endpoints); the editor auto-places scene music across its scene's shots (BGM/SFX track) and shot music on a dedicated Shot Music track.
 - **Voice** (`workflow/voice/`): TTS workflows.
 
 Camera LoRA system: up to 4 simultaneous camera types via the `LORA_NODES` array and `CAMERA_LORA_MAPPING` (high/low noise LoRA pairs with trigger keywords).

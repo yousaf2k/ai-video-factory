@@ -1,10 +1,10 @@
 /**
  * SceneCard component - Individual scene in the story editor
  */
-import { useState } from "react";
-import { GripVertical, Trash2, Edit3, Check, Mic, Play, Pause, X, Loader2, ChevronDown, CheckCircle2 } from "lucide-react";
+import { useState, useRef } from "react";
+import { GripVertical, Trash2, Edit3, Check, Mic, Play, Pause, X, Loader2, ChevronDown, CheckCircle2, Music2, Upload } from "lucide-react";
 import { Scene } from "@/types";
-import { cn } from "@/lib/utils";
+import { cn, getMediaUrl } from "@/lib/utils";
 import SceneBackgroundManager from "@/components/scenes/SceneBackgroundManager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useGenerateSceneNarration, useSelectSceneNarration, useCancelSceneNarration, useDeleteSceneNarration } from "@/hooks/useShots";
+import { useGenerateSceneNarration, useSelectSceneNarration, useCancelSceneNarration, useDeleteSceneNarration, useGenerateSceneMusic, useUploadSceneMusic, useDeleteSceneMusic } from "@/hooks/useShots";
+import { GenerationDialog } from "@/components/shots/GenerationDialog";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -54,6 +55,7 @@ export function SceneCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editedScene, setEditedScene] = useState<Scene>(scene);
   const [isGenDialogOpen, setIsGenDialogOpen] = useState(false);
+  const [isMusicDialogOpen, setIsMusicDialogOpen] = useState(false);
 
   // Generation Settings
   const [ttsMethod, setTtsMethod] = useState("local");
@@ -64,6 +66,10 @@ export function SceneCard({
   const selectNarration = useSelectSceneNarration(projectId!);
   const cancelNarration = useCancelSceneNarration(projectId!);
   const deleteNarration = useDeleteSceneNarration(projectId!);
+  const generateMusic = useGenerateSceneMusic(projectId!);
+  const uploadMusic = useUploadSceneMusic(projectId!);
+  const deleteMusic = useDeleteSceneMusic(projectId!);
+  const musicFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = () => {
     onUpdate?.(index, editedScene);
@@ -91,6 +97,35 @@ export function SceneCard({
     deleteNarration.mutate(index, {
       onSuccess: () => toast.success(`Narration deleted for Scene ${index + 1}`),
       onError: () => toast.error("Failed to delete narration"),
+    });
+  };
+
+  const handleGenerateMusic = (config: { force?: boolean; musicMode?: string; musicWorkflow?: string; musicPrompt?: string }) => {
+    generateMusic.mutate({
+      sceneId: scene.scene_id ?? index,
+      config: {
+        force: config.force || false,
+        mode: config.musicMode,
+        workflow: config.musicWorkflow,
+        prompt_override: config.musicPrompt,
+      },
+    });
+    setIsMusicDialogOpen(false);
+  };
+
+  const handleUploadMusic = (file: File) => {
+    uploadMusic.mutate({ sceneId: scene.scene_id ?? index, file }, {
+      onSuccess: () => toast.success(`Music uploaded for Scene ${index + 1}`),
+      onError: (err: any) => toast.error("Failed to upload music", {
+        description: err?.response?.data?.detail || err?.message || "Unknown error",
+      }),
+    });
+  };
+
+  const handleDeleteMusic = () => {
+    deleteMusic.mutate({ sceneId: scene.scene_id ?? index }, {
+      onSuccess: () => toast.success(`Music deleted for Scene ${index + 1}`),
+      onError: () => toast.error("Failed to delete music"),
     });
   };
 
@@ -183,6 +218,16 @@ export function SceneCard({
                   onChange={(e) => setEditedScene({ ...editedScene, set_prompt: e.target.value })}
                   className="mt-1 min-h-[40px] text-sm"
                   placeholder="Describe the background explicitly..."
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs text-muted-foreground">Music Prompt (scene background music)</label>
+                <Textarea
+                  value={editedScene.music_prompt || ""}
+                  onChange={(e) => setEditedScene({ ...editedScene, music_prompt: e.target.value })}
+                  className="mt-1 min-h-[40px] text-sm"
+                  placeholder="Describe the music: warm hopeful strings, gentle piano, 70 BPM..."
                 />
               </div>
 
@@ -315,6 +360,51 @@ export function SceneCard({
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMusicDialogOpen(true)}
+                className={cn("h-8 gap-1 text-xs", scene.music_generated && "text-fuchsia-600")}
+                title="Generate Music"
+              >
+                <Music2 className={cn("w-3.5 h-3.5", generateMusic.isPending && "animate-pulse")} />
+                Music
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => musicFileInputRef.current?.click()}
+                className="h-8 w-8"
+                disabled={uploadMusic.isPending}
+                title="Upload music file"
+              >
+                <Upload className={cn("w-4 h-4", uploadMusic.isPending && "animate-pulse")} />
+              </Button>
+              {scene.music_path && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDeleteMusic}
+                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  disabled={deleteMusic.isPending}
+                  title="Delete music"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+              <input
+                ref={musicFileInputRef}
+                type="file"
+                accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUploadMusic(file);
+                  e.target.value = "";
+                }}
+              />
 
               <Button
                 variant="ghost"
@@ -458,9 +548,31 @@ export function SceneCard({
                     : <Trash2 className="w-3 h-3" />}
                 </Button>
               )}
+
+              {scene.music_path && (
+                <div className="flex items-center gap-2 bg-fuchsia-500/5 border border-fuchsia-500/20 rounded-full px-3 py-1">
+                  <Music2 className="w-3 h-3 text-fuchsia-600 shrink-0" />
+                  <audio
+                    src={getMediaUrl(scene.music_path)}
+                    controls
+                    className="h-6 max-w-[220px]"
+                  />
+                </div>
+              )}
             </div>
           )}
         </div>
+
+        <GenerationDialog
+          isOpen={isMusicDialogOpen}
+          onClose={() => setIsMusicDialogOpen(false)}
+          type="music"
+          projectId={projectId}
+          isPending={generateMusic.isPending}
+          title={`Generate Music — Scene ${index + 1}`}
+          defaultMusicPrompt={scene.music_prompt || ""}
+          onSubmit={handleGenerateMusic}
+        />
       </div>
     </div>
   );

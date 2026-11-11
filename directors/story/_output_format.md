@@ -58,6 +58,7 @@ Respond with a single valid JSON object only — no commentary before or after i
       "action": "What happens in this scene",
       "emotion": "Primary emotion of the scene",
       "narration": "Voice-over text. Write EXACTLY enough text to fill the scene_duration. Since average speaking rate is ~2.5 words per second, a 60-second scene needs ~150 words of narration.",
+      "music_prompt": "Instrumental background music direction for this scene: genre/mood, tempo, key instruments, dynamics (e.g., 'slow melancholic piano with ambient pads, 70 BPM, builds to warm strings'). No lyrics, no vocals, 1-2 sentences.",
       "set_prompt": "Detailed background image prompt for this scene's environment (location stays a short name): a WIDE ESTABLISHING VIEW of the empty space — geography, architecture and key objects with their materials, weather and time of day, lighting, atmosphere. Not a close-up, not a single-object shot, no camera/cinematography language; 2-3 sentences, no people.",
       "scene_duration": 45
     }

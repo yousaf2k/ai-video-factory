@@ -215,8 +215,8 @@ RULES:
 
 
 def is_local_provider():
-    """Check if current LLM provider is local (Ollama or LMStudio)"""
-    local_providers = ['ollama', 'lmstudio']
+    """Check if current LLM provider is local (Ollama, LMStudio or Strata)"""
+    local_providers = ['ollama', 'lmstudio', 'strata']
     return LLM_PROVIDER.lower() in local_providers
 
 
@@ -299,6 +299,7 @@ Return JSON list (each shot):
    "motion_prompt":"",
    "video_prompt":"",
    "soundfx_prompt":"",
+   "music_prompt":"",
    "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]
@@ -479,6 +480,12 @@ def validate_and_repair_shots(shots, shots_director, max_shot_duration=None):
         return shots
 
     ensure_shot_durations(shots, max_duration=max_shot_duration)
+
+    # Directors that predate the music field omit it; default it so downstream
+    # generation always has a (possibly empty) prompt to read.
+    for shot in shots:
+        if isinstance(shot, dict) and shot.get('music_prompt') is None:
+            shot['music_prompt'] = ''
 
     # The prompt format follows the shots director: r2v directors emit the
     # six-section full-reference format, t2v directors the T2VA format
@@ -1219,6 +1226,7 @@ Return JSON list (each shot):
    "motion_prompt":"",
    "video_prompt":"",
    "soundfx_prompt":"",
+   "music_prompt":"",
    "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
   }}
 ]

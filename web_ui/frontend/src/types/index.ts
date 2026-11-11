@@ -151,6 +151,10 @@ export interface Scene {
   scene_duration?: number;
   narration_path?: string;
   narration_paths?: string[];
+  music_prompt?: string;
+  music_path?: string;
+  music_paths?: string[];
+  music_generated?: boolean;
   set_prompt?: string;
   scene_image_path?: string;
   background_image_path?: string;
@@ -202,6 +206,10 @@ export interface Shot {
   soundfx_path?: string;
   soundfx_generated?: boolean;
   soundfx_prompt?: string;
+  // Music fields
+  music_prompt?: string;
+  music_path?: string;
+  music_generated?: boolean;
   // Asset references (asset library feature) — ordered, first = primary.
   // Shapes: "i/{id}" (library), "{library}/i/{id}" (non-default library),
   // "p/{project_id}/{media_dir}/{filename}" (other projects' media).
@@ -248,6 +256,8 @@ export interface GlobalConfig {
   available_video_workflows?: string[];
   available_image_workflows?: string[];
   available_soundfx_workflows?: string[];
+  available_music_workflows?: string[];
+  music_generation_mode?: string;
   playwright_browser?: string;
   gemini_watermark_tool_image?: string;
   gemini_watermark_tool_video?: string;
@@ -274,6 +284,8 @@ export interface GlobalConfig {
   ollama_model?: string;
   lmstudio_base_url?: string;
   lmstudio_model?: string;
+  strata_base_url?: string;
+  strata_model?: string;
   llm_max_tokens?: number;
   shot_generation_batch_size?: number;
   max_parallel_batch_threads?: number;
@@ -302,6 +314,23 @@ export interface GlobalConfig {
   lmstudio_max_tokens?: string;
   lmstudio_shot_batch_size?: string;
   lmstudio_parallel_batch_threads?: string;
+  strata_max_tokens?: string;
+  strata_shot_batch_size?: string;
+  strata_parallel_batch_threads?: string;
+  // Thinking / reasoning effort per provider (custom values pass through)
+  zhipu_reasoning_effort?: string;
+  openai_reasoning_effort?: string;
+  gemini_thinking_level?: string;
+  deepseek_thinking_level?: string;
+  qwen_thinking_level?: string;
+  kimi_thinking_level?: string;
+  ollama_thinking_level?: string;
+  lmstudio_thinking_level?: string;
+  strata_thinking_level?: string;
+  thinking_options?: Record<string, string[]>;
+  thinking_config_fields?: Record<string, string>;
+  thinking_level_maps?: Record<string, Record<string, Record<string, string | null>>>;
+  models_registry?: Record<string, string[]>;
   soundfx_workflow?: string;
   prompt_mode?: string;
   comfy_output_dir?: string;
@@ -393,6 +422,8 @@ export interface UpdateGlobalConfigRequest {
   ollama_model?: string;
   lmstudio_base_url?: string;
   lmstudio_model?: string;
+  strata_base_url?: string;
+  strata_model?: string;
   llm_max_tokens?: number;
   shot_generation_batch_size?: number;
   max_parallel_batch_threads?: number;
@@ -421,6 +452,23 @@ export interface UpdateGlobalConfigRequest {
   lmstudio_max_tokens?: string;
   lmstudio_shot_batch_size?: string;
   lmstudio_parallel_batch_threads?: string;
+  strata_max_tokens?: string;
+  strata_shot_batch_size?: string;
+  strata_parallel_batch_threads?: string;
+  // Thinking / reasoning effort per provider (custom values pass through)
+  zhipu_reasoning_effort?: string;
+  openai_reasoning_effort?: string;
+  gemini_thinking_level?: string;
+  deepseek_thinking_level?: string;
+  qwen_thinking_level?: string;
+  kimi_thinking_level?: string;
+  ollama_thinking_level?: string;
+  lmstudio_thinking_level?: string;
+  strata_thinking_level?: string;
+  thinking_options?: Record<string, string[]>;
+  thinking_config_fields?: Record<string, string>;
+  thinking_level_maps?: Record<string, Record<string, Record<string, string | null>>>;
+  models_registry?: Record<string, string[]>;
   prompt_mode?: string;
   comfy_output_dir?: string;
   comfy_input_dir?: string;
@@ -481,6 +529,7 @@ export interface UpdateShotRequest {
   meeting_video_prompt?: string;
   departure_video_prompt?: string;
   soundfx_prompt?: string;
+  music_prompt?: string;
 }
 
 export interface ProgressEvent {
@@ -570,6 +619,7 @@ export enum GenerationType {
   NARRATION = "narration",
   BACKGROUND = "background",
   SOUNDFX = "soundfx",
+  MUSIC = "music",
   ASSET_IMAGE = "asset_image",
   ASSET_VIDEO = "asset_video"
 }
@@ -783,6 +833,8 @@ export interface LLMLogEntryDetail extends LLMLogEntrySummary {
   output?: string | null;
   error?: string | null;
   thread?: string | null;
+  raw_request?: Record<string, unknown> | null;
+  raw_response?: Record<string, unknown> | null;
 }
 
 export interface LLMLogListResponse {

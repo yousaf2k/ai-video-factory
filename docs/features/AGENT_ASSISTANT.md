@@ -60,7 +60,7 @@ control is hidden.
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `AGENT_LLM_PROVIDER` | *(follows `LLM_PROVIDER`)* | gemini, openai, zhipu, deepseek, qwen, kimi, ollama, lmstudio |
+| `AGENT_LLM_PROVIDER` | *(follows `LLM_PROVIDER`)* | gemini, openai, zhipu, deepseek, qwen, kimi, ollama, lmstudio, strata |
 | `AGENT_LLM_MODEL` | *(provider default)* | Model override for the agent |
 | `ZHIPU_REASONING_EFFORT` | *(auto)* | GLM-5.x thinking effort: default/low/high/max (sent as `thinking.effort`; empty = model auto) |
 | `OPENAI_REASONING_EFFORT` | *(auto)* | OpenAI reasoning models (o-series/gpt-5*): minimal/low/medium/high |

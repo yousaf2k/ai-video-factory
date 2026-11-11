@@ -25,6 +25,7 @@ import {
   ClipboardCheck,
   GripVertical,
   Volume2,
+  Music2,
   Paperclip,
   FolderInput,
   User,
@@ -45,6 +46,9 @@ import {
   useDeleteVariationVideo,
   useUploadShotVideo,
   useGenerateSoundFX,
+  useGenerateShotMusic,
+  useUploadShotMusic,
+  useDeleteShotMusic,
 } from "@/hooks/useShots";
 import { useDirectors, useConfig } from "@/hooks/useDirectors";
 import { useQueryClient } from "@tanstack/react-query";
@@ -149,7 +153,7 @@ export function ShotCard({
 
   // Regeneration modal state
   const [showRegenModal, setShowRegenModal] = useState<
-    "image" | "video" | "soundfx" | null
+    "image" | "video" | "soundfx" | "music" | null
   >(null);
   const [defaultPromptOverride, setDefaultPromptOverride] = useState("");
 
@@ -163,6 +167,7 @@ export function ShotCard({
   const uploadImage = useUploadShotImage(projectId);
   const deleteVariation = useDeleteVariationImage(projectId);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const musicFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isVideoUploading, setIsVideoUploading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -182,6 +187,9 @@ export function ShotCard({
   const selectVideo = useSelectVideo(projectId);
   const deleteVariationVideo = useDeleteVariationVideo(projectId);
   const generateSoundFX = useGenerateSoundFX(projectId);
+  const generateMusic = useGenerateShotMusic(projectId);
+  const uploadMusic = useUploadShotMusic(projectId);
+  const deleteMusic = useDeleteShotMusic(projectId);
 
   const { data: globalConfig } = useConfig();
 
@@ -308,6 +316,8 @@ export function ShotCard({
         now_image_prompt: editedShot.now_image_prompt,
         meeting_video_prompt: editedShot.meeting_video_prompt,
         departure_video_prompt: editedShot.departure_video_prompt,
+        soundfx_prompt: editedShot.soundfx_prompt,
+        music_prompt: editedShot.music_prompt,
       });
       setIsEditing(false);
       toast.success("Shot updated successfully", {
@@ -557,6 +567,23 @@ export function ShotCard({
               </div>
             </>
           )}
+
+          <div>
+            <label className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+              Music Prompt
+            </label>
+            <Textarea
+              value={editedShot.music_prompt || ""}
+              onChange={(e) =>
+                setEditedShot({ ...editedShot, music_prompt: e.target.value })
+              }
+              placeholder="Describe the music: slow melancholic piano, ambient pads, 80 BPM..."
+              className="mt-1 min-h-[60px] bg-muted/20"
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Background music generated per shot; style, mood, tempo, instruments.
+            </p>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -920,6 +947,54 @@ export function ShotCard({
           >
             <Volume2 className={cn("w-4 h-4", generateSoundFX.isPending && "animate-pulse")} />
           </button>
+          <button
+            onClick={() => setShowRegenModal("music")}
+            disabled={generateMusic.isPending}
+            className={cn("p-1 rounded disabled:opacity-50", shot.music_generated ? "text-fuchsia-600" : "text-fuchsia-500 hover:bg-fuchsia-50")}
+            title={shot.music_generated ? `Regenerate music${shot.music_path ? " (music ready)" : ""}` : "Generate Music"}
+          >
+            <Music2 className={cn("w-4 h-4", generateMusic.isPending && "animate-pulse")} />
+          </button>
+          <button
+            onClick={() => musicFileInputRef.current?.click()}
+            disabled={uploadMusic.isPending}
+            className="p-1 hover:bg-fuchsia-50 text-fuchsia-500 rounded disabled:opacity-50"
+            title="Upload music file"
+          >
+            <Upload className={cn("w-4 h-4", uploadMusic.isPending && "animate-pulse")} />
+          </button>
+          {shot.music_path && (
+            <button
+              onClick={() => {
+                deleteMusic.mutate({ shotIdOrIndex: shot.id || shot.index }, {
+                  onSuccess: () => toast.success(`Music deleted for Shot ${shot.index}`),
+                  onError: () => toast.error("Failed to delete music"),
+                });
+              }}
+              disabled={deleteMusic.isPending}
+              className="p-1 hover:bg-red-50 text-red-500 rounded disabled:opacity-50"
+              title="Delete music"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          <input
+            ref={musicFileInputRef}
+            type="file"
+            accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              uploadMusic.mutate({ shotIdOrIndex: shot.id || shot.index, file }, {
+                onSuccess: () => toast.success(`Music uploaded for Shot ${shot.index}`),
+                onError: (err: any) => toast.error("Failed to upload music", {
+                  description: err?.response?.data?.detail || err?.message || "Unknown error",
+                }),
+              });
+              e.target.value = "";
+            }}
+          />
 
           <div className="w-px h-6 bg-border mx-1 my-auto"></div>
 
@@ -1108,6 +1183,19 @@ export function ShotCard({
             </span>
           )}
         </div>
+
+        {/* Generated music player */}
+        {shot.music_path && (
+          <div className="flex items-center gap-2 px-2 py-1.5 bg-fuchsia-500/5 border border-fuchsia-500/20 rounded">
+            <Music2 className="w-3.5 h-3.5 text-fuchsia-600 shrink-0" />
+            <audio
+              key={shot.music_path}
+              src={bustCache(getMediaUrl(shot.music_path))}
+              controls
+              className="h-7 w-full"
+            />
+          </div>
+        )}
       </div>
 
       {/* Prompts */}
@@ -1154,7 +1242,7 @@ export function ShotCard({
               )}
             </button>
           </div>
-          <div className={cn("text-sm", !isImagePromptExpanded && "line-clamp-2")}>
+          <div className={cn("text-sm whitespace-pre-wrap break-words", !isImagePromptExpanded && "line-clamp-2")}>
             {shot.is_flfi2v
               ? (activeImageMode === 'then' ? (shot.then_image_prompt || shot.image_prompt) : (shot.now_image_prompt || shot.image_prompt))
               : shot.image_prompt}
@@ -1203,7 +1291,7 @@ export function ShotCard({
               )}
             </button>
           </div>
-          <div key={shot.is_flfi2v ? `motion-${activeVideoMode}` : 'motion'} className={cn("text-sm", !isMotionPromptExpanded && "line-clamp-2")}>
+          <div key={shot.is_flfi2v ? `motion-${activeVideoMode}` : 'motion'} className={cn("text-sm whitespace-pre-wrap break-words", !isMotionPromptExpanded && "line-clamp-2")}>
             {shot.is_flfi2v
               ? (activeVideoMode === 'meeting' ? (shot.meeting_video_prompt || shot.motion_prompt) : (shot.departure_video_prompt || shot.motion_prompt))
               : shot.motion_prompt}
@@ -1251,7 +1339,7 @@ export function ShotCard({
               )}
             </button>
           </div>
-          <div className={cn("text-xs font-mono", !isVideoPromptExpanded && "line-clamp-2")}>
+          <div className={cn("text-xs font-mono whitespace-pre-wrap break-words", !isVideoPromptExpanded && "line-clamp-2")}>
             {shot.video_prompt}
           </div>
         </div>
@@ -1278,7 +1366,7 @@ export function ShotCard({
             )}
           </button>
         </div>
-        <div className="text-xs">
+        <div className="text-xs whitespace-pre-wrap break-words">
           {shot.soundfx_prompt || (
             <span className="text-muted-foreground italic text-[10px]">
               Using motion prompt default
@@ -1307,10 +1395,12 @@ export function ShotCard({
           removeWatermark.isPending ||
           uploadImage.isPending ||
           uploadVideo.isPending ||
-          generateSoundFX.isPending
+          generateSoundFX.isPending ||
+          generateMusic.isPending
         }
         defaultPromptOverride={defaultPromptOverride}
         defaultSoundFXPrompt={shot.soundfx_prompt || shot.motion_prompt}
+        defaultMusicPrompt={shot.music_prompt || ""}
         onSubmit={(config) => {
           // Use ID if available, otherwise index (string or number)
           const shotIdOrIndex = shot.id || shot.index;
@@ -1344,6 +1434,7 @@ export function ShotCard({
               videoVariant,
               appendImagePrompt: config.appendImagePrompt === "default" ? undefined : config.appendImagePrompt,
               generateSoundFX: config.generateSoundFX || false,
+              noMusic: config.noMusic || false,
               draftLowResVideo: config.draftLowResVideo || false,
               promptOverride: config.promptOverride?.trim() || undefined,
               resolution: config.resolution,
@@ -1366,6 +1457,17 @@ export function ShotCard({
             });
             toast.info("Sound FX generation started", {
               description: `Shot ${shot.index} sound FX is being generated.`,
+            });
+          } else if (type === "music") {
+            generateMusic.mutate({
+              shotIdOrIndex,
+              force: config.force || false,
+              mode: config.musicMode,
+              workflow: config.musicWorkflow,
+              promptOverride: config.musicPrompt,
+            });
+            toast.info("Music generation started", {
+              description: `Shot ${shot.index} music is being generated.`,
             });
           } else if (type === "watermark") {
             removeWatermark.mutate({

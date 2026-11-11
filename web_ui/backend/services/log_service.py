@@ -142,6 +142,8 @@ class LogService:
             output=entry.get("output"),
             error=entry.get("error"),
             thread=entry.get("thread"),
+            raw_request=entry.get("raw_request"),
+            raw_response=entry.get("raw_response"),
         )
 
 

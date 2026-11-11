@@ -5,6 +5,13 @@ description: Use when the user wants to create a new video project from an idea 
 
 # New project wizard
 
+## 0. Blank projects
+If the user wants to write the story themselves ("blank project", "empty
+project", "I'll provide the story"), just `create_project` — it is already
+blank (no LLM call). Then fill it in from THEIR details with `update_story`
+(full story incl. scenes) or `add_scene`/`add_character`/`add_shot`, and skip
+`generate_story` entirely.
+
 ## 1. Gather settings
 If the user didn't specify, confirm (briefly, one question max — propose defaults):
 - **Project type** — pass the NAME to create_project's `project_type`:

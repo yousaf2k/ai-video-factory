@@ -59,8 +59,8 @@ export function useGenerateVideo(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode, soundfxWorkflow, soundfxPrompt, geminiModel, geminiThinking }: { shotIdOrIndex: string | number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean; promptOverride?: string; resolution?: string; geminiMode?: string; soundfxWorkflow?: string; soundfxPrompt?: string; geminiModel?: string; geminiThinking?: string }) =>
-      api.generateShotVideo(projectId, shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode, soundfxWorkflow, soundfxPrompt, geminiModel, geminiThinking),
+    mutationFn: ({ shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode, soundfxWorkflow, soundfxPrompt, geminiModel, geminiThinking, noMusic }: { shotIdOrIndex: string | number; force?: boolean; videoMode?: string; videoWorkflow?: string; videoVariant?: string; appendImagePrompt?: string; generateSoundFX?: boolean; draftLowResVideo?: boolean; promptOverride?: string; resolution?: string; geminiMode?: string; soundfxWorkflow?: string; soundfxPrompt?: string; geminiModel?: string; geminiThinking?: string; noMusic?: boolean }) =>
+      api.generateShotVideo(projectId, shotIdOrIndex, force, videoMode, videoWorkflow, videoVariant, appendImagePrompt, generateSoundFX, draftLowResVideo, promptOverride, resolution, geminiMode, soundfxWorkflow, soundfxPrompt, geminiModel, geminiThinking, noMusic),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -75,6 +75,90 @@ export function useGenerateSoundFX(projectId: string) {
   return useMutation({
     mutationFn: ({ shotIdOrIndex, force, workflow, promptOverride }: { shotIdOrIndex: string | number; force?: boolean; workflow?: string; promptOverride?: string }) =>
       api.generateSoundFX(projectId, shotIdOrIndex, force, workflow, promptOverride),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+  });
+}
+
+// Hook to generate music for a shot
+export function useGenerateShotMusic(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shotIdOrIndex, force, mode, workflow, promptOverride }: { shotIdOrIndex: string | number; force?: boolean; mode?: string; workflow?: string; promptOverride?: string }) =>
+      api.generateMusic(projectId, shotIdOrIndex, force, mode, workflow, promptOverride),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+  });
+}
+
+// Hook to generate music for a scene
+export function useGenerateSceneMusic(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sceneId, config }: { sceneId: number; config?: { force?: boolean; mode?: string; workflow?: string; prompt_override?: string } }) =>
+      api.generateSceneMusic(projectId, sceneId, config),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+  });
+}
+
+// Hook to upload a music file for a shot
+export function useUploadShotMusic(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shotIdOrIndex, file }: { shotIdOrIndex: string | number; file: File }) =>
+      api.uploadShotMusic(projectId, shotIdOrIndex, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+  });
+}
+
+// Hook to upload a music file for a scene
+export function useUploadSceneMusic(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sceneId, file }: { sceneId: number; file: File }) =>
+      api.uploadSceneMusic(projectId, sceneId, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+  });
+}
+
+// Hook to delete a shot's music
+export function useDeleteShotMusic(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ shotIdOrIndex }: { shotIdOrIndex: string | number }) =>
+      api.deleteShotMusic(projectId, shotIdOrIndex),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+    },
+  });
+}
+
+// Hook to delete a scene's music
+export function useDeleteSceneMusic(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sceneId }: { sceneId: number }) =>
+      api.deleteSceneMusic(projectId, sceneId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
@@ -98,6 +182,7 @@ export function useBatchGenerate(projectId: string) {
       draft_low_res_video?: boolean;
       append_image_prompt?: string;
       generate_soundfx?: boolean;
+      no_music?: boolean;
       departure_prompt_override?: string;
       then_prompt_override?: string;
       resolution?: string;
@@ -106,6 +191,10 @@ export function useBatchGenerate(projectId: string) {
       gemini_thinking?: string;
       soundfx_workflow?: string;
       soundfx_prompt?: string;
+      generate_music?: boolean;
+      music_mode?: string;
+      music_workflow?: string;
+      music_prompt?: string;
     }) => api.batchGenerate(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });

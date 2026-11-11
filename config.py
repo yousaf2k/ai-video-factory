@@ -31,12 +31,27 @@ def _env_int(name, default):
 # ==========================================
 # LLM PROVIDER CONFIGURATION
 # ==========================================
-# Primary LLM provider (gemini, openai, zhipu, deepseek, qwen, kimi, ollama, lmstudio)
+# Primary LLM provider (gemini, openai, zhipu, deepseek, qwen, kimi, ollama, lmstudio, strata)
+# Provider endpoints and available models live in models.json (PI models.json
+# format); API keys stay in .env - models.json references them as ${ENV_VAR}.
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
 
 # Maximum tokens for LLM responses (increase for large JSON outputs)
 # Set higher to avoid truncation when generating many shots
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "16384"))  # Default: 16K tokens
+
+# LLM request timeout in seconds (local models on slow hardware need more;
+# 0/negative falls back to the per-provider hard default of 300s). Override
+# per provider with e.g. OLLAMA_TIMEOUT=600, LMSTUDIO_TIMEOUT=600, STRATA_TIMEOUT=900.
+LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "300"))
+OPENAI_TIMEOUT = int(os.getenv("OPENAI_TIMEOUT", "0"))
+GEMINI_TIMEOUT = int(os.getenv("GEMINI_TIMEOUT", "0"))
+DEEPSEEK_TIMEOUT = int(os.getenv("DEEPSEEK_TIMEOUT", "0"))
+QWEN_TIMEOUT = int(os.getenv("QWEN_TIMEOUT", "0"))
+KIMI_TIMEOUT = int(os.getenv("KIMI_TIMEOUT", "0"))
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "0"))
+LMSTUDIO_TIMEOUT = int(os.getenv("LMSTUDIO_TIMEOUT", "0"))
+STRATA_TIMEOUT = int(os.getenv("STRATA_TIMEOUT", "0"))
 
 # Batch size for generating shots (process scenes in batches to avoid truncation)
 SHOT_GENERATION_BATCH_SIZE = int(os.getenv("SHOT_GENERATION_BATCH_SIZE", "1"))  # Process 1 scenes at a time to prevent LLM context errors
@@ -72,6 +87,9 @@ OLLAMA_PARALLEL_BATCH_THREADS = os.getenv("OLLAMA_PARALLEL_BATCH_THREADS", "")
 LMSTUDIO_MAX_TOKENS = os.getenv("LMSTUDIO_MAX_TOKENS", "")
 LMSTUDIO_SHOT_BATCH_SIZE = os.getenv("LMSTUDIO_SHOT_BATCH_SIZE", "")
 LMSTUDIO_PARALLEL_BATCH_THREADS = os.getenv("LMSTUDIO_PARALLEL_BATCH_THREADS", "")
+STRATA_MAX_TOKENS = os.getenv("STRATA_MAX_TOKENS", "")
+STRATA_SHOT_BATCH_SIZE = os.getenv("STRATA_SHOT_BATCH_SIZE", "")
+STRATA_PARALLEL_BATCH_THREADS = os.getenv("STRATA_PARALLEL_BATCH_THREADS", "")
 
 
 def get_llm_tuning(provider=None):
@@ -187,15 +205,15 @@ DEEPSEEK_API_KEY = decrypt_env_var("DEEPSEEK_API_KEY", "")
 # DeepSeek model (deepseek-chat is V3, deepseek-reasoner is R1 reasoning model)
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 
-# Optional override of the OpenAI-compatible API endpoint
-DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+# Optional override of the API endpoint (models.json provides the default)
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "")
 
 # ==========================================
 # OLLAMA CONFIGURATION (Local LLM)
 # ==========================================
-# Ollama server URL (default: localhost:11434)
+# Ollama server URL (models.json provides the default; set to override)
 # Download Ollama from: https://ollama.com
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "")
 
 # Model to use (e.g., llama2, mistral, codellama, qwen2, etc.)
 # List available models: ollama list
@@ -205,13 +223,22 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama2")
 # ==========================================
 # LM STUDIO CONFIGURATION (Local LLM)
 # ==========================================
-# LM Studio server URL (default: localhost:1234)
+# LM Studio server URL (models.json provides the default; set to override)
 # Download LM Studio from: https://lmstudio.ai
-LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "http://localhost:1234")
+LMSTUDIO_BASE_URL = os.getenv("LMSTUDIO_BASE_URL", "")
 
 # Model to use (e.g., lmstudio-community/qwen2, etc.)
 # Models are managed in LM Studio application
 LMSTUDIO_MODEL = os.getenv("LMSTUDIO_MODEL", "lmstudio-community/qwen2")
+
+# ==========================================
+# STRATA CONFIGURATION (Local LLM)
+# ==========================================
+# Strata local server URL (models.json provides the default; set to override)
+STRATA_BASE_URL = os.getenv("STRATA_BASE_URL", "")
+
+# Model to use as exposed by the Strata server
+STRATA_MODEL = os.getenv("STRATA_MODEL", "strata")
 
 # Image generation model (NanoBanana Pro)
 GEMINI_IMAGE_MODEL = "gemini-3-pro-image-preview"
@@ -1391,6 +1418,139 @@ if "default" not in SOUNDFX_WORKFLOWS:
         _first_key = list(SOUNDFX_WORKFLOWS.keys())[0]
         SOUNDFX_WORKFLOWS["default"] = SOUNDFX_WORKFLOWS[_first_key]
 
+# ==========================================
+# MUSIC CONFIGURATION
+# ==========================================
+# Music generation mode: "comfyui" (ACE-Step / local workflows) or "geminiweb"
+# (browser automation on gemini.google.com, prompt sent as "Create a music: ...")
+MUSIC_GENERATION_MODE = os.getenv("MUSIC_GENERATION_MODE", "comfyui")
+
+# Prompt prefix sent to Gemini Web when generating music
+MUSIC_GEMINIWEB_PROMPT_PREFIX = os.getenv("MUSIC_GEMINIWEB_PROMPT_PREFIX", "Create a music:")
+
+# Maximum music length (seconds) injected into a [duration] node when present
+MUSIC_MAX_DURATION_SECONDS = _env_int("MUSIC_MAX_DURATION_SECONDS", 240)
+
+# Active music workflow to use (must exist in MUSIC_WORKFLOWS)
+MUSIC_WORKFLOW = os.getenv("MUSIC_WORKFLOW", "default")
+
+# Music workflow definitions
+# Each workflow is auto-detected from the workflow/music directory
+MUSIC_WORKFLOWS = {}
+
+# ==========================================
+# DYNAMIC MUSIC WORKFLOW DISCOVERY
+# ==========================================
+# Auto-discover any new music workflows in the workflow/music directory.
+# Node discovery: title tags first ([prompt], [lyrics], [duration], [audio_out]),
+# then class-type heuristics (TextEncodeAceStepAudio / ACEStepSampler / SaveAudio...).
+_music_workflow_dir = resolve_path("workflow/music")
+if os.path.exists(_music_workflow_dir):
+    for _wf_file in os.listdir(_music_workflow_dir):
+        if _wf_file.endswith(".json"):
+            _wf_key = os.path.splitext(_wf_file)[0]
+            if _wf_key not in MUSIC_WORKFLOWS:
+                _wf_path = os.path.join(_music_workflow_dir, _wf_file)
+                try:
+                    with open(_wf_path, "r", encoding="utf-8") as _f:
+                        _wf_raw = json.load(_f)
+
+                    # Normalize workflow format (API JSON vs Workflow JSON)
+                    _wf_nodes = {}
+                    if "nodes" in _wf_raw and isinstance(_wf_raw["nodes"], list):
+                        # Workflow JSON format
+                        for _n in _wf_raw["nodes"]:
+                            _n_id = str(_n.get("id", ""))
+                            if _n_id:
+                                _wf_nodes[_n_id] = {
+                                    "class_type": _n.get("type", ""),
+                                    "_meta": {"title": _n.get("title", "")},
+                                    "inputs": _n.get("inputs_values", _n.get("inputs", {})) or {}
+                                }
+                    elif isinstance(_wf_raw, dict):
+                        # API JSON format
+                        _wf_nodes = _wf_raw
+
+                    _prompt_node_id = None
+                    _lyrics_node_id = None
+                    _duration_node_id = None
+                    _output_node_id = None
+
+                    _prompt_candidates = []
+                    _output_candidates = []
+
+                    # 1. First pass: strict tag matching and gathering candidates
+                    for _n_id, _n_data in _wf_nodes.items():
+                        if not isinstance(_n_data, dict):
+                            continue
+                        _title = _n_data.get("_meta", {}).get("title", "") or ""
+                        _title = _title.lower()
+                        _class_type = _n_data.get("class_type", "")
+
+                        # Explicit title tag discovery ([prompt] and [lyrics] may
+                        # live on the same node, e.g. native TextEncodeAceStepAudio)
+                        if any(tag in _title for tag in ["[prompt]"]):
+                            _prompt_node_id = _n_id
+                        if any(tag in _title for tag in ["[lyrics]"]):
+                            _lyrics_node_id = _n_id
+                        if any(tag in _title for tag in ["[duration]"]):
+                            _duration_node_id = _n_id
+                        if any(tag in _title for tag in ["[audio_out]", "[out_audio]", "[save_audio]", "[music_out]"]):
+                            _output_node_id = _n_id
+
+                        # Candidate gathering for heuristics
+                        if _class_type in ["ACEStepSampler", "TextEncodeAceStepAudio", "CLIPTextEncode", "Textbox"]:
+                            _prompt_candidates.append(_n_id)
+                        if _class_type.startswith("SaveAudio") or _class_type.startswith("PreviewAudio"):
+                            _output_candidates.append(_n_id)
+                        if _class_type == "VHS_VideoCombine":
+                            _output_candidates.append(_n_id)
+
+                    # 2. Heuristics fallbacks for missing IDs
+                    if not _prompt_node_id:
+                        # Prefer ACE-Step text encoders / samplers over generic CLIPTextEncode
+                        _ace = [cid for cid in _prompt_candidates
+                                if _wf_nodes.get(cid, {}).get("class_type") in ("ACEStepSampler", "TextEncodeAceStepAudio")]
+                        if _ace:
+                            _prompt_node_id = _ace[0]
+                        elif _prompt_candidates:
+                            # Fallback: any node whose inputs contain a prompt-ish key
+                            for _cid in _prompt_candidates:
+                                _inputs = _wf_nodes.get(_cid, {}).get("inputs", {}) or {}
+                                if any(k in _inputs for k in ("prompt", "description", "tags", "text")):
+                                    _prompt_node_id = _cid
+                                    break
+                            if not _prompt_node_id:
+                                _prompt_node_id = _prompt_candidates[0]
+
+                    if not _output_node_id and _output_candidates:
+                        _save = [cid for cid in _output_candidates
+                                 if _wf_nodes.get(cid, {}).get("class_type", "").startswith("SaveAudio")]
+                        _output_node_id = _save[0] if _save else _output_candidates[0]
+
+                    # Only register workflows where we can inject a prompt and read output
+                    if _prompt_node_id and _output_node_id:
+                        MUSIC_WORKFLOWS[_wf_key] = {
+                            "workflow_path": _wf_path,
+                            "prompt_node_id": _prompt_node_id,
+                            "lyrics_node_id": _lyrics_node_id,
+                            "duration_node_id": _duration_node_id,
+                            "output_node_id": _output_node_id,
+                            "description": f"Auto-detected music workflow: {_wf_key}"
+                        }
+
+                except Exception as e:
+                    # Silently skip unparseable files
+                    pass
+
+# Ensure a "default" music workflow exists
+if "default" not in MUSIC_WORKFLOWS:
+    if "acestep_t2m" in MUSIC_WORKFLOWS:
+        MUSIC_WORKFLOWS["default"] = MUSIC_WORKFLOWS["acestep_t2m"]
+    elif MUSIC_WORKFLOWS:
+        _first_key = list(MUSIC_WORKFLOWS.keys())[0]
+        MUSIC_WORKFLOWS["default"] = MUSIC_WORKFLOWS[_first_key]
+
 # Legacy single workflow setting (deprecated)
 TTS_WORKFLOW_PATH = resolve_path("workflow/voice/tts_workflow.json")
 
@@ -1639,12 +1799,55 @@ AGENT_CONTEXT_LIMIT_TOKENS = int(os.getenv("AGENT_CONTEXT_LIMIT_TOKENS", "0"))
 # each agent prompt.
 AGENT_HISTORY_MAX_MESSAGES = int(os.getenv("AGENT_HISTORY_MAX_MESSAGES", "40"))
 
-# Reasoning/thinking effort for providers that support it (empty = model
-# auto-selects its default). Zhipu GLM-5.x: default/low/high/max (sent as
-# thinking.effort); OpenAI reasoning models: minimal/low/medium/high (sent as
-# reasoning_effort). The agent settings page overrides these at runtime.
-ZHIPU_REASONING_EFFORT = os.getenv("ZHIPU_REASONING_EFFORT", "").strip().lower() or None
+# Reasoning/thinking effort per provider: defined in the THINKING LEVEL
+# CONFIGURATION section below (standard levels for every provider, mapped to
+# each model's real value via its thinkingLevelMap in models.json). The agent
+# settings page overrides these at runtime.
+
+# Stream LLM output to the console token-by-token as it is generated
+# (all providers). Disable for quiet batch/pipeline runs.
+LLM_STREAM_TO_CONSOLE = os.getenv("LLM_STREAM_TO_CONSOLE", "true").strip().lower() in ("1", "true", "yes", "on")
+
+# Full raw LLM API request/response wire logging: every provider call records
+# the final URL, redacted headers and the exact JSON body (incl. thinking
+# fields) into llm_io.log and the llm_calls.jsonl entry (Logs page detail).
+LOG_LLM_RAW_REQUESTS = os.getenv("LOG_LLM_RAW_REQUESTS", "true").strip().lower() in ("1", "true", "yes", "on")
+
+# ==========================================
+# THINKING LEVEL CONFIGURATION (user configurable in Settings)
+# ==========================================
+# The Settings dropdown offers these standard (PI canonical) levels for EVERY
+# provider. The selected level is translated to each model's real value via
+# its thinkingLevelMap in models.json; a null mapping (unsupported model or
+# level) sends nothing. Custom values typed in the Settings text box pass
+# through the map unchanged (absent key) or are dropped (null key).
+THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"]
+THINKING_OPTIONS = {p: list(THINKING_LEVELS) for p in (
+    "gemini", "openai", "zhipu", "deepseek", "qwen", "kimi",
+    "ollama", "lmstudio", "strata")}
+
+# Settings field that stores each provider's configured thinking level
+THINKING_CONFIG_FIELDS = {
+    "gemini": "gemini_thinking_level",
+    "openai": "openai_reasoning_effort",
+    "zhipu": "zhipu_reasoning_effort",
+    "deepseek": "deepseek_thinking_level",
+    "qwen": "qwen_thinking_level",
+    "kimi": "kimi_thinking_level",
+    "ollama": "ollama_thinking_level",
+    "lmstudio": "lmstudio_thinking_level",
+    "strata": "strata_thinking_level",
+}
+
+GEMINI_THINKING_LEVEL = os.getenv("GEMINI_THINKING_LEVEL", "").strip().lower() or None
 OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "").strip().lower() or None
+ZHIPU_REASONING_EFFORT = os.getenv("ZHIPU_REASONING_EFFORT", "").strip().lower() or None
+DEEPSEEK_THINKING_LEVEL = os.getenv("DEEPSEEK_THINKING_LEVEL", "").strip().lower() or None
+QWEN_THINKING_LEVEL = os.getenv("QWEN_THINKING_LEVEL", "").strip().lower() or None
+KIMI_THINKING_LEVEL = os.getenv("KIMI_THINKING_LEVEL", "").strip().lower() or None
+OLLAMA_THINKING_LEVEL = os.getenv("OLLAMA_THINKING_LEVEL", "").strip().lower() or None
+LMSTUDIO_THINKING_LEVEL = os.getenv("LMSTUDIO_THINKING_LEVEL", "").strip().lower() or None
+STRATA_THINKING_LEVEL = os.getenv("STRATA_THINKING_LEVEL", "").strip().lower() or None
 
 # ── Named generation styles (styles.json) ───────────────────────────────────
 # name/style pairs that populate the background-style dropdown in the web UI.

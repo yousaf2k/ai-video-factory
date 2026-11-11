@@ -33,7 +33,7 @@ from web_ui.backend.services.agent.skills import get_skill_store
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
-_LLM_PROVIDERS = ["gemini", "openai", "zhipu", "deepseek", "qwen", "kimi", "ollama", "lmstudio"]
+_LLM_PROVIDERS = ["gemini", "openai", "zhipu", "deepseek", "qwen", "kimi", "ollama", "lmstudio", "strata"]
 
 # Model suggestions per provider for the settings dropdown (plus "Custom…").
 # Mirrors the Configuration page's model dropdowns/placeholders
@@ -48,41 +48,43 @@ _PROVIDER_MODELS = {
     "kimi": ["kimi-labs"],
     "ollama": ["llama2"],
     "lmstudio": ["lmstudio-community/qwen2"],
+    "strata": ["strata"],
 }
 
 # provider -> (config model attr) used to merge the configured default in
 _PROVIDER_MODEL_ATTR = {
     "gemini": "GEMINI_TEXT_MODEL", "openai": "OPENAI_MODEL", "zhipu": "ZHIPU_MODEL",
     "deepseek": "DEEPSEEK_MODEL", "qwen": "QWEN_MODEL", "kimi": "KIMI_MODEL",
-    "ollama": "OLLAMA_MODEL", "lmstudio": "LMSTUDIO_MODEL",
+    "ollama": "OLLAMA_MODEL", "lmstudio": "LMSTUDIO_MODEL", "strata": "STRATA_MODEL",
 }
 
 
 def _effort_options(provider: str, model: str) -> list:
     """Effort levels the provider/model genuinely supports ([] = not supported).
 
-    Empty selection always means "auto" — nothing is sent and the model picks
-    its own default.
+    Standard levels (config.THINKING_LEVELS) filtered by the model's
+    thinkingLevelMap in models.json: a level mapped to null is unsupported and
+    hidden. An unknown model keeps every level (values pass through).
     """
-    provider = (provider or "").lower()
-    model = (model or "").lower()
-    if provider == "zhipu":
-        return ["default", "low", "high", "max"]
-    if provider == "openai":
-        # reasoning_effort is only accepted by reasoning models; sending it to
-        # gpt-4o & co returns "Unsupported parameter".
-        if re.match(r"^(o\d|gpt-5)", model):
-            return ["minimal", "low", "medium", "high"]
-    return []
+    import config
+    from core import model_registry
+    effective_model = (model or "").strip()
+    if not effective_model:
+        # "" = the provider's configured default model
+        attr = _PROVIDER_MODEL_ATTR.get((provider or "").lower())
+        effective_model = getattr(config, attr, "") if attr else ""
+    return model_registry.supported_thinking_levels(provider, effective_model)
 
 
 def _provider_models() -> dict:
     import config
+    from core import model_registry
     result = {}
     for provider, models in _PROVIDER_MODELS.items():
         attr = _PROVIDER_MODEL_ATTR.get(provider)
         configured = getattr(config, attr, "") if attr else ""
-        merged = list(models)
+        # models.json is the canonical registry; its ids come first
+        merged = list(model_registry.get_model_ids(provider)) or list(models)
         if configured and configured not in merged:
             merged.insert(0, configured)
         result[provider] = merged

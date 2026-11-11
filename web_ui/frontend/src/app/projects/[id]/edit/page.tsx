@@ -131,12 +131,35 @@ export default function ProjectEditPage() {
     soundfx: string;
   } | null>(null);
 
-  // Initialize and sync story when project loads
+  // Initialize and sync story when project loads. A project created "blank"
+  // has no story yet — start a minimal editable skeleton instead of showing
+  // the old "No Story Found" dead end, so the user can author it manually.
+  const storyInitRef = useRef(false);
+  const hasChangesRef = useRef(false);
   useEffect(() => {
-    if (project && project.story) {
-      setStory(project.story);
+    hasChangesRef.current = hasChanges;
+  });
+
+  useEffect(() => {
+    if (!project) return;
+    if (project.story) {
+      // Don't clobber unsaved local edits when the query refetches.
+      if (!hasChangesRef.current) {
+        setStory(project.story);
+      }
+      storyInitRef.current = true;
+    } else if (!storyInitRef.current) {
+      storyInitRef.current = true;
+      setStory({
+        title: project.idea || "Untitled Project",
+        style: "",
+        project_type: project.project_type ?? ProjectType.Documentary,
+        scenes: [],
+        characters: [],
+      });
     }
-  }, [project?.story]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.story, project?.idea, project?.project_type]);
 
   // Load backend config for replan shots dialog default values
   useEffect(() => {

@@ -10,6 +10,7 @@ Return a JSON list where each item contains:
 - `motion_prompt`: Immersive motion prompt for Wan 2.2.
 - `video_prompt`: Detailed timestamped video prompt in MiniMax H3 I2VA format (rules below). All timestamped cuts must fit inside this shot's `duration`.
 - `soundfx_prompt`: Descriptive sound tags for audio generation (e.g., "wind howling, gravel crunching, low hum").
+- `music_prompt`: Background music style/mood for music generation (e.g., "slow melancholic piano, ambient pads, 80 BPM"). Instrumental direction only.
 - `camera`: One of [static, pan, dolly, drone, orbit, tracking, arc, whip pan, handheld].
 
 {{include:videoprompt/videoprompt_minimax_h3}}

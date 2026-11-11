@@ -11,6 +11,7 @@ function MediaElement({
   globalTime,
   isPlaying,
   isMuted,
+  volume = 1,
   onReady,
   onError,
   isVisible = false
@@ -19,6 +20,7 @@ function MediaElement({
   globalTime: number;
   isPlaying: boolean;
   isMuted: boolean;
+  volume?: number;
   onReady: () => void;
   onError: (msg: string) => void;
   isVisible?: boolean;
@@ -86,6 +88,17 @@ function MediaElement({
       }
     };
   }, [clip.id, clip.type, clip.name, clip.url, hasLoggedLoad, onReady, onError]);
+
+  // Live volume/mute application (track mixer): native audio elements and
+  // video elements both follow the track's volume slider and mute toggle.
+  // HTMLMediaElement.volume caps at 1 — preview clamps boosts (export still
+  // applies the full 0-2 gain via ffmpeg).
+  useEffect(() => {
+    const el = (clip.type === 'audio' ? nativeAudioRef.current : mediaRef.current) as HTMLMediaElement | null;
+    if (!el) return;
+    el.volume = Math.max(0, Math.min(1, volume));
+    el.muted = isMuted || volume <= 0;
+  }, [clip.type, volume, isMuted, isLoaded]);
 
   // DEBUG: Log when audio element is created
   useEffect(() => {
@@ -208,14 +221,10 @@ function MediaElement({
            }
         });
 
-        // Force ensure unmuted for audio
+        // Respect the track mixer (mute toggle + volume slider)
         if ((clip.type as any) === 'audio') {
-          el.muted = false;
-          console.log('[MediaElement] 🔊 Forced unmuted:', clip.name, {
-            elementMuted: el.muted,
-            propMuted: isMuted,
-            volume: el.volume
-          });
+          el.volume = Math.max(0, Math.min(1, volume));
+          el.muted = isMuted || volume <= 0;
         }
       }
     } else {
@@ -229,7 +238,7 @@ function MediaElement({
       el.pause();
       lastPlayCall.current = 0; // Reset when paused
     }
-  }, [isPlaying, isLoaded, clip.id, clip.type, clip.name, isMuted, onError, globalTime, clip.startAt, clip.duration]);
+  }, [isPlaying, isLoaded, clip.id, clip.type, clip.name, isMuted, volume, onError, globalTime, clip.startAt, clip.duration]);
 
   useEffect(() => {
     const el = mediaRef.current;
@@ -266,8 +275,8 @@ function MediaElement({
     // on every canplay (e.g. after each buffering stall) interrupts audio.
     if (firstLoad && mediaRef.current) {
         mediaRef.current.currentTime = localTime;
-        // Ensure volume is at max
-        mediaRef.current.volume = 1.0;
+        // Apply the track mixer volume (clamped to the element's 0-1 range)
+        mediaRef.current.volume = Math.max(0, Math.min(1, volume));
     }
 
     if (firstLoad && !hasLoggedLoad) {
@@ -515,10 +524,11 @@ export function VideoPreview() {
       {/* Actual Media Container */}
       <div className="absolute inset-0 flex items-center justify-center bg-black">
         {activeClips.map((clip: any) => {
-          // Calculate mute state from track
+          // Calculate mute + volume from track
           const track = tracks.find((t: any) => t.id === clip.trackId);
           const trackIsMuted = track?.isMuted ?? false;
           const isClipMuted = trackIsMuted; // Use track's mute state
+          const trackVolume = track?.volume ?? 1;
 
           return (
             <MediaElement
@@ -527,6 +537,7 @@ export function VideoPreview() {
               globalTime={currentTime}
               isPlaying={isPlaying}
               isMuted={isClipMuted}
+              volume={trackVolume}
               onReady={handleReady}
               onError={handleError}
               isVisible={topVideoClip?.id === clip.id}
