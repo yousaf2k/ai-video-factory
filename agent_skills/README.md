@@ -39,4 +39,5 @@ Skills can also be created from the Web UI: **Agent → Settings → Skills → 
 |---|---|
 | `fix-shot-prompt` | A generated shot shows the wrong action/character and the prompt needs a surgical fix + regeneration |
 | `new-project-wizard` | The user wants a brand-new project set up end to end |
+| `empty-project-builder` | The user wants a project built by hand (no LLM story) — blank project, characters/props/scenes/shots added directly, duration-budgeted, with per-mode references and MiniMax H3 prompts |
 | `project-health-check` | The user wants a full audit of a project (missing media, failed steps, queue state) |

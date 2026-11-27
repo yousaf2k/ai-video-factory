@@ -2,10 +2,11 @@
  * SceneCard component - Individual scene in the story editor
  */
 import { useState, useRef } from "react";
-import { GripVertical, Trash2, Edit3, Check, Mic, Play, Pause, X, Loader2, ChevronDown, CheckCircle2, Music2, Upload } from "lucide-react";
+import { GripVertical, Trash2, Edit3, Check, Mic, Play, Pause, X, Loader2, ChevronDown, CheckCircle2, Music2, Upload, RotateCw } from "lucide-react";
 import { Scene } from "@/types";
 import { cn, getMediaUrl } from "@/lib/utils";
 import SceneBackgroundManager from "@/components/scenes/SceneBackgroundManager";
+import { SceneCharactersSelect } from "@/components/scenes/SceneCharactersSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useGenerateSceneNarration, useSelectSceneNarration, useCancelSceneNarration, useDeleteSceneNarration, useGenerateSceneMusic, useUploadSceneMusic, useDeleteSceneMusic } from "@/hooks/useShots";
+import { useGenerateSceneNarration, useSelectSceneNarration, useCancelSceneNarration, useDeleteSceneNarration, useGenerateSceneMusic, useUploadSceneMusic, useDeleteSceneMusic, useReplanShots } from "@/hooks/useShots";
+import { useProject } from "@/hooks/useProjects";
 import { GenerationDialog } from "@/components/shots/GenerationDialog";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
@@ -39,6 +41,7 @@ interface SceneCardProps {
   onDelete?: (index: number) => void;
   progress?: number;
   projectType?: number;
+  availableCharacters?: string[];
 }
 
 export function SceneCard({
@@ -49,6 +52,7 @@ export function SceneCard({
   onDelete,
   progress,
   projectType,
+  availableCharacters,
 }: SceneCardProps) {
   const params = useParams();
   const projectId = params.id as string;
@@ -65,6 +69,8 @@ export function SceneCard({
   const generateNarration = useGenerateSceneNarration(projectId!);
   const selectNarration = useSelectSceneNarration(projectId!);
   const cancelNarration = useCancelSceneNarration(projectId!);
+  const replanShots = useReplanShots(projectId!);
+  const { data: project } = useProject(projectId);
   const deleteNarration = useDeleteSceneNarration(projectId!);
   const generateMusic = useGenerateSceneMusic(projectId!);
   const uploadMusic = useUploadSceneMusic(projectId!);
@@ -111,6 +117,26 @@ export function SceneCard({
       },
     });
     setIsMusicDialogOpen(false);
+  };
+
+  // Re-plan only this scene's shots — other scenes' shots are untouched
+  const handleReplanScene = () => {
+    replanShots.mutate(
+      {
+        shots_director: project?.shots_director || "default",
+        scene_id: scene.scene_id ?? index,
+      },
+      {
+        onSuccess: () =>
+          toast.success(`Scene ${index + 1} re-planned`, {
+            description: "Shots for this scene were regenerated from the story.",
+          }),
+        onError: (err: any) =>
+          toast.error("Failed to re-plan scene", {
+            description: err?.response?.data?.detail || err?.message || "Please try again.",
+          }),
+      }
+    );
   };
 
   const handleUploadMusic = (file: File) => {
@@ -166,7 +192,7 @@ export function SceneCard({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
+              <div className="md:col-span-2">
                 <label className="text-xs text-muted-foreground">Location</label>
                 <Input
                   value={editedScene.location}
@@ -175,13 +201,15 @@ export function SceneCard({
                 />
               </div>
 
-              <div>
-                <label className="text-xs text-muted-foreground">Characters</label>
-                <Input
-                  value={editedScene.characters}
-                  onChange={(e) => setEditedScene({ ...editedScene, characters: e.target.value })}
-                  className="mt-1 h-8 text-sm"
-                />
+              <div className="md:col-span-2">
+                <label className="text-xs text-muted-foreground">Characters (click to select from the story cast)</label>
+                <div className="mt-1">
+                  <SceneCharactersSelect
+                    value={editedScene.characters}
+                    onChange={(characters) => setEditedScene({ ...editedScene, characters })}
+                    availableCharacters={availableCharacters}
+                  />
+                </div>
               </div>
 
               <div>
@@ -273,6 +301,17 @@ export function SceneCard({
             </div>
 
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleReplanScene}
+                disabled={replanShots.isPending}
+                className="h-8 gap-1 text-xs"
+                title="Re-plan shots for this scene only"
+              >
+                <RotateCw className={cn("w-3.5 h-3.5", replanShots.isPending && "animate-spin")} />
+                Replan
+              </Button>
               <Dialog open={isGenDialogOpen} onOpenChange={setIsGenDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs" disabled={isGenerating}>

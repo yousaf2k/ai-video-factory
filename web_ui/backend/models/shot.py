@@ -175,6 +175,7 @@ class ReplanShotsRequest(BaseModel):
     max_shots: Optional[int] = Field(default=None, description="Maximum shots to generate")
     shots_director: str = Field(default="default", description="Shots director to use")
     max_shot_duration: Optional[float] = Field(default=None, description="Max duration of a single shot in seconds (1-15); falls back to the project's setting when omitted")
+    scene_id: Optional[int] = Field(default=None, description="Re-plan only this scene's shots; omitted re-plans the whole story")
 
     @field_validator("max_shot_duration")
     @classmethod

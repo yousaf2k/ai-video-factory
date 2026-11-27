@@ -25,7 +25,7 @@ from web_ui.backend.models.agent import (
 )
 from web_ui.backend.services.agent.config_store import get_agent_config_store
 from web_ui.backend.services.agent.conversations import get_conversation_store
-from web_ui.backend.services.agent.engine import get_agent_engine
+from web_ui.backend.services.agent.engine import get_agent_engine, narration_before_call
 from web_ui.backend.services.agent.mcp_client import get_mcp_manager
 from web_ui.backend.services.agent.registry import catalog
 from web_ui.backend.services.agent.skills import get_skill_store
@@ -116,6 +116,14 @@ def _status_from_config(cfg: dict, raw: dict) -> AgentStatus:
         mcp_servers=cfg.get("mcp_servers") or {},
         provider_models=_provider_models(),
     )
+
+
+def _with_narration(conversation: dict) -> dict:
+    """Attach `narration` to tool-call replies saved before it was persisted."""
+    for message in conversation.get("messages", []):
+        if message.get("tool_call") and "narration" not in message:
+            message["narration"] = narration_before_call(message.get("content") or "")
+    return conversation
 
 
 # ------------------------------------------------------------------ config
@@ -228,7 +236,7 @@ async def get_conversation(conversation_id: str):
     conversation = get_conversation_store().get(conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return conversation
+    return _with_narration(conversation)
 
 
 @router.patch("/conversations/{conversation_id}", response_model=AgentConversationDetail)

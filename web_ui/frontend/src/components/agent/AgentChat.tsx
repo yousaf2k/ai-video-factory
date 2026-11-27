@@ -3,15 +3,15 @@
  */
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { toast } from 'sonner';
 import {
-  Bot, Check, ChevronDown, Loader2, MessageSquarePlus, Send, Settings2, Square, Wrench, X, Zap,
+  ArrowDown, Bot, History, Loader2, PenLine, Send, Settings2, Square, X, Zap,
 } from 'lucide-react';
 
+import { AgentTurn, TranscriptEmpty, UserBubble } from '@/components/agent/AgentTranscript';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -21,7 +21,8 @@ import {
   useAgentChatStream, useAgentConversation, useAgentConfig, useDeleteAgentConversation,
   useUpdateAgentConfig,
 } from '@/hooks/useAgent';
-import type { AgentStreamEvent, ContextUsage, TimedAgentEvent } from '@/types/agent';
+import { buildLiveTurn, buildTranscript } from '@/lib/agentTranscript';
+import type { ContextUsage, TranscriptItem } from '@/types/agent';
 import { cn } from '@/lib/utils';
 
 function ContextRing({ usage }: { usage: ContextUsage }) {
@@ -56,138 +57,7 @@ function ContextRing({ usage }: { usage: ContextUsage }) {
   );
 }
 
-/**
- * Live activity ticker: one constantly-updating status line while the agent
- * works; click to expand the full step-by-step log of the current run.
- */
-function LiveActivity({ events, busy }: { events: TimedAgentEvent[]; busy: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [now, setNow] = useState(Date.now());
-  const listRef = useRef<HTMLDivElement>(null);
-
-  const meaningful = events.filter(
-    (e) => !['final', 'done', 'context_usage', 'pong'].includes(e.type),
-  );
-  const finished = events.some((e) => e.type === 'done');
-  const started = meaningful.length > 0 || busy;
-
-  useEffect(() => {
-    if (!busy) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [busy]);
-
-  useEffect(() => {
-    if (open && listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [events.length, open]);
-
-  if (!started) return null;
-
-  const firstTs = meaningful[0]?.ts ?? Date.now();
-  const lastTs = events[events.length - 1]?.ts ?? Date.now();
-  const elapsed = Math.max(0, Math.round(((finished ? lastTs : now) - firstTs) / 1000));
-
-  // Ticker text = latest meaningful event
-  let status = 'Thinking…';
-  let failed = false;
-  for (let i = meaningful.length - 1; i >= 0; i--) {
-    const e = meaningful[i];
-    if (e.type === 'tool_start') { status = `Running ${e.tool}…`; break; }
-    if (e.type === 'tool_result') { status = `${e.ok ? '✓' : '✗'} ${e.tool}`; failed = !e.ok; break; }
-    if (e.type === 'llm_start') { status = `Thinking${e.model ? ` · ${e.model}` : ''}…`; break; }
-    if (e.type === 'error') { status = `Error: ${e.message.slice(0, 80)}`; failed = true; break; }
-  }
-
-  const toolCount = meaningful.filter((e) => e.type === 'tool_result').length;
-
-  return (
-    <div className="max-w-[92%] rounded-lg border bg-muted/30 text-xs">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-muted/60"
-      >
-        {busy ? (
-          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
-        ) : (
-          <Check className={cn('h-3.5 w-3.5 shrink-0', failed ? 'text-red-400' : 'text-emerald-400')} />
-        )}
-        <span className={cn('truncate', failed && 'text-red-400')}>
-          {busy
-            ? status
-            : `${toolCount} tool call${toolCount === 1 ? '' : 's'}${failed ? ' — one failed' : ' completed'}`}
-        </span>
-        <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">{elapsed}s</span>
-        <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
-      </button>
-      {open && (
-        <div ref={listRef} className="max-h-64 space-y-1.5 overflow-y-auto border-t px-2.5 py-2">
-          {meaningful.map((event, i) => {
-            if (event.type === 'tool_start' || event.type === 'tool_result') {
-              return <ToolEvent key={i} event={event} />;
-            }
-            if (event.type === 'llm_start') {
-              return (
-                <p key={i} className="px-1 text-[11px] italic text-muted-foreground">
-                  thinking (pass {event.iteration})…
-                </p>
-              );
-            }
-            if (event.type === 'error') {
-              return <p key={i} className="px-1 text-[11px] text-red-400">{event.message}</p>;
-            }
-            return null;
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ToolEvent({ event }: { event: AgentStreamEvent }) {
-  const [open, setOpen] = useState(false);
-  if (event.type === 'tool_start') {
-    return (
-      <div className="rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs">
-        <span className="inline-flex items-center gap-1.5 font-medium text-amber-500">
-          <Wrench className="h-3 w-3" /> {event.tool}
-        </span>
-        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">
-          {JSON.stringify(event.arguments, null, 2)}
-        </pre>
-      </div>
-    );
-  }
-  if (event.type === 'tool_result') {
-    const text = typeof event.result === 'string'
-      ? event.result
-      : JSON.stringify(event.result, null, 2);
-    return (
-      <div className="rounded-md border bg-muted/40 px-2.5 py-1.5 text-xs">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="inline-flex items-center gap-1.5 font-medium"
-        >
-          {event.ok ? (
-            <span className="text-emerald-400">✓ {event.tool}</span>
-          ) : (
-            <span className="text-red-400">✗ {event.tool}</span>
-          )}
-          <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
-        </button>
-        {open && (
-          <pre className="mt-1 max-h-52 overflow-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">
-            {text?.slice(0, 4000)}
-          </pre>
-        )}
-      </div>
-    );
-  }
-  return null;
-}
+const COMPOSER_MAX_HEIGHT = 160;
 
 export function AgentChat({ className }: { className?: string }) {
   const pathname = usePathname();
@@ -198,25 +68,29 @@ export function AgentChat({ className }: { className?: string }) {
 
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [input, setInput] = useState('');
-  const [streamFinal, setStreamFinal] = useState<string | null>(null);
   const [listOpen, setListOpen] = useState(false);
+  /** Drives the timers of the turn that is streaming. */
+  const [now, setNow] = useState(Date.now());
+  /** Follow the bottom of the transcript unless the user scrolled up. */
+  const [stickToBottom, setStickToBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: configData } = useAgentConfig();
   const updateConfig = useUpdateAgentConfig();
-  const { data: conversation } = useAgentConversation(selectedConversation);
+  const conversationQuery = useAgentConversation(selectedConversation);
+  const conversation = conversationQuery.data;
   const deleteConversation = useDeleteAgentConversation();
 
-  const stream = useAgentChatStream({
-    onFinal: (_id, content) => setStreamFinal(content),
-  });
+  const stream = useAgentChatStream({ onConversation: setSelectedConversation });
+  const { live, setConversation } = stream;
+  const running = stream.runState !== 'idle';
 
-  // When the user picks a conversation, bind the socket to it.
+  // Point the socket at the conversation shown (null = the next message starts a new one).
   useEffect(() => {
-    stream.setConversation(selectedConversation);
-    setStreamFinal(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedConversation]);
+    setConversation(selectedConversation);
+    setStickToBottom(true);
+  }, [selectedConversation, setConversation]);
 
   // On mount, auto-load the most recent conversation (once — an explicit
   // "New chat" afterwards must stay blank).
@@ -233,43 +107,99 @@ export function AgentChat({ className }: { className?: string }) {
   }, [configData?.conversations]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [conversation?.messages?.length, stream.liveEvents.length, streamFinal]);
+    if (!running) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+
+  // The live turn stands in for its saved copy: the engine saves a turn only
+  // once it has ended, and the refetched transcript takes over from there.
+  const savedMessages = conversation?.messages;
+  const showLive = !!live
+    && live.conversationId === selectedConversation
+    && !(savedMessages && savedMessages.length > live.baseCount);
+
+  const items = useMemo<TranscriptItem[]>(() => {
+    const saved = buildTranscript(savedMessages);
+    if (!live || !showLive) return saved;
+    return [
+      ...saved,
+      { kind: 'user', content: live.message },
+      buildLiveTurn(live, running, now),
+    ];
+  }, [savedMessages, live, showLive, running, now]);
+  // Saved items only ever append, so the position tells blocks of the live
+  // turn from their saved copy apart without resetting what the user opened.
+  const itemKeyPrefix = selectedConversation ?? live?.conversationId ?? 'draft';
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (el) setStickToBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  };
+
+  useLayoutEffect(() => {
+    if (stickToBottom) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    }
+  }, [items, stickToBottom]);
+
+  const jumpToLatest = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight });
+    setStickToBottom(true);
+  };
+
+  // Grow the composer with its text, up to a cap.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT)}px`;
+  }, [input]);
+
+  const conversationPending = !!selectedConversation && conversationQuery.isPending;
+  // A message is only safe to send once the conversation it lands in is loaded.
+  const canSend = stream.connected && !running && (!selectedConversation || !!conversation)
+    && input.trim().length > 0;
 
   const handleSend = () => {
     const message = input.trim();
-    if (!message || stream.busy) return;
-    setStreamFinal(null);
-    stream.sendMessage(message, projectId);
+    if (!canSend) return;
+    if (!stream.sendMessage(message, projectId, savedMessages?.length ?? 0)) {
+      toast.error('Agent socket not connected — is the backend running?');
+      return;
+    }
     setInput('');
+    setStickToBottom(true);
   };
 
   const handleNewChat = () => {
     setSelectedConversation(null);
-    stream.resetConversation();
-    setStreamFinal(null);
+    setListOpen(false);
   };
+
+  const usage = (showLive && stream.contextUsage) || conversation?.context_usage;
+  const emptyState = conversationQuery.isError ? 'error'
+    : conversationPending ? 'loading' : 'welcome';
 
   return (
     <div className={cn('flex h-full min-h-0 flex-col bg-background', className)}>
       {/* Header */}
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        <Bot className="h-4 w-4 text-primary" />
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-md shadow-primary/30">
+          <Bot className="h-4 w-4" />
+        </div>
         <span className="text-sm font-semibold">AI Agent</span>
         {projectId && (
-          <span className="truncate rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+          <span className="truncate rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground" title={projectId}>
             {projectId}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-1">
-          {(stream.contextUsage ?? conversation?.context_usage) && (
-            <ContextRing usage={(stream.contextUsage ?? conversation?.context_usage)!} />
-          )}
+        <div className="ml-auto flex items-center gap-0.5">
+          {usage && <ContextRing usage={usage} />}
           <span
-            className={cn(
-              'mr-1 h-2 w-2 rounded-full',
-              stream.connected ? 'bg-emerald-500' : 'bg-red-400',
-            )}
+            className={cn('mr-1 h-2 w-2 rounded-full', stream.connected ? 'bg-emerald-500' : 'bg-red-400')}
             title={stream.connected ? 'Connected' : 'Disconnected'}
           />
           <div className="relative">
@@ -278,54 +208,63 @@ export function AgentChat({ className }: { className?: string }) {
               size="icon"
               className="h-7 w-7"
               title="Conversations"
+              aria-expanded={listOpen}
               onClick={() => setListOpen((v) => !v)}
             >
-              <MessageSquarePlus className="h-4 w-4" />
+              <History className="h-4 w-4" />
             </Button>
             {listOpen && (
-              <div className="absolute right-0 z-50 mt-1 max-h-80 w-72 overflow-auto rounded-md border bg-popover p-1 shadow-md">
-                {(configData?.conversations ?? []).length === 0 && (
-                  <p className="px-2 py-1.5 text-xs text-muted-foreground">No conversations yet</p>
-                )}
-                {(configData?.conversations ?? []).map((c) => (
-                  <div
-                    key={c.id}
-                    className={cn(
-                      'group flex items-center gap-1 rounded px-2 py-1.5 text-xs hover:bg-accent',
-                      c.id === selectedConversation && 'bg-accent',
-                    )}
-                  >
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 text-left"
-                      onClick={() => {
-                        setSelectedConversation(c.id);
-                        setListOpen(false);
-                      }}
+              <>
+                <button
+                  type="button"
+                  aria-label="Close conversations list"
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setListOpen(false)}
+                />
+                <div className="absolute right-0 z-50 mt-1 max-h-80 w-72 overflow-auto rounded-lg border bg-popover p-1 shadow-lg">
+                  {(configData?.conversations ?? []).length === 0 && (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">No conversations yet</p>
+                  )}
+                  {(configData?.conversations ?? []).map((c) => (
+                    <div
+                      key={c.id}
+                      className={cn(
+                        'group flex items-center gap-1 rounded-md px-2 py-1.5 text-xs hover:bg-accent',
+                        c.id === selectedConversation && 'bg-accent',
+                      )}
                     >
-                      <span className="block truncate font-medium">{c.title}</span>
-                      <span className="block truncate text-[11px] text-muted-foreground">
-                        {c.message_count} messages · {c.updated_at?.slice(0, 16).replace('T', ' ')}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="opacity-0 transition-opacity group-hover:opacity-100"
-                      title="Delete conversation"
-                      onClick={() => {
-                        deleteConversation.mutate(c.id);
-                        if (c.id === selectedConversation) handleNewChat();
-                      }}
-                    >
-                      <X className="h-3.5 w-3.5 text-muted-foreground hover:text-red-400" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => {
+                          setSelectedConversation(c.id);
+                          setListOpen(false);
+                        }}
+                      >
+                        <span className="block truncate font-medium">{c.title}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {c.message_count} messages · {c.updated_at?.slice(0, 16).replace('T', ' ')}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="opacity-0 transition-opacity group-hover:opacity-100"
+                        title="Delete conversation"
+                        onClick={() => {
+                          deleteConversation.mutate(c.id);
+                          if (c.id === selectedConversation) handleNewChat();
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5 text-muted-foreground hover:text-red-400" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
           <Button variant="ghost" size="icon" className="h-7 w-7" title="New chat" onClick={handleNewChat}>
-            <MessageSquarePlus className="h-4 w-4" />
+            <PenLine className="h-4 w-4" />
           </Button>
           <Link href="/agent" title="Agent settings">
             <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -336,109 +275,113 @@ export function AgentChat({ className }: { className?: string }) {
       </div>
 
       {/* Transcript */}
-      <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-3 py-3">
-        {!conversation && stream.liveEvents.length === 0 && !streamFinal && (
-          <div className="px-2 py-6 text-center text-xs text-muted-foreground">
-            <Bot className="mx-auto mb-2 h-8 w-8 opacity-30" />
-            <p className="font-medium text-foreground">Ask me anything about your projects.</p>
-            <p className="mt-1">
-              I can create projects, fix shot prompts, generate stories & media,
-              manage the queue, edit workflows/directors and search project files.
-            </p>
-            <p className="mt-2 opacity-70">
-              e.g. “shot 4 video prompt the character is not doing it — fix it and regenerate”
-            </p>
-          </div>
-        )}
-
-        {(conversation?.messages ?? [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((message, i) => (
-            <div
-              key={i}
-              className={cn(
-                'max-w-[92%] rounded-lg px-3 py-2 text-sm',
-                message.role === 'user'
-                  ? 'ml-auto bg-primary text-primary-foreground'
-                  : 'bg-muted',
-              )}
-            >
-              {message.role === 'assistant' ? (
-                <div className="prose prose-sm prose-invert max-w-none break-words whitespace-pre-wrap [&_p]:m-0 [&_p]:whitespace-pre-wrap">
-                  <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
+      <div className="relative min-h-0 flex-1">
+        <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto">
+          {items.length === 0 ? (
+            <TranscriptEmpty
+              state={emptyState}
+              detail={conversationQuery.error instanceof Error ? conversationQuery.error.message : undefined}
+            />
+          ) : (
+            <div className="flex flex-col gap-5 px-3 py-4" aria-label="Conversation">
+              {items.map((item, index) => (
+                <div key={`${itemKeyPrefix}-${index}`}>
+                  {item.kind === 'user'
+                    ? <UserBubble content={item.content} />
+                    : <AgentTurn turn={item} />}
                 </div>
-              ) : (
-                <p className="whitespace-pre-wrap break-words">{message.content}</p>
-              )}
+              ))}
             </div>
-          ))}
-
-        {/* Live activity: single updating ticker line, click to expand the full log */}
-        <LiveActivity events={stream.liveEvents} busy={stream.busy} />
-
-        {streamFinal && (
-          <div className="max-w-[92%] rounded-lg bg-muted px-3 py-2 text-sm">
-            <div className="prose prose-sm prose-invert max-w-none break-words whitespace-pre-wrap [&_p]:m-0 [&_p]:whitespace-pre-wrap">
-              <Markdown remarkPlugins={[remarkGfm]}>{streamFinal}</Markdown>
-            </div>
-          </div>
+          )}
+        </div>
+        {!stickToBottom && (
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            aria-label="Jump to latest"
+            title="Jump to latest"
+            className="absolute bottom-3 left-1/2 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border bg-popover text-muted-foreground shadow-lg transition-colors hover:text-foreground"
+          >
+            <ArrowDown className="h-4 w-4" />
+          </button>
         )}
       </div>
 
       {/* Input */}
-      <div className="border-t p-2.5">
-        <div className="flex items-end gap-2">
-          {configData?.config.effort_supported && (
-            <Select
-              value={configData.config.effort || '__auto__'}
-              onValueChange={(v) =>
-                updateConfig.mutate({ effort: v === '__auto__' ? '' : v })}
-            >
-              <SelectTrigger
-                className="h-[44px] w-[104px] shrink-0 text-xs"
-                title="Reasoning effort — Auto uses the model's default"
-              >
-                <Zap className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__auto__">Auto</SelectItem>
-                {configData.config.effort_options.map((e) => (
-                  <SelectItem key={e} value={e}>
-                    {e.charAt(0).toUpperCase() + e.slice(1)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+      <div className="shrink-0 border-t p-2.5">
+        <div className={cn(
+          'rounded-xl border bg-card transition-[border-color,box-shadow]',
+          'focus-within:border-primary/60 focus-within:shadow-[0_0_0_1px_hsl(var(--primary)/0.35)]',
+          !stream.connected && 'opacity-60',
+        )}>
           <Textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 handleSend();
               }
             }}
-            placeholder={
-              stream.connected
-                ? 'Ask the agent… (Enter to send, Shift+Enter for a new line)'
-                : 'Connecting to backend…'
-            }
-            rows={2}
-            className="max-h-32 min-h-[44px] resize-none text-sm"
+            placeholder={stream.connected ? 'Ask the agent…' : 'Connecting to backend…'}
+            rows={1}
+            className="max-h-40 min-h-6 resize-none overflow-y-auto border-0 bg-transparent px-3 pb-1 pt-2.5 text-sm shadow-none focus-visible:ring-0"
             disabled={!stream.connected}
           />
-          {stream.busy ? (
-            <Button variant="destructive" size="icon" onClick={stream.stop} title="Stop">
-              <Square className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button size="icon" onClick={handleSend} disabled={!input.trim() || !stream.connected} title="Send">
-              <Send className="h-4 w-4" />
-            </Button>
-          )}
+          <div className="flex items-center gap-2 px-2 pb-2 pt-0.5">
+            {configData?.config.effort_supported && (
+              <Select
+                value={configData.config.effort || '__auto__'}
+                onValueChange={(v) =>
+                  updateConfig.mutate({ effort: v === '__auto__' ? '' : v })}
+              >
+                <SelectTrigger
+                  className="h-7 w-[104px] rounded-full border-none bg-muted text-[11px]"
+                  title="Reasoning effort — Auto uses the model's default"
+                >
+                  <Zap className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__auto__">Auto</SelectItem>
+                  {configData.config.effort_options.map((e) => (
+                    <SelectItem key={e} value={e}>
+                      {e.charAt(0).toUpperCase() + e.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {running ? (
+              <Button
+                variant="destructive"
+                size="icon"
+                className="ml-auto h-8 w-8 rounded-full"
+                onClick={stream.stop}
+                disabled={stream.runState === 'stopping'}
+                title={stream.runState === 'stopping' ? 'Stopping…' : 'Stop'}
+              >
+                {stream.runState === 'stopping'
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Square className="h-3.5 w-3.5 fill-current" />}
+              </Button>
+            ) : (
+              <Button
+                size="icon"
+                className="ml-auto h-8 w-8 rounded-full"
+                onClick={handleSend}
+                disabled={!canSend}
+                title="Send"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
+        <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
+          Enter to send · Shift + Enter for a new line
+        </p>
       </div>
     </div>
   );

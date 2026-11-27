@@ -3,7 +3,7 @@
  */
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { ShotCard } from "./ShotCard";
-import { Shot, Scene } from "@/types";
+import { Shot, Scene, Character, Prop } from "@/types";
 import { useDirectors, useConfig } from "@/hooks/useDirectors";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
@@ -70,11 +70,14 @@ interface ShotGridProps {
   shots: Shot[];
   projectId: string;
   scenes?: Scene[];
+  /** Story cast + props — resolves shot chips to their reference sheets */
+  characters?: Character[];
+  props?: Prop[];
   aspectRatio?: string;
   projectDirector?: string;
 }
 
-export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", projectDirector }: ShotGridProps) {
+export function ShotGrid({ shots, projectId, scenes, characters, props: storyProps, aspectRatio = "16:9", projectDirector }: ShotGridProps) {
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [showBatchModal, setShowBatchModal] = useState<
     "image" | "video" | "both" | "narration" | null
@@ -120,14 +123,32 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
   const [newShotData, setNewShotData] = useState<Partial<Shot>>({
     image_prompt: "",
     motion_prompt: "",
+    video_prompt: "",
+    prompt_type: undefined,
     camera: "static",
     narration: "",
+    soundfx_prompt: "",
+    duration: 5,
+    scene_id: undefined,
     character_id: undefined,
     then_image_prompt: undefined,
     now_image_prompt: undefined,
     meeting_video_prompt: undefined,
     departure_video_prompt: undefined,
   });
+
+  // Opens the insert modal; when inserting relative to an existing shot the
+  // new shot inherits its scene, otherwise it defaults to the first scene.
+  const openInsertModal = (position: number, referenceSceneId?: number | null) => {
+    const defaultSceneId =
+      referenceSceneId !== undefined && referenceSceneId !== null
+        ? referenceSceneId
+        : scenes && scenes.length > 0
+          ? 0
+          : null;
+    setNewShotData((prev) => ({ ...prev, scene_id: defaultSceneId }));
+    setInsertModalConfig({ position });
+  };
 
   const { shotProgress, sceneProgress } = useProgress(
     projectId,
@@ -710,14 +731,20 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
       index: 0, // Temporarily 0, will be overwritten by re-indexing below
       image_prompt: newShotData.image_prompt || "",
       motion_prompt: newShotData.motion_prompt || "",
+      video_prompt: newShotData.video_prompt || null,
+      prompt_type: newShotData.prompt_type || undefined,
       camera: newShotData.camera || "static",
       narration: newShotData.narration || "",
+      soundfx_prompt: newShotData.soundfx_prompt || undefined,
+      duration: newShotData.duration ?? null,
+      scene_id: newShotData.scene_id ?? null,
       batch_number: 1,
       image_generated: false,
       video_rendered: false,
       image_path: null,
       image_paths: [],
       video_path: null,
+      video_paths: [],
       // FLFI2V fields - include if this is an FLFI2V project
       ...(isFlfi2vProject ? {
         is_flfi2v: true,
@@ -757,8 +784,13 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
       setNewShotData({
         image_prompt: "",
         motion_prompt: "",
+        video_prompt: "",
+        prompt_type: undefined,
         camera: "static",
         narration: "",
+        soundfx_prompt: "",
+        duration: 5,
+        scene_id: undefined,
         character_id: undefined,
         then_image_prompt: undefined,
         now_image_prompt: undefined,
@@ -775,14 +807,6 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
       });
     }
   };
-
-  if (shots.length === 0) {
-    return (
-      <div className="text-center py-12 text-muted-foreground">
-        No shots yet. Generate story and plan shots first.
-      </div>
-    );
-  }
 
   return (
     <div className="relative">
@@ -844,6 +868,16 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
              </button>
           )}
         </div>
+
+        {/* Add Shot */}
+        <button
+          onClick={() => openInsertModal(shots.length)}
+          className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-primary/40 text-primary bg-primary/5 rounded-md hover:bg-primary/10 transition-colors shadow-sm ml-auto"
+          title="Add a new shot at the end"
+        >
+          <Plus className="w-4 h-4" />
+          Add Shot
+        </button>
 
         {(generatingIndices.size > 0 ||
           Object.keys(shotProgress).length > 0) && (
@@ -1181,14 +1215,16 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                               : undefined
                           }
                           onInsertBefore={() =>
-                            setInsertModalConfig({ position: shot.index - 1 })
+                            openInsertModal(shot.index - 1, shot.scene_id)
                           }
                           onInsertAfter={() =>
-                            setInsertModalConfig({ position: shot.index })
+                            openInsertModal(shot.index, shot.scene_id)
                           }
                           onDelete={() => handleDeleteShot(shot.index)}
                           viewModeOverride={viewModeOverride}
                           scenes={scenes}
+                          characters={characters}
+                          props={storyProps}
                         />
                       );
                     })}
@@ -1200,9 +1236,16 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
         </div>
       </DndContext>
 
+      {shots.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          No shots yet. Add your first shot manually, or use "Re-plan Shots" to
+          generate them from the story.
+        </div>
+      )}
+
       <div className="mt-8 flex justify-center">
         <button
-          onClick={() => setInsertModalConfig({ position: shots.length })}
+          onClick={() => openInsertModal(shots.length)}
           className="flex items-center gap-2 px-6 py-3 border-2 border-dashed rounded-lg hover:border-primary/50 hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
         >
           <Plus className="w-5 h-5" />
@@ -1222,7 +1265,9 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                 <X className="w-5 h-5" />
               </button>
 
-              <h2 className="text-xl font-semibold mb-6">Insert New Shot</h2>
+              <h2 className="text-xl font-semibold mb-6">
+                Insert New Shot at Position {insertModalConfig.position + 1}
+              </h2>
 
               <div className="space-y-4">
                 {/* FLFI2V Indicator */}
@@ -1376,6 +1421,100 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                   </div>
                 )}
 
+                {/* Scene + Duration */}
+                <div className="grid grid-cols-2 gap-4">
+                  {scenes && scenes.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Scene
+                      </label>
+                      <Select
+                        value={
+                          newShotData.scene_id !== undefined &&
+                          newShotData.scene_id !== null
+                            ? newShotData.scene_id.toString()
+                            : "null"
+                        }
+                        onValueChange={(val) =>
+                          setNewShotData({
+                            ...newShotData,
+                            scene_id: val === "null" ? null : parseInt(val),
+                          })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Scene" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="null">None (Unassigned)</SelectItem>
+                          {scenes.map((_, idx) => (
+                            <SelectItem key={idx} value={idx.toString()}>
+                              Scene {idx + 1}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Clip Duration (1-15s)
+                    </label>
+                    <Input
+                      type="number"
+                      value={newShotData.duration ?? ""}
+                      onChange={(e) =>
+                        setNewShotData({
+                          ...newShotData,
+                          duration: e.target.value
+                            ? parseFloat(e.target.value)
+                            : null,
+                        })
+                      }
+                      min="1"
+                      max="15"
+                      step="0.5"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Video Prompt (MiniMax H3 - timestamped)
+                  </label>
+                  <Textarea
+                    value={newShotData.video_prompt || ""}
+                    onChange={(e) =>
+                      setNewShotData({
+                        ...newShotData,
+                        video_prompt: e.target.value,
+                      })
+                    }
+                    placeholder="Detailed timestamped video prompt (integrated_multimodal_description / overall_soundscape / non_diegetic_music)"
+                    className="min-h-[120px] font-mono text-xs"
+                  />
+                  <label className="block text-xs text-muted-foreground mt-2 mb-1">
+                    Prompt Override
+                  </label>
+                  <select
+                    value={newShotData.prompt_type ?? ""}
+                    onChange={(e) =>
+                      setNewShotData({
+                        ...newShotData,
+                        prompt_type: (e.target.value || null) as
+                          | "motion"
+                          | "video"
+                          | null,
+                      })
+                    }
+                    className="w-full text-sm border rounded-md px-2 py-1.5 bg-background"
+                  >
+                    <option value="">Project default</option>
+                    <option value="video">Video Prompt</option>
+                    <option value="motion">Motion Prompt</option>
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Camera Movement
@@ -1405,6 +1544,26 @@ export function ShotGrid({ shots, projectId, scenes, aspectRatio = "16:9", proje
                     className="min-h-[60px]"
                     placeholder="Voiceover narration for this section..."
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Sound FX Prompt (Optional)
+                  </label>
+                  <Textarea
+                    value={newShotData.soundfx_prompt || ""}
+                    onChange={(e) =>
+                      setNewShotData({
+                        ...newShotData,
+                        soundfx_prompt: e.target.value,
+                      })
+                    }
+                    className="min-h-[60px]"
+                    placeholder="Describe sounds: wind, footsteps, crowd..."
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Visible cues from motion prompt will be used if left blank.
+                  </p>
                 </div>
               </div>
 

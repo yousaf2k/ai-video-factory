@@ -25,7 +25,7 @@ non_diegetic_music: ...
 - `[Shot 1]` begins the description and has NO timestamp. Start it by stating the overall style (`Live-action, cinematic`, `3D CG`, `2D-animated`, etc.) and initial composition.
 - Later shots use sequential numbers with a strictly increasing cut time inside the clip duration, e.g. `[Shot 2] At 00:03.500, the camera cuts to...`
 - Cut times MUST stay within the clip duration and leave at least 0.7 seconds before the end (e.g. in a 5-second clip the last cut must be at or before 00:04.300) so the final sub-shot can play out.
-- **Choose sub-shots from the clip length**: clips under 6 seconds stay a single sub-shot (`[Shot 1]` only). Clips of 6 seconds or more SHOULD contain 2-3 sub-shots whenever the action has multiple distinct beats, viewpoints, or moments - do not describe an 8-second sequence as one static sub-shot.
+- **Choose sub-shots from the clip length**: clips under 3 seconds stay a single sub-shot (`[Shot 1]` only). Clips of 3 seconds or more SHOULD contain 2-4 sub-shots whenever the action has multiple distinct beats, viewpoints, or moments - do not describe an 8-second sequence as one static sub-shot.
 - Use plain cuts (`the camera cuts to`, `the shot transitions to`). A cut must introduce new information (subject, space, viewpoint or time); for small framing changes prefer camera motion.
 
 Example of a 2-sub-shot clip (`duration: 8`):

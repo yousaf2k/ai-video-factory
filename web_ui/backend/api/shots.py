@@ -723,10 +723,18 @@ async def upload_shot_video(project_id: str, shot_id_or_index: str, variant: str
 
 @router.post("/replan")
 async def replan_shots(project_id: str, request: ReplanShotsRequest):
-    """Re-plan shots from story"""
+    """Re-plan shots from story (whole story, or a single scene via scene_id)"""
     try:
-        shots = await generation_service.replan_shots(project_id, max_shots=request.max_shots, shots_director=request.shots_director, max_shot_duration=request.max_shot_duration)
+        shots = await generation_service.replan_shots(
+            project_id,
+            max_shots=request.max_shots,
+            shots_director=request.shots_director,
+            max_shot_duration=request.max_shot_duration,
+            scene_id=request.scene_id,
+        )
         return {"status": "success", "shots": shots}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

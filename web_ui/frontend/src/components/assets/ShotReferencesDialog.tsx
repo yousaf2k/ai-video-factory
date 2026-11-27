@@ -45,8 +45,9 @@ import {
   useImportAsset,
 } from '@/hooks/useAssets';
 import { useProjects } from '@/hooks/useProjects';
-import type { AssetEntry, AssetTreeNode, ResolvedAssetRef, Shot } from '@/types';
-import { cn } from '@/lib/utils';
+import { usePersistedState } from '@/hooks/usePersistedState';
+import type { AssetEntry, AssetTreeNode, Character, Prop, ResolvedAssetRef, Scene, Shot } from '@/types';
+import { cn, getMediaUrl, projectMediaRef } from '@/lib/utils';
 
 const TYPE_META_BY_TYPE: Record<string, { label: string; badge: string; icon: typeof Film }> = {
   image: TYPE_META.i,
@@ -68,10 +69,17 @@ interface ShotReferencesDialogProps {
   shot: Shot;
   open: boolean;
   onClose: () => void;
+  /** Story cast — for the Characters, Backgrounds & Props tab */
+  characters?: Character[];
+  /** Story scenes — for the Characters, Backgrounds & Props tab */
+  scenes?: Scene[];
+  /** Story props — for the Characters, Backgrounds & Props tab */
+  props?: Prop[];
 }
 
-export default function ShotReferencesDialog({ projectId, shot, open, onClose }: ShotReferencesDialogProps) {
-  const [tab, setTab] = useState<'project' | 'library' | 'projects'>('project');
+export default function ShotReferencesDialog({ projectId, shot, open, onClose, characters, scenes, props: storyProps }: ShotReferencesDialogProps) {
+  // Remember the last tab the user used, per project
+  const [tab, setTab] = usePersistedState<'story' | 'project' | 'library' | 'projects'>(`references_tab_${projectId}`, 'project');
   const shotId = shot.id ?? shot.index;
 
   const { data: attached = [] } = useShotReferences(projectId, open ? shotId : null);
@@ -94,7 +102,8 @@ export default function ShotReferencesDialog({ projectId, shot, open, onClose }:
         <div className="px-4 pt-3">
           <div className="flex items-center bg-muted/40 p-1 rounded-lg border shadow-sm w-fit">
             {([
-              { key: 'project', label: `Project Assets (${attached.length})` },
+              { key: 'story', label: 'Characters, Backgrounds & Props' },
+              { key: 'project', label: 'Project Assets' },
               { key: 'library', label: 'Asset Library' },
               { key: 'projects', label: 'Project Library' },
             ] as const).map((t) => (
@@ -115,6 +124,9 @@ export default function ShotReferencesDialog({ projectId, shot, open, onClose }:
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 flex flex-col">
+          {tab === 'story' && (
+            <StoryRefsTab projectId={projectId} shotId={shotId} attached={attached} scenes={scenes} characters={characters} props={storyProps} />
+          )}
           {tab === 'project' && (
             <ProjectAssetsTab projectId={projectId} shotId={shotId} shot={shot} attached={attached} />
           )}
@@ -313,24 +325,196 @@ function ProjectAssetsTab({
   if (isLoading) return <LoadingBlock />;
 
   return (
-    <div className="space-y-3">
-      <TypeFilterRow value={typeFilter} onChange={setTypeFilter} />
-      {visible.length === 0 ? (
-        <EmptyBlock text="No project assets yet — add some from the Asset Library or Project Library tabs." />
-      ) : (
+    <div className="space-y-5">
+      {/* Attached to this shot — every ref currently attached (sync-attached
+          and manual). Click a card to detach; refs attached automatically by
+          the reference sync re-appear on the next sync. */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Attached to this shot ({attached.length})
+        </h3>
+        {attached.length > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {attached.map((entry) => (
+              <AssetPickCard
+                key={entry.ref}
+                entry={entry}
+                attached
+                onToggle={handleToggle}
+                onOpenDetail={(ref) => window.open(`/asset/${ref}`, '_blank')}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Nothing attached yet — click a tile below, or use the Characters, Backgrounds &amp; Props tab.
+          </p>
+        )}
+      </div>
+
+      {/* Project asset pool — click a tile to attach/detach */}
+      <div className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Project asset pool
+        </h3>
+        <TypeFilterRow value={typeFilter} onChange={setTypeFilter} />
+        {visible.length === 0 ? (
+          <EmptyBlock text="No project assets yet — add some from the Asset Library or Project Library tabs." />
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {visible.map((entry) => (
+              <AssetPickCard
+                key={entry.ref}
+                entry={entry}
+                attached={attachedRefs.has(entry.ref)}
+                onToggle={handleToggle}
+                onOpenDetail={(ref) => window.open(`/asset/${ref}`, '_blank')}
+                onRemove={handleRemove}
+                onUseAsSource={shot.is_flfi2v ? handleUseAsSource : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Tab: Characters & Backgrounds (attach the story's own reference sheets)
+// =====================================================================
+
+function storyRefEntry(projectId: string, title: string, path: string | null | undefined): ResolvedAssetRef | null {
+  const ref = projectMediaRef(projectId, path);
+  if (!ref) return null;
+  const url = getMediaUrl(path ?? null);
+  return {
+    ref,
+    kind: 'project',
+    title,
+    type: 'image',
+    url,
+    thumb_url: url,
+    exists: true,
+    source: projectId,
+  };
+}
+
+function StoryRefsTab({
+  projectId,
+  shotId,
+  attached,
+  scenes,
+  characters,
+  props: storyProps,
+}: {
+  projectId: string;
+  shotId: string | number;
+  attached: ResolvedAssetRef[];
+  scenes?: Scene[];
+  characters?: Character[];
+  props?: Prop[];
+}) {
+  const attach = useAddShotReferences(projectId, shotId);
+  const detach = useRemoveShotReference(projectId, shotId);
+  const attachedRefs = useMemo(() => new Set(attached.map((a) => a.ref)), [attached]);
+
+  const handleToggle = (ref: string) => {
+    if (attachedRefs.has(ref)) {
+      detach.mutate(ref);
+    } else {
+      attach.mutate([ref], {
+        onSuccess: () => toast.success('Reference attached to shot'),
+        onError: (e) => toast.error(`Attach failed: ${extractError(e)}`),
+      });
+    }
+  };
+
+  const characterEntries = (characters || [])
+    .map((c) => ({
+      name: c.name || 'Character',
+      entry: storyRefEntry(projectId, `${c.name || 'Character'} — character sheet`, c.character_reference_image_path),
+    }))
+    .filter((x) => x.entry !== null) as { name: string; entry: ResolvedAssetRef }[];
+
+  const missingSheets = (characters || []).filter((c) => !projectMediaRef(projectId, c.character_reference_image_path));
+
+  const backgroundEntries = (scenes || [])
+    .map((s, i) => ({
+      sceneId: s.scene_id ?? i,
+      entry: storyRefEntry(
+        projectId,
+        `Scene ${(s.scene_id ?? i) + 1} background${s.location ? ` — ${s.location.slice(0, 40)}` : ''}`,
+        s.background_image_path
+      ),
+    }))
+    .filter((x) => x.entry !== null) as { sceneId: number; entry: ResolvedAssetRef }[];
+
+  const missingBackgrounds = (scenes || []).filter((s) => !projectMediaRef(projectId, s.background_image_path));
+
+  const propEntries = (storyProps || [])
+    .map((p) => ({
+      name: p.name || 'Prop',
+      entry: storyRefEntry(projectId, `${p.name || 'Prop'} — prop sheet`, p.reference_image_path),
+    }))
+    .filter((x) => x.entry !== null) as { name: string; entry: ResolvedAssetRef }[];
+
+  const missingPropSheets = (storyProps || []).filter((p) => !projectMediaRef(projectId, p.reference_image_path));
+
+  const renderGroup = (
+    heading: string,
+    items: { key: string; entry: ResolvedAssetRef }[],
+    missingHint: string | null
+  ) => (
+    <div className="space-y-2">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{heading}</h3>
+      {items.length > 0 ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {visible.map((entry) => (
+          {items.map(({ key, entry }) => (
             <AssetPickCard
-              key={entry.ref}
+              key={key}
               entry={entry}
               attached={attachedRefs.has(entry.ref)}
               onToggle={handleToggle}
               onOpenDetail={(ref) => window.open(`/asset/${ref}`, '_blank')}
-              onRemove={handleRemove}
-              onUseAsSource={shot.is_flfi2v ? handleUseAsSource : undefined}
             />
           ))}
         </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">{missingHint}</p>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      <p className="text-xs text-muted-foreground">
+        Attach the story's own references to this shot. Attached refs always use the project's
+        current sheet/background files, so regenerating a sheet keeps the reference in sync.
+      </p>
+
+      {renderGroup(
+        'Characters',
+        characterEntries.map((x) => ({ key: x.entry.ref, entry: x.entry })),
+        missingSheets.length > 0
+          ? `No reference sheet yet for: ${missingSheets.map((c) => c.name).join(', ')} — generate one from the project editor.`
+          : 'No characters defined in the story.'
+      )}
+
+      {renderGroup(
+        'Scene Backgrounds',
+        backgroundEntries.map((x) => ({ key: x.entry.ref, entry: x.entry })),
+        missingBackgrounds.length > 0
+          ? `${missingBackgrounds.length} scene(s) have no background yet — generate one from the project editor.`
+          : 'No scenes defined in the story.'
+      )}
+
+      {renderGroup(
+        'Props',
+        propEntries.map((x) => ({ key: x.entry.ref, entry: x.entry })),
+        missingPropSheets.length > 0
+          ? `No reference sheet yet for: ${missingPropSheets.map((p) => p.name).join(', ')} — generate one from the project editor.`
+          : 'No props defined in the story.'
       )}
     </div>
   );

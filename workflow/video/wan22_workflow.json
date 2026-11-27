@@ -77,7 +77,7 @@
     },
     "class_type": "KSamplerAdvanced",
     "_meta": {
-      "title": "KSampler (Advanced)",
+      "title": "[seed] KSampler (Advanced)",
       "cnr_id": "comfy-core",
       "ver": "0.43.0"
     }
@@ -136,7 +136,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "CLIP Text Encode (Positive Prompt)",
+      "title": "[prompt] CLIP Text Encode (Positive Prompt)",
       "cnr_id": "comfy-core",
       "ver": "0.43.0"
     }
@@ -165,7 +165,7 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "Load Image",
+      "title": "[image_in] Load Image",
       "cnr_id": "comfy-core",
       "ver": "0.43.0"
     }
@@ -195,7 +195,7 @@
     },
     "class_type": "WanImageToVideo",
     "_meta": {
-      "title": "WanImageToVideo",
+      "title": "[video_out] WanImageToVideo",
       "cnr_id": "comfy-core",
       "ver": "0.43.0"
     }

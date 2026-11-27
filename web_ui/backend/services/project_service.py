@@ -409,10 +409,12 @@ class ProjectService:
         if request.prompt_mode is not None:
             meta['prompt_mode'] = request.prompt_mode
 
+        vgt_changed = False
         if request.video_generation_type is not None:
             old_vgt = meta.get('video_generation_type', 'i2v')
+            vgt_changed = old_vgt != request.video_generation_type
             meta['video_generation_type'] = request.video_generation_type
-            if old_vgt != request.video_generation_type:
+            if vgt_changed:
                 # Invalidate the generation service's cached type so queue
                 # gating picks up the change immediately
                 try:
@@ -441,6 +443,23 @@ class ProjectService:
                 meta['completed_at'] = datetime.now().isoformat()
 
         self.project_manager._save_meta(project_id, meta)
+
+        # Switching the visual-input strategy re-attaches shot references so the
+        # change takes effect on existing shots immediately: r2v attaches
+        # character sheets + scene backgrounds + prop sheets; i2v/t2v attach
+        # character references only.
+        if vgt_changed:
+            import logging
+            logger = logging.getLogger(__name__)
+            try:
+                if (meta.get('video_generation_type') or 'i2v') == 'r2v':
+                    updated = self.project_manager.sync_shot_video_refs(project_id)
+                else:
+                    updated = self.project_manager.sync_character_asset_refs(project_id)
+                logger.info(f"Re-synced references on {updated} shot(s) after video generation type change for {project_id}")
+            except Exception as sync_err:
+                logger.warning(f"Could not sync shot references after video generation type change for {project_id}: {sync_err}")
+
         return ProjectMetadata(**meta)
 
     def delete_project(self, project_id: str) -> bool:

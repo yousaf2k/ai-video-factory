@@ -618,7 +618,7 @@ class GenerationService:
             # Apply the professional character reference sheet template
             # This template ensures high consistency by generating 8 views (4 full-body, 4 face close-ups)
             prompt = (
-                f'create a professional character reference sheet for "{base_desc}, white background, detailed skin texture" '
+                f'create a professional character reference sheet for "{base_desc}, neutral gray background, detailed skin texture" '
                 f'divide the sheet into four different vertical columns, each representing a different angle for a total of eight shots, '
                 f'TOP ROW: Full-body views from head to toe facing four different directions (front,side,three-qarter view, back). '
                 f'All subjects in the top row must be fully visible including feet, with no cropping at the ankles, knees, or head. '
@@ -626,6 +626,12 @@ class GenerationService:
                 f'{default_style}'
                 f'do not add any text.'
             )
+
+            # Named style (styles.json) selected in the UI — appended like the
+            # background style flow
+            if item.background_style:
+                from core.sheet_generator import apply_background_style
+                prompt = apply_background_style(prompt, item.background_style)
                 
             project_title = self._gemini_chat_title(story, item.project_id)
             
@@ -923,6 +929,13 @@ class GenerationService:
                     self.project_manager.sync_shot_video_refs(item.project_id)
                 except Exception as sync_err:
                     logger.warning(f"Could not sync r2v video refs after background generation: {sync_err}")
+            else:
+                # i2v/t2v: attach the new background to its scene's shots
+                # (sync_character_asset_refs fills characters -> background -> props)
+                try:
+                    self.project_manager.sync_character_asset_refs(item.project_id)
+                except Exception as sync_err:
+                    logger.warning(f"Could not sync character asset refs after background generation: {sync_err}")
 
             logger.info(f"Completed background generation for queue item {item.item_id}")
 
@@ -944,7 +957,19 @@ class GenerationService:
 
             prop = props[item.character_index]
             from core.sheet_generator import prop_sheet_prompt
-            prompt = item.prompt_override or prop_sheet_prompt(prop, story.get('style', ''))
+            # The multi-view template is ALWAYS the prompt — a prompt_override
+            # (the Generate dialog pre-fills it with the prop's prompt text)
+            # only replaces the OBJECT NAME inside the template, it never
+            # bypasses the template.
+            object_name = (item.prompt_override or '').strip() or prop.get('image_prompt') \
+                or prop.get('description') or prop.get('name', 'object')
+            prompt = prop_sheet_prompt({'name': object_name})
+
+            # Named style (styles.json) selected in the UI — appended like the
+            # background style flow
+            if item.background_style:
+                from core.sheet_generator import apply_background_style
+                prompt = apply_background_style(prompt, item.background_style)
 
             queue_service = get_queue_service()
             item.status = QueueItemStatus.ACTIVE
@@ -977,7 +1002,12 @@ class GenerationService:
                 GenerationType.PROP_IMAGE,
                 item.gemini_mode,
                 references_dir,
-                f"prop_{item.character_index:02d}_%03d.png"
+                f"prop_{item.character_index:02d}_%03d.png",
+                # Prop reference sheets are always landscape 16:9 by spec —
+                # every view of the multi-view template fits the grid
+                # (same as background reference sheets), regardless of the
+                # project's aspect ratio.
+                aspect_ratio="16:9"
             )
             if not image_path or not os.path.exists(image_path):
                 raise RuntimeError(f"Failed to generate prop sheet for prop {item.character_index}")
@@ -990,7 +1020,7 @@ class GenerationService:
                 if 0 <= prop_index < len(props_now):
                     props_now[prop_index]['reference_image_path'] = relative_path
 
-            self.project_manager.update_story_safely(item.project_id, apply_prop_ref)
+            fresh_story = self.project_manager.update_story_safely(item.project_id, apply_prop_ref)
 
             # r2v: refresh shot reference attachments with the new prop sheet
             if self._get_project_video_generation_type(item.project_id) == 'r2v':
@@ -998,6 +1028,14 @@ class GenerationService:
                     self.project_manager.sync_shot_video_refs(item.project_id)
                 except Exception as sync_err:
                     logger.warning(f"Could not sync r2v video refs after prop generation: {sync_err}")
+
+            # Parity with character generation: push the updated story so open
+            # pages pick up the new reference path without a manual reload.
+            manager.broadcast_sync(item.project_id, {
+                "type": "story_updated",
+                "project_id": item.project_id,
+                "story": fresh_story
+            })
 
             item.status = QueueItemStatus.COMPLETED
             item.completed_at = __import__('datetime').datetime.utcnow()
@@ -1551,6 +1589,7 @@ class GenerationService:
             image_workflow=getattr(request, 'image_workflow', None),
             seed=getattr(request, 'seed', None),
             gemini_mode=self._resolve_gemini_mode(request),
+            background_style=getattr(request, 'background_style', None),
             status=QueueItemStatus.QUEUED,
             progress=0,
             priority=40, # Characters higher priority
@@ -1886,6 +1925,7 @@ class GenerationService:
             except Exception as ref_err:
                 logger.warning(f"Could not collect asset references for shot {shot_index}: {ref_err}")
                 asset_reference_paths = []
+
             if asset_reference_paths:
                 logger.info(f"Shot {shot_index}: using {len(asset_reference_paths)} attached asset reference(s): {asset_reference_paths}")
 
@@ -3893,7 +3933,8 @@ class GenerationService:
         project_id: str,
         max_shots: Optional[int] = None,
         shots_director: str = "default",
-        max_shot_duration: Optional[float] = None
+        max_shot_duration: Optional[float] = None,
+        scene_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Re-plan shots from story
@@ -3904,6 +3945,9 @@ class GenerationService:
             shots_director: Shots director to use
             max_shot_duration: Cap on a single shot's duration in seconds;
                 falls back to the project's stored setting when omitted
+            scene_id: Re-plan only this scene's shots — new shots splice into
+                the scene's old position and the rest of the storyboard is
+                left untouched
 
         Returns:
             List of shot dictionaries
@@ -3951,9 +3995,56 @@ class GenerationService:
                 shots_director, project_meta.get('video_generation_type'), _r2v_mode)
 
             if is_then_vs_now:
+                if scene_id is not None:
+                    raise ValueError("Per-scene re-planning is not supported for ThenVsNow projects")
                 logger.info(f"Detected ThenVsNow project for {project_id}, using specialized shot generator")
                 from core.story_engine import generate_shots_from_then_vs_now_story
                 shots = generate_shots_from_then_vs_now_story(story_data)
+            elif scene_id is not None:
+                # Per-scene replan: plan ONLY the target scene, then splice the
+                # new shots into the scene's old position. Every other scene's
+                # shots are untouched (their references, media and variations
+                # survive); indexes are renumbered sequentially afterwards.
+                scenes = story_data.get('scenes') or []
+                target = next((s for s in scenes
+                               if s is not None and str(s.get('scene_id')) == str(scene_id)), None)
+                if target is None:
+                    raise ValueError(f"Scene with scene_id {scene_id} not found in story")
+
+                scene_story = dict(story_data)
+                scene_story['scenes'] = [target]
+                logger.info(f"Re-planning only scene {scene_id} for project {project_id}")
+                scene_shots = await asyncio.to_thread(
+                    plan_shots,
+                    json.dumps(scene_story, ensure_ascii=False),
+                    max_shots=max_shots,
+                    shots_director=shots_director,
+                    max_shot_duration=max_shot_duration,
+                    video_generation_type=project_meta.get('video_generation_type'),
+                    r2v_mode=_r2v_mode
+                )
+
+                existing = self.project_manager.get_shots(project_id) or []
+                for shot in scene_shots:
+                    shot['scene_id'] = target.get('scene_id')
+                    shot['scene_name'] = target.get('scene_name') or target.get('location')
+
+                splice_at = next((i for i, s in enumerate(existing)
+                                  if str(s.get('scene_id')) == str(scene_id)), len(existing))
+                kept = [s for s in existing if str(s.get('scene_id')) != str(scene_id)]
+                shots = kept[:splice_at] + scene_shots + kept[splice_at:]
+                for i, shot in enumerate(shots):
+                    shot['index'] = i
+                # save_shots re-sorts by (batch_number, original index) — make
+                # batch_number follow story scene order so the splice order
+                # survives the save (old batches refer to the pre-splice plan)
+                scene_order = {}
+                for pos, s in enumerate(scenes):
+                    if s is not None and s.get('scene_id') is not None:
+                        scene_order[str(s.get('scene_id'))] = pos + 1
+                for shot in shots:
+                    shot['batch_number'] = scene_order.get(
+                        str(shot.get('scene_id')), len(scene_order) + 1)
             elif is_movie:
                 logger.info(f"Detected Movie project for {project_id}, using standard shot planner")
                 # Run standard planner in thread pool to avoid blocking
@@ -3980,6 +4071,14 @@ class GenerationService:
 
             # Save shots
             self.project_manager.save_shots(project_id, shots)
+
+            # Shots reference props by name; merge those names into
+            # story.props so reference sheets / the edit-story UI see them
+            # (story directors never emit props themselves)
+            try:
+                self.project_manager.sync_story_props(project_id)
+            except Exception as props_err:
+                logger.warning(f"Could not sync story props after replan: {props_err}")
 
             # Fresh shots don't have the characters' reference images attached
             # yet — re-attach them as asset references. r2v projects use the

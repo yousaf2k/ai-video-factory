@@ -10,7 +10,9 @@ import pytest
 from web_ui.backend.services.agent import engine as engine_mod
 from web_ui.backend.services.agent.config_store import AgentConfigStore
 from web_ui.backend.services.agent.conversations import ConversationStore
-from web_ui.backend.services.agent.engine import AgentEngine, parse_tool_call, _clean_final_answer
+from web_ui.backend.services.agent.engine import (
+    AgentEngine, parse_tool_call, narration_before_call, _clean_final_answer,
+)
 from web_ui.backend.services.agent.mcp_client import MCPManager
 from web_ui.backend.services.agent.skills import SkillStore
 
@@ -275,3 +277,62 @@ def test_engine_emits_and_persists_context_usage(agent_env, monkeypatch):
     # Persisted on the conversation for reload
     stored = conversations.get(conversation["id"])
     assert stored["context_usage"]["est_tokens"] == usage["est_tokens"]
+
+
+# ------------------------------------------------------ transcript step details
+
+def test_narration_is_only_what_precedes_the_call():
+    reply = ('I will check the story first.\n\n```tool_call\n'
+             '{"tool": "get_story", "arguments": {}}\n```\n\n'
+             'TOOL RESULT (get_story, ok):\n{"scenes": []}')
+    # The result the model invented after its call never happened: not narration.
+    assert narration_before_call(reply) == "I will check the story first."
+    assert narration_before_call('```tool_call\n{"tool": "get_story", "arguments": {}}\n```') == ""
+    assert narration_before_call('TOOL_CALL: {"tool": "list_skills", "arguments": {}}') == ""
+    assert narration_before_call('{"tool": "list_skills", "arguments": {}}') == ""
+    assert narration_before_call("plain final answer") == ""
+    assert narration_before_call("") == ""
+
+
+def test_engine_streams_and_saves_step_details(agent_env, monkeypatch):
+    """The chat transcript needs the same step details live and after a reload."""
+    from types import SimpleNamespace
+
+    eng, conversations = agent_env
+    conversation = conversations.create()
+    fake = _patch_provider(monkeypatch, eng, [
+        'Checking first.\n```tool_call\n{"tool": "list_skills", "arguments": {}}\n```',
+        "all good",
+    ])
+    # Scripted clock: the model takes 2.5 s per pass, the tool 1.25 s.
+    clock = {"now": 0.0}
+    real_ask = fake.ask
+
+    def ask(prompt, response_format=None):
+        clock["now"] += 2.5
+        return real_ask(prompt, response_format)
+
+    fake.ask = ask
+    real_dispatch = eng._dispatch
+
+    async def dispatch(*args, **kwargs):
+        clock["now"] += 1.25
+        return await real_dispatch(*args, **kwargs)
+
+    monkeypatch.setattr(eng, "_dispatch", dispatch)
+    monkeypatch.setattr(engine_mod, "time", SimpleNamespace(monotonic=lambda: clock["now"]))
+
+    events = []
+    asyncio.run(eng.run(conversation["id"], "list skills", on_event=events.append))
+
+    start = next(e for e in events if e["type"] == "tool_start")
+    result = next(e for e in events if e["type"] == "tool_result")
+    assert start["narration"] == "Checking first."
+    assert result["ok"] is True
+    assert result["duration_ms"] == 1250
+
+    user, call, tool_result, answer = conversations.get(conversation["id"])["messages"]
+    assert call["narration"] == "Checking first."
+    assert call["thinking_ms"] == 2500
+    assert tool_result["duration_ms"] == result["duration_ms"]
+    assert answer["thinking_ms"] == 2500

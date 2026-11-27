@@ -47,7 +47,7 @@ non_diegetic_music: ...
 - Body in English. Preserve the original language only for dialogue inside `<d>` and visible on-screen text.
 - Open with one or two style sentences BEFORE `[Shot 1]` (e.g. "The target video is live-action, cinematic, warm practical lighting.").
 - `[Shot 1]` has NO timestamp. Later sub-shots: `[Shot 2] At 00:05.000, the camera cuts to...` — cut times strictly increasing, inside the clip `duration`, at least 0.7s before the end.
-- Clips under 6 seconds stay a single sub-shot; clips of 6+ seconds SHOULD use 2-3 sub-shots when the action has distinct beats.
+- Clips under 3 seconds stay a single sub-shot; clips of 3+ seconds SHOULD use 2-4 sub-shots when the action has distinct beats.
 - Camera motion as natural English (motion type + amplitude + speed): "The camera pushes in with small amplitude at slow speed toward..."
 - At a subject's first clear appearance, describe its referenced characteristics, position, and action within what is visible. Reuse the same label later without redefining it.
 - **Speakers and dialogue**: stable IDs `(S1)`, `(S2)`; a speaker keeps the same ID across sub-shots. Establish identity on first appearance. Spoken content verbatim inside `<d>` with a language tag: `The middle-aged baker with a calm, slightly raspy voice (S1) says: <d>[English] First batch of the morning.</d>` Voiceover uses the exact phrase `says in an off-screen voiceover` followed by `while his lips remain completely closed.`

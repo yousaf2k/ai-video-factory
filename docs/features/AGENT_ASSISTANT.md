@@ -46,6 +46,30 @@ Chat (WS) ──► AgentEngine ──► LLM (any provider, JSON tool-call prot
 - **Bounded**: max tool iterations per message (default 12), tool results
   truncated (`AGENT_MAX_TOOL_RESULT_CHARS`).
 
+### Chat transcript UI
+
+Messages render like a modern agent harness — user bubbles on the right
+(primary color), agent turns on the left under an avatar with a vertical
+timeline. Each agent pass is a foldable row:
+
+- **"Thought for 1.2s"** — one per LLM pass, with the pass number, duration and
+  what it led to. Collapsed by default, always.
+- **Narration** — if the model wrote prose before calling a tool, it renders as
+  regular agent text above the call. Text the model emits *after* its tool call
+  (invented "TOOL RESULT" blocks etc.) is never shown — it did not happen.
+- **`✓ get_shot shot: 4`** — the tool call with a per-tool icon, live timer
+  while running, and the real duration once done. Expanding shows the full
+  input and output JSON (copy buttons included).
+- **Answer bubble** — the final markdown reply, with a copy-on-hover button.
+
+The live turn and the reloaded conversation share one transcript model
+(`web_ui/frontend/src/lib/agentTranscript.ts`), so a page refresh renders the
+identical view: all step rows stay collapsed, durations and narration included
+(the engine persists `thinking_ms`/`duration_ms`/`narration`; the API backfills
+`narration` for conversations saved before it existed). Scroll follows the
+bottom while you are there; scrolling up pins the view and shows a
+jump-to-latest button.
+
 ## Configuration
 
 ### Agent LLM
@@ -123,7 +147,7 @@ frontmatter `name`/`description` + markdown body). The agent sees every
 skill's name/description in its system prompt and calls `read_skill` before
 following one. Create them in **Agent → Settings → Skills** or by hand — see
 `agent_skills/README.md`. Shipped examples: `fix-shot-prompt`,
-`new-project-wizard`, `project-health-check`.
+`new-project-wizard`, `empty-project-builder`, `project-health-check`.
 
 ### MCP support
 
@@ -153,7 +177,7 @@ same 56-tool registry to Claude Desktop, Cursor, ZCode, etc. over stdio JSON-RPC
 | GET/POST | `/api/agent/conversations` | List/create conversations |
 | GET/PATCH/DELETE | `/api/agent/conversations/{id}` | Load/rename/delete |
 | POST | `/api/agent/chat` | Blocking chat (WS fallback) |
-| WS | `/api/agent/ws` | Streaming chat (chat/stop messages; llm_start/tool_start/tool_result/final/error events) |
+| WS | `/api/agent/ws` | Streaming chat (chat/stop; `llm_start`/`tool_start` (+narration)/`tool_result` (+duration_ms)/`final`/`error` events) |
 
 ## Security notes
 

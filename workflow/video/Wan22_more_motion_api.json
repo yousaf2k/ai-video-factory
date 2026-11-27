@@ -12,7 +12,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "CLIP Text Encode (Positive Prompt)"
+      "title": "[prompt] CLIP Text Encode (Positive Prompt)"
     }
   },
   "7": {
@@ -130,7 +130,7 @@
     },
     "class_type": "KSamplerAdvanced",
     "_meta": {
-      "title": "KSampler (Advanced)"
+      "title": "[seed] KSampler (Advanced)"
     }
   },
   "58": {
@@ -362,7 +362,7 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "Load Image"
+      "title": "[image_in] Load Image"
     }
   },
   "120": {
@@ -447,7 +447,7 @@
     },
     "class_type": "PainterI2V",
     "_meta": {
-      "title": "PainterI2V"
+      "title": "[video_out] PainterI2V"
     }
   },
   "126": {

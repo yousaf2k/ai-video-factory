@@ -51,6 +51,16 @@ class Character(BaseModel):
     attire: Optional[str] = Field(default=None, description="Character attire")
 
 
+class Prop(BaseModel):
+    """Story prop model — a recurring object that gets a product reference
+    sheet (r2v projects). Sheets attach to shots via shot['props'] name
+    matching in ProjectManager.sync_shot_video_refs."""
+    name: str = Field(..., description="Prop display name (e.g. 'Excalibur')")
+    description: Optional[str] = Field(default=None, description="Short prop description")
+    image_prompt: Optional[str] = Field(default=None, description="Prompt used to generate the prop reference sheet")
+    reference_image_path: Optional[str] = Field(default=None, description="Path to the prop reference sheet image")
+
+
 class Scene(BaseModel):
     """Story scene model"""
     scene_name: Optional[str] = Field(default=None, description="Human-readable scene name (e.g., 'Main Cast', 'Supporting Cast')")
@@ -85,6 +95,7 @@ class Story(BaseModel):
     scenes: List[Scene]
     project_type: ProjectType = Field(default=ProjectType.DOCUMENTARY, description="Project type (documentary or then_vs_now)")
     characters: Optional[List[Character]] = Field(default=None, description="Characters for ThenVsNow projects")
+    props: Optional[List[Prop]] = Field(default=None, description="Recurring props for r2v reference-to-video projects")
     youtube_metadata: Optional[YouTubeMetadata] = Field(default=None, description="YouTube publishing metadata")
     movie_metadata: Optional[MovieMetadata] = Field(default=None, description="Movie metadata for ThenVsNow projects")
 

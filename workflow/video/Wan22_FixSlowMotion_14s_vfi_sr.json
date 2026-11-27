@@ -127,7 +127,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "CLIP Text Encode (Positive Prompt)"
+      "title": "[prompt] CLIP Text Encode (Positive Prompt)"
     }
   },
   "95": {
@@ -175,7 +175,7 @@
     },
     "class_type": "WanImageToVideo",
     "_meta": {
-      "title": "WanImageToVideo"
+      "title": "[video_out] WanImageToVideo"
     }
   },
   "101": {
@@ -238,7 +238,7 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "Load Image"
+      "title": "[image_in] Load Image"
     }
   },
   "142": {
@@ -247,7 +247,7 @@
     },
     "class_type": "PrimitiveInt",
     "_meta": {
-      "title": "Seed"
+      "title": "[seed] Seed"
     }
   },
   "145": {
@@ -350,7 +350,9 @@
       "images": [
         "149",
         0
-      ]
+      ],
+      "image_encoding": "8-bit RGB",
+      "strength": 1
     },
     "class_type": "RTXVideoSuperResolution",
     "_meta": {

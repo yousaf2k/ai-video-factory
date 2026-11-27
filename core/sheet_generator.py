@@ -129,15 +129,40 @@ def apply_background_style(prompt: str, background_style: str) -> str:
 
 
 def prop_sheet_prompt(prop: dict, style: str = "") -> str:
-    """Product-style reference for a recurring object (vehicle/weapon/etc.)."""
-    desc = prop.get('image_prompt') or prop.get('description') or prop.get('name', 'object')
-    return (
-        f"cinematic product reference shot of {prop.get('name', 'the object')}: {desc}. "
-        f"The object alone on a clean neutral background, three-quarter front view, "
-        f"materials and wear details clearly visible, consistent single light source. "
-        f"{style + ', ' if style else ''}"
-        f"do not add any text."
-    )
+    """Multi-view Object Reference Sheet prompt for a recurring object
+    (vehicle/weapon/etc.). The template fixes its own visual style, so the
+    story style suffix is intentionally not appended.
+
+    Sheets are generated in 16:9 (landscape) so every view fits the grid —
+    same as background sheets.
+    """
+    object_name = prop.get('image_prompt') or prop.get('description') or prop.get('name', 'object')
+    return f"""Create a highly detailed, professional Object Reference Sheet of {object_name}.
+
+Display the object from multiple consistent viewpoints, arranged neatly on a clean, neutral gray background.
+
+Required views:
+
+Front view
+Back view
+Left side view
+Right side view
+Three-quarter perspective view
+Top view
+Bottom view
+Close-up detail views of important features
+Design and presentation:
+
+Maintain identical proportions, shape, colors, and details across every view.
+Show accurate geometry, dimensions, construction, and structural details.
+Include close-ups of materials, textures, surface finishes, buttons, joints, edges, and unique design elements.
+Add subtle measurement guides, dimension lines, and annotations where appropriate.
+Use consistent lighting and clear visibility.
+Keep every view aligned, evenly spaced, and clearly separated.
+Use realistic materials and precise details.
+Visual style: Professional industrial design reference sheet, technical concept art presentation, clean studio render, orthographic views, high-detail product visualization, crisp edges, accurate proportions, sharp focus, and presentation-board quality.
+
+Important: The object must remain visually identical across all views. Do not redesign, alter, add, or remove any features between perspectives. Prioritize accuracy, consistency, and clarity over artistic interpretation."""
 
 
 def _next_version(directory: str, prefix: str) -> int:
@@ -253,8 +278,11 @@ def ensure_prop_sheets(project_manager, project_id, force=False, **gen_kwargs):
         if existing and not force and _project_file_exists(project_manager, project_id, existing):
             continue
         prompt = prop_sheet_prompt(prop, style)
+        # Prop reference sheets are always landscape 16:9 by spec — every
+        # view of the multi-view template fits the grid (like backgrounds)
         path = _generate_sheet(project_manager, project_id, "references",
-                               f"prop_{idx:02d}", prompt, **gen_kwargs)
+                               f"prop_{idx:02d}", prompt,
+                               **{**gen_kwargs, 'aspect_ratio': '16:9'})
         if not path:
             continue
         rel = project_manager.relativize_path(path)

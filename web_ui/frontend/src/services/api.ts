@@ -206,11 +206,62 @@ class ApiClient {
       gemini_mode?: string;
       gemini_model?: string;
       gemini_thinking?: string;
+      background_style?: string;
     }
   ): Promise<any> {
     const response = await this.client.post(
       `/api/projects/${projectId}/story/characters/${characterIndex}/generate-reference`,
       request
+    );
+    return response.data;
+  }
+
+  async generatePropReferenceImage(
+    projectId: string,
+    propIndex: number,
+    request: {
+      prompt_override?: string;
+      image_mode?: string;
+      image_workflow?: string;
+      seed?: number;
+      gemini_mode?: string;
+      gemini_model?: string;
+      gemini_thinking?: string;
+      background_style?: string;
+    }
+  ): Promise<any> {
+    const response = await this.client.post(
+      `/api/projects/${projectId}/story/props/${propIndex}/generate-reference`,
+      request
+    );
+    return response.data;
+  }
+
+  async useAssetForPropReference(projectId: string, propIndex: number, ref: string): Promise<any> {
+    const response = await this.client.post(
+      `/api/projects/${projectId}/story/props/${propIndex}/use-asset`,
+      { ref }
+    );
+    return response.data;
+  }
+
+  async useAssetForCharacterReference(
+    projectId: string,
+    characterIndex: number,
+    ref: string,
+    variant: string = 'character'
+  ): Promise<any> {
+    const response = await this.client.post(
+      `/api/projects/${projectId}/story/characters/${characterIndex}/use-asset`,
+      { ref, variant }
+    );
+    return response.data;
+  }
+
+  async useAssetForSceneBackground(projectId: string, sceneId: number, ref: string): Promise<any> {
+    const response = await this.client.post(
+      `/api/projects/${projectId}/story/scenes/${sceneId}/use-asset-background`,
+      { ref }
     );
     return response.data;
   }
@@ -315,6 +366,21 @@ class ApiClient {
     config?: { force?: boolean, mode?: string, workflow?: string, prompt_override?: string }
   ): Promise<void> {
     await this.client.post(`/api/projects/${projectId}/story/scenes/${sceneId}/generate-music`, config || {});
+  }
+
+  async generateSceneBackground(
+    projectId: string,
+    sceneId: number,
+    request?: {
+      prompt?: string;
+      negative_prompt?: string;
+      seed?: number;
+      workflow?: string;
+      image_model?: string;
+      background_style?: string;
+    }
+  ): Promise<void> {
+    await this.client.post(`/api/projects/${projectId}/story/scenes/${sceneId}/generate-background`, request || {});
   }
 
   async uploadShotMusic(
@@ -555,6 +621,7 @@ class ApiClient {
       max_shots?: number;
       shots_director: string;
       max_shot_duration?: number;
+      scene_id?: number;
     }
   ): Promise<any> {
     const response = await this.client.post(`/api/projects/${projectId}/shots/replan`, data);

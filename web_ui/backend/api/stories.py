@@ -23,7 +23,9 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 class GenerateCharacterReferenceRequest(BaseModel):
-    variant: str = Field(..., description="'then', 'now', or 'character'")
+    # Optional so prop reference generation (which ignores the variant) can
+    # reuse this request model without sending a placeholder value.
+    variant: Optional[str] = Field(default="character", description="'then', 'now', or 'character'")
     prompt_override: Optional[str] = None
     image_mode: Optional[str] = None
     image_workflow: Optional[str] = None
@@ -31,6 +33,7 @@ class GenerateCharacterReferenceRequest(BaseModel):
     gemini_mode: Optional[str] = None
     gemini_model: Optional[str] = None
     gemini_thinking: Optional[str] = None
+    background_style: Optional[str] = Field(default=None, description="Named-style text (styles.json) appended to the sheet prompt")
 from web_ui.backend.services.project_service import ProjectService
 from web_ui.backend.services.generation_service import get_generation_service
 from core.story_engine import build_story, normalize_scene_ids
@@ -657,6 +660,268 @@ async def upload_character_reference(
         )
 
 
+class UseCharacterAssetRequest(BaseModel):
+    ref: str = Field(..., description='Asset ref: "i/9f3ab21c" (library) or "p/{project_id}/{media_dir}/{filename}" (project media)')
+    variant: Optional[str] = Field(default="character", description="'then', 'now', or 'character'")
+
+
+@router.post("/characters/{character_index}/use-asset")
+async def use_asset_as_character_reference(
+    project_id: str,
+    character_index: int,
+    request: UseCharacterAssetRequest
+):
+    """
+    Use an Asset Library image as a character reference (any variant).
+
+    Mirrors the character reference upload: the library file is copied into
+    the project's images/ dir under the same versioned
+    shot_{idx}_{variant}_{version} naming family, then attached like an
+    upload (sync + broadcast).
+    """
+    try:
+        variant = request.variant or "character"
+        if variant not in ["then", "now", "character"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid variant '{variant}'. Must be 'then', 'now', or 'character'"
+            )
+
+        # Load story
+        project_dir = project_manager.get_project_dir(project_id)
+        story_path = os.path.join(project_dir, "story.json")
+
+        if not os.path.exists(story_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Story not found for project {project_id}"
+            )
+
+        with open(story_path, 'r', encoding='utf-8') as f:
+            story_data = json.load(f)
+
+        characters = story_data.get('characters', [])
+
+        if character_index < 0 or character_index >= len(characters):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Character index {character_index} out of range (0-{len(characters)-1})"
+            )
+
+        # Resolve the asset ref to a file on disk (library and project-media
+        # refs both supported)
+        from web_ui.backend.services.asset_service import get_asset_service
+
+        entry = get_asset_service().resolve_ref(request.ref, probe=False)
+        if not entry.get('exists', False):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Asset not found: {request.ref}"
+            )
+        if entry.get('type') != 'image':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Asset must be an image (got '{entry.get('type')}')"
+            )
+        source_path = entry.get('path')
+        if not source_path or not os.path.isfile(source_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Asset file missing on disk: {request.ref}"
+            )
+
+        # Save into images/ alongside uploads and generated sheets: one
+        # versioned filename family (shot_{idx}_{variant}_{version}).
+        images_dir = os.path.join(project_dir, "images")
+        os.makedirs(images_dir, exist_ok=True)
+
+        file_extension = os.path.splitext(source_path)[1] or '.png'
+        next_version = generation_service._get_next_image_version(
+            images_dir, character_index, variant)
+        unique_filename = f"shot_{character_index:03d}_{variant}_{next_version:03d}{file_extension}"
+        shutil.copyfile(source_path, os.path.join(images_dir, unique_filename))
+
+        # Update character model on the FRESH story under the project lock
+        field_name = f"{variant}_reference_image_path"
+        relative_path = f"output/projects/{project_id}/images/{unique_filename}"
+
+        def set_character_ref(current_story):
+            current_characters = current_story.get('characters', [])
+            if 0 <= character_index < len(current_characters):
+                current_characters[character_index][field_name] = relative_path
+
+        story_data = project_manager.update_story_safely(project_id, set_character_ref) or story_data
+
+        # Same attachment flow as uploads: character refs flow to shots as
+        # asset references (the r2v video-ref sync no-ops elsewhere)
+        if variant == "character":
+            try:
+                project_manager.sync_character_asset_refs(project_id)
+            except Exception as sync_err:
+                logger.warning(f"Could not sync character asset refs after asset pick: {sync_err}")
+        try:
+            project_manager.sync_shot_video_refs(project_id)
+        except Exception as sync_err:
+            logger.warning(f"Could not sync r2v video refs after character asset pick: {sync_err}")
+
+        # Broadcast update
+        from web_ui.backend.websocket.manager import manager
+        manager.broadcast_sync(project_id, {
+            "type": "story_updated",
+            "project_id": project_id,
+            "story": story_data
+        })
+
+        logger.info(f"Used asset {request.ref} as {variant} reference for character {character_index}: {unique_filename}")
+
+        return {
+            "status": "success",
+            "character_index": character_index,
+            "variant": variant,
+            "image_path": relative_path,
+            "source_ref": request.ref,
+            "message": f"{variant.upper()} reference attached from Asset Library"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error attaching asset as character reference: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to attach asset as reference image: {str(e)}"
+        )
+
+
+class UseSceneAssetRequest(BaseModel):
+    ref: str = Field(..., description='Asset ref: "i/9f3ab21c" (library) or "p/{project_id}/{media_dir}/{filename}" (project media)')
+
+
+@router.post("/scenes/{scene_id}/use-asset-background")
+async def use_asset_as_scene_background(
+    project_id: str,
+    scene_id: int,
+    request: UseSceneAssetRequest
+):
+    """
+    Use an Asset Library image as a scene background.
+
+    Mirrors the scene background upload: the library file is copied into the
+    project's backgrounds/ dir under the same scene_{id}_background name,
+    marked as uploaded (not AI-generated), and the r2v reference sync
+    re-attaches it to the scene's shots.
+    """
+    try:
+        # Load story
+        project_dir = project_manager.get_project_dir(project_id)
+        story_path = os.path.join(project_dir, "story.json")
+
+        if not os.path.exists(story_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Story not found for project {project_id}"
+            )
+
+        with open(story_path, 'r', encoding='utf-8') as f:
+            story_data = json.load(f)
+
+        scenes = story_data.get('scenes', [])
+
+        # Find scene by scene_id
+        scene = None
+        for s in scenes:
+            if s.get('scene_id') == scene_id:
+                scene = s
+                break
+
+        if scene is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Scene with scene_id {scene_id} not found"
+            )
+
+        # Resolve the asset ref to a file on disk
+        from web_ui.backend.services.asset_service import get_asset_service
+
+        entry = get_asset_service().resolve_ref(request.ref, probe=False)
+        if not entry.get('exists', False):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Asset not found: {request.ref}"
+            )
+        if entry.get('type') != 'image':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Asset must be an image (got '{entry.get('type')}')"
+            )
+        source_path = entry.get('path')
+        if not source_path or not os.path.isfile(source_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Asset file missing on disk: {request.ref}"
+            )
+
+        # Copy into backgrounds/ under the upload naming (shared with upload)
+        backgrounds_dir = os.path.join(project_dir, "backgrounds")
+        os.makedirs(backgrounds_dir, exist_ok=True)
+
+        file_extension = os.path.splitext(source_path)[1] or '.png'
+        unique_filename = f"scene_{scene_id}_background{file_extension}"
+        shutil.copyfile(source_path, os.path.join(backgrounds_dir, unique_filename))
+
+        # Update scene model on the FRESH story under the project lock
+        relative_path = f"output/projects/{project_id}/backgrounds/{unique_filename}"
+
+        def set_scene_background(current_story):
+            for current_scene in current_story.get('scenes', []):
+                if current_scene.get('scene_id') == scene_id:
+                    current_scene['background_image_path'] = relative_path
+                    current_scene['background_generated'] = True
+                    current_scene['background_is_generated'] = False  # Picked, not AI-generated
+                    return
+
+        story_data = project_manager.update_story_safely(project_id, set_scene_background) or story_data
+
+        # Refresh shot reference attachments with the new background:
+        # r2v -> sync_shot_video_refs (no-op elsewhere),
+        # i2v/t2v -> sync_character_asset_refs (characters -> background -> props)
+        try:
+            if project_manager.load_project(project_id).get('video_generation_type') == 'r2v':
+                project_manager.sync_shot_video_refs(project_id)
+            else:
+                project_manager.sync_character_asset_refs(project_id)
+        except Exception as sync_err:
+            logger.warning(f"Could not sync shot refs after background asset pick: {sync_err}")
+
+        # Broadcast update
+        from web_ui.backend.websocket.manager import manager
+        manager.broadcast_sync(project_id, {
+            "type": "story_updated",
+            "project_id": project_id,
+            "story": story_data
+        })
+
+        logger.info(f"Used asset {request.ref} as background for scene {scene_id}: {unique_filename}")
+
+        return {
+            "status": "success",
+            "scene_id": scene_id,
+            "image_path": relative_path,
+            "source_ref": request.ref,
+            "source": "asset_library",
+            "message": "Background attached from Asset Library"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error attaching asset as scene background: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to attach asset as background: {str(e)}"
+        )
+
+
 @router.post("/characters/{character_index}/generate-reference")
 async def generate_character_reference(
     project_id: str,
@@ -728,6 +993,7 @@ async def generate_prop_reference(
             image_workflow=getattr(request, 'image_workflow', None),
             seed=getattr(request, 'seed', None),
             gemini_mode=getattr(request, 'gemini_mode', None),
+            background_style=getattr(request, 'background_style', None),
             status=QueueItemStatus.QUEUED,
             progress=0,
             priority=40,
@@ -747,6 +1013,226 @@ async def generate_prop_reference(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to queue prop reference generation: {str(e)}"
+        )
+
+
+@router.post("/props/{prop_index}/upload-reference")
+async def upload_prop_reference(
+    project_id: str,
+    prop_index: int,
+    file: UploadFile = File(...)
+):
+    """
+    Upload a reference image for a story prop (r2v projects).
+
+    Mirrors the character reference upload; prop_index indexes story.props.
+    Uploads share the generated-sheet naming family (prop_{idx}_{version}) in
+    the project's references/ dir so versions interleave.
+    """
+    try:
+        # Load story
+        project_dir = project_manager.get_project_dir(project_id)
+        story_path = os.path.join(project_dir, "story.json")
+
+        if not os.path.exists(story_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Story not found for project {project_id}"
+            )
+
+        with open(story_path, 'r', encoding='utf-8') as f:
+            story_data = json.load(f)
+
+        props = story_data.get('props', [])
+
+        if prop_index < 0 or prop_index >= len(props):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Prop index {prop_index} out of range (0-{len(props)-1})"
+            )
+
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File must be an image"
+            )
+
+        # Save into references/ alongside generated prop sheets: uploads and
+        # generation share one versioned filename family (prop_{idx}_{version}).
+        references_dir = os.path.join(project_dir, "references")
+        os.makedirs(references_dir, exist_ok=True)
+
+        from core.sheet_generator import _next_version
+
+        file_extension = os.path.splitext(file.filename)[1] if file.filename else '.png'
+        next_version = _next_version(references_dir, f"prop_{prop_index:02d}")
+        unique_filename = f"prop_{prop_index:02d}_{next_version:03d}{file_extension}"
+        file_path = os.path.join(references_dir, unique_filename)
+
+        # Save uploaded file
+        with open(file_path, 'wb') as f:
+            shutil.copyfileobj(file.file, f)
+
+        # Update prop model on the FRESH story under the project lock
+        relative_path = f"output/projects/{project_id}/references/{unique_filename}"
+
+        def set_prop_ref(current_story):
+            current_props = current_story.get('props', [])
+            if 0 <= prop_index < len(current_props):
+                current_props[prop_index]['reference_image_path'] = relative_path
+
+        story_data = project_manager.update_story_safely(project_id, set_prop_ref) or story_data
+
+        # Prop sheets flow to shots as asset references — refresh the r2v
+        # reference sync so the uploaded sheet attaches to the prop's shots
+        # (no-op for non-r2v projects).
+        try:
+            project_manager.sync_shot_video_refs(project_id)
+        except Exception as sync_err:
+            logger.warning(f"Could not sync prop asset refs after upload: {sync_err}")
+
+        # Broadcast update
+        from web_ui.backend.websocket.manager import manager
+        manager.broadcast_sync(project_id, {
+            "type": "story_updated",
+            "project_id": project_id,
+            "story": story_data
+        })
+
+        logger.info(f"Uploaded reference for prop {prop_index}: {unique_filename}")
+
+        return {
+            "status": "success",
+            "prop_index": prop_index,
+            "image_path": relative_path,
+            "message": "Prop reference image uploaded successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading prop reference: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload reference image: {str(e)}"
+        )
+
+
+class UseAssetReferenceRequest(BaseModel):
+    ref: str = Field(..., description='Asset ref: "i/9f3ab21c" (library) or "p/{project_id}/{media_dir}/{filename}" (project media)')
+
+
+@router.post("/props/{prop_index}/use-asset")
+async def use_asset_as_prop_reference(
+    project_id: str,
+    prop_index: int,
+    request: UseAssetReferenceRequest
+):
+    """
+    Use an Asset Library image as a prop reference (r2v projects).
+
+    Copies the library file into the project's references/ dir under the same
+    versioned prop_{idx}_{version} naming family as uploads and generated
+    sheets, then attaches it like the upload endpoint (sync + broadcast).
+    """
+    try:
+        # Load story
+        project_dir = project_manager.get_project_dir(project_id)
+        story_path = os.path.join(project_dir, "story.json")
+
+        if not os.path.exists(story_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Story not found for project {project_id}"
+            )
+
+        with open(story_path, 'r', encoding='utf-8') as f:
+            story_data = json.load(f)
+
+        props = story_data.get('props', [])
+
+        if prop_index < 0 or prop_index >= len(props):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Prop index {prop_index} out of range (0-{len(props)-1})"
+            )
+
+        # Resolve the asset ref to a file on disk (library and project-media
+        # refs both supported)
+        from web_ui.backend.services.asset_service import get_asset_service
+
+        entry = get_asset_service().resolve_ref(request.ref, probe=False)
+        if not entry.get('exists', False):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Asset not found: {request.ref}"
+            )
+        if entry.get('type') != 'image':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Asset must be an image (got '{entry.get('type')}')"
+            )
+        source_path = entry.get('path')
+        if not source_path or not os.path.isfile(source_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Asset file missing on disk: {request.ref}"
+            )
+
+        # Copy into references/ sharing the upload/generation naming family
+        references_dir = os.path.join(project_dir, "references")
+        os.makedirs(references_dir, exist_ok=True)
+
+        from core.sheet_generator import _next_version
+
+        file_extension = os.path.splitext(source_path)[1] or '.png'
+        next_version = _next_version(references_dir, f"prop_{prop_index:02d}")
+        unique_filename = f"prop_{prop_index:02d}_{next_version:03d}{file_extension}"
+        shutil.copyfile(source_path, os.path.join(references_dir, unique_filename))
+
+        # Update prop model on the FRESH story under the project lock
+        relative_path = f"output/projects/{project_id}/references/{unique_filename}"
+
+        def set_prop_ref(current_story):
+            current_props = current_story.get('props', [])
+            if 0 <= prop_index < len(current_props):
+                current_props[prop_index]['reference_image_path'] = relative_path
+
+        story_data = project_manager.update_story_safely(project_id, set_prop_ref) or story_data
+
+        # Refresh the r2v reference sync so the new sheet attaches to the
+        # prop's shots (no-op for non-r2v projects).
+        try:
+            project_manager.sync_shot_video_refs(project_id)
+        except Exception as sync_err:
+            logger.warning(f"Could not sync prop asset refs after asset pick: {sync_err}")
+
+        # Broadcast update
+        from web_ui.backend.websocket.manager import manager
+        manager.broadcast_sync(project_id, {
+            "type": "story_updated",
+            "project_id": project_id,
+            "story": story_data
+        })
+
+        logger.info(f"Used asset {request.ref} as reference for prop {prop_index}: {unique_filename}")
+
+        return {
+            "status": "success",
+            "prop_index": prop_index,
+            "image_path": relative_path,
+            "source_ref": request.ref,
+            "message": "Asset library image attached as prop reference"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error attaching asset to prop reference: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to attach asset as prop reference: {str(e)}"
         )
 
 
@@ -827,6 +1313,17 @@ async def upload_scene_background(
                     return
 
         story_data = project_manager.update_story_safely(project_id, set_scene_background) or story_data
+
+        # Refresh shot reference attachments with the new background:
+        # r2v -> sync_shot_video_refs (character sheet + background + props),
+        # i2v/t2v -> sync_character_asset_refs (characters -> background -> props)
+        try:
+            if project_manager.load_project(project_id).get('video_generation_type') == 'r2v':
+                project_manager.sync_shot_video_refs(project_id)
+            else:
+                project_manager.sync_character_asset_refs(project_id)
+        except Exception as sync_err:
+            logger.warning(f"Could not sync shot refs after background upload: {sync_err}")
 
         # Broadcast update
         from web_ui.backend.websocket.manager import manager

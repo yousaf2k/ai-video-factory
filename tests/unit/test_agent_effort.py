@@ -132,7 +132,9 @@ def test_effort_options_per_provider(client):
         return model_registry.supported_thinking_levels(provider, eff)
 
     assert cfg["effort_options"] == expected_for(cfg["effective_provider"], "")
-    assert cfg["effort_supported"] is True
+    # supported ⇔ the effective provider's default model offers levels — derived
+    # from the live config (the user's LLM_PROVIDER may be a non-reasoning model)
+    assert cfg["effort_supported"] == bool(cfg["effort_options"])
     assert cfg["effort"] == ""  # auto by default
 
     def options_for(provider, model):

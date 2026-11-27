@@ -193,7 +193,8 @@ def test_openai_payload_maps_off_to_none(real_registry, monkeypatch):
                             chat=SimpleNamespace(completions=_Completions()))))
 
     p = lle.get_provider("openai", config_module=_shim(
-        OPENAI_BASE_URL="", OPENAI_MODEL="gpt-5.1", OPENAI_REASONING_EFFORT="off"))
+        OPENAI_BASE_URL="", OPENAI_MODEL="gpt-5.1", OPENAI_REASONING_EFFORT="off",
+        OPENAI_API_KEY="test-key"))
     p.ask("hi")
     # gpt-5.1 maps off -> none via thinkingLevelMap
     assert captured["reasoning_effort"] == "none"

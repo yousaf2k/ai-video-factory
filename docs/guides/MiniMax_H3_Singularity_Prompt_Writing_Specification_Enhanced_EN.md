@@ -288,7 +288,8 @@ subject\_definitions:
 <Subject 1>: \[identity / appearance / clothing / distinctive features / reference relationship]
 <Subject 2>: \[identity / appearance / clothing / distinctive features / reference relationship]
 <Environment>: \[location / architecture / terrain / atmosphere / lighting]
-<Prop or VFX>: \[appearance / material / persistent characteristics]
+<Prop>: \[physical object — appearance / material / persistent characteristics]
+<VFX>: \[transient or persistent video effect — trigger and behavior; never reference-attached]
 
 summary:
 \[Main action progression and final state]

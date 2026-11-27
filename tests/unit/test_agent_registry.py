@@ -242,3 +242,54 @@ def test_add_and_delete_shot(project):
     deleted = asyncio.run(execute_tool("delete_shot", {"project_id": project, "shot": new_id}, cfg))
     assert deleted["ok"] is True
     assert _run("list_shots", {"project_id": project})["result"]["count"] == 2
+
+
+def test_add_shot_to_empty_project_persists(project):
+    """Regression: add_shot once rebound its callback's list (`shots = shots or []`),
+    so on a project with NO shots the new shot landed on a throwaway list and was
+    never written — while the tool still reported added=True."""
+    from core.project_manager import ProjectManager
+    pm = ProjectManager()
+    pm.save_shots(project, [])
+    assert pm.get_shots(project) == []
+
+    added = _run("add_shot", {
+        "project_id": project, "image_prompt": "first", "motion_prompt": "walk",
+        "camera": "static", "scene_id": 0})
+    assert added["ok"] is True, added
+    new_id = added["result"]["shot_id"]
+
+    # Read back from disk, not from the tool's own return value
+    on_disk = pm.get_shots(project)
+    assert [s["id"] for s in on_disk] == [new_id]
+    assert on_disk[0]["index"] == 1
+    assert _run("get_shot", {"project_id": project, "shot": new_id})["ok"] is True
+    assert _run("list_shots", {"project_id": project})["result"]["count"] == 1
+
+
+def test_add_shot_stores_soundfx_prompt(project):
+    added = _run("add_shot", {
+        "project_id": project, "image_prompt": "new", "motion_prompt": "fly",
+        "camera": "zoom", "soundfx_prompt": "wind, distant crows"})
+    assert added["ok"] is True, added
+    got = _run("get_shot", {"project_id": project, "shot": added["result"]["shot_id"]})
+    assert got["result"]["soundfx_prompt"] == "wind, distant crows"
+    # Optional: omitted -> stored as None, never a crash or a stray value
+    plain = _run("add_shot", {
+        "project_id": project, "image_prompt": "new", "motion_prompt": "fly",
+        "camera": "zoom"})
+    got = _run("get_shot", {"project_id": project, "shot": plain["result"]["shot_id"]})
+    assert got["result"]["soundfx_prompt"] is None
+
+
+def test_update_shots_bulk_replaces_list(project):
+    """Regression: the bulk tool passed `lambda _current: shots`, which never
+    mutated the locked list — the replace was silently dropped."""
+    result = _run("update_shots_bulk", {"project_id": project, "shots": [
+        {"id": "bbbb2222", "image_prompt": "swapped", "motion_prompt": "run",
+         "camera": "pan"},
+    ]})
+    assert result["ok"] is True, result
+    assert _run("list_shots", {"project_id": project})["result"]["count"] == 1
+    kept = _run("get_shot", {"project_id": project, "shot": "bbbb2222"})
+    assert kept["result"]["image_prompt"] == "swapped"

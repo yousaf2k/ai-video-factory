@@ -10,8 +10,10 @@ names tolerantly instead of requiring exact equality.
 import re
 
 # Keep letters (ASCII + Latin-1 supplement + accented), digits, CJK and
-# Korean syllables; everything else collapses to a space.
-_KEEP_RE = re.compile(r"[^0-9a-zà-öø-ÿ\u00c0-\u024f\u0370-\u03ff"
+# Korean syllables; everything else collapses to a space. Arabic blocks
+# (incl. Urdu) are kept so Urdu/Hindi-adjacent casts match tolerantly.
+_KEEP_RE = re.compile(r"[^0-9a-zà-öø-ÿ\u00c0-\u024f\u0370-\u03ff\u0400-\u04ff"
+                      r"\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff"
                       r"\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+")
 # ASCII and full-width bracketed qualifiers ("(Red Snake)", "（白蛇）")
 _PAREN_RE = re.compile(r"[(（][^)）]*[)）]|\[[^\]]*\]|【[^】]*】")

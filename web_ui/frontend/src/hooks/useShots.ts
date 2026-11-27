@@ -217,12 +217,12 @@ export function useSelectImage(projectId: string) {
   });
 }
 
-// Hook to replan shots
+// Hook to replan shots (whole story, or a single scene via scene_id)
 export function useReplanShots(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: { max_shots?: number; shots_director: string; max_shot_duration?: number; }) =>
+    mutationFn: (data: { max_shots?: number; shots_director: string; max_shot_duration?: number; scene_id?: number; }) =>
       api.replanShots(projectId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shots', projectId] });

@@ -42,7 +42,7 @@
           ]
         }
       ],
-      "title": "CLIP Text Encode (Positive Prompt)",
+      "title": "[prompt] CLIP Text Encode (Positive Prompt)",
       "properties": {
         "ue_properties": {
           "widget_ue_connectable": {},
@@ -412,7 +412,8 @@
         0,
         3,
         "enable"
-      ]
+      ],
+      "title": "[seed]"
     },
     {
       "id": 58,
@@ -1113,7 +1114,8 @@
       "widgets_values": [
         "1 (1) (1).jpg",
         "image"
-      ]
+      ],
+      "title": "[image_in]"
     },
     {
       "id": 120,
@@ -1361,7 +1363,8 @@
         81,
         1,
         1.35
-      ]
+      ],
+      "title": "[video_out]"
     },
     {
       "id": 127,

@@ -88,6 +88,14 @@ export interface AgentMessage {
   role: 'user' | 'assistant' | 'tool_result' | 'system';
   content: string;
   tool?: string;
+  /** Assistant replies that called a tool: the call that was executed. */
+  tool_call?: { tool: string; arguments: Record<string, unknown> };
+  /** Text the model wrote ahead of its tool call — agent output in its own right. */
+  narration?: string | null;
+  /** How long the model deliberated before this reply (ms). */
+  thinking_ms?: number;
+  /** Tool results: how long the call took (ms). */
+  duration_ms?: number;
   arguments?: Record<string, unknown>;
   ok?: boolean;
 }
@@ -110,8 +118,8 @@ export interface ContextUsage {
 export type AgentStreamEvent =
   | { type: 'conversation'; conversation_id: string }
   | { type: 'llm_start'; iteration: number; provider: string; model: string }
-  | { type: 'tool_start'; tool: string; arguments: Record<string, unknown> }
-  | { type: 'tool_result'; tool: string; ok: boolean; result?: unknown }
+  | { type: 'tool_start'; tool: string; arguments: Record<string, unknown>; narration?: string }
+  | { type: 'tool_result'; tool: string; ok: boolean; result?: unknown; duration_ms?: number }
   | { type: 'context_usage'; prompt_chars: number; est_tokens: number; limit_tokens: number; percent: number }
   | { type: 'final'; content: string }
   | { type: 'error'; message: string }
@@ -120,6 +128,76 @@ export type AgentStreamEvent =
 
 /** Stream event with the client-side receive timestamp (for elapsed-time UI). */
 export type TimedAgentEvent = AgentStreamEvent & { ts?: number };
+
+/**
+ * The turn currently streaming over the socket: the user's message plus every
+ * event of the run. It stands in for its saved copy in the transcript.
+ */
+export interface AgentLiveTurn {
+  message: string;
+  conversationId: string | null;
+  /** Messages the conversation held when this turn was sent. */
+  baseCount: number;
+  events: TimedAgentEvent[];
+}
+
+/* Transcript view model — one shape for what the agent did in a turn, built
+   alike from saved messages and from the live stream (lib/agentTranscript.ts). */
+
+export type AgentTurnStatus = 'running' | 'done' | 'error' | 'cancelled';
+
+/** One LLM call ("pass"), from llm_start until its reply is in. */
+export interface ThinkingSegment {
+  kind: 'thinking';
+  status: 'running' | 'done';
+  /** 1-based pass number within the turn. */
+  iteration?: number;
+  model?: string;
+  durationMs?: number;
+}
+
+/** Text the model wrote ahead of its tool call. */
+export interface NarrationSegment {
+  kind: 'narration';
+  text: string;
+}
+
+export interface ToolSegment {
+  kind: 'tool';
+  tool: string;
+  arguments: Record<string, unknown>;
+  status: 'running' | 'ok' | 'error';
+  /** The tool's output, or the error text when status is 'error'. */
+  result?: unknown;
+  durationMs?: number;
+}
+
+export interface AnswerSegment {
+  kind: 'answer';
+  text: string;
+}
+
+export interface ErrorSegment {
+  kind: 'error';
+  message: string;
+}
+
+export type AgentSegment =
+  | ThinkingSegment | NarrationSegment | ToolSegment | AnswerSegment | ErrorSegment;
+
+/** Everything the agent did in response to one user message, in order. */
+export interface AgentTurnItem {
+  kind: 'turn';
+  status: AgentTurnStatus;
+  segments: AgentSegment[];
+}
+
+export interface UserItem {
+  kind: 'user';
+  content: string;
+}
+
+export type TranscriptItem = UserItem | AgentTurnItem;
 
 export interface AgentTestResult {
   ok: boolean;

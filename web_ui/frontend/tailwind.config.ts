@@ -74,7 +74,15 @@ const config: Config = {
   					height: '0'
   				}
   			},
-  			'pulse-glow': {
+  			'agent-shimmer': {
+				'0%': {
+					backgroundPosition: '200% 0'
+				},
+				'100%': {
+					backgroundPosition: '-200% 0'
+				}
+			},
+			'pulse-glow': {
   				'0%, 100%': {
   					opacity: '1'
   				},
@@ -86,7 +94,8 @@ const config: Config = {
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out',
-  			'pulse-glow': 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+  			'pulse-glow': 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+			'agent-shimmer': 'agent-shimmer 2.5s linear infinite'
   		}
   	}
   },

@@ -48,6 +48,14 @@ export interface Character {
   attire?: string;
 }
 
+/** Recurring prop that gets a product reference sheet (r2v projects) */
+export interface Prop {
+  name: string;
+  description?: string;
+  image_prompt?: string;
+  reference_image_path?: string;
+}
+
 export interface ProjectStep {
   story: boolean;
   scene_graph: boolean;
@@ -136,6 +144,7 @@ export interface Story {
   aspect_ratio?: string;  // For ASMR projects
   project_type: ProjectType;
   characters?: Character[];
+  props?: Prop[];
   youtube_metadata?: YouTubeMetadata;
   movie_metadata?: MovieMetadata;
 }
@@ -185,6 +194,7 @@ export interface Shot {
   scene_id?: number | null;
   character_name?: string;
   characters?: string[] | null;
+  props?: string[] | null;
   scene_name?: string;
   order_in_scene?: number;
   // FLFI2V mode fields
