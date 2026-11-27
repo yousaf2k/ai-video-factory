@@ -26,7 +26,8 @@ subject_definitions:
 <Subject 1>: [identity / appearance / clothing / distinctive features / reference relationship to <Picture 1>]
 <Subject 2>: [ ... ]
 <Environment>: [location / architecture / terrain / atmosphere / lighting — cite the background <Picture N>]
-<Prop or VFX>: [appearance / material / persistent characteristics — cite its <Picture N>]
+<Prop>: [physical object — appearance / material / persistent characteristics — cite its <Picture N>]
+<VFX>: [transient or persistent video effect — energy, glow, mist, sparks, liquid, debris — with its trigger and behavior; NO <Picture N>, never reference-attached]
 
 summary:
 [reference generation] [main action progression and the resulting state — what happens, how it develops, where it ends]
@@ -45,7 +46,7 @@ non_diegetic_music: ...
 ```
 
 - `id`: a short stable clip id (`x1`, `x2`, ... — unique per shot).
-- `subject_definitions`: one line per referenced subject — each character (cite its `<Picture N>`), the scene environment (cite the background `<Picture N>`), each prop or persistent VFX element (cite its `<Picture N>`). Stable identity only: face, hair, clothing, body characteristics, distinctive features, materials. NEVER put time-axis action here — evolving action belongs in `detailed_description`.
+- `subject_definitions`: one line per referenced subject — each character (cite its `<Picture N>`), the scene environment (cite the background `<Picture N>`), each physical prop under `<Prop>` (cite its `<Picture N>` reference sheet), and each transient or persistent effect under `<VFX>` (NO `<Picture N>` — effects are not reference-attached). Use `<Prop>` only for tangible recurring objects a reference sheet exists for; everything energy/glow/mist/particle goes under `<VFX>`. Stable identity only: face, hair, clothing, body characteristics, distinctive features, materials. NEVER put time-axis action here — evolving action belongs in `detailed_description`.
 - `summary`: begins with the task-type prefix `[reference generation]`, then one short paragraph naming the main subjects, the action progression, and the final state — not merely the plot premise. Never introduce labels that `subject_definitions` did not define.
 - `retention_analysis`: one line per `<Subject N>` with its shots and a relationship marker — `fully_preserved`, `partially_preserved`, `attribute_transfer`, or `weak_reference`. Do not treat new actions or plot events as losses of fidelity.
 - `detailed_description`: the core field (rules below).
@@ -78,7 +79,7 @@ Strong: `The warrior lowers his center of gravity, shifts one foot forward, draw
 - Body in English. Preserve the original language only for dialogue inside `<d>` and visible on-screen text.
 - Open with one or two style sentences BEFORE `[Shot 1]` (e.g. "The target video is live-action, cinematic, warm practical lighting.").
 - `[Shot 1]` has NO timestamp. Later sub-shots: `[Shot 2] At 00:03.000, the camera cuts to...` — cut times strictly increasing, inside the clip `duration`, at least 0.7s before the end.
-- Clips under 6 seconds stay a single sub-shot; clips of 6+ seconds SHOULD use 2-3 sub-shots when the action has distinct beats.
+- Clips under 3 seconds stay a single sub-shot; clips of 3+ seconds SHOULD use 2-4 sub-shots when the action has distinct beats.
 - At a subject's first clear appearance, describe its referenced characteristics, position, and action within what is visible. Reuse the same label later without redefining it — inconsistent Subject redefinition across shots is a failure mode.
 - **Continuity**: maintain consistent screen direction unless a deliberate reversal is specified; track weapon position, body pose, object ownership and prop state between sub-shots; carry damage, dirt, blood, smoke and broken objects forward; preserve the intended reference anchor when a picture is a keyframe.
 - **Speakers and dialogue**: stable IDs `(S1)`, `(S2)`; a speaker keeps the same ID across sub-shots. Establish identity on first appearance. Spoken content verbatim inside `<d>` with a language tag: `The middle-aged baker with a calm, slightly raspy voice (S1) says: <d>[English] First batch of the morning.</d>` Voiceover uses the exact phrase `says in an off-screen voiceover` followed by `while his lips remain completely closed.`

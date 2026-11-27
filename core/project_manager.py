@@ -45,6 +45,121 @@ def _name_in_prompt(name, prompt, prompt_lower=None):
     return any(re.search(rf"\b{w.capitalize()}\b", prompt) for w in words)
 
 
+# VFX words mark light/mist/aura descriptions in <Prop or VFX> sections —
+# not tangible objects, so no reference sheet can be generated for them.
+# Deliberately excludes object-ish words like "beam"/"ray" ("from the beam",
+# "iron beam" are locations/props, not effects).
+_VFX_HINT_RE = re.compile(
+    r"\b(glow\w*|light\w*|mist\w*|fog|sparkl\w*|haze|shadow\w*|dust|"
+    r"smoke|reflection\w*|particle\w*|aura|bokeh)\b", re.I)
+# Quantity-led descriptions ("Dozens of glowing oil lanterns drifting...") are
+# ambient plural effects covering the scene, not a single referenceable object
+_PROP_QUANTITY_WORDS = {
+    "dozens", "hundreds", "thousands", "several", "many", "few", "couple",
+    "countless", "swarm", "cluster", "bunch", "handful", "tons", "myriad",
+}
+# Material/craft adjectives distinguish prop variants ("paper lantern" vs
+# "tin lantern") — containment merging must NOT merge across them
+_PROP_MATERIAL_WORDS = {
+    "paper", "tin", "brass", "bronze", "copper", "iron", "steel", "wooden",
+    "wood", "carved", "glass", "golden", "gold", "silver", "crystal",
+    "porcelain", "ceramic", "leather", "silk", "velvet", "painted", "ornate",
+    "weathered", "rusted", "wicker", "bamboo", "clay", "stone", "marble",
+}
+# Filler words dropped when deriving a prop name from its description
+_PROP_NAME_STOPWORDS = {
+    "a", "an", "the", "and", "or", "its", "his", "her", "their", "on", "in",
+    "at", "of", "to", "for", "with", "small", "tiny", "little", "large",
+    "big", "single", "one", "warm", "cold", "hot", "bright", "dim", "soft",
+    "gentle", "faint", "glowing", "floating", "drifting", "bobbing", "old",
+}
+
+
+def _significant_words(name):
+    """Lowercase significant words of a prop name (possessive 's removed)."""
+    cleaned = re.sub(r"[’']s\b", "", (name or "").strip(), flags=re.I)
+    return [w.lower() for w in re.findall(
+        r"[A-Za-zÀ-ÿ\u0400-\u04FF\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF"
+        r"\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+", cleaned)
+        if len(w) > 1 or not w.lower().startswith("s")]
+
+
+def _props_merge_compatible(name_a, name_b):
+    """True when two prop names denote the same object for merging.
+
+    One name's significant words must fully contain the other's, and the
+    difference must not include a material/craft adjective ("paper" vs "tin"
+    lanterns are different props even though both contain "lantern").
+    """
+    a, b = set(_significant_words(name_a)), set(_significant_words(name_b))
+    if not a or not b:
+        return False
+    smaller, larger = (a, b) if a <= b else (b, a) if b <= a else (None, None)
+    if smaller is None:
+        return False
+    return not (larger - smaller) & {w for w in _PROP_MATERIAL_WORDS}
+
+
+def _prop_section_texts(video_prompt):
+    """Cleaned texts of all <Prop> / legacy <Prop or VFX> sections of a video
+    prompt (inheritance suffixes stripped, no filtering). Used both to derive
+    prop candidates and to fill missing prompts on planner-named props."""
+    sections = re.findall(r"<Prop>:\s*([^\n<]+)", video_prompt or "")
+    sections += re.findall(r"<Prop or VFX>:\s*([^\n<]+)", video_prompt or "")
+    out = []
+    for raw in sections:
+        desc = raw.strip()
+        if not desc:
+            continue
+        # Drop slot-inheritance suffixes ("appearance inherited from <Picture 3>")
+        desc = re.sub(r"[;,]?\s*[\w\s]*inherited from <[^>]*>\s*$", "", desc, flags=re.I).strip(" ;,.")
+        if desc:
+            out.append(desc)
+    return out
+
+
+def _prop_candidates_from_video_prompt(video_prompt):
+    """Extract (name, description) prop candidates from a singularity-format
+    video prompt's prop sections.
+
+    The planner sometimes defines props only here (leaving shot['props']
+    empty), which leaves the <Picture N> slot the section inherits from
+    without an attached reference. Two tags exist in the format: <Prop> for
+    tangible reference-attached objects, <VFX> for effects (never harvested).
+    The legacy combined <Prop or VFX> tag is still parsed but filtered
+    heuristically — VFX-only descriptions (glows, mists, light rays) and
+    quantity-led ambient effects are skipped.
+    """
+    out = []
+    seen_names = set()
+    for desc in _prop_section_texts(video_prompt):
+        # Name = the head noun phrase before the first clause boundary
+        head = re.split(
+            r"\bwith\b|\bthat\b|\bwhich\b|\bwhose\b|\binherited\b|\bcasting\b|"
+            r"\bhovering\b|\bdrifting\b|,|;|—", desc, flags=re.I)[0]
+        words = [w for w in re.findall(
+            r"[A-Za-zÀ-ÿ\u0400-\u04FF\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+", head)
+            if w.lower() not in _PROP_NAME_STOPWORDS and len(w) > 1]
+        if not words:
+            continue
+        # Quantity-led head ("Dozens of ...") = ambient plural effect
+        if words[0].lower() in _PROP_QUANTITY_WORDS:
+            continue
+        # VFX descriptions (lantern glow, mist...) are not attachable props
+        if any(_VFX_HINT_RE.search(w) for w in words):
+            continue
+        # English noun phrases end with the head noun — keep it. A 4-word
+        # head keeps all words ("Tall Wooden Grandfather Clock"); longer
+        # heads trail into prepositional phrases, so stay on the first three.
+        name_words = words[:4] if len(words) == 4 else words[:3]
+        name = " ".join(name_words).title()
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        out.append((name, desc))
+    return out
+
+
 class ProjectManager:
     # Single lock guarding all JSON read-modify-write transactions of one
     # project (shots.json, meta, story.json) so multi-file updates stay atomic.
@@ -168,11 +283,20 @@ class ProjectManager:
         character refs are appended after user refs (order = priority, first is
         primary). Idempotent.
 
+        For i2v projects the owning scene's background image is also attached
+        after the character refs (tracked alongside them) — i2v references feed
+        image generation only, and videos consume the generated shot image, so
+        the background never reaches video generation. Skipped for t2v, which
+        generates no first-frame images at all.
+
         Returns the number of shots updated.
         """
         story = self.get_story(project_id)
+        meta = self.load_project(project_id) or {}
+        attach_backgrounds = (meta.get('video_generation_type') or 'i2v') == 'i2v'
+        scenes = (story or {}).get('scenes') or []
         characters = (story or {}).get('characters') or []
-        if not characters:
+        if not characters and not attach_backgrounds:
             return 0
 
         # lowercased name -> display name, and lowercased name -> asset ref
@@ -189,9 +313,20 @@ class ProjectManager:
                 asset_ref = self._project_media_asset_ref(project_id, self.relativize_path(ref_path))
                 if asset_ref:
                     refs_by_name[name.lower()] = asset_ref
-        if not display_names:
+        if not display_names and not attach_backgrounds:
             return 0
         cast_names = list(display_names.values())
+
+        # Owning-scene background refs (i2v only) — keyed str(scene_id)
+        bg_ref = {}
+        if attach_backgrounds:
+            for scene in scenes:
+                sid = scene.get('scene_id')
+                path = scene.get('background_image_path')
+                if sid is not None and path:
+                    asset_ref = self._project_media_asset_ref(project_id, self.relativize_path(path))
+                    if asset_ref:
+                        bg_ref[str(sid)] = asset_ref
 
         def explicit_shot_names(shot):
             raw = [n for n in (shot.get('characters') or []) if (n or '').strip()]
@@ -230,6 +365,15 @@ class ProjectManager:
                     ref = refs_by_name.get(display.lower())
                     if ref and ref not in matched_refs:
                         matched_refs.append(ref)
+
+                # i2v: attach the owning scene's background after the character
+                # refs (characters stay primary) — tracked alongside them so a
+                # regenerated background replaces the attached one on the next
+                # sync, exactly like character sheets.
+                if attach_backgrounds:
+                    scene_bg = bg_ref.get(str(shot.get('scene_id')))
+                    if scene_bg and scene_bg not in matched_refs:
+                        matched_refs.append(scene_bg)
 
                 # Persist discovered attribution (prompt matching) so the UI and
                 # later syncs can use it — never overwrite existing attribution;
@@ -272,7 +416,9 @@ class ProjectManager:
         reference-to-video generation, in priority order:
 
             1. character sheets of shot['characters'] (fallback: character_name)
-            2. the owning scene's background sheet
+            2. background reference — the shot's own generated image when one
+               exists (a composed frame beats the raw sheet), else the owning
+               scene's background sheet
             3. prop sheets of shot['props']
 
         Character and prop names resolve tolerantly against the story cast —
@@ -369,24 +515,73 @@ class ProjectManager:
                     if canonical and canonical != shot.get('characters'):
                         shot['characters'] = canonical
                         names_changed = True
+                elif not shot_characters:
+                    # No explicit attribution: fall back to matching the cast
+                    # against the image prompt (same discovery the character
+                    # sync uses) and persist it so the UI chips and later
+                    # syncs see it.
+                    prompt = shot.get('image_prompt') or ''
+                    if prompt:
+                        prompt_matched = []
+                        for display in char_names:
+                            if char_ref.get(display) and _name_in_prompt(display, prompt):
+                                if display not in prompt_matched:
+                                    prompt_matched.append(display)
+                        if prompt_matched:
+                            shot['characters'] = prompt_matched
+                            names_changed = True
+                            for display in prompt_matched:
+                                ref = char_ref.get(display)
+                                if ref and ref not in refs:
+                                    refs.append(ref)
 
-                scene_bg = bg_ref.get(str(shot.get('scene_id')))
-                if scene_bg and scene_bg not in refs:
-                    refs.append(scene_bg)
+                # Background reference: prefer the shot's own generated image
+                # when one exists — a composed, project-consistent frame is a
+                # stronger video reference than the raw background sheet — and
+                # fall back to the owning scene's background sheet otherwise.
+                bg_ref_entry = None
+                image_path = shot.get('image_path')
+                if image_path and os.path.isfile(image_path):
+                    bg_ref_entry = self._project_media_asset_ref(
+                        project_id, self.relativize_path(image_path))
+                if not bg_ref_entry:
+                    bg_ref_entry = bg_ref.get(str(shot.get('scene_id')))
+                if bg_ref_entry and bg_ref_entry not in refs:
+                    refs.append(bg_ref_entry)
 
-                for name in shot.get('props') or []:
-                    name = (name or '').strip()
+                shot_props = [n for n in (shot.get('props') or []) if (n or '').strip()]
+                resolved_props = []
+                for name in shot_props:
                     display = resolve_character_name(name, prop_names) if name else None
                     if display:
+                        resolved_props.append(display)
                         ref = prop_ref.get(display)
                         if ref and ref not in refs:
                             refs.append(ref)
-                if shot.get('props'):
+                if resolved_props and shot.get('props'):
                     canonical_props, _ = canonicalize_name_list(
                         shot.get('props') or [], sorted(prop_names))
                     if canonical_props and canonical_props != shot.get('props'):
                         shot['props'] = canonical_props
                         names_changed = True
+                elif not shot_props:
+                    # No explicit props: match prop names against the image
+                    # prompt and persist the discovery (props only attach when
+                    # a reference sheet exists, same as explicit attribution)
+                    prompt = shot.get('image_prompt') or ''
+                    if prompt:
+                        prompt_matched_props = []
+                        for display in prop_names:
+                            if prop_ref.get(display) and _name_in_prompt(display, prompt):
+                                if display not in prompt_matched_props:
+                                    prompt_matched_props.append(display)
+                        if prompt_matched_props:
+                            shot['props'] = prompt_matched_props
+                            names_changed = True
+                            for display in prompt_matched_props:
+                                ref = prop_ref.get(display)
+                                if ref and ref not in refs:
+                                    refs.append(ref)
 
                 original_refs = shot.get('reference_asset_ids') or []
                 synced = shot.get('synced_video_ref_asset_refs') or []
@@ -408,6 +603,161 @@ class ProjectManager:
         if updated:
             logger.info(f"Synced r2v video reference attachments on {updated} shot(s) in project {project_id}")
         return updated
+
+    def sync_story_props(self, project_id: str) -> int:
+        """
+        Merge prop names referenced by shots into story.props, and harvest
+        prop definitions from singularity video prompts.
+
+        Story directors never emit props — only shots directors do (per-shot
+        `props` name lists) — but every prop consumer (reference sheets,
+        r2v reference sync, agent tools, the edit-story UI) reads story.props.
+        This merges the shot-level names into the story cast of props so those
+        consumers see them.
+
+        Shots may also define props only inside their video prompt's
+        <Prop or VFX> section (leaving shot['props'] empty and the section's
+        <Picture N> slot without a reference). Those sections are harvested:
+        tangible objects become story props (named from the description head,
+        image_prompt set to the description) and are added to the shot's
+        props list; VFX-only descriptions (glows, mists, light rays) are
+        skipped.
+
+        Existing story.props entries are preserved as-is (their prompts and
+        reference sheets survive re-plans); new names are appended in
+        first-seen shot order. Names resolving tolerantly to an existing
+        entry are skipped, so re-runs are idempotent. Props are never
+        removed — user-added props that no shot references stay.
+
+        Returns the number of props added.
+        """
+        story = self.get_story(project_id) or {}
+        shots = self.get_shots(project_id) or []
+
+        existing = story.get('props') or []
+        existing_names = [(p.get('name') or '').strip() for p in existing
+                          if isinstance(p, dict) and (p.get('name') or '').strip()]
+
+        merged = list(existing)
+        added = 0
+        # per-shot canonical names to add to shot['props']: {shot_key: [names]}
+        shot_additions = {}
+
+        def ensure_prop(raw, image_prompt=None):
+            """Resolve a prop name against the story cast, creating a new
+            story prop when nothing matches. Returns the canonical name."""
+            nonlocal added
+            name = (raw or '').strip()
+            if not name:
+                return None
+            display = resolve_character_name(name, existing_names)
+            if display:
+                return display
+            # Containment merge: "Fresh Marigold Garlands" reuses an existing
+            # "Marigold Garlands" prop instead of duplicating it — unless the
+            # difference is a material adjective ("paper"/"tin" lanterns are
+            # genuinely different objects)
+            for existing in existing_names:
+                if _props_merge_compatible(name, existing):
+                    return existing
+            existing_names.append(name)
+            merged.append({'name': name, **({'image_prompt': image_prompt} if image_prompt else {})})
+            added += 1
+            return name
+
+        for shot in shots:
+            shot_existing = [(n or '').strip() for n in (shot.get('props') or []) if (n or '').strip()]
+            additions = []
+
+            def add_to_shot(canonical):
+                """Queue a canonical prop name for the shot unless the shot
+                already lists it (tolerantly)."""
+                if canonical and not resolve_character_name(canonical, shot_existing):
+                    additions.append(canonical)
+                    shot_existing.append(canonical)
+
+            # Explicit planner-assigned props
+            for raw in (shot.get('props') or []):
+                add_to_shot(ensure_prop(raw))
+            # Harvested <Prop>/<Prop or VFX> sections (r2v singularity format).
+            # A section that describes a prop the shot already lists is the
+            # SAME object — skip it, never recreate a duplicate.
+            for name, desc in _prop_candidates_from_video_prompt(shot.get('video_prompt') or ''):
+                desc_words = set(_significant_words(desc))
+                if any(set(_significant_words(existing)) <= desc_words
+                       for existing in shot_existing):
+                    continue
+                add_to_shot(ensure_prop(name, desc))
+            if additions:
+                shot_additions[shot.get('id') or shot.get('index')] = additions
+
+        if added:
+            def apply_props(current_story):
+                current = current_story.get('props') or []
+                current_names = [(p.get('name') or '').strip() for p in current
+                                 if isinstance(p, dict) and (p.get('name') or '').strip()]
+                for prop in merged:
+                    if not resolve_character_name(prop.get('name', ''), current_names):
+                        current.append(prop)
+                        current_names.append(prop.get('name', ''))
+                current_story['props'] = current
+
+            self.update_story_safely(project_id, apply_props)
+
+        if shot_additions:
+            def apply_shot_props(current_shots):
+                for shot in current_shots:
+                    additions = shot_additions.get(shot.get('id') or shot.get('index'))
+                    if not additions:
+                        continue
+                    current_list = shot.get('props') or []
+                    current_keys = [norm for n in current_list
+                                    if (norm := (n or '').strip())]
+                    for canonical in additions:
+                        if not resolve_character_name(canonical, current_keys):
+                            current_list.append(canonical)
+                            current_keys.append(canonical)
+                    shot['props'] = current_list
+
+            self.update_shots_safely(project_id, apply_shot_props)
+
+        # Fill empty prompts on story props from matching prop-section
+        # descriptions in the shots' video prompts. Planner-named props
+        # ('glowing oil lanterns') often have a full description in a
+        # <Prop>/<Prop or VFX> section that the name-based merge can't see.
+        section_texts = []
+        for shot in shots:
+            section_texts.extend(_prop_section_texts(shot.get('video_prompt') or ''))
+        if section_texts:
+            section_word_sets = [set(_significant_words(d)) for d in section_texts]
+
+            def apply_prompt_fills(current_story):
+                for prop in current_story.get('props') or []:
+                    if (prop.get('image_prompt') or '').strip():
+                        continue
+                    prop_words = set(_significant_words(prop.get('name', '')))
+                    if not prop_words:
+                        continue
+                    best, best_score = None, 0.0
+                    for desc, desc_words in zip(section_texts, section_word_sets):
+                        # Every word of the prop name must appear in the
+                        # description; prefer the most specific (shortest
+                        # relative) match
+                        if prop_words <= desc_words:
+                            score = len(desc_words & prop_words) / len(desc_words)
+                            if score > best_score:
+                                best, best_score = desc, score
+                    if best:
+                        prop['image_prompt'] = best
+
+            self.update_story_safely(project_id, apply_prompt_fills)
+
+        if added or shot_additions:
+            logger.info(
+                f"Added {added} prop(s) to story.props"
+                + (f" and harvested prop tags on {len(shot_additions)} shot(s)" if shot_additions else "")
+                + f" in project {project_id}")
+        return added
 
     @staticmethod
     def _project_media_asset_ref(project_id: str, rel_path: str):

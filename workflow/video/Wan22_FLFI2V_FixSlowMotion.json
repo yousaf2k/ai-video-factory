@@ -233,7 +233,8 @@
       "widgets_values": [
         "0311.png",
         "image"
-      ]
+      ],
+      "title": "[image_in_first]"
     },
     {
       "id": 84,
@@ -408,7 +409,7 @@
           ]
         }
       ],
-      "title": "Seed",
+      "title": "[seed] Seed",
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.16.3",
@@ -521,7 +522,8 @@
         720,
         81,
         1
-      ]
+      ],
+      "title": "[video_out]"
     },
     {
       "id": 153,
@@ -601,7 +603,8 @@
       "widgets_values": [
         "Now_processed.png",
         "image"
-      ]
+      ],
+      "title": "[image_in_last]"
     },
     {
       "id": 152,
@@ -881,7 +884,7 @@
           ]
         }
       ],
-      "title": "CLIP Text Encode (Positive Prompt)",
+      "title": "[prompt] CLIP Text Encode (Positive Prompt)",
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.16.3",
@@ -1095,7 +1098,8 @@
         0,
         4,
         "enable"
-      ]
+      ],
+      "title": ""
     },
     {
       "id": 101,

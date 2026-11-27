@@ -73,7 +73,7 @@
     },
     "class_type": "KSamplerAdvanced",
     "_meta": {
-      "title": "KSampler (Advanced)"
+      "title": "[seed] KSampler (Advanced)"
     }
   },
   "87": {
@@ -124,7 +124,7 @@
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
-      "title": "CLIP Text Encode (Positive Prompt)"
+      "title": "[prompt] CLIP Text Encode (Positive Prompt)"
     }
   },
   "95": {
@@ -207,7 +207,7 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "Load Image"
+      "title": "[image_in_first] Load Image"
     }
   },
   "147": {
@@ -268,7 +268,7 @@
     },
     "class_type": "WanFirstLastFrameToVideo",
     "_meta": {
-      "title": "WanFirstLastFrameToVideo"
+      "title": "[video_out] WanFirstLastFrameToVideo"
     }
   },
   "151": {
@@ -277,7 +277,7 @@
     },
     "class_type": "LoadImage",
     "_meta": {
-      "title": "Load Image"
+      "title": "[image_in_last] Load Image"
     }
   },
   "153": {
@@ -303,7 +303,9 @@
       "images": [
         "153",
         0
-      ]
+      ],
+      "image_encoding": "8-bit RGB",
+      "strength": 1
     },
     "class_type": "RTXVideoSuperResolution",
     "_meta": {

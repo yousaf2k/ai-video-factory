@@ -72,6 +72,7 @@ export default function ProjectDetailPage() {
   >({});
   const [imageVersion, setImageVersion] = useState<number>(Date.now());
   const [isUpdatingAspectRatio, setIsUpdatingAspectRatio] = useState(false);
+  const [isUpdatingVideoGeneration, setIsUpdatingVideoGeneration] = useState(false);
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
 
@@ -94,6 +95,31 @@ export default function ProjectDetailPage() {
       toast.error("Failed to update aspect ratio. Please try again.");
     } finally {
       setIsUpdatingAspectRatio(false);
+    }
+  };
+
+  const handleUpdateVideoGeneration = async (
+    vgt: "i2v" | "t2v" | "r2v",
+    r2vMode?: "standard" | "singularity"
+  ) => {
+    try {
+      setIsUpdatingVideoGeneration(true);
+      await api.updateProject(projectId, {
+        video_generation_type: vgt,
+        r2v_mode: vgt === "r2v" ? (r2vMode || "singularity") : undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success(
+        vgt === "r2v"
+          ? "Reference to Video enabled — character sheets, scene backgrounds and prop sheets now attach to shots as references."
+          : "Video generation updated."
+      );
+    } catch (error) {
+      console.error("Failed to update video generation type:", error);
+      toast.error("Failed to update video generation. Please try again.");
+    } finally {
+      setIsUpdatingVideoGeneration(false);
     }
   };
 
@@ -440,6 +466,82 @@ export default function ProjectDetailPage() {
                 <p className="text-[10px] text-muted-foreground mt-2">
                   Current: <span className="font-semibold">{project.aspect_ratio || "16:9"}</span>
                   {isUpdatingAspectRatio && " (Updating...)"}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-accent flex items-center justify-center text-[10px]">
+                  🎬
+                </span>
+                Video Generation
+              </h2>
+              <div className="bg-background/50 rounded-lg p-4 border border-border/30 space-y-3">
+                <Select
+                  value={project.video_generation_type || "i2v"}
+                  onValueChange={(val) =>
+                    handleUpdateVideoGeneration(val as "i2v" | "t2v" | "r2v", project.r2v_mode || "singularity")
+                  }
+                  disabled={isUpdatingVideoGeneration}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Video Generation" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="i2v">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">Image to Video</span>
+                        <span className="text-xs text-muted-foreground">(default — first-frame image per shot)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="t2v">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">Text to Video</span>
+                        <span className="text-xs text-muted-foreground">(prompt only, no reference images)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="r2v">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">Reference to Video</span>
+                        <span className="text-xs text-muted-foreground">(character sheets, backgrounds & props attach to shots)</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {(project.video_generation_type || "i2v") === "r2v" && (
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Reference Mode
+                    </label>
+                    <Select
+                      value={project.r2v_mode || "singularity"}
+                      onValueChange={(val) => handleUpdateVideoGeneration("r2v", val as "standard" | "singularity")}
+                      disabled={isUpdatingVideoGeneration}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Reference Mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="singularity">Singularity (default)</SelectItem>
+                        <SelectItem value="standard">Standard</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  Current: <span className="font-semibold">
+                    {(project.video_generation_type || "i2v") === "r2v"
+                      ? `Reference to Video (${project.r2v_mode || "singularity"})`
+                      : (project.video_generation_type || "i2v") === "t2v"
+                        ? "Text to Video"
+                        : "Image to Video"}
+                  </span>
+                  {isUpdatingVideoGeneration && " (Updating...)"}
+                  {(project.video_generation_type || "i2v") === "i2v" &&
+                    " — switch to Reference to Video to use character sheets, scene backgrounds and prop sheets as generation references."}
                 </p>
               </div>
             </div>

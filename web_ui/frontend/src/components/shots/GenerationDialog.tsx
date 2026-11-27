@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { X, RotateCw } from "lucide-react";
 import {
   Select,
@@ -10,6 +11,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useConfig } from "@/hooks/useDirectors";
+import { api } from "@/services/api";
 import {
   GEMINI_MODELS,
   GEMINI_THINKING,
@@ -44,6 +46,8 @@ export interface GenerationConfig {
   musicWorkflow?: string;
   musicPrompt?: string;
   noMusic?: boolean;
+  /** Resolved styles.json text for reference sheets / scene backgrounds. */
+  backgroundStyle?: string;
 }
 
 interface GenerationDialogProps {
@@ -61,6 +65,15 @@ interface GenerationDialogProps {
   isFLFI2V?: boolean;
   isThenImage?: boolean;
   defaultUseOverride?: boolean;
+  /**
+   * Show the Reference Style picker (styles.json) for image generations —
+   * used by the character/prop sheet and scene background flows. The choice
+   * persists per project under `styleStorageKey` and is resolved to its text
+   * at submit time (`backgroundStyle`).
+   */
+  withReferenceStyle?: boolean;
+  styleStorageKey?: string;
+  styleLabel?: string;
 }
 
 export function GenerationDialog({
@@ -78,11 +91,27 @@ export function GenerationDialog({
   isFLFI2V = false,
   isThenImage = false,
   defaultUseOverride = false,
+  withReferenceStyle = false,
+  styleStorageKey,
+  styleLabel = "Reference Style",
 }: GenerationDialogProps) {
   const { data: globalConfig } = useConfig();
   // Image mode/workflow/seed/Gemini picker state — shared with the asset
   // library generate dialog via ImageGenerationOptions.
   const imgOpts = useImageGenerationOptions(projectId, isOpen && type === "image");
+
+  // Reference style (styles.json via /api/config/styles) — same cached list
+  // the story-edit pickers use. Selected by name, resolved to its style text
+  // at submit time so config edits apply without stale copies.
+  const styleKey = styleStorageKey || `sheet_style_${projectId}`;
+  const showStyle = isOpen && type === "image" && withReferenceStyle;
+  const [styleName, setStyleName] = useState("none");
+  const { data: styleOptions = [] } = useQuery({
+    queryKey: ["background-styles"],
+    queryFn: () => api.getBackgroundStyles().catch(() => []),
+    staleTime: 5 * 60 * 1000,
+    enabled: showStyle,
+  });
 
   // Common State
   const [force, setForce] = useState(false);
@@ -121,6 +150,16 @@ export function GenerationDialog({
       setPromptOverride(defaultUseOverride && isThenImage ? DEFAULT_THEN_PROMPT : (defaultPromptOverride || ""));
       setSoundfxPrompt(defaultSoundFXPrompt || "");
       setMusicPrompt(defaultMusicPrompt || "");
+
+      if (type === "image" && withReferenceStyle) {
+        let saved = "none";
+        try {
+          saved = localStorage.getItem(styleKey) || "none";
+        } catch {
+          // localStorage unavailable — fall back to the default
+        }
+        setStyleName(saved);
+      }
 
       if (type === "music") {
         const savedMusicMode = localStorage.getItem(`music_mode_${projectId}`) || globalConfig?.music_generation_mode || "comfyui";
@@ -208,6 +247,9 @@ export function GenerationDialog({
       : mode === "geminiweb";
     const geminiModelValue = type === "image" ? imgOpts.value.geminiModel : geminiModel;
     const geminiThinkingValue = type === "image" ? imgOpts.value.geminiThinking : geminiThinking;
+    const styleText = withReferenceStyle
+      ? styleOptions.find((s) => s.name === styleName)?.style
+      : undefined;
 
     onSubmit({
       force,
@@ -228,6 +270,7 @@ export function GenerationDialog({
       musicMode: type === "music" ? musicMode : undefined,
       musicWorkflow: type === "music" && musicMode === "comfyui" ? musicWorkflow : undefined,
       musicPrompt: type === "music" ? (musicPrompt || undefined) : undefined,
+      backgroundStyle: styleText || undefined,
     });
   };
 
@@ -270,6 +313,40 @@ export function GenerationDialog({
                 onSelectGeminiThinking={imgOpts.selectGeminiThinking}
               />
 
+              {withReferenceStyle && (
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    {styleLabel}
+                  </label>
+                  <Select
+                    value={styleName}
+                    onValueChange={(val) => {
+                      setStyleName(val);
+                      try {
+                        localStorage.setItem(styleKey, val);
+                      } catch {
+                        // persistence is best-effort
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full h-8 text-xs">
+                      <SelectValue placeholder="None (story default)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (story default)</SelectItem>
+                      {styleOptions.map((s) => (
+                        <SelectItem key={s.name} value={s.name}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground italic">
+                    Appended to the end of the generation prompt for this image.
+                  </p>
+                </div>
+              )}
+
               {/* Prompt Override — visible for ALL image modes */}
               {!hidePrompt && (
                 <div className="space-y-4 pt-4 border-t">
@@ -310,7 +387,7 @@ export function GenerationDialog({
                         className="text-xs resize-y"
                       />
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        Edits here are one-time only — they won't change the saved prompt.
+                        Edits here are one-time only — they won&apos;t change the saved prompt.
                       </p>
                     </div>
                   )}

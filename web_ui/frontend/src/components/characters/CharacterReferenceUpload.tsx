@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Character } from '@/types';
-import { Sparkles, RefreshCw, Save } from 'lucide-react';
+import { Character, AssetEntry } from '@/types';
+import { Sparkles, RefreshCw, Save, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 import { GenerationDialog } from '../shots/GenerationDialog';
+import AssetPickerDialog from '../assets/AssetPickerDialog';
 import { api } from '@/services/api';
 import { toast } from 'sonner';
 
@@ -84,6 +85,37 @@ export default function CharacterReferenceUpload({
 
   const [showGenerationDialog, setShowGenerationDialog] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null);
+  const [showAssetPicker, setShowAssetPicker] = useState(false);
+  const [assetPickerVariant, setAssetPickerVariant] = useState<string>('character');
+  const [attachingAsset, setAttachingAsset] = useState<Record<string, boolean>>({});
+
+  const handleAssetPick = async (entry: AssetEntry) => {
+    const variant = assetPickerVariant;
+    if (onBeforeUpload) {
+      try {
+        await onBeforeUpload();
+      } catch (err) {
+        console.error("Error in onBeforeUpload before attaching asset:", err);
+        return;
+      }
+    }
+    setAttachingAsset(prev => ({ ...prev, [variant]: true }));
+    try {
+      const result = await api.useAssetForCharacterReference(projectId, characterIndex, entry.ref, variant);
+      // Update preview
+      setPreviews(prev => ({
+        ...prev,
+        [variant]: result.image_path
+      }));
+      if (onUpdate) onUpdate();
+      toast.success(`Attached "${entry.title}" as ${variant === 'character' ? 'reference' : `${variant} reference`}`);
+    } catch (error) {
+      console.error("Failed to attach library asset:", error);
+      toast.error(`Failed to attach library asset: ${error}`);
+    } finally {
+      setAttachingAsset(prev => ({ ...prev, [variant]: false }));
+    }
+  };
 
   const getMediaUrl = (path: string) => {
     if (!path) return '';
@@ -189,7 +221,8 @@ export default function CharacterReferenceUpload({
         seed: options.seed ? Number(options.seed) : undefined,
         gemini_mode: options.gemini_mode,
         gemini_model: options.gemini_model,
-        gemini_thinking: options.gemini_thinking
+        gemini_thinking: options.gemini_thinking,
+        background_style: options.backgroundStyle
       });
       setShowGenerationDialog(false);
       setSelectedVariant(null);
@@ -251,6 +284,16 @@ export default function CharacterReferenceUpload({
                 {v.label}
               </label>
               <div className="flex items-center gap-1 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 whitespace-nowrap"
+                  onClick={() => { setAssetPickerVariant(v.key); setShowAssetPicker(true); }}
+                  disabled={!!attachingAsset[v.key]}
+                  title="Pick an image from the Asset Library"
+                >
+                  <><FolderOpen className="w-3 h-3 mr-1" /> {attachingAsset[v.key] ? 'Attaching…' : 'From Assets'}</>
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -383,6 +426,16 @@ export default function CharacterReferenceUpload({
           projectId={projectId}
           type="image"
           defaultPromptOverride={variants.find(v => v.key === selectedVariant)?.prompt || ""}
+          withReferenceStyle
+        />
+      )}
+
+      {showAssetPicker && (
+        <AssetPickerDialog
+          open={showAssetPicker}
+          onClose={() => setShowAssetPicker(false)}
+          onSelect={handleAssetPick}
+          title={`Choose a reference image${assetPickerVariant !== 'character' ? ` (${assetPickerVariant.toUpperCase()})` : ''}`}
         />
       )}
 

@@ -328,7 +328,8 @@ def test_nonreasoning_model_level_sends_nothing(real_registry, monkeypatch):
     monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(
         OpenAI=lambda **kw: SimpleNamespace(chat=SimpleNamespace(completions=_Completions()))))
     p = lle.get_provider("openai", config_module=_shim(
-        OPENAI_BASE_URL="", OPENAI_MODEL="gpt-4o", OPENAI_REASONING_EFFORT="high"))
+        OPENAI_BASE_URL="", OPENAI_MODEL="gpt-4o", OPENAI_REASONING_EFFORT="high",
+        OPENAI_API_KEY="test-key"))
     p.ask("hi")
     assert "reasoning_effort" not in captured
 

@@ -14,7 +14,7 @@
     "_meta": {
       "title": "Save Video",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "114": {
@@ -25,7 +25,7 @@
     "_meta": {
       "title": "[image_in] Load Image",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "119": {
@@ -38,7 +38,7 @@
     "_meta": {
       "title": "Scale Image to Total Pixels",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "120": {
@@ -52,7 +52,7 @@
     "_meta": {
       "title": "Get Image Size",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "121": {
@@ -102,7 +102,7 @@
     "_meta": {
       "title": "Load VAE",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_24": {
@@ -113,7 +113,7 @@
     "_meta": {
       "title": "Load VAE",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_17": {
@@ -124,7 +124,7 @@
     "_meta": {
       "title": "KSamplerSelect",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_6": {
@@ -136,7 +136,7 @@
     "_meta": {
       "title": "Load Diffusion Model",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_13": {
@@ -149,7 +149,7 @@
     "_meta": {
       "title": "Load CLIP",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_15": {
@@ -160,7 +160,7 @@
     "_meta": {
       "title": "RandomNoise",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_111": {
@@ -171,7 +171,7 @@
     "_meta": {
       "title": "[duration]",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_124": {
@@ -182,7 +182,7 @@
     "_meta": {
       "title": "Int",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_125": {
@@ -193,7 +193,7 @@
     "_meta": {
       "title": "Int",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_126": {
@@ -204,7 +204,7 @@
     "_meta": {
       "title": "Boolean (Enable Lightning LoRA)",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_121": {
@@ -220,7 +220,7 @@
     "_meta": {
       "title": "Load LoRA",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_107": {
@@ -235,7 +235,7 @@
     "_meta": {
       "title": "Math Expression",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_123": {
@@ -257,7 +257,7 @@
     "_meta": {
       "title": "If/Else Switch (Steps)",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_122": {
@@ -279,7 +279,7 @@
     "_meta": {
       "title": "If/Else Switch (Model)",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_104": {
@@ -308,7 +308,7 @@
     "_meta": {
       "title": "[prompt] [video_gen] MiniMax H3 Image to Video",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_9": {
@@ -328,7 +328,7 @@
     "_meta": {
       "title": "BasicScheduler",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_16": {
@@ -346,7 +346,7 @@
     "_meta": {
       "title": "Basic Guider",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_14": {
@@ -376,7 +376,7 @@
     "_meta": {
       "title": "SamplerCustomAdvanced",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_23": {
@@ -394,7 +394,7 @@
     "_meta": {
       "title": "VAE Decode Audio",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_10": {
@@ -412,14 +412,15 @@
     "_meta": {
       "title": "VAE Decode",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   },
   "105_91": {
     "inputs": {
-      "fps": 24,
+      "fps": 48,
       "bit_depth": 8,
       "color_space": "sRGB",
+      "chroma_subsampling": "auto",
       "codec": "none",
       "images": [
         "121",
@@ -434,7 +435,7 @@
     "_meta": {
       "title": "Create Video",
       "cnr_id": "comfy-core",
-      "ver": "0.43.0"
+      "ver": "0.44.0"
     }
   }
 }

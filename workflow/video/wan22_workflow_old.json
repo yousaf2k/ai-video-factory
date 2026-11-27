@@ -372,7 +372,8 @@
         640,
         81,
         1
-      ]
+      ],
+      "title": ""
     },
     {
       "id": 84,
@@ -609,7 +610,8 @@
       "widgets_values": [
         "video_wan2_2_14B_i2v_input_image.jpg",
         "image"
-      ]
+      ],
+      "title": ""
     },
     {
       "id": 104,
@@ -986,7 +988,8 @@
         0,
         10,
         "enable"
-      ]
+      ],
+      "title": ""
     },
     {
       "id": 61,
@@ -1070,7 +1073,8 @@
       "widgets_values": [
         "wan22_00007.png",
         "image"
-      ]
+      ],
+      "title": "[image_in]"
     },
     {
       "id": 98,
@@ -1158,7 +1162,8 @@
         576,
         81,
         1
-      ]
+      ],
+      "title": "[video_out]"
     },
     {
       "id": 93,
@@ -1191,7 +1196,7 @@
           ]
         }
       ],
-      "title": "CLIP Text Encode (Positive Prompt)",
+      "title": "[prompt] CLIP Text Encode (Positive Prompt)",
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.3.45",
@@ -1312,7 +1317,8 @@
         0,
         2,
         "enable"
-      ]
+      ],
+      "title": "[seed]"
     },
     {
       "id": 85,

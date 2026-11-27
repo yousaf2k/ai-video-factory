@@ -1,7 +1,7 @@
 /**
  * ShotCard component - Individual shot with editing and regeneration
  */
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Edit3,
   RotateCw,
@@ -29,10 +29,12 @@ import {
   Paperclip,
   FolderInput,
   User,
+  Package,
+  Mountain,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Shot } from "@/types";
+import { Shot, Character, Prop } from "@/types";
 import { toast } from "sonner";
 import {
   useUpdateShot,
@@ -53,7 +55,8 @@ import {
 import { useDirectors, useConfig } from "@/hooks/useDirectors";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
-import { cn, getMediaUrl } from "@/lib/utils";
+import { cn, getMediaUrl, projectMediaRef } from "@/lib/utils";
+import { useShotReferences } from "@/hooks/useAssets";
 import { Button } from "@/components/ui/button";
 import ShotReferencesDialog from "@/components/assets/ShotReferencesDialog";
 import SaveToLibraryDialog from "@/components/assets/SaveToLibraryDialog";
@@ -68,6 +71,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { GenerationDialog } from "./GenerationDialog";
+import { ImageLightbox } from "@/components/ui/ImageLightbox";
 
 interface ShotCardProps {
   shot: Shot;
@@ -85,8 +89,54 @@ interface ShotCardProps {
   onDelete?: () => void;
   viewModeOverride?: "image" | "video" | null;
   scenes?: any[];
+  /** Story cast — resolves character chips to their reference sheets */
+  characters?: Character[];
+  /** Story props — resolves prop chips to their reference sheets */
+  props?: Prop[];
   aspectRatio?: string;
   projectDirector?: string;
+}
+
+// Script ranges kept by the name normalizer — Latin, Greek, Cyrillic, Arabic
+// (incl. Urdu), Hebrew, CJK, kana, Hangul. Everything else (punctuation,
+// emoji) collapses to a space.
+const KEEP_SCRIPTS = "0-9a-zà-öø-ÿ\u00c0-\u024f\u0370-\u03ff\u0400-\u04ff\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\ufb50-\ufdff\ufe70-\ufeff\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af";
+
+// Tolerant name matching for reference lookups (compact mirror of the
+// backend's resolve_character_name): exact match, normalized-key match
+// (qualifiers like "(Red Snake)" dropped), then word containment with the
+// fewest-extra-words winner.
+const normKey = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[(（][^)）]*[)）]|\[[^\]]*\]|【[^】]*】/g, " ")
+    .replace(new RegExp(`[^${KEEP_SCRIPTS}]+`, "g"), " ")
+    .trim();
+
+function resolveReferenceName(raw: string, names: string[]): string | null {
+  const rawKey = normKey(raw || "");
+  if (!rawKey || names.length === 0) return null;
+  for (const n of names) {
+    if (normKey(n) === rawKey) return n;
+  }
+  const rawWords = new Set(rawKey.split(" "));
+  let best: string | null = null;
+  let bestExtra = Infinity;
+  let ties = 0;
+  for (const n of names) {
+    const words = n.toLowerCase().split(new RegExp(`[^${KEEP_SCRIPTS}]+`)).filter(Boolean);
+    if (words.length > 0 && [...rawWords].every((w) => w.length >= 2 && words.includes(w))) {
+      const extra = words.length - rawWords.size;
+      if (extra < bestExtra) {
+        best = n;
+        bestExtra = extra;
+        ties = 1;
+      } else if (extra === bestExtra) {
+        ties++;
+      }
+    }
+  }
+  return ties === 1 ? best : null;
 }
 
 export function ShotCard({
@@ -105,6 +155,8 @@ export function ShotCard({
   onDelete,
   viewModeOverride,
   scenes,
+  characters,
+  props: storyProps,
   aspectRatio = "16:9",
   projectDirector,
 }: ShotCardProps) {
@@ -116,6 +168,94 @@ export function ShotCard({
       ? [shot.character_name]
       : []
   ).filter(Boolean);
+
+  // Reference-sheet lookups: the owning scene's background image, plus each
+  // chip's reference image resolved tolerantly against the story cast
+  const sceneRef = scenes?.find((s) => s.scene_id === shot.scene_id);
+  const backgroundRefPath = sceneRef?.background_image_path || null;
+  const charNameToRef = useMemo(() => {
+    const map = new Map<string, string>();
+    (characters || []).forEach((c) => {
+      if (c.name && c.character_reference_image_path) {
+        map.set(normKey(c.name), c.character_reference_image_path);
+      }
+    });
+    return map;
+  }, [characters]);
+  const propNameToRef = useMemo(() => {
+    const map = new Map<string, string>();
+    (storyProps || []).forEach((p) => {
+      if (p.name && p.reference_image_path) {
+        map.set(normKey(p.name), p.reference_image_path);
+      }
+    });
+    return map;
+  }, [storyProps]);
+  const charRefFor = (name: string) => {
+    const match = resolveReferenceName(
+      name,
+      (characters || []).filter((c) => c.character_reference_image_path).map((c) => c.name)
+    );
+    return match ? charNameToRef.get(normKey(match)) || null : null;
+  };
+  const propRefFor = (name: string) => {
+    const match = resolveReferenceName(name, (storyProps || []).map((p) => p.name));
+    return match ? propNameToRef.get(normKey(match)) || null : null;
+  };
+
+  // Attached asset references (resolved server-side) — library picks and
+  // manual attaches are shown as extra chips in the reference row below.
+  // Refs already represented by the background/character/prop chips actually
+  // rendered for THIS shot are excluded to avoid duplicates.
+  const { data: attachedRefEntries = [] } = useShotReferences(projectId, shot.id ?? shot.index);
+  // Friendly metadata for refs that belong to the story (character sheets,
+  // scene backgrounds, prop sheets) — chips fall back to the resolved title
+  // for plain library picks.
+  const friendlyRefMeta = useMemo(() => {
+    const map = new Map<string, { label: string; kind: "character" | "prop" | "background"; name?: string }>();
+    (characters || []).forEach((c) => {
+      const ref = projectMediaRef(projectId, c.character_reference_image_path);
+      if (ref && c.name) map.set(ref, { label: `${c.name} — character sheet`, kind: "character", name: c.name });
+    });
+    (storyProps || []).forEach((p) => {
+      const ref = projectMediaRef(projectId, p.reference_image_path);
+      if (ref && p.name) map.set(ref, { label: `${p.name} — prop reference`, kind: "prop", name: p.name });
+    });
+    (scenes || []).forEach((s, i) => {
+      const ref = projectMediaRef(projectId, s.background_image_path);
+      if (ref) map.set(ref, { label: `Scene ${(s.scene_id ?? i) + 1} background${s.location ? ` — ${s.location.slice(0, 40)}` : ""}`, kind: "background" });
+    });
+    return map;
+  }, [characters, storyProps, scenes, projectId]);
+  const extraRefEntries = useMemo(() => {
+    const displayed = new Set<string>();
+    const bgRef = projectMediaRef(projectId, backgroundRefPath);
+    if (bgRef) displayed.add(bgRef);
+    shotCharacters.forEach((name) => {
+      const r = projectMediaRef(projectId, charRefFor(name));
+      if (r) displayed.add(r);
+    });
+    (shot.props || []).forEach((name) => {
+      const r = projectMediaRef(projectId, propRefFor(name));
+      if (r) displayed.add(r);
+    });
+    return attachedRefEntries.filter((e) => e.exists && e.type === "image" && !displayed.has(e.ref));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachedRefEntries, projectId, backgroundRefPath, shotCharacters, shot.props, charNameToRef, propNameToRef, characters, storyProps, scenes]);
+
+  // Reference currently hovered on a chip — rendered as an overlay in the
+  // media preview box instead of the shot's own image/video
+  const [hoverPreview, setHoverPreview] = useState<{ src: string; label: string } | null>(null);
+  // Reference clicked in the hover overlay — pinned fullscreen until closed
+  const [refLightbox, setRefLightbox] = useState<{ src: string; label: string } | null>(null);
+  const previewHandlers = (src: string | null, label: string) => ({
+    onMouseEnter: () => {
+      if (src) setHoverPreview({ src, label });
+    },
+    onMouseLeave: () => {
+      setHoverPreview((cur) => (cur?.src === src ? null : cur));
+    },
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [editedShot, setEditedShot] = useState(shot);
   const [viewMode, setViewMode] = useState<"image" | "video" | "soundfx">("image");
@@ -1024,16 +1164,121 @@ export function ShotCard({
       {/* Status & Metadata */}
       <div className="flex flex-wrap items-center justify-between gap-y-1.5 mb-3 text-xs">
         <div className="flex items-center gap-2">
-          {shotCharacters.length > 0 && shotCharacters.map((name) => (
+          {/* Background reference chip — icon only, hover previews in the shot
+              box, click opens fullscreen; full location in the tooltip */}
+          {backgroundRefPath && (
             <span
-              key={name}
-              className="inline-flex items-center gap-1 text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium max-w-[140px]"
-              title="Characters in this shot"
+              className="inline-flex items-center text-[10px] bg-sky-500/10 text-sky-600 px-1.5 py-1 rounded font-medium cursor-pointer hover:bg-sky-500/20"
+              title={`Background reference — ${sceneRef?.location || sceneRef?.scene_name || 'scene'} (hover to preview, click to enlarge)`}
+              onClick={(e) => {
+                e.stopPropagation();
+                setRefLightbox({
+                  src: getMediaUrl(backgroundRefPath),
+                  label: `Background reference — ${sceneRef?.location || sceneRef?.scene_name || 'scene'}`,
+                });
+              }}
+              {...previewHandlers(
+                getMediaUrl(backgroundRefPath),
+                `Background reference — ${sceneRef?.location || sceneRef?.scene_name || 'scene'}`
+              )}
             >
-              <User className="w-3 h-3 shrink-0" />
-              <span className="truncate">{name}</span>
+              <Mountain className="w-3 h-3 shrink-0" />
             </span>
-          ))}
+          )}
+          {shotCharacters.length > 0 && shotCharacters.map((name) => {
+            const charRef = charRefFor(name);
+            return (
+              <span
+                key={name}
+                className={cn(
+                  "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium max-w-[140px]",
+                  charRef
+                    ? "bg-primary/10 text-primary cursor-pointer hover:bg-primary/20"
+                    : "bg-muted text-muted-foreground cursor-default"
+                )}
+                title={charRef ? `${name} — character reference (hover to preview, click to enlarge)` : 'Characters in this shot'}
+                {...(charRef
+                  ? {
+                      ...previewHandlers(getMediaUrl(charRef), `Character reference — ${name}`),
+                      onClick: (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        setRefLightbox({ src: getMediaUrl(charRef), label: `Character reference — ${name}` });
+                      },
+                    }
+                  : {})}
+              >
+                <User className="w-3 h-3 shrink-0" />
+                <span className="truncate">{name}</span>
+              </span>
+            );
+          })}
+          {/* Prop chips — hover previews in the shot box, click opens fullscreen */}
+          {(shot.props || []).filter(Boolean).map((name) => {
+            const propRef = propRefFor(name);
+            return (
+              <span
+                key={name}
+                className={cn(
+                  "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium max-w-[140px]",
+                  propRef
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 cursor-pointer hover:bg-amber-500/20"
+                    : "bg-muted text-muted-foreground cursor-default",
+                )}
+                title={propRef ? `${name} — prop reference (hover to preview, click to enlarge)` : 'Props in this shot'}
+                {...(propRef
+                  ? {
+                      ...previewHandlers(getMediaUrl(propRef), `Prop reference — ${name}`),
+                      onClick: (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        setRefLightbox({ src: getMediaUrl(propRef), label: `Prop reference — ${name}` });
+                      },
+                    }
+                  : {})}
+              >
+                <Package className="w-3 h-3 shrink-0" />
+                <span className="truncate">{name}</span>
+              </span>
+            );
+          })}
+          {/* Attached asset references (library picks & manual attaches) that
+              aren't already covered by the chips above — rendered in the style
+              of their kind: character/prop refs like their chips, scene
+              backgrounds icon-only, everything else with a paperclip */}
+          {extraRefEntries.map((entry) => {
+            const meta = friendlyRefMeta.get(entry.ref);
+            const kind = meta?.kind;
+            const label = meta?.label || entry.title;
+            const url = entry.thumb_url || entry.url;
+            const Icon =
+              kind === "character" ? User :
+              kind === "prop" ? Package :
+              kind === "background" ? Mountain :
+              Paperclip;
+            const style =
+              kind === "character" ? "bg-primary/10 text-primary hover:bg-primary/20" :
+              kind === "prop" ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20" :
+              "bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20";
+            return (
+              <span
+                key={entry.ref}
+                className={cn(
+                  "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium max-w-[140px] cursor-pointer",
+                  style
+                )}
+                title={`${label} — attached reference (hover to preview, click to enlarge)`}
+                {...previewHandlers(url, `Attached reference — ${label}`)}
+                onClick={(e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  setRefLightbox({ src: url, label: `Attached reference — ${label}` });
+                }}
+              >
+                <Icon className="w-3 h-3 shrink-0" />
+                {kind !== "background" && (
+                  <span className="truncate">{meta?.name || entry.title}</span>
+                )}
+              </span>
+            );
+          })}
           {/* FLFI2V Mode Toggle Buttons - Image or Video */}
           {shot.is_flfi2v && viewMode === "image" && (
             <div className="flex gap-1 bg-muted/50 p-0.5 rounded-md">
@@ -1181,6 +1426,27 @@ export function ShotCard({
             <span className="text-muted-foreground text-xs">
               No media available
             </span>
+          )}
+          {/* Reference hover overlay — a chip is being hovered: show its
+              reference image in place of the shot's own media. Click pins it
+              fullscreen. */}
+          {hoverPreview && (
+            <div className="absolute inset-0 z-20 bg-black/90 flex items-center justify-center animate-in fade-in duration-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={hoverPreview.src}
+                alt={hoverPreview.label}
+                title="Click to enlarge"
+                className="max-w-full max-h-full object-contain cursor-zoom-in"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setRefLightbox(hoverPreview);
+                }}
+              />
+              <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] px-2 py-1 text-center truncate pointer-events-none">
+                {hoverPreview.label}
+              </div>
+            </div>
           )}
         </div>
 
@@ -1712,12 +1978,15 @@ export function ShotCard({
         );
       })()}
       {referencesOpen && (
-        <ShotReferencesDialog
-          projectId={projectId}
-          shot={shot}
-          open={referencesOpen}
-          onClose={() => setReferencesOpen(false)}
-        />
+      <ShotReferencesDialog
+        projectId={projectId}
+        shot={shot}
+        open={referencesOpen}
+        onClose={() => setReferencesOpen(false)}
+        characters={characters}
+        scenes={scenes}
+        props={storyProps}
+      />
       )}
       {saveLibOpen && saveToLibraryMedia && (
         <SaveToLibraryDialog
@@ -1729,6 +1998,11 @@ export function ShotCard({
           onClose={() => setSaveLibOpen(false)}
         />
       )}
+      <ImageLightbox
+        src={refLightbox?.src || null}
+        alt={refLightbox?.label || ''}
+        onClose={() => setRefLightbox(null)}
+      />
     </div>
   );
 }

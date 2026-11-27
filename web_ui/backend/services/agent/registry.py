@@ -788,6 +788,7 @@ def tool_update_shot(args: dict) -> Any:
         "image_prompt": _s(), "motion_prompt": _s(), "camera": _s("Camera movement"),
         "video_prompt": _s("Timestamped H3 video prompt (optional)"),
         "narration": _s(), "duration": {"type": "number"},
+        "soundfx_prompt": _s("Sound FX prompt (optional; blank = generic sounds)"),
         "scene_id": _i("0-based scene this shot belongs to"),
         "position": _i("1-based position to insert AFTER; omit to append"),
     }, ["project_id", "image_prompt", "motion_prompt", "camera"]),
@@ -804,6 +805,7 @@ def tool_add_shot(args: dict) -> Any:
         "prompt_type": None,
         "camera": camera,
         "narration": args.get("narration", ""),
+        "soundfx_prompt": args.get("soundfx_prompt"),
         "duration": args.get("duration"),
         "scene_id": args.get("scene_id"),
         "batch_number": 1,
@@ -812,8 +814,9 @@ def tool_add_shot(args: dict) -> Any:
     }
     created = {}
 
+    # update_shots_safely keeps in-place mutations only — never rebind `shots`
+    # (e.g. `shots = shots or []`), or the edit lands on a throwaway list.
     def modify(shots: List[dict]) -> List[dict]:
-        shots = shots or []
         position = args.get("position")
         if isinstance(position, int) and 1 <= position <= len(shots):
             shots.insert(position, new_shot)
@@ -866,7 +869,14 @@ def tool_update_shots_bulk(args: dict) -> Any:
     if not isinstance(shots, list):
         raise ValueError("shots must be an array")
     pm = _pm()
-    pm.update_shots_safely(project_id, lambda _current: shots)
+
+    # Replace the contents of the locked list in place — returning a new list
+    # from the callback is ignored by update_shots_safely.
+    def modify(current: List[dict]) -> List[dict]:
+        current[:] = shots
+        return current
+
+    pm.update_shots_safely(project_id, modify)
     return {"updated": True, "count": len(shots)}
 
 

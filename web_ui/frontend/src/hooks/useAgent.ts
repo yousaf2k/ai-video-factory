@@ -11,10 +11,10 @@ import { api, getApiErrorMessage } from '@/services/api';
 import type {
   AgentConfigResponse,
   AgentConversationDetail,
+  AgentLiveTurn,
   AgentStreamEvent,
   ContextUsage,
   McpServerConfig,
-  TimedAgentEvent,
 } from '@/types/agent';
 
 export function useAgentConfig() {
@@ -84,130 +84,179 @@ export function useTestAgentLlm() {
   });
 }
 
+export type AgentRunState = 'idle' | 'running' | 'stopping';
+
+/** How long Stop waits for the backend to finish cancelling before the UI moves on. */
+const STOP_TIMEOUT_MS = 8000;
+
 /**
  * Streaming agent chat over WebSocket.
- * Manages the socket lifecycle, exposes send/stop and the live event stream.
+ * Manages the socket lifecycle, exposes send/stop and the turn that is
+ * streaming right now (`live`).
  */
 export function useAgentChatStream(options?: {
-  onFinal?: (conversationId: string | null, content: string) => void;
-  onError?: (message: string) => void;
+  /** The backend bound the outgoing message to a conversation. */
+  onConversation?: (conversationId: string) => void;
 }) {
+  const queryClient = useQueryClient();
   const [connected, setConnected] = useState(false);
-  const [busy, setBusy] = useState(false);
-  /** Live event stream for the in-flight message, each stamped with a timestamp. */
-  const [liveEvents, setLiveEvents] = useState<TimedAgentEvent[]>([]);
+  const [runState, setRunState] = useState<AgentRunState>('idle');
+  const [live, setLive] = useState<AgentLiveTurn | null>(null);
   /** Latest context-window usage reported by the engine. */
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const conversationIdRef = useRef<string | null>(null);
+  // The same state as mirrors, for use inside the socket handlers.
+  const runStateRef = useRef<AgentRunState>('idle');
+  const liveRef = useRef<AgentLiveTurn | null>(null);
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
+  const setRun = useCallback((state: AgentRunState) => {
+    if (stopTimerRef.current) {
+      clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+    }
+    runStateRef.current = state;
+    setRunState(state);
+  }, []);
+
+  const updateLive = useCallback((update: (turn: AgentLiveTurn | null) => AgentLiveTurn | null) => {
+    liveRef.current = update(liveRef.current);
+    setLive(liveRef.current);
+  }, []);
+
+  /** A turn is only saved once it has ended — pick up the saved copy then. */
+  const refetchSaved = useCallback((conversationId: string | null) => {
+    queryClient.invalidateQueries({ queryKey: ['agent-config'] });
+    if (conversationId) {
+      queryClient.invalidateQueries({ queryKey: ['agent-conversation', conversationId] });
+    }
+  }, [queryClient]);
+
   const connect = useCallback(() => {
     if (socketRef.current && socketRef.current.readyState <= WebSocket.OPEN) return;
+    let socket: WebSocket;
     try {
-      const socket = new WebSocket(api.getAgentWsUrl());
-      socketRef.current = socket;
-      socket.onopen = () => setConnected(true);
-      socket.onclose = () => {
-        setConnected(false);
-        setTimeout(() => {
-          // Auto-reconnect while the component is still mounted.
-          if (socketRef.current === socket) connect();
-        }, 3000);
-      };
-      socket.onmessage = (event) => {
-        let data: AgentStreamEvent;
-        try {
-          data = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-        if (data.type === 'conversation') {
-          conversationIdRef.current = data.conversation_id;
-        } else if (data.type === 'context_usage') {
-          setContextUsage({
-            prompt_chars: data.prompt_chars,
-            est_tokens: data.est_tokens,
-            limit_tokens: data.limit_tokens,
-            percent: data.percent,
-          });
-        } else if (data.type === 'done') {
-          setBusy(false);
-        } else if (data.type === 'error') {
-          setBusy(false);
-          optionsRef.current?.onError?.(data.message);
-        } else if (data.type === 'final') {
-          optionsRef.current?.onFinal?.(conversationIdRef.current, data.content);
-        }
-        if (data.type !== 'pong' && data.type !== 'conversation' && data.type !== 'context_usage') {
-          setLiveEvents((prev) => [...prev, { ...data, ts: Date.now() }]);
-        }
-      };
+      socket = new WebSocket(api.getAgentWsUrl());
     } catch {
       setConnected(false);
+      return;
     }
-  }, []);
+    socketRef.current = socket;
+    socket.onopen = () => setConnected(true);
+    socket.onclose = () => {
+      setConnected(false);
+      // A run cannot outlive its socket: the backend cancels it.
+      if (runStateRef.current !== 'idle') {
+        updateLive((turn) => turn && {
+          ...turn,
+          events: [...turn.events, {
+            type: 'error', message: 'Connection to the agent was lost.', ts: Date.now(),
+          }],
+        });
+        setRun('idle');
+        refetchSaved(liveRef.current?.conversationId ?? null);
+      }
+      setTimeout(() => {
+        // Auto-reconnect while the component is still mounted.
+        if (socketRef.current === socket) connect();
+      }, 3000);
+    };
+    socket.onmessage = (event) => {
+      let data: AgentStreamEvent;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (data.type === 'conversation') {
+        conversationIdRef.current = data.conversation_id;
+        updateLive((turn) => turn && { ...turn, conversationId: data.conversation_id });
+        optionsRef.current?.onConversation?.(data.conversation_id);
+      } else if (data.type === 'context_usage') {
+        setContextUsage({
+          prompt_chars: data.prompt_chars,
+          est_tokens: data.est_tokens,
+          limit_tokens: data.limit_tokens,
+          percent: data.percent,
+        });
+      } else if (data.type === 'pong') {
+        return;
+      } else {
+        if (data.type === 'done') {
+          setRun('idle');
+          refetchSaved(liveRef.current?.conversationId ?? conversationIdRef.current);
+        } else if (data.type === 'error') {
+          // An error outside a run (e.g. "Conversation not found") has no turn
+          // to surface in, so it becomes a toast instead.
+          setRun('idle');
+          if (!liveRef.current) toast.error(data.message);
+        }
+        updateLive((turn) => turn && {
+          ...turn, events: [...turn.events, { ...data, ts: Date.now() }],
+        });
+      }
+    };
+  }, [refetchSaved, setRun, updateLive]);
 
   useEffect(() => {
     connect();
     return () => {
       const socket = socketRef.current;
       socketRef.current = null;
-      socket?.close();
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
     };
   }, [connect]);
 
+  /** Returns false when the socket is down (nothing was sent). */
   const sendMessage = useCallback(
-    (message: string, projectId?: string | null) => {
+    (message: string, projectId: string | null, baseCount: number): boolean => {
       const socket = socketRef.current;
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
-        optionsRef.current?.onError?.('Agent socket not connected — is the backend running?');
-        return;
-      }
-      setLiveEvents([]);
-      setBusy(true);
+      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+      updateLive(() => ({
+        message, conversationId: conversationIdRef.current, baseCount, events: [],
+      }));
+      setRun('running');
       socket.send(
         JSON.stringify({
           type: 'chat',
           message,
-          project_id: projectId ?? null,
+          project_id: projectId,
           conversation_id: conversationIdRef.current,
         }),
       );
+      return true;
     },
-    [],
+    [setRun, updateLive],
   );
 
   const stop = useCallback(() => {
     const socket = socketRef.current;
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'stop' }));
-      setBusy(false);
-    }
-  }, []);
+    if (runStateRef.current !== 'running' || !socket || socket.readyState !== WebSocket.OPEN) return;
+    setRun('stopping');
+    // Never hang on "stopping" if the backend does not acknowledge.
+    stopTimerRef.current = setTimeout(() => setRun('idle'), STOP_TIMEOUT_MS);
+    socket.send(JSON.stringify({ type: 'stop' }));
+  }, [setRun]);
 
-  const resetConversation = useCallback(() => {
-    conversationIdRef.current = null;
-    setLiveEvents([]);
-    setContextUsage(null);
-  }, []);
-
+  /** Point the next message at a conversation (null = the backend creates one). */
   const setConversation = useCallback((id: string | null) => {
     conversationIdRef.current = id;
-    setLiveEvents([]);
-    setContextUsage(null);
   }, []);
 
   return {
     connected,
-    busy,
-    liveEvents,
+    runState,
+    live,
     contextUsage,
     sendMessage,
     stop,
-    resetConversation,
     setConversation,
-    conversationIdRef,
   };
 }

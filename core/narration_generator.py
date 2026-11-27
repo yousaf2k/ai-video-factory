@@ -77,6 +77,23 @@ def generate_narration_from_story(story_json):
     return "\n".join(script_parts)
 
 
+def _strip_bracket_tags(script):
+    """Remove square-bracket tags from narration text before TTS.
+
+    Narration text carries production tags the voice must never read aloud —
+    scene markers ("[Shot 2]"), sound cues ("[SFX: door creak]"), timing
+    ("[0:00-0:08]"), direction notes — in any bracket style and casing.
+    Nested brackets are handled by stripping innermost-first until none remain.
+    """
+    import re
+    cleaned = script or ""
+    prev = None
+    while prev != cleaned:
+        prev = cleaned
+        cleaned = re.sub(r"\[[^\[\]]*\]", " ", cleaned)
+    return re.sub(r" +", " ", cleaned).strip()
+
+
 def generate_narration_audio(script, output_path, tts_method="local", tts_workflow="default", voice="default"):
     """
     Generate narration audio from script using TTS.
@@ -91,6 +108,9 @@ def generate_narration_audio(script, output_path, tts_method="local", tts_workfl
     Returns:
         Path to generated audio file, or None if failed
     """
+    # Production tags in square brackets are directions, not words — strip
+    # them before every TTS backend reads the text
+    script = _strip_bracket_tags(script)
     logger.info(f"Generating narration audio: {output_path}")
     logger.debug(f"  TTS method: {tts_method}")
     logger.debug(f"  Voice: {voice}")

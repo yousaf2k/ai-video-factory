@@ -1,20 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Scene } from '@/types';
+import { useQueryClient } from '@tanstack/react-query';
+import { Scene, AssetEntry } from '@/types';
 import { GenerationDialog, GenerationConfig } from '../shots/GenerationDialog';
+import AssetPickerDialog from '../assets/AssetPickerDialog';
 import { useProject } from '@/hooks/useProjects';
-import { usePersistedState } from '@/hooks/usePersistedState';
 import { api } from '@/services/api';
 import { toast } from 'sonner';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ImageLightbox } from '@/components/ui/ImageLightbox';
 
 interface SceneBackgroundManagerProps {
@@ -33,21 +26,16 @@ export default function SceneBackgroundManager({
   const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [showGenModal, setShowGenModal] = useState(false);
+  const [showAssetPicker, setShowAssetPicker] = useState(false);
+  const [attachingAsset, setAttachingAsset] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { data: project } = useProject(projectId);
-  // Selected background style (by name, resolved to text from styles.json
-  // at submit time so config edits apply without stale copies)
-  const [styleName, setStyleName] = usePersistedState<string>(`background_style_${projectId}`, 'none');
-  const { data: styleOptions = [] } = useQuery({
-    queryKey: ['background-styles'],
-    queryFn: () => api.getBackgroundStyles(),
-    staleTime: 5 * 60 * 1000,
-  });
-  // Reference-sheet (r2v) projects generate backgrounds from the scene
-  // location — a set_prompt is not required (backend builds the sheet prompt).
+  // Backgrounds can be generated from the scene's set_prompt, falling back
+  // to the location (backend background_base_text handles the fallback for
+  // every project type). The style is chosen in the generation dialog.
   const isR2V = project?.video_generation_type === "r2v";
-  const canGenerate = !!scene.set_prompt || (isR2V && !!scene.location);
+  const canGenerate = !!scene.set_prompt || !!scene.location;
 
   const getMediaUrl = (path: string) => {
     if (!path) return '';
@@ -107,16 +95,13 @@ export default function SceneBackgroundManager({
 
     setGenerating(true);
 
-    // Resolve the selected style name to its prompt text (styles.json)
-    const backgroundStyle = styleOptions.find((s) => s.name === styleName)?.style;
-
     try {
       const requestBody = {
         prompt: config.promptOverride,
         seed: config.seed === "" ? undefined : config.seed,
         workflow: config.workflow === "default" ? undefined : config.workflow,
         image_model: config.mode,
-        background_style: backgroundStyle || undefined,
+        background_style: config.backgroundStyle,
       };
 
       const response = await fetch(
@@ -156,6 +141,22 @@ export default function SceneBackgroundManager({
     }
   };
 
+  const handleAssetPick = async (entry: AssetEntry) => {
+    setAttachingAsset(true);
+    try {
+      const result = await api.useAssetForSceneBackground(projectId, scene.scene_id!, entry.ref);
+      // Invalidate project query to pull full details with its background path
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+      toast.success(`Attached "${entry.title}" as scene background`);
+      console.log('Background attached from asset library:', result.image_path);
+    } catch (error) {
+      console.error('Error attaching background from asset library:', error);
+      toast.error(`Failed to attach background: ${error}`);
+    } finally {
+      setAttachingAsset(false);
+    }
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -165,9 +166,12 @@ export default function SceneBackgroundManager({
 
   const hasBackground = !!scene.background_image_path;
   const isGenerated = scene.background_is_generated;
-  // Backgrounds are consumed by ThenVsNow (IPAdapter) and r2v (reference
-  // sheets attached to shots); other project types don't use them.
-  const backgroundEnabled = projectType === 2 || isR2V;
+  // Backgrounds are consumed by ThenVsNow (IPAdapter), r2v (reference sheets
+  // attached to shots) and i2v/t2v story projects (sync_character_asset_refs
+  // attaches each scene's background to that scene's shots). Only ASMR, which
+  // manages shots directly without scene images, hides the section.
+  const backgroundEnabled =
+    projectType === 1 || projectType === 2 || projectType === 3 || isR2V;
 
   if (!backgroundEnabled && !hasBackground) {
     return null; // Hide empty container where backgrounds aren't used
@@ -198,7 +202,7 @@ export default function SceneBackgroundManager({
         className={`
           relative border-2 border-dashed rounded-lg p-4 text-center
           transition-colors duration-200 cursor-pointer
-          ${uploading || generating
+          ${uploading || generating || attachingAsset
             ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
             : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
           }
@@ -262,29 +266,6 @@ export default function SceneBackgroundManager({
         />
       </div>
 
-      {/* Style selection (styles.json via /api/config/styles); the selected
-          style text is appended to the end of the background prompt */}
-      {backgroundEnabled && (
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">
-            Background Style
-          </label>
-          <Select value={styleName} onValueChange={setStyleName}>
-            <SelectTrigger className="w-full h-9">
-              <SelectValue placeholder="None (story default)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None (story default)</SelectItem>
-              {styleOptions.map((s) => (
-                <SelectItem key={s.name} value={s.name}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
       {/* Action Buttons */}
       {backgroundEnabled && (
         <div className="flex gap-2">
@@ -293,10 +274,21 @@ export default function SceneBackgroundManager({
               e.stopPropagation();
               document.getElementById(`bg-input-${scene.scene_id}`)?.click();
             }}
-            disabled={uploading || generating}
+            disabled={uploading || generating || attachingAsset}
             className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
           >
             {uploading ? 'Uploading...' : 'Upload'}
+          </button>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAssetPicker(true);
+            }}
+            disabled={uploading || generating || attachingAsset}
+            className="flex-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+          >
+            {attachingAsset ? 'Attaching...' : 'From Assets'}
           </button>
 
           <button
@@ -326,7 +318,19 @@ export default function SceneBackgroundManager({
         defaultPromptOverride={scene.set_prompt || undefined}
         onSubmit={handleGenerateSubmit}
         title="Generate Scene Background"
+        withReferenceStyle
+        styleStorageKey={`background_style_${projectId}`}
+        styleLabel="Background Style"
       />
+
+      {showAssetPicker && (
+        <AssetPickerDialog
+          open={showAssetPicker}
+          onClose={() => setShowAssetPicker(false)}
+          onSelect={handleAssetPick}
+          title={`Choose a background for "${scene.location || 'Scene'}"`}
+        />
+      )}
 
       <ImageLightbox
         src={lightboxSrc}

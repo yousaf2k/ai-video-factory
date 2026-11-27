@@ -1820,7 +1820,8 @@
         720,
         81,
         1
-      ]
+      ],
+      "title": "[video_out]"
     },
     {
       "id": 68,
@@ -1873,7 +1874,8 @@
       "widgets_values": [
         "0311.png",
         "image"
-      ]
+      ],
+      "title": "[image_in_first]"
     },
     {
       "id": 62,
@@ -1926,7 +1928,8 @@
       "widgets_values": [
         "Now.png",
         "image"
-      ]
+      ],
+      "title": "[image_in_last]"
     },
     {
       "id": 6,
@@ -1959,7 +1962,7 @@
           ]
         }
       ],
-      "title": "CLIP Text Encode (Positive Prompt)",
+      "title": "[prompt] CLIP Text Encode (Positive Prompt)",
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.3.45",
@@ -2131,7 +2134,8 @@
         0,
         4,
         "enable"
-      ]
+      ],
+      "title": "[seed]"
     },
     {
       "id": 91,

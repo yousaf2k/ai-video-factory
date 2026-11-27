@@ -14,9 +14,10 @@ interface SceneListProps {
   onReorder?: (scenes: Scene[]) => void;
   onAdd?: () => void;
   projectType?: number;
+  availableCharacters?: string[];
 }
 
-export function SceneList({ scenes, onUpdate, onDelete, onReorder, onAdd, projectType }: SceneListProps) {
+export function SceneList({ scenes, onUpdate, onDelete, onReorder, onAdd, projectType, availableCharacters }: SceneListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -56,6 +57,7 @@ export function SceneList({ scenes, onUpdate, onDelete, onReorder, onAdd, projec
                   onUpdate={onUpdate}
                   onDelete={onDelete}
                   projectType={projectType}
+                  availableCharacters={availableCharacters}
                 />
               </div>
             ))}

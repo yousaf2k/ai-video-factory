@@ -70,3 +70,27 @@ def test_ws_rejects_unknown_type(client_and_engine):
             msg = ws.receive_json()
             assert msg["type"] == "error"
             assert "Unknown message type" in msg["message"]
+
+
+def test_conversation_detail_backfills_narration_for_older_saves(client_and_engine):
+    """Tool-call replies saved before `narration` existed get it computed on read."""
+    from web_ui.backend.services.agent.conversations import get_conversation_store
+    store = get_conversation_store()
+    conversation = store.create()
+    store.append_messages(conversation["id"], [
+        {"role": "user", "content": "add it"},
+        {"role": "assistant",
+         "content": 'Checking first.\n```tool_call\n{"tool": "get_story", "arguments": {}}\n```',
+         "tool_call": {"tool": "get_story", "arguments": {}}},
+        {"role": "assistant", "content": "saved later",
+         "tool_call": {"tool": "get_story", "arguments": {}}, "narration": "kept as saved"},
+    ])
+    app, _ = client_and_engine
+    try:
+        with TestClient(app) as client:
+            detail = client.get(f"/api/agent/conversations/{conversation['id']}").json()
+    finally:
+        store.delete(conversation["id"])
+
+    assert detail["messages"][1]["narration"] == "Checking first."
+    assert detail["messages"][2]["narration"] == "kept as saved"

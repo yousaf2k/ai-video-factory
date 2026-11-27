@@ -48,7 +48,8 @@
       "widgets_values": [
         42,
         "fixed"
-      ]
+      ],
+      "title": ""
     },
     {
       "id": 326,
@@ -94,7 +95,8 @@
       "widgets_values": [
         1074094905273223,
         "randomize"
-      ]
+      ],
+      "title": "[seed]"
     },
     {
       "id": 327,
@@ -193,7 +195,8 @@
       },
       "widgets_values": [
         "euler_cfg_pp"
-      ]
+      ],
+      "title": ""
     },
     {
       "id": 330,
@@ -373,7 +376,8 @@
         "secondTabOffset": 80,
         "secondTabWidth": 65
       },
-      "widgets_values": []
+      "widgets_values": [],
+      "title": "[video_out]"
     },
     {
       "id": 333,
@@ -1015,7 +1019,8 @@
         ""
       ],
       "color": "#232",
-      "bgcolor": "#353"
+      "bgcolor": "#353",
+      "title": "[prompt]"
     },
     {
       "id": 353,
@@ -1905,7 +1910,7 @@
           ]
         }
       ],
-      "title": "Duration",
+      "title": "[duration] Duration",
       "properties": {
         "Node name for S&R": "PrimitiveInt",
         "ue_properties": {

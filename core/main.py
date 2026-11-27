@@ -1669,6 +1669,13 @@ def _run_auto_mode(project_id, project_meta, project_mgr, idea, image_mode, nega
         # Enhance motion prompts with trigger keywords for LoRA activation
         shots = enhance_motion_prompts_with_triggers(shots)
         project_mgr.save_shots(project_id, shots)
+        # Shots reference props by name; merge those names into story.props so
+        # the r2v reference-sheet step (and the web UI) can see them — story
+        # directors never emit props themselves
+        try:
+            project_mgr.sync_story_props(project_id)
+        except Exception as props_err:
+            logger.warning(f"Could not sync story props after shot planning: {props_err}")
     else:
         # Reload shots if already done
         shots_dir = project_mgr.get_project_dir(project_id)

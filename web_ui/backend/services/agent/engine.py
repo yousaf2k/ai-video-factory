@@ -9,16 +9,21 @@ required — tool calls travel as structured JSON in the prompt).
 
 Events (for the WebSocket UI):
     llm_start        – an LLM call started (iteration n)
-    tool_start       – {tool, arguments}
-    tool_result      – {tool, ok, result|error}
+    tool_start       – {tool, arguments, narration}
+    tool_result      – {tool, ok, result|error, duration_ms}
     final            – {content} the agent's answer
     error            – {message}
+
+Saved conversation messages carry the same details (narration, thinking_ms,
+duration_ms) so the chat transcript renders a finished turn exactly like the
+live one after a page refresh.
 """
 import asyncio
 import json
 import logging
 import re
-from typing import Any, Callable, Dict, List, Optional
+import time
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import config
 
@@ -73,8 +78,8 @@ _FENCE_RE = re.compile(r"```(?:tool_call|tool|json)?\s*\n(\{.*?\})\s*\n```", re.
 _TOOL_PREFIX_RE = re.compile(r"TOOL_CALL\s*[:：]?\s*(\{.*)", re.DOTALL | re.IGNORECASE)
 
 
-def parse_tool_call(text: str) -> Optional[Dict[str, Any]]:
-    """Extract {"tool": name, "arguments": {...}} from an LLM reply, if any.
+def _locate_tool_call(text: str) -> Optional[Tuple[Dict[str, Any], int]]:
+    """Find the tool call in an LLM reply: (call, offset of the call in text).
 
     Accepted shapes (most providers get this right with just the system prompt):
       - a fenced block:        ```tool_call {"tool": ..., "arguments": ...}```
@@ -83,22 +88,40 @@ def parse_tool_call(text: str) -> Optional[Dict[str, Any]]:
     """
     if not text:
         return None
-    candidates: List[str] = []
+    candidates: List[Tuple[str, int]] = []
     for match in _FENCE_RE.finditer(text):
-        candidates.append(match.group(1))
+        candidates.append((match.group(1), match.start()))
     prefix = _TOOL_PREFIX_RE.search(text)
     if prefix:
-        candidates.append(prefix.group(1))
+        candidates.append((prefix.group(1), prefix.start()))
     stripped = text.strip()
     if stripped.startswith("{"):
-        candidates.append(_balanced_json(stripped) or stripped)
-    for candidate in candidates:
+        candidates.append((_balanced_json(stripped) or stripped, len(text) - len(stripped)))
+    for candidate, offset in candidates:
         parsed = _try_load_json(candidate)
         if isinstance(parsed, dict) and "tool" in parsed:
             tool = str(parsed["tool"]).strip()
             if tool:
-                return {"tool": tool, "arguments": parsed.get("arguments") or {}}
+                return {"tool": tool, "arguments": parsed.get("arguments") or {}}, offset
     return None
+
+
+def parse_tool_call(text: str) -> Optional[Dict[str, Any]]:
+    """Extract {"tool": name, "arguments": {...}} from an LLM reply, if any."""
+    located = _locate_tool_call(text)
+    return located[0] if located else None
+
+
+def narration_before_call(text: str) -> str:
+    """What the model said to the user ahead of its tool call, if anything.
+
+    Only the text BEFORE the call counts. Models sometimes keep writing the
+    transcript themselves after it (invented "TOOL RESULT" blocks, further
+    calls, even a made-up answer) — none of that happened, so it is never
+    shown as agent output.
+    """
+    located = _locate_tool_call(text)
+    return text[:located[1]].strip() if located else ""
 
 
 def _balanced_json(text: str) -> Optional[str]:
@@ -236,6 +259,7 @@ To call a tool, reply with EXACTLY a fenced block (nothing else):
 ```
 
 Rules:
+- Required inputs: before doing anything that needs settings the user has not provided, ASK for them — never silently fall back to defaults. For create_project specifically: if the user has not given the total duration (total_duration) and max shot duration (max_shot_duration), ask for both; if they have not picked a director, call list_directors, present the relevant story/shots directors and ask the user to select. Collect all missing values in ONE compact message (with your suggested defaults marked), wait for the answers, then proceed.
 - Call tools to fetch facts before acting (e.g. get_shot before update_shot). Never invent shot ids, scene ids or file paths — look them up.
 - NEVER analyze, compare, quote or edit shot/story/scene content you have not read with a tool in this conversation. The project context summary is an INDEX ONLY (no prompt text) — full text comes only from get_shot / get_story. If you haven't fetched it, you don't know it: fetch, never guess.
 - One tool call per reply. After each call you receive its result and may call another tool.
@@ -446,7 +470,9 @@ class AgentEngine:
                 emit({"type": "context_usage", **last_usage})
                 emit({"type": "llm_start", "iteration": iteration,
                       "provider": provider_name, "model": model_label})
+                started = time.monotonic()
                 response = await asyncio.to_thread(provider.ask, prompt)
+                thinking_ms = int((time.monotonic() - started) * 1000)
                 response = (response or "").strip()
                 if not response:
                     response = "(empty response from model)"
@@ -456,26 +482,36 @@ class AgentEngine:
                     final_answer = _clean_final_answer(response)
                     if not final_answer:
                         final_answer = "(empty response from model)"
-                    transcript.append({"role": "assistant", "content": final_answer})
+                    transcript.append({"role": "assistant", "content": final_answer,
+                                       "thinking_ms": thinking_ms})
                     break
 
                 tool_name = call["tool"]
                 arguments = call.get("arguments") or {}
-                emit({"type": "tool_start", "tool": tool_name, "arguments": arguments})
+                narration = narration_before_call(response)
+                emit({"type": "tool_start", "tool": tool_name, "arguments": arguments,
+                      "narration": narration})
+                started = time.monotonic()
                 result = await self._dispatch(tool_name, arguments, cfg, mcp_by_name, mcp_servers)
+                duration_ms = int((time.monotonic() - started) * 1000)
                 emit({"type": "tool_result", "tool": tool_name, "ok": result.get("ok"),
-                      "result": result.get("result") if result.get("ok") else result.get("error")})
+                      "result": result.get("result") if result.get("ok") else result.get("error"),
+                      "duration_ms": duration_ms})
                 steps.append({"tool": tool_name, "arguments": arguments,
                               "ok": result.get("ok", False),
                               "result": result.get("result") if result.get("ok") else result.get("error")})
+                # thinking_ms / duration_ms / narration are transcript display
+                # metadata (_render_prompt reads role/content only).
                 transcript.append({
                     "role": "assistant", "content": response,
                     "tool_call": {"tool": tool_name, "arguments": arguments},
+                    "narration": narration, "thinking_ms": thinking_ms,
                 })
                 transcript.append({
                     "role": "tool_result", "tool": tool_name,
                     "ok": result.get("ok", False),
                     "content": self._stringify_result(result),
+                    "duration_ms": duration_ms,
                 })
             else:
                 final_answer = (

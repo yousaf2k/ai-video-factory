@@ -14,7 +14,7 @@ non_diegetic_music: ...
 
 - `[Shot 1]` begins the description with NO timestamp. Start it by stating the overall style (`Live-action, cinematic`, `3D CG`, `2D-animated`, ...) and the initial composition.
 - Later sub-shots: `[Shot 2] At 00:03.500, the camera cuts to...` — cut times strictly increasing, inside the clip `duration`, at least 0.7 seconds before the end.
-- Clips under 6 seconds stay a single sub-shot; clips of 6+ seconds SHOULD contain 2-3 sub-shots when the action has multiple distinct beats.
+- Clips under 3 seconds stay a single sub-shot; clips of 3+ seconds SHOULD contain 2-4 sub-shots when the action has multiple distinct beats.
 
 ## Subject Consistency (nothing is referenced — describe fully, every shot)
 

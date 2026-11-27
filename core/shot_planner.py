@@ -268,55 +268,49 @@ IMPORTANT: Generate ONLY shots for these {len(scenes_batch)} scenes in this batc
 {VIDEO_PROMPT_TIMING_INSTRUCTION}
 """
 
-    # Try to use director prompts
-    try:
-        user_input = f"{batch_graph}{batch_instruction}"
-        image_prompt = load_director_prompt("shots", user_input, shots_director,
-                                            base_override=base_override)
+    # The batch's prompt format follows the base override, not the director
+    # name — named directors (studio_ghibli) with an r2v/t2v base_override
+    # emit full-reference prompts even though their name says otherwise
+    prompt_kind = None
+    if base_override:
+        base_lower = base_override.lower()
+        if "r2v" in base_lower:
+            prompt_kind = "r2v"
+        elif "t2v" in base_lower:
+            prompt_kind = "t2v"
 
-        provider = get_provider()
-        response = provider.ask(image_prompt, response_format="application/json")
-        shots = extract_and_repair_json(response)
-        repair_batch_scene_ids(shots, scenes_batch, batch_num, total_batches)
+    # Director prompts only — no legacy fallback. The hard-coded legacy i2v
+    # prompt would inject the wrong video-prompt format into r2v/t2v projects
+    # (hybrid prompts, missing reference citations). A failed batch raises so
+    # it is reported and can be retried, instead of silently polluting the plan.
+    last_error: Exception = None
+    for attempt in (1, 2):
+        try:
+            user_input = f"{batch_graph}{batch_instruction}"
+            image_prompt = load_director_prompt("shots", user_input, shots_director,
+                                                base_override=base_override)
 
-        logger.info(f"Batch {batch_num}/{total_batches}: Generated {len(shots)} shots")
-        validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration)
-        return shots
+            provider = get_provider()
+            response = provider.ask(image_prompt, response_format="application/json")
+            shots = extract_and_repair_json(response)
+            repair_batch_scene_ids(shots, scenes_batch, batch_num, total_batches)
 
-    except (FileNotFoundError, ValueError):
-        # Fall back to legacy prompt
-        cap = normalize_shot_duration_cap(max_shot_duration)
-        print(f"[WARN] Shots director '{shots_director}' not found, using legacy prompt for batch {batch_num}")
-        prompt = f"""
-Create cinematic shots for WAN 2.2.{batch_instruction}
-
-Return JSON list (each shot):
-[
-  {{
-   "scene_id": 0,
-   "duration": {min(5.0, cap):g},
-   "image_prompt":"",
-   "motion_prompt":"",
-   "video_prompt":"",
-   "soundfx_prompt":"",
-   "music_prompt":"",
-   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
-  }}
-]
-
-The "duration" of each shot is its rendered clip length in seconds ({MIN_SHOT_DURATION}-{cap:g}).
-The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp; clips of 6 seconds or more should continue with [Shot 2], [Shot 3] sub-shots at strictly increasing cut times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
-
-SCENES:
-{batch_graph}
-"""
-        provider = get_provider()
-        response = provider.ask(prompt, response_format="application/json")
-        shots = extract_and_repair_json(response)
-        repair_batch_scene_ids(shots, scenes_batch, batch_num, total_batches)
-        validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration)
-        logger.info(f"Batch {batch_num}/{total_batches}: Generated {len(shots)} shots (legacy mode)")
-        return shots
+            logger.info(f"Batch {batch_num}/{total_batches}: Generated {len(shots)} shots")
+            validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration,
+                                      prompt_kind=prompt_kind)
+            return shots
+        except (FileNotFoundError, ValueError) as exc:
+            # FileNotFoundError: missing director file; ValueError: usually an
+            # unparseable LLM response. Retry once with the SAME director, then
+            # give up — never fall back to the legacy i2v prompt.
+            last_error = exc
+            if attempt == 1:
+                print(f"[WARN] Shots director '{shots_director}' failed for batch {batch_num} "
+                      f"({type(exc).__name__}: {str(exc)[:200]}); retrying once with the same director")
+                logger.warning(
+                    f"Batch {batch_num}/{total_batches}: director attempt failed "
+                    f"({type(exc).__name__}: {str(exc)[:200]}); retrying with the same director")
+    raise last_error
 
 
 # Matches a sub-shot header followed by a cut time, e.g.
@@ -404,6 +398,13 @@ def validate_video_prompt(video_prompt, clip_duration=None, prompt_kind="i2v"):
         if needle not in text:
             problems.append(f"missing {label}")
 
+    # r2v prompts inherit their subjects from attached reference images —
+    # subject_definitions must cite them via <Picture N>. Batches sometimes
+    # drop the citations ("in Picture 1" prose instead), which leaves the
+    # video model without the inheritance mapping.
+    if kind == "r2v" and not re.search(r"<Picture\s*\d+>", text):
+        problems.append("no <Picture N> reference citations (r2v prompts must cite the attached reference images)")
+
     if kind in ("r2v", "t2v") and len(text) > R2V_PROMPT_CHAR_LIMIT:
         problems.append(
             f"prompt exceeds the {R2V_PROMPT_CHAR_LIMIT}-character limit ({len(text)} chars)"
@@ -468,13 +469,19 @@ def ensure_shot_durations(shots, max_duration=None):
     return adjusted
 
 
-def validate_and_repair_shots(shots, shots_director, max_shot_duration=None):
+def validate_and_repair_shots(shots, shots_director, max_shot_duration=None, prompt_kind=None):
     """Validate video_prompts and re-ask the LLM once to fix broken ones.
 
     Structural problems (missing fields, non-sequential sub-shot numbers, cut
     times outside the clip) are repaired with one follow-up LLM call per
     batch. Clips that stay single-sub-shot are only logged as warnings - the
     planner instructions already push long clips toward 2-3 sub-shots.
+
+    prompt_kind: 'r2v' | 't2v' | 'i2v' — the format the batch prompt actually
+    asked for. Derived from the director NAME when omitted, but named
+    directors with a base_override emit a different format than their name
+    suggests (e.g. studio_ghibli + r2v singularity base), so callers with a
+    base_override should pass it explicitly.
     """
     if not isinstance(shots, list):
         return shots
@@ -489,13 +496,14 @@ def validate_and_repair_shots(shots, shots_director, max_shot_duration=None):
 
     # The prompt format follows the shots director: r2v directors emit the
     # six-section full-reference format, t2v directors the T2VA format
-    director_name = (shots_director or "").lower()
-    if "r2v" in director_name:
-        prompt_kind = "r2v"
-    elif "t2v" in director_name:
-        prompt_kind = "t2v"
-    else:
-        prompt_kind = "i2v"
+    if prompt_kind is None:
+        director_name = (shots_director or "").lower()
+        if "r2v" in director_name:
+            prompt_kind = "r2v"
+        elif "t2v" in director_name:
+            prompt_kind = "t2v"
+        else:
+            prompt_kind = "i2v"
 
     invalid = []
     for pos, shot in enumerate(shots):
@@ -1159,112 +1167,83 @@ CRITICAL SHOT REQUIREMENTS:
     # Single batch processing (original logic)
     user_input = f"{scene_graph_with_indices}{max_shots_instruction}{get_shot_duration_instruction(max_shot_duration)}{SUB_SHOT_INSTRUCTION}{VIDEO_PROMPT_TIMING_INSTRUCTION}"
 
-    # Try to use director prompts
-    try:
-        # Load shots director prompt
-        image_prompt = load_director_prompt("shots", user_input, shots_director,
-                                            base_override=base_override)
+    # The batch's prompt format follows the base override, not the director
+    # name — named directors (studio_ghibli) with an r2v/t2v base_override
+    # emit full-reference prompts even though their name says otherwise
+    prompt_kind = None
+    if base_override:
+        base_lower = base_override.lower()
+        if "r2v" in base_lower:
+            prompt_kind = "r2v"
+        elif "t2v" in base_lower:
+            prompt_kind = "t2v"
 
-        # Get the response
-        provider = get_provider()
-        response = provider.ask(image_prompt, response_format="application/json")
-        shots = extract_and_repair_json(response)
+    # Director prompts only — no legacy fallback. The hard-coded legacy i2v
+    # prompt would inject the wrong video-prompt format into r2v/t2v projects
+    # (hybrid prompts, missing reference citations). A failure retries once
+    # with the SAME director, then raises so it is reported and can be
+    # retried, instead of silently polluting the plan.
+    last_error: Exception = None
+    for attempt in (1, 2):
+        try:
+            # Load shots director prompt
+            image_prompt = load_director_prompt("shots", user_input, shots_director,
+                                                base_override=base_override)
 
-        validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration)
+            # Get the response
+            provider = get_provider()
+            response = provider.ask(image_prompt, response_format="application/json")
+            shots = extract_and_repair_json(response)
 
-        # Ensure shots is a list
-        if isinstance(shots, dict):
-            # Check for common wrappers like {"shots": [...]}
-            for val in shots.values():
-                if isinstance(val, list):
-                    shots = val
-                    break
-            else:
-                shots = [shots]  # Wrap single object in list
-        elif not isinstance(shots, list):
-            shots = []
+            validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration,
+                                      prompt_kind=prompt_kind)
 
-        # The LLM may echo a wrong scene_id (often 0); repair against the
-        # scenes this plan actually received
-        repair_batch_scene_ids(shots, scenes, 1, 1)
+            # Ensure shots is a list
+            if isinstance(shots, dict):
+                # Check for common wrappers like {"shots": [...]}
+                for val in shots.values():
+                    if isinstance(val, list):
+                        shots = val
+                        break
+                else:
+                    shots = [shots]  # Wrap single object in list
+            elif not isinstance(shots, list):
+                shots = []
 
-        # Enforce max_shots limit if specified
-        if max_shots and len(shots) > max_shots:
-            print(f"[INFO] Generated {len(shots)} shots, limiting to {max_shots}")
-            logger.info(f"Generated {len(shots)} shots, limiting to {max_shots}")
-            shots = shots[:max_shots]
+            # The LLM may echo a wrong scene_id (often 0); repair against the
+            # scenes this plan actually received
+            repair_batch_scene_ids(shots, scenes, 1, 1)
 
-        # Log results
-        if max_shots:
-            if len(shots) == max_shots:
-                print(f"[INFO] Target achieved: {len(shots)} shots = ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
-            else:
-                print(f"[INFO] Final shot count: {len(shots)} shots = ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
-            logger.info(f"Final shot count: {len(shots)} shots, ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
+            # Enforce max_shots limit if specified
+            if max_shots and len(shots) > max_shots:
+                print(f"[INFO] Generated {len(shots)} shots, limiting to {max_shots}")
+                logger.info(f"Generated {len(shots)} shots, limiting to {max_shots}")
+                shots = shots[:max_shots]
 
-        # Inject stable UUIDs and correct indices
-        for i, shot in enumerate(shots):
-            shot['id'] = uuid.uuid4().hex[:8]
-            shot['index'] = i + 1
-            # scene_id is repaired against the input scenes by repair_batch_scene_ids
+            # Log results
+            if max_shots:
+                if len(shots) == max_shots:
+                    print(f"[INFO] Target achieved: {len(shots)} shots = ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
+                else:
+                    print(f"[INFO] Final shot count: {len(shots)} shots = ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
+                logger.info(f"Final shot count: {len(shots)} shots, ~{len(shots) * DEFAULT_SHOT_LENGTH}s video")
 
-        return shots
+            # Inject stable UUIDs and correct indices
+            for i, shot in enumerate(shots):
+                shot['id'] = uuid.uuid4().hex[:8]
+                shot['index'] = i + 1
+                # scene_id is repaired against the input scenes by repair_batch_scene_ids
 
-    except (FileNotFoundError, ValueError):
-        # Fall back to legacy prompt if director not found
-        cap = normalize_shot_duration_cap(max_shot_duration)
-        print(f"[WARN] Shots director '{shots_director}' not found, using legacy prompt")
-        prompt = f"""
-Create cinematic shots for WAN 2.2.{max_shots_instruction}
-
-Return JSON list (each shot):
-[
-  {{
-   "scene_index": 0,
-   "duration": {min(5.0, cap):g},
-   "image_prompt":"",
-   "motion_prompt":"",
-   "video_prompt":"",
-   "soundfx_prompt":"",
-   "music_prompt":"",
-   "camera":"slow pan | dolly | static | orbit | zoom | tracking | drone | arc | walk | fpv | dronedive | bullettime "
-  }}
-]
-
-{get_shot_duration_instruction(max_shot_duration)}
-The "video_prompt" of each shot is a detailed timestamped MiniMax H3 I2VA prompt: first-frame instruction line ("For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced."), then "integrated_multimodal_description:" with [Shot 1] (no timestamp; clips of 6 seconds or more should continue with [Shot 2], [Shot 3] sub-shots at strictly increasing cut times inside the clip duration), then "overall_soundscape:" (1-4 sentences) and "non_diegetic_music:" (1-3 sentences or N/A).
-
-SCENES:
-{scene_graph_with_indices}
-"""
-        provider = get_provider()
-        response = provider.ask(prompt, response_format="application/json")
-        shots = extract_and_repair_json(response)
-        validate_and_repair_shots(shots, shots_director, max_shot_duration=max_shot_duration)
-
-        # Ensure shots is a list
-        if isinstance(shots, dict):
-            for val in shots.values():
-                if isinstance(val, list):
-                    shots = val
-                    break
-            else:
-                shots = [shots]
-        elif not isinstance(shots, list):
-            shots = []
-
-        # The LLM may echo a wrong scene_id (often 0); repair against the
-        # scenes this plan actually received
-        repair_batch_scene_ids(shots, scenes, 1, 1)
-
-        # Enforce max_shots limit if specified
-        if max_shots and len(shots) > max_shots:
-            print(f"[INFO] Generated {len(shots)} shots, limiting to {max_shots}")
-            shots = shots[:max_shots]
-
-        # Inject stable UUIDs and correct indices
-        for i, shot in enumerate(shots):
-            shot['id'] = uuid.uuid4().hex[:8]
-            shot['index'] = i + 1
-
-        return shots
+            return shots
+        except (FileNotFoundError, ValueError) as exc:
+            # FileNotFoundError: missing director file; ValueError: usually an
+            # unparseable LLM response. Retry once with the SAME director —
+            # never fall back to the legacy i2v prompt.
+            last_error = exc
+            if attempt == 1:
+                print(f"[WARN] Shots director '{shots_director}' failed "
+                      f"({type(exc).__name__}: {str(exc)[:200]}); retrying once with the same director")
+                logger.warning(
+                    f"Shots director '{shots_director}' failed ({type(exc).__name__}: {str(exc)[:200]}); "
+                    f"retrying once with the same director")
+    raise last_error

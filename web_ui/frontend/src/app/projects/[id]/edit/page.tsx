@@ -19,13 +19,16 @@ import { useUpdateStory, useGenerateStory } from "@/hooks/useStory";
 import { useShots, useReplanShots } from "@/hooks/useShots";
 import { useDirectors, useDirectorTree } from "@/hooks/useDirectors";
 import { SceneList } from "@/components/scenes/SceneList";
+import { AddSceneDialog } from "@/components/scenes/AddSceneDialog";
 import { ShotGrid } from "@/components/shots/ShotGrid";
-import { Scene, Story, Shot, ProjectType, Character } from "@/types";
+import { Scene, Story, Shot, ProjectType, Character, Prop } from "@/types";
 import { api, getApiErrorMessage } from "@/services/api";
 import { useQueryClient } from "@tanstack/react-query";
 import CharacterReferenceUpload from "@/components/characters/CharacterReferenceUpload";
+import PropReferenceUpload from "@/components/props/PropReferenceUpload";
+import BatchGenerateDialog from "@/components/scenes/BatchGenerateDialog";
 import { useProgress } from "@/hooks/useProgress";
-import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play, ArrowLeft, Clock, Video, ListMusic, Settings, CheckCircle2, UserCircle, Plus, Trash2 } from "lucide-react";
+import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play, ArrowLeft, Clock, Video, ListMusic, Settings, CheckCircle2, UserCircle, Package, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,7 +84,9 @@ export default function ProjectEditPage() {
     }
   }) || [];
 
-  // Keep WebSocket invalidation connected top-level for both tabs
+  // Keep WebSocket invalidation connected top-level for both tabs. The
+  // story_updated hook picks up finished character/prop reference sheets so
+  // their new image paths show without a manual reload.
   useProgress(
     projectId,
     useCallback(
@@ -90,7 +95,10 @@ export default function ProjectEditPage() {
         queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
       },
       [queryClient, projectId]
-    )
+    ),
+    useCallback(() => {
+      queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+    }, [queryClient, projectId])
   );
 
   const updateStoryMutation = useUpdateStory(projectId);
@@ -110,7 +118,9 @@ export default function ProjectEditPage() {
 
   // Modal states
   const [showRegenStoryModal, setShowRegenStoryModal] = useState(false);
+  const [showBatchGenerate, setShowBatchGenerate] = useState(false);
   const [showReplanShotsModal, setShowReplanShotsModal] = useState(false);
+  const [showAddSceneDialog, setShowAddSceneDialog] = useState(false);
 
   // Selection states
   const [selectedStoryDirector, setSelectedStoryDirector] = useState("default");
@@ -156,6 +166,7 @@ export default function ProjectEditPage() {
         project_type: project.project_type ?? ProjectType.Documentary,
         scenes: [],
         characters: [],
+        props: [],
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -376,34 +387,19 @@ export default function ProjectEditPage() {
     }
   };
 
-  const handleAddScene = async () => {
-    if (!story || !story.scenes) {
+  // Appends a user-built scene from the AddSceneDialog form and saves the
+  // story. Returns whether the save succeeded so the dialog knows to close.
+  const handleAddScene = async (newScene: Scene): Promise<boolean> => {
+    if (!story) {
       toast.error("Cannot add scenes", {
-        description: "This project type does not support scene editing.",
+        description: "The story has not loaded yet. Please try again.",
       });
-      return;
+      return false;
     }
-
-    const confirmed = await confirmDialog.showDialog({
-      title: "Add New Scene",
-      description: "Do you want to add a new scene to the story?",
-      type: "add",
-    });
-
-    if (!confirmed) return;
-
-    const newScene: Scene = {
-      location: "New Location",
-      characters: "Characters",
-      action: "Action happening",
-      emotion: "Emotional tone",
-      narration: "Narration text",
-      scene_duration: 30,
-    };
 
     const updatedStory = {
       ...story,
-      scenes: [...story.scenes, newScene],
+      scenes: [...(story.scenes || []), newScene],
     };
 
     // Update local state immediately for responsive UI
@@ -414,19 +410,27 @@ export default function ProjectEditPage() {
     try {
       await updateStoryMutation.mutateAsync(updatedStory);
       toast.success("Scene added successfully", {
-        description: "New scene has been added to the story.",
+        description: `"${newScene.location}" has been added to the story. Run "Re-plan Shots" to generate shots for it.`,
       });
+      return true;
     } catch (error) {
       console.error("Failed to add scene:", error);
-      await confirmDialog.showDialog({
-        title: "Error",
-        description: "Failed to add scene. Please try again.",
-        type: "warning",
-      });
+      toast.error(getApiErrorMessage(error, "Failed to add scene. Please try again."));
       // Revert local state on error
       setStory(story);
       setHasChanges(true);
+      return false;
     }
+  };
+
+  const openAddSceneDialog = () => {
+    if (!story) {
+      toast.error("Cannot add scenes", {
+        description: "The story has not loaded yet. Please try again.",
+      });
+      return;
+    }
+    setShowAddSceneDialog(true);
   };
 
   const handleAddCharacter = async () => {
@@ -485,6 +489,63 @@ export default function ProjectEditPage() {
     } catch (error) {
       console.error("Failed to remove character:", error);
       toast.error("Failed to remove character. Please try again.");
+      setStory(story);
+    }
+  };
+
+  const handleAddProp = async () => {
+    if (!story) return;
+    const newProps = [...(story.props || [])];
+    const newProp: Prop = {
+      name: `New Prop ${newProps.length + 1}`,
+      image_prompt: "",
+    };
+    newProps.push(newProp);
+    const updatedStory = { ...story, props: newProps };
+
+    // Update local state optimistically
+    setStory(updatedStory);
+    setHasChanges(false);
+
+    try {
+      await updateStoryMutation.mutateAsync(updatedStory);
+      toast.success("Prop added successfully", {
+        description: `"${newProp.name}" has been added to the story.`,
+      });
+    } catch (error) {
+      console.error("Failed to add prop:", error);
+      toast.error("Failed to add prop. Please try again.");
+      setStory(story);
+    }
+  };
+
+  const handleRemoveProp = async (idx: number) => {
+    if (!story || !story.props) return;
+    const propToDelete = story.props[idx];
+    const confirmed = await confirmDialog.showDialog({
+      title: "Remove Prop",
+      description: `Are you sure you want to remove "${propToDelete.name || 'this prop'}"? This action cannot be undone.`,
+      type: "delete",
+      confirmText: "Remove Prop",
+    });
+
+    if (!confirmed) return;
+
+    const newProps = story.props.filter((_, i) => i !== idx);
+    const updatedStory = { ...story, props: newProps };
+
+    // Update local state optimistically
+    setStory(updatedStory);
+    setHasChanges(false);
+
+    try {
+      await updateStoryMutation.mutateAsync(updatedStory);
+      toast.success("Prop removed successfully", {
+        description: `"${propToDelete.name || 'Prop'}" has been removed.`,
+      });
+    } catch (error) {
+      console.error("Failed to remove prop:", error);
+      toast.error("Failed to remove prop. Please try again.");
       setStory(story);
     }
   };
@@ -852,6 +913,119 @@ export default function ProjectEditPage() {
             )}
           </div>
 
+          {/* Prop References Section */}
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm mb-6">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/50">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Package className="w-5 h-5 text-primary" />
+                Prop References
+              </h2>
+              <div className="flex items-center gap-2">
+                {hasChanges && (
+                  <Button
+                    onClick={handleSaveStory}
+                    size="sm"
+                    disabled={updateStoryMutation.isPending}
+                    className="flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Save className="w-4 h-4" />
+                    {updateStoryMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                )}
+                <Button
+                  onClick={handleAddProp}
+                  size="sm"
+                  variant="outline"
+                  className="flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Prop
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Recurring objects (vehicles, weapons, tools…) get a product reference sheet.
+              Sheets are attached to matching shots as references, after characters and the scene background.
+            </p>
+            {story.props && story.props.length > 0 ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {story.props.map((prop, idx) => (
+                  <div key={idx} className="border border-border/50 rounded-xl p-5 bg-background shadow-sm hover:border-primary/30 transition-colors relative group">
+                    <div className="flex justify-between items-center mb-4 gap-2">
+                      <div className="flex items-center gap-2 flex-grow">
+                        <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs shrink-0">{idx + 1}</span>
+                        <Input
+                          value={prop.name}
+                          onChange={(e) => {
+                            const newProps = [...(story.props || [])];
+                            newProps[idx] = { ...newProps[idx], name: e.target.value };
+                            setStory({ ...story, props: newProps });
+                            setHasChanges(true);
+                          }}
+                          className="h-8 text-sm font-semibold py-1 bg-transparent border-transparent hover:border-border focus:border-input focus:bg-background"
+                          placeholder="Prop name"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 shrink-0"
+                        onClick={() => handleRemoveProp(idx)}
+                        title="Remove prop"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <PropReferenceUpload
+                      prop={prop}
+                      propIndex={idx}
+                      projectId={projectId}
+                      onUpdate={() => {
+                        queryClient.invalidateQueries({ queryKey: ["project", projectId] });
+                      }}
+                      onPromptChange={(promptKey, newPrompt) => {
+                        const newProps = [...(story.props || [])];
+                        newProps[idx] = { ...newProps[idx], [promptKey]: newPrompt };
+                        setStory({ ...story, props: newProps });
+                        setHasChanges(true);
+                      }}
+                      onSavePrompt={async (promptKey, newPrompt) => {
+                        const newProps = [...(story.props || [])];
+                        newProps[idx] = { ...newProps[idx], [promptKey]: newPrompt };
+                        const updatedStory = { ...story, props: newProps };
+                        setStory(updatedStory);
+                        try {
+                          await updateStoryMutation.mutateAsync(updatedStory);
+                          setHasChanges(false);
+                        } catch (error) {
+                          console.error("Failed to save prop prompt:", error);
+                          toast.error("Failed to save prompt. Please try again.");
+                          throw error;
+                        }
+                      }}
+                      onBeforeUpload={handleSaveStoryBeforeUpload}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 bg-muted/50 rounded-lg border border-dashed border-border text-center">
+                <p className="text-muted-foreground mb-4">
+                  No props defined for this project yet.
+                </p>
+                <Button
+                  onClick={handleAddProp}
+                  size="sm"
+                  variant="outline"
+                  className="mx-auto flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Your First Prop
+                </Button>
+              </div>
+            )}
+          </div>
+
           {/* Scenes Editor */}
           <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/50">
@@ -859,14 +1033,24 @@ export default function ProjectEditPage() {
                 <ListMusic className="w-5 h-5 text-primary" />
                 Scenes Breakdown
               </h2>
-              <button
-                onClick={() => setShowRegenStoryModal(true)}
-                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-blue-500/20 rounded-md hover:bg-blue-500/10 transition-colors text-blue-500 shadow-sm"
-                title="Generate entire story using an AI director"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Generate Story
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowBatchGenerate(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-emerald-500/20 rounded-md hover:bg-emerald-500/10 transition-colors text-emerald-600 shadow-sm"
+                  title="Batch generate references, backgrounds, music and narration"
+                >
+                  <ListChecks className="w-3.5 h-3.5" />
+                  Batch Generate
+                </button>
+                <button
+                  onClick={() => setShowRegenStoryModal(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-blue-500/20 rounded-md hover:bg-blue-500/10 transition-colors text-blue-500 shadow-sm"
+                  title="Generate entire story using an AI director"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Generate Story
+                </button>
+              </div>
             </div>
             {story.scenes && story.scenes.length > 0 ? (
               <SceneList
@@ -874,14 +1058,25 @@ export default function ProjectEditPage() {
                 onUpdate={handleUpdateScene}
                 onDelete={handleDeleteScene}
                 onReorder={handleReorderScenes}
-                onAdd={handleAddScene}
+                onAdd={openAddSceneDialog}
                 projectType={story.project_type}
+                availableCharacters={(story.characters ?? []).map((c) => c.name)}
               />
-            ) : (
+            ) : story.project_type === ProjectType.AsmrGlassCutting ? (
               <div className="p-8 bg-muted/50 rounded-lg border border-dashed border-border text-center">
                 <p className="text-muted-foreground">
                   This project type does not use scenes. Shots are managed directly.
                 </p>
+              </div>
+            ) : (
+              <div className="p-8 bg-muted/50 rounded-lg border border-dashed border-border text-center">
+                <p className="text-muted-foreground mb-4">
+                  No scenes yet. Add your first scene manually, or use "Generate Story" to build the whole story with an AI director.
+                </p>
+                <Button onClick={openAddSceneDialog} variant="outline" className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Add Scene
+                </Button>
               </div>
             )}
           </div>
@@ -934,6 +1129,8 @@ export default function ProjectEditPage() {
               shots={shots || []}
               projectId={projectId}
               scenes={project?.story?.scenes}
+              characters={project?.story?.characters}
+              props={project?.story?.props}
               aspectRatio={project?.aspect_ratio || "16:9"}
               projectDirector={project?.story_director}
             />
@@ -1002,6 +1199,17 @@ export default function ProjectEditPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Batch Generate Modal */}
+      {showBatchGenerate && story && (
+        <BatchGenerateDialog
+          open={showBatchGenerate}
+          onClose={() => setShowBatchGenerate(false)}
+          projectId={projectId}
+          story={story}
+          isR2V={project?.video_generation_type === "r2v"}
+        />
       )}
 
       {/* Re-plan Shots Modal */}
@@ -1361,6 +1569,14 @@ export default function ProjectEditPage() {
 
 
       <ConfirmDialog {...confirmDialog.dialogProps} />
+
+      <AddSceneDialog
+        open={showAddSceneDialog}
+        onOpenChange={setShowAddSceneDialog}
+        onAdd={handleAddScene}
+        nextSceneNumber={(story?.scenes?.length ?? 0) + 1}
+        availableCharacters={(story?.characters ?? []).map((c) => c.name)}
+      />
     </div>
   );
 }

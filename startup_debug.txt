@@ -1,3 +1,3 @@
 [DEBUG] Startup: lifespan triggered
 [DEBUG] Startup: Completed lifespan startup
-[DEBUG] Shutdown: lifespan completed
+[DEBUG] loop: started

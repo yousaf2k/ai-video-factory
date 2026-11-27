@@ -36,6 +36,24 @@ export function getMediaUrl(path: string | null, cacheBuster?: string | number):
   if (cacheBuster) {
     finalUrl += `?t=${cacheBuster}`;
   }
-  
+
   return finalUrl;
+}
+
+/**
+ * Convert a project-relative media path ("output/projects/{pid}/{dir}/{file}")
+ * into the asset-reference shape ("p/{pid}/{dir}/{file}") used by
+ * shot.reference_asset_ids. Returns null when the path doesn't match.
+ */
+export function projectMediaRef(projectId: string, path: string | null | undefined): string | null {
+  if (!path) return null;
+  const normalized = path.replace(/\\/g, '/');
+  const prefix = `output/projects/${projectId}/`;
+  if (!normalized.startsWith(prefix)) return null;
+  const rest = normalized.slice(prefix.length);
+  const [dir, filename] = [rest.slice(0, rest.indexOf('/')), rest.slice(rest.indexOf('/') + 1)];
+  if (!filename) return null;
+  const mediaDirs = ['images', 'references', 'backgrounds', 'audio', 'videos', 'music', 'narration', 'editor'];
+  if (!mediaDirs.includes(dir)) return null;
+  return `p/${projectId}/${rest}`;
 }
