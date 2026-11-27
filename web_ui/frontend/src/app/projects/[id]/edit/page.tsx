@@ -32,6 +32,7 @@ import { Save, RefreshCw, X, BookOpen, Film, ChevronLeft, ChevronRight, Play, Ar
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { MultiDirectorSelector } from "@/components/directors/MultiDirectorSelector";
 import {
   Select,
@@ -862,6 +863,22 @@ export default function ProjectEditPage() {
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
+                    </div>
+                    <div className="mb-3">
+                      <label className="text-xs text-muted-foreground">
+                        Voice (speaking voice — copied word for word into every shot this character speaks in)
+                      </label>
+                      <Textarea
+                        value={character.voice_type || ""}
+                        onChange={(e) => {
+                          const newCharacters = [...(story.characters || [])];
+                          newCharacters[idx] = { ...newCharacters[idx], voice_type: e.target.value };
+                          setStory({ ...story, characters: newCharacters });
+                          setHasChanges(true);
+                        }}
+                        className="mt-1 min-h-[48px] text-sm"
+                        placeholder="e.g. Tired man in his late thirties, low husky voice, slow breathless delivery, rural Punjabi accent"
+                      />
                     </div>
                     <CharacterReferenceUpload
                       character={character}

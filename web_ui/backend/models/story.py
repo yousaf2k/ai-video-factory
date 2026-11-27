@@ -61,6 +61,17 @@ class Prop(BaseModel):
     reference_image_path: Optional[str] = Field(default=None, description="Path to the prop reference sheet image")
 
 
+class DialogueLine(BaseModel):
+    """One scripted line of a scene's dialogue, in playing order.
+
+    Movie screenplays carry these per scene; shot planning places every line
+    into a shot's video prompt as lip-synced speech.
+    """
+    speaker: str = Field(..., description="Character name of the speaker (must match a story character)")
+    line: str = Field(..., description="The exact words the character says")
+    delivery: Optional[str] = Field(default=None, description="Short acting note (whispered, defiant, ...)")
+
+
 class Scene(BaseModel):
     """Story scene model"""
     scene_name: Optional[str] = Field(default=None, description="Human-readable scene name (e.g., 'Main Cast', 'Supporting Cast')")
@@ -68,7 +79,8 @@ class Scene(BaseModel):
     characters: str = Field(..., description="Characters in scene")
     action: str = Field(..., description="Action happening")
     emotion: str = Field(..., description="Emotional tone")
-    narration: str = Field(..., description="Narration text")
+    narration: str = Field(..., description="Narrator voice-over text")
+    dialogue: List[DialogueLine] = Field(default_factory=list, description="Scripted lines spoken on screen, in playing order")
     scene_duration: Optional[int] = Field(default=None, description="Scene duration in seconds")
     narration_path: Optional[str] = Field(default=None, description="Active narration audio path")
     narration_paths: List[str] = Field(default_factory=list, description="All narration audio variations")

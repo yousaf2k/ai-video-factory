@@ -7,7 +7,8 @@ the logic never forks:
 - voice-text embedding (D13): every character bound to a text voice must have
   that text appear VERBATIM in the prompt; when the director's prose lost it, a
   deterministic voice-note line is inserted into subject_definitions
-  (idempotent — never duplicated).
+  (idempotent — never duplicated). The voice text is a character's bound
+  `voice.text`, or — what the story directors write — its `voice_type`.
 - <Picture N> label pruning (D3): the director numbers pictures in attachment
   convention order (characters -> background -> props). When the slot budget
   dropped trailing refs, citations beyond the attached count are stripped so
@@ -24,12 +25,15 @@ import logging
 import re
 
 from core.character_matching import resolve_character_name
+from core.dialogue import bound_voice_text, character_voice
 
 logger = logging.getLogger(__name__)
 
 R2V_PROMPT_CHAR_LIMIT = 7000
 
 _PICTURE_RE = re.compile(r"<Picture (\d+)>")
+# Speaker IDs mark every shot in which someone talks, e.g. "... (S1) says:"
+_SPEAKER_ID_RE = re.compile(r"\(S\d+\)")
 
 R2V_REQUIRED_SECTIONS = (
     "subject_definitions:",
@@ -42,15 +46,20 @@ R2V_REQUIRED_SECTIONS = (
 
 
 def _voice_texts_for_shot(shot, story):
-    """[(character_name, voice_text)] for characters in this shot that have one."""
+    """[(character_name, voice_text)] for characters in this shot that have one.
+
+    A character's bound `voice.text` is always embedded. The `voice_type`
+    fallback (what the story directors write) is embedded only in shots where
+    someone speaks: a voice note is what keeps a speaking voice consistent,
+    and silent shots keep their prompt unchanged.
+    """
     story = story or {}
     voices = {}
     for char in story.get('characters') or []:
         name = (char.get('name') or '').strip()
-        voice = char.get('voice') or {}
-        text = (voice.get('text') or '').strip() if isinstance(voice, dict) else ''
+        text = character_voice(char)
         if name and text:
-            voices[name] = text
+            voices[name] = (text, bool(bound_voice_text(char)))
     if not voices:
         return []
 
@@ -61,11 +70,12 @@ def _voice_texts_for_shot(shot, story):
     # Shots usually carry short names ("Chi She") while the story cast uses
     # display names ("Chi She (Red Snake)") — resolve tolerantly, else voice
     # lines never attach to the character's shots
+    speaks = bool(_SPEAKER_ID_RE.search(shot.get('video_prompt') or ''))
     out = []
     for n in names:
         display = resolve_character_name(n, list(voices.keys()))
-        text = voices.get(display) if display else None
-        if text:
+        text, bound = voices.get(display, ('', False)) if display else ('', False)
+        if text and (bound or speaks):
             out.append((display, text))
     return out
 
@@ -205,7 +215,12 @@ def compose_video_prompt(shot, story=None, attached_picture_count=None,
     prompt = (shot.get('video_prompt') or shot.get('motion_prompt') or '').strip()
 
     prompt, _ = prune_picture_labels(prompt, attached_picture_count)
-    prompt, _ = embed_voice_texts(prompt, _voice_texts_for_shot(shot, story))
+    # Voice notes go in only while the prompt stays inside the model's cap: an
+    # over-long prompt is rejected outright, a missing voice note merely risks
+    # a slightly different timbre.
+    with_voices, _ = embed_voice_texts(prompt, _voice_texts_for_shot(shot, story))
+    if len(with_voices) <= R2V_PROMPT_CHAR_LIMIT or len(prompt) > R2V_PROMPT_CHAR_LIMIT:
+        prompt = with_voices
     if audio_attachments:
         prompt = append_audio_definitions(prompt, audio_attachments)
     problems = validate_composed_prompt(prompt, r2v_six_sections=r2v_six_sections)

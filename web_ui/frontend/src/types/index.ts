@@ -149,6 +149,13 @@ export interface Story {
   movie_metadata?: MovieMetadata;
 }
 
+/** One scripted line of a scene's dialogue, spoken on screen by its speaker. */
+export interface DialogueLine {
+  speaker: string;
+  line: string;
+  delivery?: string;
+}
+
 export interface Scene {
   scene_id?: number;
   scene_name?: string;
@@ -157,6 +164,8 @@ export interface Scene {
   action: string;
   emotion: string;
   narration: string;
+  /** Scripted lines in playing order; shot planning speaks every one of them. */
+  dialogue?: DialogueLine[];
   scene_duration?: number;
   narration_path?: string;
   narration_paths?: string[];

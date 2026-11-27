@@ -78,6 +78,7 @@ docs/
 |----------|-------------|
 | [Asset Library](features/ASSET_LIBRARY.md) 🆕 | Nested-category asset library and per-shot references |
 | [Ref2Video & Video Generation Types](features/REF2VIDEO.md) 🆕 | t2v / i2v / r2v video generation setting — reference sheets, MiniMax H3 Ref2VA prompts, props, voices |
+| [Movie Dialogue Layer](features/MOVIE_DIALOGUE.md) 🆕 | Screenplay-style `dialogue` on movie scenes — word budgets, verbatim carry-over, shot coverage checks, voice consistency |
 | [Google Flow Image Generation](features/FLOW_IMAGE.md) 🆕 | `flow` image mode — browser automation of flow.google.com (projects, settings, Nano Banana models) |
 | [Logs Page](features/LOGS_PAGE.md) 🆕 | Structured log viewer at `/log` — phase 1: LLM call inputs/outputs with resizable split view |
 | [AI Agent Assistant](features/AGENT_ASSISTANT.md) 🆕 | In-app agent (left dock + `/agent`): 56 pipeline tools, skills, MCP support + the project's own MCP server |

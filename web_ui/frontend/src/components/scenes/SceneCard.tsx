@@ -2,11 +2,12 @@
  * SceneCard component - Individual scene in the story editor
  */
 import { useState, useRef } from "react";
-import { GripVertical, Trash2, Edit3, Check, Mic, Play, Pause, X, Loader2, ChevronDown, CheckCircle2, Music2, Upload, RotateCw } from "lucide-react";
+import { GripVertical, Trash2, Edit3, Check, Mic, Play, Pause, X, Loader2, ChevronDown, CheckCircle2, Music2, Upload, RotateCw, MessagesSquare } from "lucide-react";
 import { Scene } from "@/types";
 import { cn, getMediaUrl } from "@/lib/utils";
 import SceneBackgroundManager from "@/components/scenes/SceneBackgroundManager";
 import { SceneCharactersSelect } from "@/components/scenes/SceneCharactersSelect";
+import { SceneDialogueEditor } from "@/components/scenes/SceneDialogueEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -156,6 +157,11 @@ export function SceneCard({
   };
 
   const isGenerating = progress !== undefined && progress >= 0;
+  const dialogue = scene.dialogue ?? [];
+  const dialogueWords = dialogue.reduce(
+    (total, entry) => total + (entry.line?.trim() ? entry.line.trim().split(/\s+/).length : 0),
+    0,
+  );
 
   if (isEditing) {
     return (
@@ -231,11 +237,22 @@ export function SceneCard({
               </div>
 
               <div className="md:col-span-2">
-                <label className="text-xs text-muted-foreground">Narration</label>
+                <label className="text-xs text-muted-foreground">Narration (the narrator's voice-over only)</label>
                 <Textarea
                   value={editedScene.narration}
                   onChange={(e) => setEditedScene({ ...editedScene, narration: e.target.value })}
                   className="mt-1 min-h-[60px] text-sm"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs text-muted-foreground">
+                  Dialogue (spoken on screen — every line is placed into this scene's shots when planning)
+                </label>
+                <SceneDialogueEditor
+                  value={editedScene.dialogue ?? []}
+                  onChange={(lines) => setEditedScene({ ...editedScene, dialogue: lines })}
+                  availableCharacters={availableCharacters}
                 />
               </div>
 
@@ -448,7 +465,10 @@ export function SceneCard({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                  setEditedScene(scene);
+                  setIsEditing(true);
+                }}
                 className="h-8 w-8"
                 title="Edit scene"
               >
@@ -490,6 +510,24 @@ export function SceneCard({
               "{scene.narration}"
             </p>
           </div>
+
+          {dialogue.length > 0 && (
+            <div className="bg-primary/5 border border-primary/20 rounded p-2 mb-3">
+              <div className="flex items-center gap-1.5 mb-1 text-xs font-medium text-primary">
+                <MessagesSquare className="w-3.5 h-3.5" />
+                Dialogue · {dialogue.length} line{dialogue.length === 1 ? "" : "s"} · {dialogueWords} words
+              </div>
+              <ol className="space-y-1">
+                {dialogue.map((entry, i) => (
+                  <li key={i} className="text-sm leading-relaxed">
+                    <span className="font-semibold">{entry.speaker}</span>
+                    {entry.delivery && <span className="text-muted-foreground"> ({entry.delivery})</span>}
+                    <span className="italic text-foreground/90" dir="auto">: “{entry.line}”</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
 
           <div className="mb-4 pt-2 border-t border-border/30">
              <SceneBackgroundManager

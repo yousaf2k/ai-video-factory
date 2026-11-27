@@ -439,17 +439,19 @@ def tool_generate_story(args: dict) -> Any:
 # ============================================================== SCENES tools
 
 _SCENE_FIELDS = ("scene_name", "location", "characters", "action", "emotion",
-                 "narration_text", "scene_duration", "visual_description",
+                 "narration_text", "dialogue", "scene_duration", "visual_description",
                  "background_prompt")
 
 
 @tool(
     "update_scene", "scenes",
     "Edit one scene of the story by its 0-based scene_id: location, characters, action, "
-    "emotion, narration_text, scene_duration, etc.",
+    "emotion, narration_text, scene_duration, etc. `dialogue` is the list of lines spoken on "
+    "screen ([{speaker, line, delivery}] in playing order) - replan the scene's shots after "
+    "editing it so every line is placed into a shot.",
     _obj({
         "project_id": _s(), "scene_id": _i("0-based scene index"),
-        "fields": {"type": "object", "description": "Scene fields to update, e.g. {\"action\": \"...\"}"},
+        "fields": {"type": "object", "description": "Scene fields to update, e.g. {\"action\": \"...\"}, or {\"dialogue\": [{\"speaker\": \"Name\", \"line\": \"...\", \"delivery\": \"whispered\"}]}"},
     }, ["project_id", "scene_id", "fields"]),
 )
 def tool_update_scene(args: dict) -> Any:

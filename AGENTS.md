@@ -96,6 +96,7 @@ Idea → Story → Scene Graph → Shots → Images → Videos → Narration
 - **LLM layer** (`llm_engine.py`, `gemini_engine.py`): provider abstraction, text + JSON-structured outputs, selected via `LLM_PROVIDER`.
 - **Director system** (`director_loader.py`): modular prompt templates in `directors/` with `{{include:name}}` composition and `{USER_INPUT}` placeholder.
 - **Story pipeline** (`story_engine.py`, `scene_graph.py`, `shot_planner.py`): story → visual scenes → shots with camera movements, prompts, durations; scene duration validation and auto-correction.
+- **Dialogue layer** (`dialogue.py`): scripted movie dialogue — speech matching/normalisation helpers shared by the story pass and the shot planner's coverage check (see `docs/features/MOVIE_DIALOGUE.md`).
 - **Generation layer** (`image_generator.py`, `comfyui_image_generator.py`, `geminiweb_image_generator.py`, `flowweb_image_generator.py`, `comfy_client.py`, `flowweb_video_generator.py`): Gemini API / ComfyUI (Flux, Krea2, HiDream, Z-Image) / GeminiWeb + Google Flow browser automation for images; Wan 2.2, MiniMax H3, LTX-2 via ComfyUI for video.
 - **Workflow compiler** (`prompt_compiler.py`, `workflow_loader.py`): auto-discovers workflows from `workflow/`, supports API JSON and Workflow JSON, detects node IDs via title tags (`[prompt]`, `[image_in]`, `[video_out]`, …) or heuristics.
 - **Project management** (`project_manager.py`): atomic file-locking, crash recovery, thumbnails, selective regeneration; `video_regenerator.py` and `render_monitor.py` handle re-renders.
@@ -167,7 +168,8 @@ Notable defaults: `IMAGE_WORKFLOW = "krea2_reference"`, `VIDEO_WORKFLOW = "wan22
 1. Create a `.md` file in the right category: `directors/story/…` or `directors/shots/…`
 2. Use `{USER_INPUT}` for dynamic content and `{{include:name}}` for composition — name has no `.md` extension and is resolved relative to the including file's directory, its sibling subdirectories, and the director type root (e.g. `{{include:styles/style_shots_artistic}}`, `{{include:_base/base_movie_standard}}`)
 3. Reference via `--story-director {name}` or `--shots-director {name}` (subdirectory paths like `asmr/asmr_glass_cutting` work)
-4. Story generation is two-pass: Pass 1 writes a master voice-over script from `<family>/_base/master_script.md` (movie and documentary ship one; other families fall back to the documentary version), Pass 2 breaks it into scenes with the selected director — Pass 2 is authoritative for `title`/`style`
+4. Story generation is two-pass: Pass 1 writes a master script from `<family>/_base/master_script.md` (movie and documentary ship one; other families fall back to the documentary version), Pass 2 breaks it into scenes with the selected director — Pass 2 is authoritative for `title`/`style`
+5. Movie stories are **screenplays with a dialogue layer**: Pass 1 is dialogue-first, Pass 2 uses the movie-family `movie/_base/_output_format.md` (an include resolves to a same-folder file before the type-root one), and every scene carries `dialogue: [{speaker, line, delivery}]`. Budgets come from `{DIALOGUE_WORD_COUNT}` / `{NARRATION_WORD_COUNT}` (`MOVIE_DIALOGUE_SHARE` / `MOVIE_NARRATION_SHARE`). Because models cannot be trusted with word counts or dialogue language, `story_engine` checks the result deterministically: the dialogue language named in the idea (`detect_dialogue_language` → `{DIALOGUE_LANGUAGE}`, with a translation pass when the script is wrong) and `fit_story_dialogue` (too few lines, or a scene that cannot play its speech). `shot_planner.enforce_dialogue_coverage` then rewrites a scene whose shots do not speak every line as `<d>` speech, and `rebalance_speech_durations` moves time to the clips whose lines need it. Speech time is one model everywhere (`dialogue.speaking_seconds`: words ÷ 2.5 plus a breath per line, at most 75% of a scene or a clip). Documentaries keep the narration-only scene shape — see `docs/features/MOVIE_DIALOGUE.md`
 
 Director layout:
 
@@ -176,7 +178,7 @@ directors/
 ├── story/
 │   ├── asmr/            # ASMR glass cutting
 │   ├── documentary/     # default, netflix/youtube documentary, historical, _base/_contexts/_styles
-│   ├── movie/           # action, horror, comedy, drama, sci-fi, thriller, … + _base/_contexts/_styles
+│   ├── movie/           # action, horror, comedy, drama, sci-fi, thriller, … + _base/_contexts/_styles (screenplay + scene dialogue schema)
 │   └── then_vs_now/     # FLFI2V comparative storytelling
 └── shots/
     ├── base/            # base_shots_standard, base_shots_r2v, base_shots_r2v_singularity, base_shots_t2v

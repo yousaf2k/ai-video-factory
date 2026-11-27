@@ -28,6 +28,14 @@ def _env_int(name, default):
     except (TypeError, ValueError):
         return default
 
+
+def _env_float(name, default):
+    """Read a float env var, falling back to `default` on garbage input."""
+    try:
+        return float(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return default
+
 # ==========================================
 # LLM PROVIDER CONFIGURATION
 # ==========================================
@@ -1104,6 +1112,15 @@ IMAGE_PROMPT_APPEND_POSITION = "end"  # Options: "start", "end"
 # Note: If both DEFAULT_MAX_SHOTS and TARGET_VIDEO_LENGTH are set,
 #       max_shots will be calculated as: int(TARGET_VIDEO_LENGTH / DEFAULT_SHOT_LENGTH)
 TARGET_VIDEO_LENGTH = _env_int("TARGET_VIDEO_LENGTH", 600)  # or specify like: 60.0 for 60 seconds
+
+# Movie screenplays (directors/story/movie/*): share of the film's running time
+# taken by spoken words. Dialogue is lip-synced speech authored by the video
+# model; narration is the narrator's voice-over. The rest is action, reaction
+# and silence. 0.40 + 0.15 = speech for ~55% of a film, close to a real
+# feature (which averages 60-80 spoken dialogue words per screen minute at
+# 2.5 words/s). Raise MOVIE_DIALOGUE_SHARE for talk-driven films.
+MOVIE_DIALOGUE_SHARE = _env_float("MOVIE_DIALOGUE_SHARE", 0.40)
+MOVIE_NARRATION_SHARE = _env_float("MOVIE_NARRATION_SHARE", 0.15)
 
 # Video rendering timeout (in seconds)
 # Maximum time to wait for a single video render to complete

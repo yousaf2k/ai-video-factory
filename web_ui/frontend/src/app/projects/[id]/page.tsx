@@ -1150,6 +1150,22 @@ export default function ProjectDetailPage() {
                                 "{scene.narration}"
                               </div>
                             )}
+                            {(scene.dialogue?.length ?? 0) > 0 && (
+                              <div className="mt-3 p-3 bg-primary/5 rounded border-l-2 border-primary/50">
+                                <p className="mb-1 text-xs font-semibold text-primary">
+                                  Dialogue · {scene.dialogue?.length} line{scene.dialogue?.length === 1 ? "" : "s"}
+                                </p>
+                                <ol className="space-y-1">
+                                  {scene.dialogue?.map((entry, i) => (
+                                    <li key={i} className="text-sm text-foreground/85">
+                                      <span className="font-semibold">{entry.speaker}</span>
+                                      {entry.delivery && <span className="text-muted-foreground"> ({entry.delivery})</span>}
+                                      <span className="italic" dir="auto">: “{entry.line}”</span>
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

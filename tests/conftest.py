@@ -70,3 +70,21 @@ def _disable_llm_console_streaming(monkeypatch):
         monkeypatch.setattr(config, "LLM_STREAM_TO_CONSOLE", False, raising=False)
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Structured call log isolation: provider tests mock the HTTP layer but still
+# run the real logging path (core/llm_call_log.py), so a mocked ask("hi") with
+# a canned "ok" reply would otherwise append a bogus entry to the live
+# <LOG_DIR>/llm_calls.jsonl that the web UI Logs page serves. Redirect it to a
+# per-test throwaway file; tests that assert on log records patch _log_path or
+# _append themselves and keep working.
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _isolate_llm_call_log(tmp_path, monkeypatch):
+    try:
+        from core import llm_call_log
+        monkeypatch.setattr(llm_call_log, "_log_path",
+                            lambda: str(tmp_path / llm_call_log.LOG_FILENAME))
+    except Exception:
+        pass

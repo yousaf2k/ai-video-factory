@@ -88,10 +88,13 @@ Idea → Story → Scene Graph → Shots (r2v director)
   background, then props; the composer prunes citations for refs the 12-file/9-slot budget
   dropped and embeds each character's **voice text** verbatim so voices stay consistent
   across separately generated clips.
-- **Voice IDs**: characters carry `voice: {type: "text"|"audio", text: "...", ref: "..."}`.
-  The text voice is embedded in every shot prompt where the character appears; an audio
-  voice additionally references a sample asset (timbre anchor — used by the pipeline once
-  the node's audio inputs land).
+- **Voice IDs**: characters carry `voice: {type: "text"|"audio", text: "...", ref: "..."}`, or —
+  what the story directors write — a `voice_type` string (used when `voice.text` is absent). The
+  text voice is embedded in every shot prompt **where someone speaks** (an audio voice additionally
+  references a sample asset — timbre anchor — used by the pipeline once the node's audio inputs
+  land); silent shots are left unchanged.
+- **Dialogue**: movie scenes carry scripted lines (`dialogue: [{speaker, line, delivery}]`) that the
+  shot planner must speak verbatim — see the [Movie Dialogue Layer](MOVIE_DIALOGUE.md).
 - **Workflow**: `workflow/video/minimax_h3_r2v.json` wires 9 tagged `[ref_0..8]`
   reference slots; unfilled slots are simply omitted from the submission. The `Ns` suffix
   in H3 workflow filenames = N sampling **steps** (speed/quality preset), never seconds.

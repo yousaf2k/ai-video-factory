@@ -60,7 +60,7 @@ def build_scene_graph(story_json):
             logger.warning(f"Scene {i} missing required fields, skipping. Available keys: {list(s.keys())}")
             continue
 
-        graph.append({
+        entry = {
             "id": i,
             "location": s.get("location", ""),
             "action": s.get("action", ""),
@@ -68,7 +68,12 @@ def build_scene_graph(story_json):
             "characters": s.get("characters", ""),
             "narration": s.get("narration", ""),  # Include narration from story
             "music_prompt": s.get("music_prompt", "")  # Scene music direction
-        })
+        }
+        # Scripted lines the shots must speak (movie screenplays). Only carried
+        # when present, so narrated stories plan from an unchanged scene graph
+        if s.get("dialogue"):
+            entry["dialogue"] = list(s["dialogue"]) if isinstance(s["dialogue"], list) else s["dialogue"]
+        graph.append(entry)
 
     logger.info(f"Built scene graph with {len(graph)} scenes from {len(scenes)} input scenes")
     return graph

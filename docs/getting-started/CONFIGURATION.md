@@ -158,6 +158,12 @@ VIDEO_FPS = 16
 # Target total video length (in seconds)
 TARGET_VIDEO_LENGTH = None
 
+# Movie dialogue layer: share of a film's running time filled with spoken
+# words (dialogue = lip-synced character speech, narration = voice-over).
+# 0.40 is about 60 dialogue words per screen minute.
+MOVIE_DIALOGUE_SHARE = 0.40
+MOVIE_NARRATION_SHARE = 0.15
+
 # Video rendering timeout (in seconds)
 VIDEO_RENDER_TIMEOUT = 1800  # 30 minutes
 ```
@@ -167,6 +173,8 @@ VIDEO_RENDER_TIMEOUT = 1800  # 30 minutes
 - `DEFAULT_SHOT_LENGTH`: Length of each video clip in seconds
 - `DEFAULT_MAX_SHOTS`: Limit shots for testing (0 = unlimited)
 - `VIDEO_FPS`: Frames per second (16 recommended for Wan 2.2)
+- `MOVIE_DIALOGUE_SHARE` / `MOVIE_NARRATION_SHARE`: how much of a movie's running time is spoken
+  dialogue vs. narrator voice-over — see the [Movie Dialogue Layer](../features/MOVIE_DIALOGUE.md)
 - `VIDEO_RENDER_TIMEOUT`: Maximum wait time for video rendering
 
 ### 5. Camera-to-LoRA Mapping
